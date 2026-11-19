@@ -1,0 +1,1162 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>check_wetdry_open_edge_depth &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>check_wetdry_open_edge_depth
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">69 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_engine.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_engine.f90.html'>rdb_ocean_engine.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_engine.html'>rdb_ocean_engine</a></li>
+            <li class="breadcrumb-item active" aria-current="page">check_wetdry_open_edge_depth</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-dmin_glob">dmin_glob</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-dmin_loc">dmin_loc</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-edge_name~4">edge_name</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-has_edge">has_edge</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-i~285">i</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-ie~3">ie</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-j~266">j</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-ng~57">ng</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-nm">nm</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-nxp~6">nxp</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-nyp~6">nyp</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-t~31">t</a>
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#variable-thr">thr</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#proc-take_wet_depth">take_wet_depth</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/check_wetdry_open_edge_depth.html#src">check_wetdry_open_edge_depth</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine check_wetdry_open_edge_depth(cfg, engine, ierr)  
+</h2>
+    
+
+    <p>Configure-time refusal (any rank count): with dynamic wet/dry on, a
+wet column on an OPEN (Flather) or TIDAL edge whose resting depth is
+below <code>WETDRY_OPEN_EDGE_MIN_FACTOR * &amp;ocean_wetdry_nml dry_depth</code> is
+refused.  The Flather radiation velocity scales with
+<code>sqrt(g/max(D, 1e-6))</code>, so a near-dry edge column turns a small
+elevation mismatch into a runaway edge velocity; measured on the
+decomposition-gate tidal flat (0.25 m tide, <code>dry_depth = 0.05</code>): an
+edge column of 0.35 m blows up on ONE rank, one floored at 0.6 m is
+stable.  The factor 10 (0.5 m at the default <code>dry_depth</code>) sits between.
+A static-land column (<code>b &lt; -land_margin</code>) is a wall and is not
+checked.  Each rank checks the owned columns of the edges it holds
+(<code>has_*</code>) and the verdict is a global minimum, so every rank refuses
+together and the answer does not depend on the decomposition.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~231"></span>
+              type(<a href='../type/config_t.html'>config_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-engine~3"></span>
+              type(<a href='../type/ocean_engine_t.html'>ocean_engine_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>engine</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~134"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~check_wetdry_open_edge_depth~~CallsGraph Pages: 1 -->
+<svg id="proccheck_wetdry_open_edge_depthCallsGraph" width="641pt" height="184pt"
+ viewBox="0.00 0.00 641.00 184.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph" class="graph" transform="scale(0.917904 0.917904) rotate(0) translate(4 196.27)">
+<title>proc~~check_wetdry_open_edge_depth~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-196.27 694.33,-196.27 694.33,4 -4,4"/>
+<!-- proc~check_wetdry_open_edge_depth -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node1" class="node">
+<title>proc~check_wetdry_open_edge_depth</title>
+<polygon fill="none" stroke="black" points="184.77,-108.27 0,-108.27 0,-84 184.77,-84 184.77,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50">check_wetdry_open_edge_depth</text>
+</g>
+<!-- none~take_wet_depth -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node2" class="node">
+<title>none~take_wet_depth</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CallsGraph_node2"><a xlink:href="../proc/check_wetdry_open_edge_depth.html#proc-take_wet_depth" xlink:title="take_wet_depth">
+<polygon fill="#d9534f" stroke="#d9534f" points="346.29,-192.27 251.52,-192.27 251.52,-168 346.29,-168 346.29,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.91" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">take_wet_depth</text>
+</a>
+</g>
+</g>
+<!-- proc~check_wetdry_open_edge_depth&#45;&gt;none~take_wet_depth -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge1" class="edge">
+<title>proc~check_wetdry_open_edge_depth&#45;&gt;none~take_wet_depth</title>
+<path fill="none" stroke="#ff0000" d="M115.35,-108.63C140.28,-122.43 182.48,-144.61 220.77,-159.13 227.16,-161.56 233.94,-163.83 240.73,-165.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="239.31,-169.14 249.9,-168.6 241.29,-162.42 239.31,-169.14"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node3" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CallsGraph_node3"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="325.91,-150.27 271.91,-150.27 271.91,-126 325.91,-126 325.91,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.91" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~check_wetdry_open_edge_depth&#45;&gt;proc~fail -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge2" class="edge">
+<title>proc~check_wetdry_open_edge_depth&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M154.75,-108.74C189.13,-115.8 230.9,-124.37 260.42,-130.44"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="259.5,-133.82 270,-132.4 260.91,-126.96 259.5,-133.82"/>
+</g>
+<!-- proc~halo_allreduce_min -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node4" class="node">
+<title>proc~halo_allreduce_min</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CallsGraph_node4"><a xlink:href="../proc/halo_allreduce_min.html" xlink:title="halo_allreduce_min">
+<polygon fill="#d9534f" stroke="#d9534f" points="356.42,-108.27 241.4,-108.27 241.4,-84 356.42,-84 356.42,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.91" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_min</text>
+</a>
+</g>
+</g>
+<!-- proc~check_wetdry_open_edge_depth&#45;&gt;proc~halo_allreduce_min -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge3" class="edge">
+<title>proc~check_wetdry_open_edge_depth&#45;&gt;proc~halo_allreduce_min</title>
+<path fill="none" stroke="#ff0000" d="M185.18,-96.14C200.17,-96.14 215.48,-96.14 229.77,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="229.49,-99.64 239.49,-96.14 229.49,-92.64 229.49,-99.64"/>
+</g>
+<!-- proc~ocean_bc_type_from_string -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node5" class="node">
+<title>proc~ocean_bc_type_from_string</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CallsGraph_node5"><a xlink:href="../proc/ocean_bc_type_from_string.html" xlink:title="ocean_bc_type_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="377.04,-66.27 220.77,-66.27 220.77,-42 377.04,-42 377.04,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.91" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bc_type_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~check_wetdry_open_edge_depth&#45;&gt;proc~ocean_bc_type_from_string -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge4" class="edge">
+<title>proc~check_wetdry_open_edge_depth&#45;&gt;proc~ocean_bc_type_from_string</title>
+<path fill="none" stroke="#ff0000" d="M154.75,-83.53C176.99,-78.97 202.33,-73.76 225.44,-69.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="226.01,-72.47 235.1,-67.03 224.6,-65.62 226.01,-72.47"/>
+</g>
+<!-- to_string -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node6" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="327.54,-24.27 270.27,-24.27 270.27,0 327.54,0 327.54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="298.91" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~check_wetdry_open_edge_depth&#45;&gt;to_string -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge5" class="edge">
+<title>proc~check_wetdry_open_edge_depth&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M115.35,-83.64C140.28,-69.84 182.48,-47.66 220.77,-33.13 232.99,-28.5 246.66,-24.43 259.05,-21.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="259.71,-24.59 268.54,-18.72 257.98,-17.81 259.71,-24.59"/>
+</g>
+<!-- error -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node8" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="520.8,-192.27 466.8,-192.27 466.8,-168 520.8,-168 520.8,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="493.8" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge6" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#cbff00" d="M326.32,-143.89C359.7,-151.16 417.37,-163.71 455.3,-171.97"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="454.4,-175.36 464.91,-174.06 455.89,-168.52 454.4,-175.36"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node10" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CallsGraph_node10"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="541.19,-150.27 446.42,-150.27 446.42,-126 541.19,-126 541.19,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="493.8" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge7" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#cbff00" d="M326.32,-138.13C354.07,-138.13 398.59,-138.13 434.61,-138.13"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="434.46,-141.64 444.46,-138.14 434.46,-134.64 434.46,-141.64"/>
+</g>
+<!-- allreduce -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node7" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="524.31,-108.27 463.29,-108.27 463.29,-84 524.31,-84 524.31,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="493.8" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_min&#45;&gt;allreduce -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge8" class="edge">
+<title>proc~halo_allreduce_min&#45;&gt;allreduce</title>
+<path fill="none" stroke="#00ff66" d="M356.74,-96.14C387.17,-96.14 423.98,-96.14 451.63,-96.14"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="451.36,-99.64 461.36,-96.14 451.36,-92.64 451.36,-99.64"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node9" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CallsGraph_node9"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="574.56,-66.27 413.04,-66.27 413.04,-42 574.56,-42 574.56,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="493.8" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_min&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge9" class="edge">
+<title>proc~halo_allreduce_min&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#00ff66" d="M356.74,-83.76C377.84,-79.17 402.01,-73.9 424.07,-69.1"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="424.53,-72.58 433.56,-67.03 423.04,-65.74 424.53,-72.58"/>
+</g>
+<!-- to_lower -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node11" class="node">
+<title>to_lower</title>
+<polygon fill="#777777" stroke="#777777" points="522.06,-24.27 465.54,-24.27 465.54,0 522.06,0 522.06,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="493.8" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_lower</text>
+</g>
+<!-- proc~ocean_bc_type_from_string&#45;&gt;to_lower -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_bc_type_from_string&#45;&gt;to_lower</title>
+<path fill="none" stroke="#0066ff" d="M357.78,-41.53C388.85,-34.77 426.32,-26.61 453.9,-20.61"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="454.55,-24.04 463.58,-18.5 453.07,-17.2 454.55,-24.04"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_node12" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="690.33,-66.27 610.56,-66.27 610.56,-42 690.33,-42 690.33,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="650.45" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~check_wetdry_open_edge_depth~~CallsGraph_edge11" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#00ff66" d="M574.84,-54.13C583.06,-54.13 591.24,-54.13 599.01,-54.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="598.92,-57.64 608.92,-54.14 598.92,-50.64 598.92,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproccheck_wetdry_open_edge_depthCallsGraph = svgPanZoom('#proccheck_wetdry_open_edge_depthCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~check_wetdry_open_edge_depth~~CalledByGraph Pages: 1 -->
+<svg id="proccheck_wetdry_open_edge_depthCalledByGraph" width="641pt" height="146pt"
+ viewBox="0.00 0.00 641.00 146.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph" class="graph" transform="scale(0.92286 0.92286) rotate(0) translate(4 154.27)">
+<title>proc~~check_wetdry_open_edge_depth~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 690.58,-154.27 690.58,4 -4,4"/>
+<!-- proc~check_wetdry_open_edge_depth -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_node1" class="node">
+<title>proc~check_wetdry_open_edge_depth</title>
+<polygon fill="none" stroke="black" points="686.58,-66.27 501.81,-66.27 501.81,-42 686.58,-42 686.58,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="594.19" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">check_wetdry_open_edge_depth</text>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_node2" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CalledByGraph_node2"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.81,-66.27 383.04,-66.27 383.04,-42 465.81,-42 465.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="424.42" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~check_wetdry_open_edge_depth -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~check_wetdry_open_edge_depth</title>
+<path fill="none" stroke="#ff0000" d="M466.04,-54.13C473.59,-54.13 481.79,-54.13 490.26,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="490,-57.64 500,-54.14 490,-50.64 490,-57.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_node3" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CalledByGraph_node3"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.04,-108.27 208.02,-108.27 208.02,-84 347.04,-84 347.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_edge2" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-83.53C337.72,-78.98 355.61,-73.79 371.94,-69.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="372.87,-72.43 381.5,-66.29 370.92,-65.71 372.87,-72.43"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="329.79,-66.27 225.27,-66.27 225.27,-42 329.79,-42 329.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M330.02,-54.13C343.36,-54.13 357.73,-54.13 371.11,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="371.05,-57.64 381.05,-54.14 371.05,-50.64 371.05,-57.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_node5" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CalledByGraph_node5"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="323.04,-24.27 232.02,-24.27 232.02,0 323.04,0 323.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-24.74C337.72,-29.29 355.61,-34.48 371.94,-39.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="370.92,-42.56 381.5,-41.98 372.87,-35.84 370.92,-42.56"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.14,-66.27 52.87,-66.27 52.87,-42 119.14,-42 119.14,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M119.59,-54.13C145.42,-54.13 182.28,-54.13 213.78,-54.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="213.61,-57.64 223.61,-54.14 213.61,-50.64 213.61,-57.64"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="161.14,-150.27 10.87,-150.27 10.87,-126 161.14,-126 161.14,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M143.87,-125.53C164.2,-121.03 187.32,-115.9 208.5,-111.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.22,-114.64 218.23,-109.05 207.71,-107.8 209.22,-114.64"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~check_wetdry_open_edge_depth~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="172.02,-108.27 0,-108.27 0,-84 172.02,-84 172.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~check_wetdry_open_edge_depth~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M172.34,-96.14C180.27,-96.14 188.28,-96.14 196.15,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.05,-99.64 206.05,-96.14 196.05,-92.64 196.05,-99.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproccheck_wetdry_open_edge_depthCalledByGraph = svgPanZoom('#proccheck_wetdry_open_edge_depthCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmin_glob"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmin_glob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmin_loc"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmin_loc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-edge_name~4"></span>
+              character(len=32),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>edge_name</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_edge"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_edge</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~285"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ie~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ie</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~266"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ng~57"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ng</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nm"></span>
+              character(len=8),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nxp~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nxp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nyp~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nyp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~31"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-thr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>thr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+    <section>
+    <h2>Subroutines</h2>
+      <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-take_wet_depth"></span> <h3> subroutine <a href='check_wetdry_open_edge_depth.html#proc-take_wet_depth'>take_wet_depth</a>(b)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b~39"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+    </section>    
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">check_wetdry_open_edge_depth</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">engine</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Configure-time refusal (any rank count): with dynamic wet/dry on, a</span>
+<span class="w">      </span><span class="c">!! wet column on an OPEN (Flather) or TIDAL edge whose resting depth is</span>
+<span class="w">      </span><span class="c">!! below `WETDRY_OPEN_EDGE_MIN_FACTOR * &amp;ocean_wetdry_nml dry_depth` is</span>
+<span class="w">      </span><span class="c">!! refused.  The Flather radiation velocity scales with</span>
+<span class="w">      </span><span class="c">!! `sqrt(g/max(D, 1e-6))`, so a near-dry edge column turns a small</span>
+<span class="w">      </span><span class="c">!! elevation mismatch into a runaway edge velocity; measured on the</span>
+<span class="w">      </span><span class="c">!! decomposition-gate tidal flat (0.25 m tide, `dry_depth = 0.05`): an</span>
+<span class="w">      </span><span class="c">!! edge column of 0.35 m blows up on ONE rank, one floored at 0.6 m is</span>
+<span class="w">      </span><span class="c">!! stable.  The factor 10 (0.5 m at the default `dry_depth`) sits between.</span>
+<span class="w">      </span><span class="c">!! A static-land column (`b &lt; -land_margin`) is a wall and is not</span>
+<span class="w">      </span><span class="c">!! checked.  Each rank checks the owned columns of the edges it holds</span>
+<span class="w">      </span><span class="c">!! (`has_*`) and the verdict is a global minimum, so every rank refuses</span>
+<span class="w">      </span><span class="c">!! together and the answer does not depend on the decomposition.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">config_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_engine_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">engine</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ie</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">nxp</span><span class="p">,</span><span class="w"> </span><span class="n">nyp</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">t</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dmin_loc</span><span class="p">,</span><span class="w"> </span><span class="n">dmin_glob</span><span class="p">,</span><span class="w"> </span><span class="n">thr</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nm</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">edge_name</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">has_edge</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">wetdry</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      </span><span class="n">thr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WETDRY_OPEN_EDGE_MIN_FACTOR</span><span class="o">*</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">wetdry</span><span class="p">%</span><span class="n">dry_depth</span>
+<span class="w">      </span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">nxp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span>
+<span class="w">      </span><span class="n">nyp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span>
+<span class="w">      </span><span class="k">do </span><span class="n">ie</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">         </span><span class="k">select case</span><span class="w"> </span><span class="p">(</span><span class="n">ie</span><span class="p">)</span>
+<span class="w">         </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">edge_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">west</span>
+<span class="w">            </span><span class="n">nm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"west"</span>
+<span class="w">            </span><span class="n">has_edge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">decomp</span><span class="p">%</span><span class="n">has_west</span>
+<span class="w">         </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="w">            </span><span class="n">edge_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">east</span>
+<span class="w">            </span><span class="n">nm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"east"</span>
+<span class="w">            </span><span class="n">has_edge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">decomp</span><span class="p">%</span><span class="n">has_east</span>
+<span class="w">         </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="w">            </span><span class="n">edge_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">south</span>
+<span class="w">            </span><span class="n">nm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"south"</span>
+<span class="w">            </span><span class="n">has_edge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">decomp</span><span class="p">%</span><span class="n">has_south</span>
+<span class="w">         </span><span class="k">case </span><span class="n">default</span>
+<span class="w">            </span><span class="n">edge_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">north</span>
+<span class="w">            </span><span class="n">nm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"north"</span>
+<span class="w">            </span><span class="n">has_edge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">decomp</span><span class="p">%</span><span class="n">has_north</span>
+<span class="w">         </span><span class="k">end select</span>
+<span class="k">         </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_bc_type_from_string</span><span class="p">(</span><span class="n">edge_name</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">OBC_OPEN</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">OBC_TIDAL</span><span class="p">)</span><span class="w"> </span><span class="k">cycle</span><span class="w">   </span><span class="c">! rank-uniform (config only)</span>
+<span class="w">         </span><span class="n">dmin_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">has_edge</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            select case</span><span class="w"> </span><span class="p">(</span><span class="n">ie</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyp</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">take_wet_depth</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">b</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            case</span><span class="w"> </span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="w">               </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyp</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">take_wet_depth</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">b</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nxp</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            case</span><span class="w"> </span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="w">               </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nxp</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">take_wet_depth</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">b</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            case </span><span class="n">default</span>
+<span class="w">               </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nxp</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">take_wet_depth</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">b</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyp</span><span class="p">))</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end select</span>
+<span class="k">         end if</span>
+<span class="k">         call </span><span class="n">halo_allreduce_min</span><span class="p">(</span><span class="n">dmin_loc</span><span class="p">,</span><span class="w"> </span><span class="n">dmin_glob</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dmin_glob</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">thr</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;ocean_wetdry_nml enable = .true. with the "</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">nm</span><span class="p">)</span><span class="o">//</span><span class="s2">" edge '"</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="nb">trim</span><span class="p">(</span><span class="n">edge_name</span><span class="p">)</span><span class="o">//</span><span class="s2">"': a wet boundary column has a resting depth of "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="n">to_string</span><span class="p">(</span><span class="n">dmin_glob</span><span class="p">)</span><span class="o">//</span><span class="s2">" m, below the minimum "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">thr</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="s2">" m ("</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">WETDRY_OPEN_EDGE_MIN_FACTOR</span><span class="p">)</span><span class="o">//</span><span class="s2">" x dry_depth) for an "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="s2">"open / tidal edge: the Flather velocity scales with sqrt(g/D) and "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="s2">"runs away on a near-dry edge column.  Deepen the bathymetry at the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="s2">"edge or move the edge."</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">            </span><span class="k">return</span>
+<span class="k">         end if</span>
+<span class="k">      end do</span>
+<span class="k">   contains</span>
+<span class="k">      subroutine </span><span class="n">take_wet_depth</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+<span class="w">         </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">b</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="o">-</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">wetdry</span><span class="p">%</span><span class="n">land_margin</span><span class="p">)</span><span class="w"> </span><span class="n">dmin_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">dmin_loc</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end subroutine </span><span class="n">take_wet_depth</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">check_wetdry_open_edge_depth</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

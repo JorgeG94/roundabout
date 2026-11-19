@@ -1,0 +1,1176 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>atm_sw_coszen_refresh &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>atm_sw_coszen_refresh
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">29 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_atm_state.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_atm_state.f90.html'>rdb_atm_state.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_atm_state.html'>rdb_atm_state</a></li>
+            <li class="breadcrumb-item active" aria-current="page">atm_sw_coszen_refresh</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-tol_s">TOL_S</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-d~13">d</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-decl_mid">decl_mid</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-decl_unused">decl_unused</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-eqtime_mid">eqtime_mid</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-eqtime_unused">eqtime_unused</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-hour_frac_mid">hour_frac_mid</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-hour_frac_rec">hour_frac_rec</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-r~28">r</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-sod">sod</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-sod_a">sod_a</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-t_off">t_off</a>
+            <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#variable-t_rec">t_rec</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/atm_sw_coszen_refresh.html#src">atm_sw_coszen_refresh</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine atm_sw_coszen_refresh(this, metrics, t, shift, wlen)  
+</h2>
+    
+
+    <p>Host-side Spencer (1971) solar-position scalars (calendar
+arithmetic, not device-safe) for the UTC bucket <code>[t_rec, t_rec +
+bucket)</code> holding the application window <code>[t + shift, t + shift +
+wlen)</code>, then ONE device kernel (<code>atm_coszen_apply_impl</code>) doing the
+per-cell closed-form integrals over the window and over the bucket.
+Fails loud if the window is not a tile of the bucket (see the
+module docstring).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~218"></span>
+              class(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~30"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~26"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-shift~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>shift</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wlen~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wlen</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~atm_sw_coszen_refresh~~CallsGraph Pages: 1 -->
+<svg id="procatm_sw_coszen_refreshCallsGraph" width="641pt" height="353pt"
+ viewBox="0.00 0.00 641.00 353.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph" class="graph" transform="scale(0.986791 0.986791) rotate(0) translate(4 353.27)">
+<title>proc~~atm_sw_coszen_refresh~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-353.27 645.58,-353.27 645.58,4 -4,4"/>
+<!-- proc~atm_sw_coszen_refresh -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node1" class="node">
+<title>proc~atm_sw_coszen_refresh</title>
+<polygon fill="none" stroke="black" points="135.27,-148.27 0,-148.27 0,-124 135.27,-124 135.27,-148.27"/>
+<text xml:space="preserve" text-anchor="middle" x="67.63" y="-132.53" font-family="Helvetica,sans-Serif" font-size="10.50">atm_sw_coszen_refresh</text>
+</g>
+<!-- proc~atm_coszen_apply_impl -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node2" class="node">
+<title>proc~atm_coszen_apply_impl</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node2"><a xlink:href="../proc/atm_coszen_apply_impl.html" xlink:title="atm_coszen_apply_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="308.79,-289.27 171.27,-289.27 171.27,-265 308.79,-265 308.79,-289.27"/>
+<text xml:space="preserve" text-anchor="middle" x="240.03" y="-273.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_coszen_apply_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_coszen_apply_impl -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge1" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_coszen_apply_impl</title>
+<path fill="none" stroke="#ff0000" d="M81.1,-148.58C99.94,-167.15 137.1,-202.84 171.27,-230.13 183.63,-240.01 197.94,-250.11 210.21,-258.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="208.03,-261.16 218.29,-263.8 211.91,-255.33 208.03,-261.16"/>
+</g>
+<!-- proc~atm_spencer_sun -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node3" class="node">
+<title>proc~atm_spencer_sun</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node3"><a xlink:href="../proc/atm_spencer_sun.html" xlink:title="atm_spencer_sun">
+<polygon fill="#d9534f" stroke="#d9534f" points="292.29,-148.27 187.77,-148.27 187.77,-124 292.29,-124 292.29,-148.27"/>
+<text xml:space="preserve" text-anchor="middle" x="240.03" y="-132.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_spencer_sun</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_spencer_sun -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge2" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_spencer_sun</title>
+<path fill="none" stroke="#ff0000" d="M135.49,-136.13C148.83,-136.13 162.8,-136.13 176.01,-136.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="175.87,-139.64 185.87,-136.14 175.87,-132.64 175.87,-139.64"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node4" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node4"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="267.03,-67.27 213.03,-67.27 213.03,-43 267.03,-43 267.03,-67.27"/>
+<text xml:space="preserve" text-anchor="middle" x="240.03" y="-51.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~fail -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge3" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M90.72,-123.65C111.28,-112.24 142.93,-95.19 171.27,-82.14 181.15,-77.58 192.03,-73.04 202.13,-69.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="203.25,-72.34 211.29,-65.44 200.7,-65.83 203.25,-72.34"/>
+</g>
+<!-- proc~safe_cos -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node5" class="node">
+<title>proc~safe_cos</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node5"><a xlink:href="../proc/safe_cos.html" xlink:title="safe_cos">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="436.18,-188.27 378.91,-188.27 378.91,-164 436.18,-164 436.18,-188.27"/>
+<text xml:space="preserve" text-anchor="middle" x="407.55" y="-172.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">safe_cos</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~safe_cos -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge4" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~safe_cos</title>
+<path fill="none" stroke="#ff0000" d="M124.08,-148.76C139.31,-151.88 155.87,-154.95 171.27,-157.13 239.76,-166.87 320.23,-172.03 367.09,-174.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="366.87,-177.91 377.03,-174.9 367.21,-170.91 366.87,-177.91"/>
+</g>
+<!-- proc~safe_sin -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node6" class="node">
+<title>proc~safe_sin</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node6"><a xlink:href="../proc/safe_sin.html" xlink:title="safe_sin">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="434.68,-230.27 380.41,-230.27 380.41,-206 434.68,-206 434.68,-230.27"/>
+<text xml:space="preserve" text-anchor="middle" x="407.55" y="-214.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">safe_sin</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~safe_sin -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge5" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~safe_sin</title>
+<path fill="none" stroke="#ff0000" d="M94.65,-148.65C115.07,-158.01 144.43,-170.46 171.27,-178.13 239.43,-197.62 321.59,-208.93 368.58,-214.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="368.19,-217.76 378.51,-215.38 368.96,-210.8 368.19,-217.76"/>
+</g>
+<!-- proc~seconds_to_date -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node7" class="node">
+<title>proc~seconds_to_date</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node7"><a xlink:href="../proc/seconds_to_date.html" xlink:title="seconds_to_date">
+<polygon fill="#d9534f" stroke="#d9534f" points="457.56,-108.27 357.54,-108.27 357.54,-84 457.56,-84 457.56,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="407.55" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">seconds_to_date</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~seconds_to_date -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge6" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~seconds_to_date</title>
+<path fill="none" stroke="#ff0000" d="M124.08,-123.51C139.31,-120.39 155.87,-117.32 171.27,-115.14 230.3,-106.74 298.24,-101.75 345.88,-99.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="345.94,-102.51 355.73,-98.46 345.55,-95.52 345.94,-102.51"/>
+</g>
+<!-- to_string -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node8" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="268.66,-25.27 211.39,-25.27 211.39,-1 268.66,-1 268.66,-25.27"/>
+<text xml:space="preserve" text-anchor="middle" x="240.03" y="-9.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;to_string -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge7" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M77.95,-123.52C94.42,-102.07 130.8,-58.47 171.27,-34.13 180.09,-28.83 190.37,-24.75 200.22,-21.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="200.93,-25.1 209.6,-19 199.02,-18.37 200.93,-25.1"/>
+</g>
+<!-- proc~atm_cosz_cumulative -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node10" class="node">
+<title>proc~atm_cosz_cumulative</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node10"><a xlink:href="../proc/atm_cosz_cumulative.html" xlink:title="atm_cosz_cumulative">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="470.31,-348.27 344.79,-348.27 344.79,-324 470.31,-324 470.31,-348.27"/>
+<text xml:space="preserve" text-anchor="middle" x="407.55" y="-332.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_cosz_cumulative</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;proc~atm_cosz_cumulative -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge8" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;proc~atm_cosz_cumulative</title>
+<path fill="none" stroke="#ff0000" d="M276.13,-289.65C300.74,-298.42 333.87,-310.23 360.58,-319.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="359.19,-322.97 369.79,-323.03 361.54,-316.38 359.19,-322.97"/>
+</g>
+<!-- rdb_sm_cos -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node14" class="node">
+<title>rdb_sm_cos</title>
+<polygon fill="#777777" stroke="#777777" points="610.83,-228.27 537.06,-228.27 537.06,-204 610.83,-204 610.83,-228.27"/>
+<text xml:space="preserve" text-anchor="middle" x="573.94" y="-212.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_cos</text>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_cos -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge9" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_cos</title>
+<path fill="none" stroke="#ff0000" d="M309.18,-266.87C354.88,-259.73 416.35,-249.64 470.31,-239.13 488.54,-235.58 508.49,-231.22 525.91,-227.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="526.51,-230.71 535.47,-225.06 524.95,-223.89 526.51,-230.71"/>
+</g>
+<!-- rdb_sm_sin -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node15" class="node">
+<title>rdb_sm_sin</title>
+<polygon fill="#777777" stroke="#777777" points="609.33,-307.27 538.56,-307.27 538.56,-283 609.33,-283 609.33,-307.27"/>
+<text xml:space="preserve" text-anchor="middle" x="573.94" y="-291.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_sin</text>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_sin -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge10" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#ff0000" d="M309,-280.82C373.98,-284.35 470.19,-289.56 526.74,-292.63"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="526.49,-296.12 536.66,-293.17 526.87,-289.13 526.49,-296.12"/>
+</g>
+<!-- proc~atm_spencer_sun&#45;&gt;proc~safe_cos -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge12" class="edge">
+<title>proc~atm_spencer_sun&#45;&gt;proc~safe_cos</title>
+<path fill="none" stroke="#ffda00" d="M292.49,-148.57C316.74,-154.43 345.18,-161.31 367.6,-166.72"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="366.71,-170.11 377.25,-169.05 368.35,-163.3 366.71,-170.11"/>
+</g>
+<!-- proc~atm_spencer_sun&#45;&gt;proc~safe_sin -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge13" class="edge">
+<title>proc~atm_spencer_sun&#45;&gt;proc~safe_sin</title>
+<path fill="none" stroke="#ffda00" d="M259.53,-148.58C279.81,-161.84 313.63,-182.86 344.79,-197.13 352.51,-200.67 361,-203.93 369.15,-206.78"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="367.92,-210.06 378.51,-209.92 370.14,-203.43 367.92,-210.06"/>
+</g>
+<!-- proc~atm_spencer_sun&#45;&gt;proc~seconds_to_date -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge14" class="edge">
+<title>proc~atm_spencer_sun&#45;&gt;proc~seconds_to_date</title>
+<path fill="none" stroke="#ffda00" d="M292.49,-123.7C309.55,-119.58 328.68,-114.95 346.33,-110.69"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="346.73,-114.19 355.63,-108.44 345.09,-107.39 346.73,-114.19"/>
+</g>
+<!-- proc~gregorian_day_number -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node13" class="node">
+<title>proc~gregorian_day_number</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node13"><a xlink:href="../proc/gregorian_day_number.html" xlink:title="gregorian_day_number">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="641.58,-148.27 506.31,-148.27 506.31,-124 641.58,-124 641.58,-148.27"/>
+<text xml:space="preserve" text-anchor="middle" x="573.94" y="-132.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gregorian_day_number</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_spencer_sun&#45;&gt;proc~gregorian_day_number -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge11" class="edge">
+<title>proc~atm_spencer_sun&#45;&gt;proc~gregorian_day_number</title>
+<path fill="none" stroke="#ffda00" d="M292.53,-136.13C346.52,-136.13 432.04,-136.13 494.45,-136.13"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="494.31,-139.64 504.31,-136.14 494.31,-132.64 494.31,-139.64"/>
+</g>
+<!-- error -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node9" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="434.55,-24.27 380.55,-24.27 380.55,0 434.55,0 434.55,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="407.55" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge15" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#48ff00" d="M267.26,-48.32C294.78,-41.17 338.28,-29.87 369.34,-21.8"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="369.91,-25.27 378.71,-19.37 368.15,-18.5 369.91,-25.27"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node12" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node12"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="454.93,-66.27 360.16,-66.27 360.16,-42 454.93,-42 454.93,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="407.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge16" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#48ff00" d="M267.26,-54.98C289.05,-54.84 320.86,-54.65 348.58,-54.49"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="348.28,-57.99 358.25,-54.43 348.23,-50.99 348.28,-57.99"/>
+</g>
+<!-- proc~safe_cos&#45;&gt;rdb_sm_cos -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge17" class="edge">
+<title>proc~safe_cos&#45;&gt;rdb_sm_cos</title>
+<path fill="none" stroke="#00ff91" d="M436.44,-182.92C460.86,-188.86 496.86,-197.62 525.76,-204.65"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="524.84,-208.03 535.38,-207 526.49,-201.23 524.84,-208.03"/>
+</g>
+<!-- proc~safe_sin&#45;&gt;rdb_sm_sin -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge18" class="edge">
+<title>proc~safe_sin&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#0091ff" d="M434.96,-230.51C462.24,-243.28 505.04,-263.33 535.74,-277.71"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="534.14,-280.82 544.68,-281.9 537.11,-274.49 534.14,-280.82"/>
+</g>
+<!-- proc~day_number_to_date -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node11" class="node">
+<title>proc~day_number_to_date</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CallsGraph_node11"><a xlink:href="../proc/day_number_to_date.html" xlink:title="day_number_to_date">
+<polygon fill="#d9534f" stroke="#d9534f" points="635.58,-106.27 512.31,-106.27 512.31,-82 635.58,-82 635.58,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="573.94" y="-90.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">day_number_to_date</text>
+</a>
+</g>
+</g>
+<!-- proc~seconds_to_date&#45;&gt;proc~day_number_to_date -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge19" class="edge">
+<title>proc~seconds_to_date&#45;&gt;proc~day_number_to_date</title>
+<path fill="none" stroke="#4800ff" d="M457.87,-95.53C471.31,-95.37 486.14,-95.19 500.57,-95.02"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="500.54,-98.52 510.5,-94.89 500.46,-91.52 500.54,-98.52"/>
+</g>
+<!-- proc~seconds_to_date&#45;&gt;proc~gregorian_day_number -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge20" class="edge">
+<title>proc~seconds_to_date&#45;&gt;proc~gregorian_day_number</title>
+<path fill="none" stroke="#4800ff" d="M457.87,-108.14C474.24,-112.12 492.7,-116.61 509.95,-120.81"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="509.07,-124.2 519.62,-123.16 510.73,-117.39 509.07,-124.2"/>
+</g>
+<!-- proc~atm_cosz_cumulative&#45;&gt;rdb_sm_sin -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge22" class="edge">
+<title>proc~atm_cosz_cumulative&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#ffda00" d="M458.77,-323.61C480.54,-318.18 505.85,-311.87 527.11,-306.57"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="527.81,-310 536.66,-304.18 526.11,-303.21 527.81,-310"/>
+</g>
+<!-- rdb_sm_atan2 -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_node16" class="node">
+<title>rdb_sm_atan2</title>
+<polygon fill="#777777" stroke="#777777" points="617.2,-349.27 530.68,-349.27 530.68,-325 617.2,-325 617.2,-349.27"/>
+<text xml:space="preserve" text-anchor="middle" x="573.94" y="-333.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_atan2</text>
+</g>
+<!-- proc~atm_cosz_cumulative&#45;&gt;rdb_sm_atan2 -->
+<g id="proc~~atm_sw_coszen_refresh~~CallsGraph_edge21" class="edge">
+<title>proc~atm_cosz_cumulative&#45;&gt;rdb_sm_atan2</title>
+<path fill="none" stroke="#ffda00" d="M470.7,-336.51C486.64,-336.61 503.65,-336.71 519.13,-336.81"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="519.09,-340.31 529.12,-336.87 519.14,-333.31 519.09,-340.31"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocatm_sw_coszen_refreshCallsGraph = svgPanZoom('#procatm_sw_coszen_refreshCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~atm_sw_coszen_refresh~~CalledByGraph Pages: 1 -->
+<svg id="procatm_sw_coszen_refreshCalledByGraph" width="641pt" height="74pt"
+ viewBox="0.00 0.00 641.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70.27)">
+<title>proc~~atm_sw_coszen_refresh~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 636.85,-70.27 636.85,4 -4,4"/>
+<!-- proc~atm_sw_coszen_refresh -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_node1" class="node">
+<title>proc~atm_sw_coszen_refresh</title>
+<polygon fill="none" stroke="black" points="632.85,-45.27 497.58,-45.27 497.58,-21 632.85,-21 632.85,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="565.22" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">atm_sw_coszen_refresh</text>
+</g>
+<!-- proc~atm_state_update -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_node2" class="node">
+<title>proc~atm_state_update</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CalledByGraph_node2"><a xlink:href="../proc/atm_state_update.html" xlink:title="atm_state_update">
+<polygon fill="#d9534f" stroke="#d9534f" points="461.58,-45.27 354.81,-45.27 354.81,-21 461.58,-21 461.58,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="408.19" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_state_update</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_state_update&#45;&gt;proc~atm_sw_coszen_refresh -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_edge1" class="edge">
+<title>proc~atm_state_update&#45;&gt;proc~atm_sw_coszen_refresh</title>
+<path fill="none" stroke="#ff0000" d="M461.68,-33.13C469.44,-33.13 477.58,-33.13 485.73,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="485.71,-36.64 495.71,-33.14 485.71,-29.64 485.71,-36.64"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_node3" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CalledByGraph_node3"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.81,-45.27 242.79,-45.27 242.79,-21 318.81,-21 318.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="280.8" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~atm_state_update -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step&#45;&gt;proc~atm_state_update</title>
+<path fill="none" stroke="#ff0000" d="M319.08,-33.13C326.73,-33.13 334.98,-33.13 343.26,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="343,-36.64 353,-33.14 343,-29.64 343,-36.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M207.15,-45.41C215.13,-44.06 223.34,-42.68 231.25,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.77,-44.8 241.05,-39.68 230.61,-37.9 231.77,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_node5" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CalledByGraph_node5"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M202.51,-20.07C211.89,-21.66 221.77,-23.33 231.2,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.49,-28.35 240.94,-26.57 231.66,-21.45 230.49,-28.35"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~atm_sw_coszen_refresh~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~atm_sw_coszen_refresh~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocatm_sw_coszen_refreshCalledByGraph = svgPanZoom('#procatm_sw_coszen_refreshCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tol_s"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TOL_S</strong></td>
+<td> =</td>
+                <td>1.0e-3_wp</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d~13"></span>
+              type(<a href='../type/date_t.html'>date_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decl_mid"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decl_mid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decl_unused"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decl_unused</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eqtime_mid"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eqtime_mid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eqtime_unused"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eqtime_unused</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hour_frac_mid"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hour_frac_mid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hour_frac_rec"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hour_frac_rec</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-r~28"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sod"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sod</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sod_a"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sod_a</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_off"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_off</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_rec"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_rec</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">atm_sw_coszen_refresh</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">shift</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Host-side Spencer (1971) solar-position scalars (calendar</span>
+<span class="w">      </span><span class="c">!! arithmetic, not device-safe) for the UTC bucket `[t_rec, t_rec +</span>
+<span class="w">      </span><span class="c">!! bucket)` holding the application window `[t + shift, t + shift +</span>
+<span class="w">      </span><span class="c">!! wlen)`, then ONE device kernel (`atm_coszen_apply_impl`) doing the</span>
+<span class="w">      </span><span class="c">!! per-cell closed-form integrals over the window and over the bucket.</span>
+<span class="w">      </span><span class="c">!! Fails loud if the window is not a tile of the bucket (see the</span>
+<span class="w">      </span><span class="c">!! module docstring).</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">atm_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">shift</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span>
+
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">date_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">d</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TOL_S</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0e-3_wp</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sod</span><span class="p">,</span><span class="w"> </span><span class="n">sod_a</span><span class="p">,</span><span class="w"> </span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">t_off</span><span class="p">,</span><span class="w"> </span><span class="n">t_rec</span><span class="p">,</span><span class="w"> </span><span class="n">hour_frac_rec</span><span class="p">,</span><span class="w"> </span><span class="n">hour_frac_mid</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">decl_mid</span><span class="p">,</span><span class="w"> </span><span class="n">eqtime_mid</span><span class="p">,</span><span class="w"> </span><span class="n">decl_unused</span><span class="p">,</span><span class="w"> </span><span class="n">eqtime_unused</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">wlen</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"atm_sw_coszen_refresh: non-positive shortwave window length "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">wlen</span><span class="p">)</span><span class="o">//</span><span class="s2">" s"</span><span class="p">,</span><span class="w"> </span><span class="n">code</span><span class="o">=</span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">modulo</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">sw_bucket</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">r</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">TOL_S</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"atm_sw_coszen_refresh: sw_interp = 'coszen' needs the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">sw_bucket</span><span class="p">)</span><span class="o">//</span><span class="s2">" s rsds interval to be a multiple of the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"step over which the flux is applied ("</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">wlen</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">" s = dt * dt_therm_ratio); change dt / dt_therm_ratio or use "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"sw_interp = 'linear'"</span><span class="p">,</span><span class="w"> </span><span class="n">code</span><span class="o">=</span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! UTC time of day of the window start; the buckets are fixed to the</span>
+<span class="w">      </span><span class="c">! UTC clock, not to the model epoch.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">seconds_to_date</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">epoch</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">)</span>
+<span class="w">      </span><span class="n">sod</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">d</span><span class="p">%</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="mi">360</span><span class="mf">0.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">d</span><span class="p">%</span><span class="n">mi</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="mi">6</span><span class="mf">0.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">d</span><span class="p">%</span><span class="n">s</span>
+<span class="w">      </span><span class="n">sod_a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sod</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">shift</span>
+<span class="w">      </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">modulo</span><span class="p">(</span><span class="n">sod_a</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">r</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">TOL_S</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"atm_sw_coszen_refresh: sw_interp = 'coszen' needs the shortwave window "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"start on the "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">wlen</span><span class="p">)</span><span class="o">//</span><span class="s2">" s grid of the UTC clock (start_date "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"time of day / restart time are off it by "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">r</span><span class="p">))</span><span class="o">//</span><span class="s2">" s)"</span><span class="p">,</span><span class="w"> </span><span class="n">code</span><span class="o">=</span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="w">      </span><span class="c">! Snap the (verified) tie so a window start a hair below a bucket edge</span>
+<span class="w">      </span><span class="c">! cannot fall into the previous bucket.</span>
+<span class="w">      </span><span class="n">sod_a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">anint</span><span class="p">(</span><span class="n">sod_a</span><span class="o">/</span><span class="n">wlen</span><span class="p">)</span><span class="o">*</span><span class="n">wlen</span>
+<span class="w">      </span><span class="n">t_off</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">modulo</span><span class="p">(</span><span class="n">sod_a</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">sw_bucket</span><span class="p">)</span>
+<span class="w">      </span><span class="n">t_rec</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">shift</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">sod_a</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">sod</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">shift</span><span class="p">))</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_off</span>
+
+<span class="w">      </span><span class="c">! Hour of day at the bucket start; declination + equation of time</span>
+<span class="w">      </span><span class="c">! frozen at the bucket midpoint (so every window's integral and the</span>
+<span class="w">      </span><span class="c">! bucket's come from ONE function and telescope exactly).</span>
+<span class="w">      </span><span class="k">call </span><span class="n">atm_spencer_sun</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">epoch</span><span class="p">,</span><span class="w"> </span><span class="n">t_rec</span><span class="p">,</span><span class="w"> </span><span class="n">hour_frac_rec</span><span class="p">,</span><span class="w"> </span><span class="n">decl_unused</span><span class="p">,</span><span class="w"> </span><span class="n">eqtime_unused</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">atm_spencer_sun</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">epoch</span><span class="p">,</span><span class="w"> </span><span class="n">t_rec</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">this</span><span class="p">%</span><span class="n">sw_bucket</span><span class="p">,</span><span class="w"> </span><span class="n">hour_frac_mid</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">decl_mid</span><span class="p">,</span><span class="w"> </span><span class="n">eqtime_mid</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">atm_coszen_apply_impl</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">hour_frac_rec</span><span class="p">,</span><span class="w"> </span><span class="n">safe_sin</span><span class="p">(</span><span class="n">decl_mid</span><span class="p">),</span><span class="w"> </span><span class="n">safe_cos</span><span class="p">(</span><span class="n">decl_mid</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">eqtime_mid</span><span class="p">,</span><span class="w"> </span><span class="n">t_off</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">sw_bucket</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">metrics</span><span class="p">%</span><span class="n">geolonT</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">geolatT</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">this</span><span class="p">%</span><span class="n">rsds_rec</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">cosz</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">cosz_mean</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rsds</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">atm_sw_coszen_refresh</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

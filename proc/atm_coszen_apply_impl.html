@@ -1,0 +1,1243 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>atm_coszen_apply_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>atm_coszen_apply_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">36 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_atm_state.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_atm_state.f90.html'>rdb_atm_state.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_atm_state.html'>rdb_atm_state</a></li>
+            <li class="breadcrumb-item active" aria-current="page">atm_coszen_apply_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-a~22">a</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-b~37">b</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-bucket_mean">bucket_mean</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-clat">clat</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-i~272">i</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-ii~15">ii</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-j~254">j</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-jj~14">jj</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-lat_r">lat_r</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-lon_deg">lon_deg</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-ratio~4">ratio</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-ratio_max">ratio_max</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-slat">slat</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-step_mean">step_mean</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-w_bucket0">w_bucket0</a>
+            <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#variable-w_step0">w_step0</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/atm_coszen_apply_impl.html#src">atm_coszen_apply_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine atm_coszen_apply_impl(nx_total, ny_total, nghost, nx_phys, ny_phys, hour_frac_rec, sdec, cdec, eqtime, t_off, dt, bucket, geolonT, geolatT, rsds_rec, cosz, cosz_mean, rsds)  
+</h2>
+    
+
+    <p>The ONE device kernel.  Per physical T-cell, with <code>cos Z(omega) =
+a + b cos omega</code> (<code>a = sin(lat) sin(dec)</code>, <code>b = cos(lat) cos(dec)</code>,
+<code>omega</code> the hour angle, advancing <code>ATM_EARTH_OMEGA</code> rad/s): the
+exact mean of <code>max(0, cos Z)</code> over the step <code>[t, t+dt)</code> (<code>cosz</code>)
+and over the whole <code>bucket</code> (<code>cosz_mean</code>) &ndash; both differences of
+<code>atm_cosz_cumulative</code> &ndash; and <code>rsds = rsds_rec * cosz /
+cosz_mean</code> (see the module docstring for the conservation and
+bound this gives).  <code>t_off</code> = seconds from the bucket start to
+<code>t</code>; <code>hour_frac_rec</code> = UTC hour of day at the bucket start;
+<code>sdec</code>/<code>cdec</code>/<code>eqtime</code> frozen at the bucket midpoint.
+Explicit-shape throughout; no cross-module calls &ndash; every quantity
+but <code>geolonT</code>/<code>geolatT</code> is a host-precomputed scalar.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~14"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~14"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~40"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~28"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~29"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hour_frac_rec~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>hour_frac_rec</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sdec"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>sdec</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cdec"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>cdec</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eqtime"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>eqtime</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_off~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>t_off</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~54"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bucket"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              value
+            </td>
+            <td>::</td>
+            <td><strong>bucket</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolont"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolonT</strong>(nx_total,ny_total)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolatt~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolatT</strong>(nx_total,ny_total)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rsds_rec~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rsds_rec</strong>(nx_total,ny_total)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cosz~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cosz</strong>(nx_total,ny_total)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cosz_mean~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cosz_mean</strong>(nx_total,ny_total)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rsds~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rsds</strong>(nx_total,ny_total)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~atm_coszen_apply_impl~~CallsGraph Pages: 1 -->
+<svg id="procatm_coszen_apply_implCallsGraph" width="430pt" height="94pt"
+ viewBox="0.00 0.00 430.00 94.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 90.27)">
+<title>proc~~atm_coszen_apply_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-90.27 425.56,-90.27 425.56,4 -4,4"/>
+<!-- proc~atm_coszen_apply_impl -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_node1" class="node">
+<title>proc~atm_coszen_apply_impl</title>
+<polygon fill="none" stroke="black" points="137.52,-44.27 0,-44.27 0,-20 137.52,-20 137.52,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="68.76" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50">atm_coszen_apply_impl</text>
+</g>
+<!-- proc~atm_cosz_cumulative -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_node2" class="node">
+<title>proc~atm_cosz_cumulative</title>
+<g id="a_proc~~atm_coszen_apply_impl~~CallsGraph_node2"><a xlink:href="../proc/atm_cosz_cumulative.html" xlink:title="atm_cosz_cumulative">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="299.04,-86.27 173.52,-86.27 173.52,-62 299.04,-62 299.04,-86.27"/>
+<text xml:space="preserve" text-anchor="middle" x="236.28" y="-70.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_cosz_cumulative</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;proc~atm_cosz_cumulative -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_edge1" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;proc~atm_cosz_cumulative</title>
+<path fill="none" stroke="#ff0000" d="M119.42,-44.74C136.77,-49.14 156.44,-54.13 174.59,-58.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="173.63,-62.1 184.19,-61.17 175.35,-55.32 173.63,-62.1"/>
+</g>
+<!-- rdb_sm_cos -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_node3" class="node">
+<title>rdb_sm_cos</title>
+<polygon fill="#777777" stroke="#777777" points="273.16,-44.27 199.39,-44.27 199.39,-20 273.16,-20 273.16,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="236.28" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_cos</text>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_cos -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_edge2" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_cos</title>
+<path fill="none" stroke="#ff0000" d="M137.56,-32.13C154.35,-32.13 171.99,-32.13 187.59,-32.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="187.56,-35.64 197.56,-32.14 187.56,-28.64 187.56,-35.64"/>
+</g>
+<!-- rdb_sm_sin -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_node4" class="node">
+<title>rdb_sm_sin</title>
+<polygon fill="#777777" stroke="#777777" points="413.68,-24.27 342.91,-24.27 342.91,0 413.68,0 413.68,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="378.3" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_sin</text>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_sin -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_edge3" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#ff0000" d="M121.7,-19.51C138.17,-16.08 156.51,-12.84 173.52,-11.13 229.03,-5.57 243.25,-10.78 299.04,-11.13 309.52,-11.2 320.78,-11.32 331.41,-11.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="331.07,-14.95 341.11,-11.58 331.16,-7.95 331.07,-14.95"/>
+</g>
+<!-- proc~atm_cosz_cumulative&#45;&gt;rdb_sm_sin -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_edge5" class="edge">
+<title>proc~atm_cosz_cumulative&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#ff0000" d="M277.16,-61.59C284.51,-58.99 292.07,-56.13 299.04,-53.13 314.81,-46.37 331.74,-37.69 345.8,-30.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="347.08,-33.35 354.15,-25.46 343.71,-27.22 347.08,-33.35"/>
+</g>
+<!-- rdb_sm_atan2 -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_node5" class="node">
+<title>rdb_sm_atan2</title>
+<polygon fill="#777777" stroke="#777777" points="421.56,-86.27 335.04,-86.27 335.04,-62 421.56,-62 421.56,-86.27"/>
+<text xml:space="preserve" text-anchor="middle" x="378.3" y="-70.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_atan2</text>
+</g>
+<!-- proc~atm_cosz_cumulative&#45;&gt;rdb_sm_atan2 -->
+<g id="proc~~atm_coszen_apply_impl~~CallsGraph_edge4" class="edge">
+<title>proc~atm_cosz_cumulative&#45;&gt;rdb_sm_atan2</title>
+<path fill="none" stroke="#ff0000" d="M299.51,-74.14C307.56,-74.14 315.75,-74.14 323.64,-74.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="323.43,-77.64 333.43,-74.14 323.43,-70.64 323.43,-77.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~atm_coszen_apply_impl~~CalledByGraph Pages: 1 -->
+<svg id="procatm_coszen_apply_implCalledByGraph" width="641pt" height="58pt"
+ viewBox="0.00 0.00 641.00 58.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph" class="graph" transform="scale(0.787112 0.787112) rotate(0) translate(4 70.27)">
+<title>proc~~atm_coszen_apply_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 810.37,-70.27 810.37,4 -4,4"/>
+<!-- proc~atm_coszen_apply_impl -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_node1" class="node">
+<title>proc~atm_coszen_apply_impl</title>
+<polygon fill="none" stroke="black" points="806.37,-45.27 668.85,-45.27 668.85,-21 806.37,-21 806.37,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="737.61" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">atm_coszen_apply_impl</text>
+</g>
+<!-- proc~atm_sw_coszen_refresh -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_node2" class="node">
+<title>proc~atm_sw_coszen_refresh</title>
+<g id="a_proc~~atm_coszen_apply_impl~~CalledByGraph_node2"><a xlink:href="../proc/atm_sw_coszen_refresh.html" xlink:title="atm_sw_coszen_refresh">
+<polygon fill="#d9534f" stroke="#d9534f" points="632.85,-45.27 497.58,-45.27 497.58,-21 632.85,-21 632.85,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="565.21" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_sw_coszen_refresh</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_coszen_apply_impl -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_coszen_apply_impl</title>
+<path fill="none" stroke="#ff0000" d="M633.07,-33.13C640.99,-33.13 649.14,-33.13 657.21,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="657.03,-36.64 667.03,-33.14 657.03,-29.64 657.03,-36.64"/>
+</g>
+<!-- proc~atm_state_update -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_node3" class="node">
+<title>proc~atm_state_update</title>
+<g id="a_proc~~atm_coszen_apply_impl~~CalledByGraph_node3"><a xlink:href="../proc/atm_state_update.html" xlink:title="atm_state_update">
+<polygon fill="#d9534f" stroke="#d9534f" points="461.58,-45.27 354.81,-45.27 354.81,-21 461.58,-21 461.58,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="408.19" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_state_update</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_state_update&#45;&gt;proc~atm_sw_coszen_refresh -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~atm_state_update&#45;&gt;proc~atm_sw_coszen_refresh</title>
+<path fill="none" stroke="#ff0000" d="M461.68,-33.13C469.44,-33.13 477.58,-33.13 485.73,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="485.71,-36.64 495.71,-33.14 485.71,-29.64 485.71,-36.64"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_node4" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~atm_coszen_apply_impl~~CalledByGraph_node4"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.81,-45.27 242.79,-45.27 242.79,-21 318.81,-21 318.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="280.8" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~atm_state_update -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~engine_step&#45;&gt;proc~atm_state_update</title>
+<path fill="none" stroke="#ff0000" d="M319.08,-33.13C326.73,-33.13 334.98,-33.13 343.26,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="343,-36.64 353,-33.14 343,-29.64 343,-36.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~atm_coszen_apply_impl~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M207.15,-45.41C215.13,-44.06 223.34,-42.68 231.25,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.77,-44.8 241.05,-39.68 230.61,-37.9 231.77,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~atm_coszen_apply_impl~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M202.51,-20.07C211.89,-21.66 221.77,-23.33 231.2,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.49,-28.35 240.94,-26.57 231.66,-21.45 230.49,-28.35"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~atm_coszen_apply_impl~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~atm_coszen_apply_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocatm_coszen_apply_implCalledByGraph = svgPanZoom('#procatm_coszen_apply_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a~22"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b~37"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bucket_mean"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bucket_mean</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-clat"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>clat</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~272"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ii~15"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ii</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~254"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jj~14"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jj</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lat_r"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lat_r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lon_deg"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lon_deg</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ratio~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ratio</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ratio_max"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ratio_max</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slat"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slat</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-step_mean"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>step_mean</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w_bucket0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w_bucket0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w_step0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w_step0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">atm_coszen_apply_impl</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">hour_frac_rec</span><span class="p">,</span><span class="w"> </span><span class="n">sdec</span><span class="p">,</span><span class="w"> </span><span class="n">cdec</span><span class="p">,</span><span class="w"> </span><span class="n">eqtime</span><span class="p">,</span><span class="w"> </span><span class="n">t_off</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">bucket</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">geolonT</span><span class="p">,</span><span class="w"> </span><span class="n">geolatT</span><span class="p">,</span><span class="w"> </span><span class="n">rsds_rec</span><span class="p">,</span><span class="w"> </span><span class="n">cosz</span><span class="p">,</span><span class="w"> </span><span class="n">cosz_mean</span><span class="p">,</span><span class="w"> </span><span class="n">rsds</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! The ONE device kernel.  Per physical T-cell, with `cos Z(omega) =</span>
+<span class="w">      </span><span class="c">!! a + b cos omega` (`a = sin(lat) sin(dec)`, `b = cos(lat) cos(dec)`,</span>
+<span class="w">      </span><span class="c">!! `omega` the hour angle, advancing `ATM_EARTH_OMEGA` rad/s): the</span>
+<span class="w">      </span><span class="c">!! exact mean of `max(0, cos Z)` over the step `[t, t+dt)` (`cosz`)</span>
+<span class="w">      </span><span class="c">!! and over the whole `bucket` (`cosz_mean`) -- both differences of</span>
+<span class="w">      </span><span class="c">!! `atm_cosz_cumulative` -- and `rsds = rsds_rec * cosz /</span>
+<span class="w">      </span><span class="c">!! cosz_mean` (see the module docstring for the conservation and</span>
+<span class="w">      </span><span class="c">!! bound this gives).  `t_off` = seconds from the bucket start to</span>
+<span class="w">      </span><span class="c">!! `t`; `hour_frac_rec` = UTC hour of day at the bucket start;</span>
+<span class="w">      </span><span class="c">!! `sdec`/`cdec`/`eqtime` frozen at the bucket midpoint.</span>
+<span class="w">      </span><span class="c">!! Explicit-shape throughout; no cross-module calls -- every quantity</span>
+<span class="w">      </span><span class="c">!! but `geolonT`/`geolatT` is a host-precomputed scalar.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">value</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">value</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hour_frac_rec</span><span class="p">,</span><span class="w"> </span><span class="n">sdec</span><span class="p">,</span><span class="w"> </span><span class="n">cdec</span><span class="p">,</span><span class="w"> </span><span class="n">eqtime</span><span class="p">,</span><span class="w"> </span><span class="n">t_off</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">bucket</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">geolonT</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">),</span><span class="w"> </span><span class="n">geolatT</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rsds_rec</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cosz</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">),</span><span class="w"> </span><span class="n">cosz_mean</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rsds</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ii</span><span class="p">,</span><span class="w"> </span><span class="n">jj</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lat_r</span><span class="p">,</span><span class="w"> </span><span class="n">slat</span><span class="p">,</span><span class="w"> </span><span class="n">clat</span><span class="p">,</span><span class="w"> </span><span class="n">lon_deg</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">w_bucket0</span><span class="p">,</span><span class="w"> </span><span class="n">w_step0</span><span class="p">,</span><span class="w"> </span><span class="n">ratio</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">step_mean</span><span class="p">,</span><span class="w"> </span><span class="n">bucket_mean</span><span class="p">,</span><span class="w"> </span><span class="n">ratio_max</span>
+
+<span class="w">      </span><span class="n">ratio_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bucket</span><span class="o">/</span><span class="nb">max</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="nb">tiny</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">))</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_phys</span><span class="p">)</span>
+<span class="w">         </span><span class="n">ii</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span>
+<span class="w">         </span><span class="n">jj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span>
+<span class="w">         </span><span class="n">lat_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolatT</span><span class="p">(</span><span class="n">ii</span><span class="p">,</span><span class="w"> </span><span class="n">jj</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span>
+<span class="w">         </span><span class="n">lon_deg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolonT</span><span class="p">(</span><span class="n">ii</span><span class="p">,</span><span class="w"> </span><span class="n">jj</span><span class="p">)</span>
+<span class="w">         </span><span class="n">slat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_sm_sin</span><span class="p">(</span><span class="n">lat_r</span><span class="p">)</span>
+<span class="w">         </span><span class="n">clat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_sm_cos</span><span class="p">(</span><span class="n">lat_r</span><span class="p">)</span>
+<span class="w">         </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slat</span><span class="o">*</span><span class="n">sdec</span>
+<span class="w">         </span><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">clat</span><span class="o">*</span><span class="n">cdec</span>
+
+<span class="w">         </span><span class="c">! Hour angle at the bucket start, and at the step start.</span>
+<span class="w">         </span><span class="n">w_bucket0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="mf">5.0_wp</span><span class="o">*</span><span class="n">hour_frac_rec</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.25_wp</span><span class="o">*</span><span class="n">eqtime</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">lon_deg</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span>
+<span class="w">         </span><span class="n">w_step0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w_bucket0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ATM_EARTH_OMEGA</span><span class="o">*</span><span class="n">t_off</span>
+
+<span class="w">         </span><span class="n">bucket_mean</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">atm_cosz_cumulative</span><span class="p">(</span><span class="n">w_bucket0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ATM_EARTH_OMEGA</span><span class="o">*</span><span class="n">bucket</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                        </span><span class="o">-</span><span class="w"> </span><span class="n">atm_cosz_cumulative</span><span class="p">(</span><span class="n">w_bucket0</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">))</span><span class="o">/</span><span class="p">(</span><span class="n">ATM_EARTH_OMEGA</span><span class="o">*</span><span class="n">bucket</span><span class="p">)</span>
+<span class="w">         </span><span class="n">step_mean</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">atm_cosz_cumulative</span><span class="p">(</span><span class="n">w_step0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ATM_EARTH_OMEGA</span><span class="o">*</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="o">-</span><span class="w"> </span><span class="n">atm_cosz_cumulative</span><span class="p">(</span><span class="n">w_step0</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">))</span><span class="o">/</span><span class="p">(</span><span class="n">ATM_EARTH_OMEGA</span><span class="o">*</span><span class="n">dt</span><span class="p">)</span>
+<span class="w">         </span><span class="n">bucket_mean</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">bucket_mean</span><span class="p">)</span>
+<span class="w">         </span><span class="n">step_mean</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">step_mean</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cosz</span><span class="p">(</span><span class="n">ii</span><span class="p">,</span><span class="w"> </span><span class="n">jj</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">step_mean</span>
+<span class="w">         </span><span class="n">cosz_mean</span><span class="p">(</span><span class="n">ii</span><span class="p">,</span><span class="w"> </span><span class="n">jj</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bucket_mean</span>
+
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bucket_mean</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">ATM_COSZ_MEAN_MIN</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">rsds</span><span class="p">(</span><span class="n">ii</span><span class="p">,</span><span class="w"> </span><span class="n">jj</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">ratio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">step_mean</span><span class="o">/</span><span class="n">bucket_mean</span><span class="p">,</span><span class="w"> </span><span class="n">ratio_max</span><span class="p">)</span>
+<span class="w">            </span><span class="n">rsds</span><span class="p">(</span><span class="n">ii</span><span class="p">,</span><span class="w"> </span><span class="n">jj</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rsds_rec</span><span class="p">(</span><span class="n">ii</span><span class="p">,</span><span class="w"> </span><span class="n">jj</span><span class="p">)</span><span class="o">*</span><span class="n">ratio</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">atm_coszen_apply_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

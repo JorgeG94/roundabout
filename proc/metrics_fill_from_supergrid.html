@@ -1,0 +1,2474 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>metrics_fill_from_supergrid &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>metrics_fill_from_supergrid
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">152 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_metrics.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_metrics.f90.html'>rdb_ocean_metrics.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></li>
+            <li class="breadcrumb-item active" aria-current="page">metrics_fill_from_supergrid</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-band_top">band_top</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-decomposed~2">decomposed</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-file_folds">file_folds</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-fold~4">fold</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-gband~2">gband</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-has_angle">has_angle</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-jb0~2">jb0</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-jb1~2">jb1</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-local_ierr~18">local_ierr</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-mband">mband</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-n0~3">n0</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-nb~4">nb</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-ncid~49">ncid</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-ng~76">ng</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-ni~9">ni</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-nj~9">nj</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-nnode">nnode</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-per_x~12">per_x</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_angle">sg_angle</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_area">sg_area</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_dx">sg_dx</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_dy">sg_dy</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_nx">sg_nx</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_nxp">sg_nxp</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_ny">sg_ny</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_nyp">sg_nyp</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_x">sg_x</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-sg_y">sg_y</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-top_x">top_x</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-top_y">top_y</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-varid_angle">varid_angle</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-varid_area">varid_area</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-varid_dx">varid_dx</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-varid_dy">varid_dy</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-varid_x">varid_x</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-varid_y">varid_y</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-y_scale">y_scale</a>
+            <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#variable-y_seam_err">y_seam_err</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/metrics_fill_from_supergrid.html#src">metrics_fill_from_supergrid</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine metrics_fill_from_supergrid(this, grid, supergrid_file, ierr, periodic_x, north_fold)  
+</h2>
+    
+
+    <p>Load an MOM6 supergrid (mosaic) NetCDF file and fill all metric
+arrays.  After this call the caller must invoke <code>metrics_finalize</code>
+to compute the inverses + hvisc ratio bundle.</p>
+<p>The file must contain variables <code>x</code>, <code>y</code> (degrees, shape
+<code>(2*ni+1, 2*nj+1)</code>), <code>dx</code> (m, shape <code>(2*ni, 2*nj+1)</code>), <code>dy</code> (m,
+shape <code>(2*ni+1, 2*nj)</code>), and <code>area</code> (m^2, shape <code>(2*ni, 2*nj)</code>),
+where <code>ni = grid%nx_global</code>, <code>nj = grid%ny_global</code> (the file
+always describes the WHOLE grid).  Dimensions must
+be named <code>nxp</code>/<code>nyp</code> (size 2ni+1 / 2nj+1) and <code>nx</code>/<code>ny</code> (size
+2ni / 2nj).  Ghost rows are filled by constant extrapolation,
+then — on a periodic-x and/or tripolar-fold grid — replaced by the
+periodic / fold images through <code>metrics_fold_periodic_ghosts</code>, the
+routine the analytic tripolar generator uses.</p>
+<p>Decomposed tile: only the full-width band of rows the tile needs
+(its storage rows plus one padding row each side) is read, with
+start/count windows; the band is assembled and ghost-filled as a
+whole grid of that height, and the tile&rsquo;s storage window is cut
+out of it, so every tile is bit-identical to its slice of the
+single-rank metrics (see the band note in the body).</p>
+<p>Topology cross-check (fail-loud, <code>OCEAN_STATUS_ERR_SETUP</code>): whether
+the file IS tripolar is read off the file itself
+(<code>supergrid_top_row_folds</code>), and must agree with <code>north_fold</code>
+(the <code>&amp;ocean_bc_nml north = "tripolar_fold"</code> tag) — a folded grid
+with a north wall, or a fold tag on a grid whose top row does not
+fold, would silently exchange the wrong cells.  <code>periodic_x</code>
+requires the east and west node columns to lie on the same
+latitudes (<code>y</code>), which every periodic supergrid satisfies.</p>
+<p>The optional variable <code>angle_dx</code> (degrees, MOM6&rsquo;s grid rotation,
+counter-clockwise from true east) is read when present; absent, it
+is derived from the node geography
+(<code>supergrid_angle_dx_from_geography</code>).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~311"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~222"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                <p>Grid metadata — supplies the tile (<code>nx_phys</code>, <code>ny_phys</code>,
+<code>nghost</code>, offsets) and the whole grid (<code>nx_global</code>, <code>ny_global</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-supergrid_file~2"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>supergrid_file</strong></td>
+            <td>
+                <p>Path to the MOM6 mosaic supergrid NetCDF file.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~152"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                <p>Non-zero on a dimension mismatch, an unreadable/missing file,
+a topology mismatch, or a missing NetCDF build when present;
+absent behaves as today (<code>error stop</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_x~8"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_x</strong></td>
+            <td>
+                <p>The run is periodic east-west.  Absent ⇒ <code>.false.</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-north_fold~5"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>north_fold</strong></td>
+            <td>
+                <p>The run closes the north edge with the tripolar fold.  Absent ⇒
+<code>.false.</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~metrics_fill_from_supergrid~~CallsGraph Pages: 1 -->
+<svg id="procmetrics_fill_from_supergridCallsGraph" width="641pt" height="567pt"
+ viewBox="0.00 0.00 641.00 567.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph" class="graph" transform="scale(0.579503 0.579503) rotate(0) translate(4 974.27)">
+<title>proc~~metrics_fill_from_supergrid~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-974.27 1102.12,-974.27 1102.12,4 -4,4"/>
+<!-- proc~metrics_fill_from_supergrid -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node1" class="node">
+<title>proc~metrics_fill_from_supergrid</title>
+<polygon fill="none" stroke="black" points="155.52,-394.27 0,-394.27 0,-370 155.52,-370 155.52,-394.27"/>
+<text xml:space="preserve" text-anchor="middle" x="77.76" y="-378.53" font-family="Helvetica,sans-Serif" font-size="10.50">metrics_fill_from_supergrid</text>
+</g>
+<!-- info -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node2" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="334.9,-907.27 280.9,-907.27 280.9,-883 334.9,-883 334.9,-907.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-891.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;info -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge1" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;info</title>
+<path fill="none" stroke="#ff0000" d="M79.8,-394.63C85.85,-464.34 118.82,-804.66 191.52,-874.13 211.98,-893.69 244.23,-898.2 269.45,-898.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="269.39,-901.74 279.31,-898 269.22,-894.74 269.39,-901.74"/>
+</g>
+<!-- nf90_inq_varid -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node3" class="node">
+<title>nf90_inq_varid</title>
+<polygon fill="#777777" stroke="#777777" points="577.18,-554.27 487.66,-554.27 487.66,-530 577.18,-530 577.18,-554.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-538.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_inq_varid</text>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;nf90_inq_varid -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge2" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;nf90_inq_varid</title>
+<path fill="none" stroke="#ff0000" d="M84.18,-394.44C97.57,-423.11 135.24,-494.12 191.52,-523.13 282.34,-569.96 405.5,-562.21 475.91,-552.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="476.29,-555.72 485.67,-550.78 475.26,-548.79 476.29,-555.72"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node4" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node4"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="931.96,-462.27 877.96,-462.27 877.96,-438 931.96,-438 931.96,-462.27"/>
+<text xml:space="preserve" text-anchor="middle" x="904.96" y="-446.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~fail -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge3" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M82.46,-394.73C93.02,-428.12 126.8,-518.81 191.52,-555.13 271.58,-600.07 514.25,-579.61 604.56,-563.13 704.99,-544.81 815.5,-494.58 869.88,-467.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="871.25,-470.9 878.63,-463.3 868.12,-464.64 871.25,-470.9"/>
+</g>
+<!-- proc~grid_init -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node5" class="node">
+<title>proc~grid_init</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node5"><a xlink:href="../proc/grid_init.html" xlink:title="hgrid_t%grid_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="358.29,-634.27 257.52,-634.27 257.52,-610 358.29,-610 358.29,-634.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-618.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">hgrid_t%grid_init</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~grid_init -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge4" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~grid_init</title>
+<path fill="none" stroke="#ff0000" d="M81.47,-394.65C90.19,-431.81 121.18,-542.25 191.52,-596.13 207.05,-608.03 227,-614.68 245.93,-618.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="245.3,-621.77 255.73,-619.95 246.44,-614.86 245.3,-621.77"/>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node6" class="node">
+<title>proc~metrics_assemble_from_supergrid_arrays</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node6"><a xlink:href="../proc/metrics_assemble_from_supergrid_arrays.html" xlink:title="metrics_assemble_from_supergrid_arrays">
+<polygon fill="#d9534f" stroke="#d9534f" points="424.29,-865.27 191.52,-865.27 191.52,-841 424.29,-841 424.29,-865.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-849.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_assemble_from_supergrid_arrays</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~metrics_assemble_from_supergrid_arrays -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge5" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~metrics_assemble_from_supergrid_arrays</title>
+<path fill="none" stroke="#ff0000" d="M80.84,-394.52C89.03,-440.98 122.07,-608.25 191.52,-727.13 216.41,-769.75 257.69,-810.19 283.54,-833.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="281.02,-835.74 290.85,-839.71 285.64,-830.48 281.02,-835.74"/>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node7" class="node">
+<title>proc~metrics_fold_periodic_ghosts</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node7"><a xlink:href="../proc/metrics_fold_periodic_ghosts.html" xlink:title="metrics_fold_periodic_ghosts">
+<polygon fill="#d9534f" stroke="#d9534f" points="390.54,-718.27 225.27,-718.27 225.27,-694 390.54,-694 390.54,-718.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-702.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_periodic_ghosts</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~metrics_fold_periodic_ghosts -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge6" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~metrics_fold_periodic_ghosts</title>
+<path fill="none" stroke="#ff0000" d="M81.12,-394.6C89.37,-435.14 120.34,-565.09 191.52,-643.13 210.19,-663.61 237.1,-678.83 260.24,-689.18"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="258.6,-692.29 269.17,-693 261.35,-685.85 258.6,-692.29"/>
+</g>
+<!-- proc~metrics_window_all -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node8" class="node">
+<title>proc~metrics_window_all</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node8"><a xlink:href="../proc/metrics_window_all.html" xlink:title="metrics_window_all">
+<polygon fill="#d9534f" stroke="#d9534f" points="365.04,-454.27 250.77,-454.27 250.77,-430 365.04,-430 365.04,-454.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-438.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_window_all</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~metrics_window_all -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge7" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~metrics_window_all</title>
+<path fill="none" stroke="#ff0000" d="M126.59,-394.71C162.03,-404.03 210.52,-416.79 248.29,-426.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="247.12,-430.03 257.68,-429.19 248.9,-423.26 247.12,-430.03"/>
+</g>
+<!-- proc~nc_close -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node9" class="node">
+<title>proc~nc_close</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node9"><a xlink:href="../proc/nc_close.html" xlink:title="nc_close">
+<polygon fill="#d9534f" stroke="#d9534f" points="561.06,-150.27 503.79,-150.27 503.79,-126 561.06,-126 561.06,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_close</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_close -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge8" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_close</title>
+<path fill="none" stroke="#ff0000" d="M84.56,-369.64C98.48,-341.15 136.77,-271.4 191.52,-239.13 281.83,-185.92 328.21,-243.06 424.29,-201.13 442.87,-193.03 443.11,-183.89 460.29,-173.13 470.64,-166.66 482.35,-160.47 493.24,-155.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.47,-158.44 501.99,-150.98 491.46,-152.12 494.47,-158.44"/>
+</g>
+<!-- proc~nc_get_dim_len -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node10" class="node">
+<title>proc~nc_get_dim_len</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node10"><a xlink:href="../proc/nc_get_dim_len.html" xlink:title="nc_get_dim_len">
+<polygon fill="#d9534f" stroke="#d9534f" points="354.91,-394.27 260.89,-394.27 260.89,-370 354.91,-370 354.91,-394.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-378.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_get_dim_len</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_get_dim_len -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge9" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_get_dim_len</title>
+<path fill="none" stroke="#ff0000" d="M156,-382.13C186.56,-382.13 221.08,-382.13 249.38,-382.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="249.18,-385.64 259.18,-382.14 249.18,-378.64 249.18,-385.64"/>
+</g>
+<!-- proc~nc_get_var_slab_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node11" class="node">
+<title>proc~nc_get_var_slab_2d</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node11"><a xlink:href="../proc/nc_get_var_slab_2d.html" xlink:title="nc_get_var_slab_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="365.41,-272.27 250.39,-272.27 250.39,-248 365.41,-248 365.41,-272.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-256.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_get_var_slab_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_get_var_slab_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge10" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_get_var_slab_2d</title>
+<path fill="none" stroke="#ff0000" d="M88.44,-369.83C106.28,-348.09 146.67,-303.09 191.52,-281.13 206.16,-273.97 222.92,-269.23 239.05,-266.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="239.33,-269.61 248.58,-264.45 238.13,-262.71 239.33,-269.61"/>
+</g>
+<!-- proc~nc_get_varid -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node12" class="node">
+<title>proc~nc_get_varid</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node12"><a xlink:href="../proc/nc_get_varid.html" xlink:title="nc_get_varid">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.41,-514.27 268.39,-514.27 268.39,-490 347.41,-490 347.41,-514.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-498.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_get_varid</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_get_varid -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge11" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_get_varid</title>
+<path fill="none" stroke="#ff0000" d="M93.16,-394.65C113.75,-412.03 153.35,-443.53 191.52,-463.13 212.17,-473.74 236.32,-482.42 257.18,-488.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="256.04,-492.19 266.62,-491.71 258.05,-485.48 256.04,-492.19"/>
+</g>
+<!-- proc~nc_open_read -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node13" class="node">
+<title>proc~nc_open_read</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node13"><a xlink:href="../proc/nc_open_read.html" xlink:title="nc_open_read">
+<polygon fill="#d9534f" stroke="#d9534f" points="350.79,-314.27 265.02,-314.27 265.02,-290 350.79,-290 350.79,-314.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-298.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_open_read</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_open_read -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge12" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~nc_open_read</title>
+<path fill="none" stroke="#ff0000" d="M114.66,-369.55C154.02,-355.74 217.32,-333.55 260.44,-318.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="261.51,-321.76 269.79,-315.15 259.19,-315.16 261.51,-321.76"/>
+</g>
+<!-- proc~ocean_metrics_destroy -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node14" class="node">
+<title>proc~ocean_metrics_destroy</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node14"><a xlink:href="../proc/ocean_metrics_destroy.html" xlink:title="ocean_metrics_t%ocean_metrics_destroy">
+<polygon fill="#d9534f" stroke="#d9534f" points="423.16,-192.27 192.64,-192.27 192.64,-168 423.16,-168 423.16,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_metrics_t%ocean_metrics_destroy</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~ocean_metrics_destroy -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge13" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~ocean_metrics_destroy</title>
+<path fill="none" stroke="#ff0000" d="M82.98,-369.53C94.59,-336.86 130.3,-249.04 191.52,-206.13 196.46,-202.67 201.78,-199.66 207.34,-197.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="208.3,-200.44 216.17,-193.34 205.59,-193.99 208.3,-200.44"/>
+</g>
+<!-- proc~supergrid_angle_dx_from_geography -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node15" class="node">
+<title>proc~supergrid_angle_dx_from_geography</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node15"><a xlink:href="../proc/supergrid_angle_dx_from_geography.html" xlink:title="supergrid_angle_dx_from_geography">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="412.29,-108.27 203.52,-108.27 203.52,-84 412.29,-84 412.29,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_angle_dx_from_geography</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~supergrid_angle_dx_from_geography -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge14" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~supergrid_angle_dx_from_geography</title>
+<path fill="none" stroke="#ff0000" d="M79.98,-369.69C84.88,-326.86 107.16,-184.56 191.52,-117.13 192.66,-116.22 193.83,-115.35 195.02,-114.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.58,-117.65 203.3,-109.46 192.94,-111.67 196.58,-117.65"/>
+</g>
+<!-- proc~supergrid_io_ok -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node16" class="node">
+<title>proc~supergrid_io_ok</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node16"><a xlink:href="../proc/supergrid_io_ok.html" xlink:title="supergrid_io_ok">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="355.66,-150.27 260.14,-150.27 260.14,-126 355.66,-126 355.66,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_io_ok</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~supergrid_io_ok -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge15" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~supergrid_io_ok</title>
+<path fill="none" stroke="#ff0000" d="M81.08,-369.51C88.86,-330.98 117.82,-214.16 191.52,-159.13 207.75,-147.02 228.79,-141.15 248.45,-138.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="248.74,-141.99 258.31,-137.45 248,-135.02 248.74,-141.99"/>
+</g>
+<!-- proc~supergrid_top_row_folds -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node17" class="node">
+<title>proc~supergrid_top_row_folds</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node17"><a xlink:href="../proc/supergrid_top_row_folds.html" xlink:title="supergrid_top_row_folds">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="377.79,-66.27 238.02,-66.27 238.02,-42 377.79,-42 377.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_top_row_folds</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~supergrid_top_row_folds -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge16" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~supergrid_top_row_folds</title>
+<path fill="none" stroke="#ff0000" d="M79.18,-369.77C81.49,-322.95 96.37,-155.19 191.52,-75.13 201.62,-66.64 214.01,-61.09 226.88,-57.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="227.33,-61.05 236.29,-55.38 225.75,-54.23 227.33,-61.05"/>
+</g>
+<!-- to_string -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node18" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="336.54,-24.27 279.27,-24.27 279.27,0 336.54,0 336.54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="307.9" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;to_string -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge17" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M78.57,-369.55C78.54,-318.58 85.65,-125.83 191.52,-33.13 212.06,-15.15 242.73,-10.25 267.29,-9.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="267.26,-13.15 277.27,-9.66 267.27,-6.15 267.26,-13.15"/>
+</g>
+<!-- error -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node19" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="1077.73,-483.27 1023.73,-483.27 1023.73,-459 1077.73,-459 1077.73,-483.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1050.73" y="-467.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge18" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#ffb300" d="M932.33,-453.99C954.73,-457.26 987.13,-461.99 1012.23,-465.66"/>
+<polygon fill="#ffb300" stroke="#ffb300" points="1011.63,-469.11 1022.03,-467.09 1012.65,-462.18 1011.63,-469.11"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node27" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node27"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="1098.12,-441.27 1003.35,-441.27 1003.35,-417 1098.12,-417 1098.12,-441.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1050.73" y="-425.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge19" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#ffb300" d="M932.33,-446.28C948.96,-443.86 971.09,-440.62 991.66,-437.62"/>
+<polygon fill="#ffb300" stroke="#ffb300" points="991.99,-441.11 1001.38,-436.2 990.98,-434.18 991.99,-441.11"/>
+</g>
+<!-- proc~supergrid_ghost_fill_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node34" class="node">
+<title>proc~supergrid_ghost_fill_2d</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node34"><a xlink:href="../proc/supergrid_ghost_fill_2d.html" xlink:title="supergrid_ghost_fill_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="599.31,-886.27 465.54,-886.27 465.54,-862 599.31,-862 599.31,-886.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-870.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_ghost_fill_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge20" class="edge">
+<title>proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_2d</title>
+<path fill="none" stroke="#96ff00" d="M424.73,-864.07C434.56,-864.99 444.35,-865.92 453.78,-866.81"/>
+<polygon fill="#96ff00" stroke="#96ff00" points="453.3,-870.28 463.58,-867.73 453.96,-863.31 453.3,-870.28"/>
+</g>
+<!-- proc~supergrid_ghost_fill_bu -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node35" class="node">
+<title>proc~supergrid_ghost_fill_bu</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node35"><a xlink:href="../proc/supergrid_ghost_fill_bu.html" xlink:title="supergrid_ghost_fill_bu">
+<polygon fill="#d9534f" stroke="#d9534f" points="599.31,-844.27 465.54,-844.27 465.54,-820 599.31,-820 599.31,-844.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-828.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_ghost_fill_bu</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_bu -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge21" class="edge">
+<title>proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_bu</title>
+<path fill="none" stroke="#96ff00" d="M424.73,-842.2C434.56,-841.28 444.35,-840.35 453.78,-839.46"/>
+<polygon fill="#96ff00" stroke="#96ff00" points="453.96,-842.96 463.58,-838.54 453.3,-835.99 453.96,-842.96"/>
+</g>
+<!-- proc~supergrid_ghost_fill_cu -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node36" class="node">
+<title>proc~supergrid_ghost_fill_cu</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node36"><a xlink:href="../proc/supergrid_ghost_fill_cu.html" xlink:title="supergrid_ghost_fill_cu">
+<polygon fill="#d9534f" stroke="#d9534f" points="598.93,-970.27 465.91,-970.27 465.91,-946 598.93,-946 598.93,-970.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-954.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_ghost_fill_cu</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_cu -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge22" class="edge">
+<title>proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_cu</title>
+<path fill="none" stroke="#96ff00" d="M409.66,-865.73C414.8,-868.12 419.72,-870.9 424.29,-874.13 450.61,-892.76 435,-917.13 460.29,-937.13 461.58,-938.16 462.93,-939.13 464.31,-940.06"/>
+<polygon fill="#96ff00" stroke="#96ff00" points="462.2,-942.88 472.62,-944.76 465.64,-936.79 462.2,-942.88"/>
+</g>
+<!-- proc~supergrid_ghost_fill_cv -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node37" class="node">
+<title>proc~supergrid_ghost_fill_cv</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node37"><a xlink:href="../proc/supergrid_ghost_fill_cv.html" xlink:title="supergrid_ghost_fill_cv">
+<polygon fill="#d9534f" stroke="#d9534f" points="598.56,-928.27 466.29,-928.27 466.29,-904 598.56,-904 598.56,-928.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-912.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_ghost_fill_cv</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_cv -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge23" class="edge">
+<title>proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_cv</title>
+<path fill="none" stroke="#96ff00" d="M396.41,-865.71C405.95,-868.07 415.41,-870.85 424.29,-874.13 441.66,-880.56 443.28,-887.79 460.29,-895.13 464.12,-896.79 468.12,-898.36 472.19,-899.84"/>
+<polygon fill="#96ff00" stroke="#96ff00" points="471.01,-903.14 481.6,-903.07 473.28,-896.52 471.01,-903.14"/>
+</g>
+<!-- interface~fold_north_centre -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node20" class="node">
+<title>interface~fold_north_centre</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node20"><a xlink:href="../interface/fold_north_centre.html" xlink:title="fold_north_centre">
+<polygon fill="#a7506f" stroke="#a7506f" points="584.68,-802.27 480.16,-802.27 480.16,-778 584.68,-778 584.68,-802.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-786.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts&#45;&gt;interface~fold_north_centre -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge24" class="edge">
+<title>proc~metrics_fold_periodic_ghosts&#45;&gt;interface~fold_north_centre</title>
+<path fill="none" stroke="#3cff00" d="M336.46,-718.65C366.53,-732.07 416.29,-753.53 460.29,-769.13 465.06,-770.83 470.04,-772.49 475.06,-774.1"/>
+<polygon fill="#3cff00" stroke="#3cff00" points="474,-777.44 484.59,-777.08 476.08,-770.76 474,-777.44"/>
+</g>
+<!-- proc~metrics_fold_north_faces -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node28" class="node">
+<title>proc~metrics_fold_north_faces</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node28"><a xlink:href="../proc/metrics_fold_north_faces.html" xlink:title="metrics_fold_north_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="604.56,-760.27 460.29,-760.27 460.29,-736 604.56,-736 604.56,-760.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-744.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_north_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_fold_north_faces -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge25" class="edge">
+<title>proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_fold_north_faces</title>
+<path fill="none" stroke="#3cff00" d="M375.67,-718.74C400.2,-723.37 428.19,-728.65 453.61,-733.45"/>
+<polygon fill="#3cff00" stroke="#3cff00" points="452.75,-736.85 463.22,-735.26 454.04,-729.97 452.75,-736.85"/>
+</g>
+<!-- proc~metrics_periodic_x_all -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node29" class="node">
+<title>proc~metrics_periodic_x_all</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node29"><a xlink:href="../proc/metrics_periodic_x_all.html" xlink:title="metrics_periodic_x_all">
+<polygon fill="#d9534f" stroke="#d9534f" points="597.06,-676.27 467.79,-676.27 467.79,-652 597.06,-652 597.06,-676.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-660.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_all</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_periodic_x_all -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge26" class="edge">
+<title>proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_periodic_x_all</title>
+<path fill="none" stroke="#3cff00" d="M375.67,-693.53C401.1,-688.73 430.24,-683.23 456.38,-678.3"/>
+<polygon fill="#3cff00" stroke="#3cff00" points="456.72,-681.8 465.9,-676.5 455.42,-674.92 456.72,-681.8"/>
+</g>
+<!-- proc~metrics_window_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node30" class="node">
+<title>proc~metrics_window_2d</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node30"><a xlink:href="../proc/metrics_window_2d.html" xlink:title="metrics_window_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="589.93,-474.27 474.91,-474.27 474.91,-450 589.93,-450 589.93,-474.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-458.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_window_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_window_all&#45;&gt;proc~metrics_window_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge27" class="edge">
+<title>proc~metrics_window_all&#45;&gt;proc~metrics_window_2d</title>
+<path fill="none" stroke="#00ff1e" d="M365.34,-447.21C395.16,-449.89 431.98,-453.2 463.36,-456.02"/>
+<polygon fill="#00ff1e" stroke="#00ff1e" points="462.88,-459.49 473.15,-456.9 463.51,-452.52 462.88,-459.49"/>
+</g>
+<!-- nf90_close -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node21" class="node">
+<title>nf90_close</title>
+<polygon fill="#777777" stroke="#777777" points="757.83,-150.27 689.31,-150.27 689.31,-126 757.83,-126 757.83,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_close</text>
+</g>
+<!-- proc~nc_close&#45;&gt;nf90_close -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge28" class="edge">
+<title>proc~nc_close&#45;&gt;nf90_close</title>
+<path fill="none" stroke="#00ff78" d="M561.33,-138.13C592.03,-138.13 641.78,-138.13 677.91,-138.13"/>
+<polygon fill="#00ff78" stroke="#00ff78" points="677.61,-141.64 687.61,-138.14 677.61,-134.64 677.61,-141.64"/>
+</g>
+<!-- proc~nc_check -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node31" class="node">
+<title>proc~nc_check</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node31"><a xlink:href="../proc/nc_check.html" xlink:title="nc_check">
+<polygon fill="#d9534f" stroke="#d9534f" points="754.08,-373.27 693.06,-373.27 693.06,-349 754.08,-349 754.08,-373.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-357.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_check</text>
+</a>
+</g>
+</g>
+<!-- proc~nc_close&#45;&gt;proc~nc_check -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge29" class="edge">
+<title>proc~nc_close&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ff78" d="M561.33,-143.65C575.46,-147.53 592.2,-153.91 604.56,-164.13 662.73,-212.22 699.4,-296.92 714.56,-337.78"/>
+<polygon fill="#00ff78" stroke="#00ff78" points="711.23,-338.88 717.91,-347.1 717.82,-336.51 711.23,-338.88"/>
+</g>
+<!-- nf90_inq_dimid -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node23" class="node">
+<title>nf90_inq_dimid</title>
+<polygon fill="#777777" stroke="#777777" points="578.68,-394.27 486.16,-394.27 486.16,-370 578.68,-370 578.68,-394.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-378.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_inq_dimid</text>
+</g>
+<!-- proc~nc_get_dim_len&#45;&gt;nf90_inq_dimid -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge30" class="edge">
+<title>proc~nc_get_dim_len&#45;&gt;nf90_inq_dimid</title>
+<path fill="none" stroke="#00ffd1" d="M355.28,-382.13C390.03,-382.13 437.75,-382.13 474.75,-382.13"/>
+<polygon fill="#00ffd1" stroke="#00ffd1" points="474.36,-385.64 484.36,-382.14 474.36,-378.64 474.36,-385.64"/>
+</g>
+<!-- nf90_inquire_dimension -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node24" class="node">
+<title>nf90_inquire_dimension</title>
+<polygon fill="#777777" stroke="#777777" points="601.56,-352.27 463.29,-352.27 463.29,-328 601.56,-328 601.56,-352.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-336.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_inquire_dimension</text>
+</g>
+<!-- proc~nc_get_dim_len&#45;&gt;nf90_inquire_dimension -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge31" class="edge">
+<title>proc~nc_get_dim_len&#45;&gt;nf90_inquire_dimension</title>
+<path fill="none" stroke="#00ffd1" d="M355.28,-373.38C383.78,-368 421,-360.98 453.88,-354.77"/>
+<polygon fill="#00ffd1" stroke="#00ffd1" points="454.18,-358.28 463.36,-352.98 452.88,-351.4 454.18,-358.28"/>
+</g>
+<!-- proc~nc_get_dim_len&#45;&gt;proc~nc_check -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge32" class="edge">
+<title>proc~nc_get_dim_len&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ffd1" d="M355.34,-392.3C413.86,-403.54 517.34,-418.19 604.56,-403.13 632.37,-398.33 662.31,-387.61 685.07,-378.2"/>
+<polygon fill="#00ffd1" stroke="#00ffd1" points="686.4,-381.44 694.24,-374.31 683.66,-374.99 686.4,-381.44"/>
+</g>
+<!-- nf90_get_var -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node22" class="node">
+<title>nf90_get_var</title>
+<polygon fill="#777777" stroke="#777777" points="572.68,-230.27 492.16,-230.27 492.16,-206 572.68,-206 572.68,-230.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-214.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_get_var</text>
+</g>
+<!-- proc~nc_get_var_slab_2d&#45;&gt;nf90_get_var -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge33" class="edge">
+<title>proc~nc_get_var_slab_2d&#45;&gt;nf90_get_var</title>
+<path fill="none" stroke="#00d1ff" d="M365.63,-249.43C401.15,-242.72 446.51,-234.16 480.81,-227.69"/>
+<polygon fill="#00d1ff" stroke="#00d1ff" points="481.32,-231.15 490.5,-225.86 480.02,-224.28 481.32,-231.15"/>
+</g>
+<!-- proc~nc_get_var_slab_2d&#45;&gt;proc~nc_check -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge34" class="edge">
+<title>proc~nc_get_var_slab_2d&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00d1ff" d="M365.85,-254C385.28,-250.2 406.55,-244.07 424.29,-234.13 444.31,-222.93 439.15,-206.06 460.29,-197.13 519.36,-172.19 547.5,-167.89 604.56,-197.13 662.84,-227 698.88,-300.52 714.12,-338.15"/>
+<polygon fill="#00d1ff" stroke="#00d1ff" points="710.74,-339.12 717.63,-347.17 717.27,-336.58 710.74,-339.12"/>
+</g>
+<!-- proc~nc_get_varid&#45;&gt;nf90_inq_varid -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge35" class="edge">
+<title>proc~nc_get_varid&#45;&gt;nf90_inq_varid</title>
+<path fill="none" stroke="#0078ff" d="M347.67,-509.1C383.21,-515.49 436.25,-525.03 476.22,-532.21"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="475.44,-535.63 485.9,-533.95 476.67,-528.74 475.44,-535.63"/>
+</g>
+<!-- proc~nc_get_varid&#45;&gt;proc~nc_check -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge36" class="edge">
+<title>proc~nc_get_varid&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#0078ff" d="M347.44,-508.14C406,-515.45 519.59,-522.42 604.56,-483.13 651.49,-461.44 689.52,-412.17 708.81,-383.32"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="711.72,-385.27 714.23,-374.98 705.85,-381.46 711.72,-385.27"/>
+</g>
+<!-- nf90_open -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node25" class="node">
+<title>nf90_open</title>
+<polygon fill="#777777" stroke="#777777" points="566.31,-272.27 498.54,-272.27 498.54,-248 566.31,-248 566.31,-272.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-256.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_open</text>
+</g>
+<!-- proc~nc_open_read&#45;&gt;nf90_open -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge37" class="edge">
+<title>proc~nc_open_read&#45;&gt;nf90_open</title>
+<path fill="none" stroke="#001dff" d="M351.13,-294.59C372.98,-290.65 400.08,-285.71 424.29,-281.13 444.9,-277.24 467.71,-272.79 486.97,-268.99"/>
+<polygon fill="#001dff" stroke="#001dff" points="487.53,-272.45 496.66,-267.07 486.18,-265.58 487.53,-272.45"/>
+</g>
+<!-- proc~nc_open_read&#45;&gt;proc~nc_check -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge38" class="edge">
+<title>proc~nc_open_read&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#001dff" d="M351,-300.83C408.78,-299.87 515.62,-301.14 604.56,-319.13 631.85,-324.66 661.37,-335.16 684.05,-344.29"/>
+<polygon fill="#001dff" stroke="#001dff" points="682.62,-347.48 693.2,-348.05 685.28,-341.01 682.62,-347.48"/>
+</g>
+<!-- proc~safe_atan2 -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node32" class="node">
+<title>proc~safe_atan2</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node32"><a xlink:href="../proc/safe_atan2.html" xlink:title="safe_atan2">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="567.43,-108.27 497.41,-108.27 497.41,-84 567.43,-84 567.43,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">safe_atan2</text>
+</a>
+</g>
+</g>
+<!-- proc~supergrid_angle_dx_from_geography&#45;&gt;proc~safe_atan2 -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge39" class="edge">
+<title>proc~supergrid_angle_dx_from_geography&#45;&gt;proc~safe_atan2</title>
+<path fill="none" stroke="#9500ff" d="M412.67,-96.13C438.39,-96.13 464.64,-96.13 485.9,-96.13"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="485.65,-99.64 495.65,-96.14 485.65,-92.64 485.65,-99.64"/>
+</g>
+<!-- proc~safe_cos -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node33" class="node">
+<title>proc~safe_cos</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node33"><a xlink:href="../proc/safe_cos.html" xlink:title="safe_cos">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="752.2,-66.27 694.93,-66.27 694.93,-42 752.2,-42 752.2,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">safe_cos</text>
+</a>
+</g>
+</g>
+<!-- proc~supergrid_angle_dx_from_geography&#45;&gt;proc~safe_cos -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge40" class="edge">
+<title>proc~supergrid_angle_dx_from_geography&#45;&gt;proc~safe_cos</title>
+<path fill="none" stroke="#9500ff" d="M393.27,-83.55C415.07,-80.54 438.53,-77.51 460.29,-75.13 539.28,-66.5 632.02,-59.9 683.36,-56.56"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="683.31,-60.07 693.06,-55.94 682.86,-53.09 683.31,-60.07"/>
+</g>
+<!-- proc~supergrid_io_ok&#45;&gt;proc~nc_close -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge41" class="edge">
+<title>proc~supergrid_io_ok&#45;&gt;proc~nc_close</title>
+<path fill="none" stroke="#f000ff" d="M356.1,-138.13C396.68,-138.13 454.51,-138.13 492.49,-138.13"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="492.09,-141.64 502.09,-138.14 492.09,-134.64 492.09,-141.64"/>
+</g>
+<!-- none~unit_vector -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node26" class="node">
+<title>none~unit_vector</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node26"><a xlink:href="../proc/supergrid_top_row_folds.html#proc-unit_vector" xlink:title="unit_vector">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="567.81,-28.27 497.04,-28.27 497.04,-4 567.81,-4 567.81,-28.27"/>
+<text xml:space="preserve" text-anchor="middle" x="532.42" y="-12.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">unit_vector</text>
+</a>
+</g>
+</g>
+<!-- proc~supergrid_top_row_folds&#45;&gt;none~unit_vector -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge42" class="edge">
+<title>proc~supergrid_top_row_folds&#45;&gt;none~unit_vector</title>
+<path fill="none" stroke="#ff00b4" d="M378.09,-42.32C413.05,-36.35 454.5,-29.27 485.49,-23.98"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="486.06,-27.43 495.33,-22.3 484.88,-20.53 486.06,-27.43"/>
+</g>
+<!-- proc~fold_north_centre_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node40" class="node">
+<title>proc~fold_north_centre_2d</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node40"><a xlink:href="../proc/fold_north_centre_2d.html" xlink:title="fold_north_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="785.2,-928.27 661.93,-928.27 661.93,-904 785.2,-904 785.2,-928.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-912.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_centre&#45;&gt;proc~fold_north_centre_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge43" class="edge">
+<title>interface~fold_north_centre&#45;&gt;proc~fold_north_centre_2d</title>
+<path fill="none" stroke="#ff5000" stroke-dasharray="5,2" d="M584.88,-799.34C592.04,-802.25 598.88,-806.09 604.56,-811.13 634.92,-838.11 609.71,-868.71 640.56,-895.13 643.92,-898.01 647.62,-900.5 651.53,-902.66"/>
+<polygon fill="#ff5000" stroke="#ff5000" points="649.73,-905.68 660.27,-906.71 652.68,-899.33 649.73,-905.68"/>
+</g>
+<!-- proc~fold_north_centre_3d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node41" class="node">
+<title>proc~fold_north_centre_3d</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node41"><a xlink:href="../proc/fold_north_centre_3d.html" xlink:title="fold_north_centre_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="785.2,-886.27 661.93,-886.27 661.93,-862 785.2,-862 785.2,-886.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-870.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_centre&#45;&gt;proc~fold_north_centre_3d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge44" class="edge">
+<title>interface~fold_north_centre&#45;&gt;proc~fold_north_centre_3d</title>
+<path fill="none" stroke="#ff5000" stroke-dasharray="5,2" d="M585.13,-801.52C591.94,-804.12 598.62,-807.29 604.56,-811.13 625.2,-824.5 619.68,-840.15 640.56,-853.13 643.91,-855.22 647.45,-857.09 651.12,-858.78"/>
+<polygon fill="#ff5000" stroke="#ff5000" points="649.71,-861.99 660.3,-862.5 652.34,-855.5 649.71,-861.99"/>
+</g>
+<!-- none~unit_vector&#45;&gt;proc~safe_cos -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge45" class="edge">
+<title>none~unit_vector&#45;&gt;proc~safe_cos</title>
+<path fill="none" stroke="#00ff35" d="M568.12,-23.1C600.79,-29.67 649.66,-39.49 683.65,-46.32"/>
+<polygon fill="#00ff35" stroke="#00ff35" points="682.59,-49.67 693.08,-48.21 683.96,-42.81 682.59,-49.67"/>
+</g>
+<!-- proc~safe_sin -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node48" class="node">
+<title>proc~safe_sin</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node48"><a xlink:href="../proc/safe_sin.html" xlink:title="safe_sin">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="750.7,-24.27 696.43,-24.27 696.43,0 750.7,0 750.7,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">safe_sin</text>
+</a>
+</g>
+</g>
+<!-- none~unit_vector&#45;&gt;proc~safe_sin -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge46" class="edge">
+<title>none~unit_vector&#45;&gt;proc~safe_sin</title>
+<path fill="none" stroke="#00ff35" d="M568.12,-15.4C601.13,-14.7 650.67,-13.66 684.69,-12.94"/>
+<polygon fill="#00ff35" stroke="#00ff35" points="684.59,-16.44 694.51,-12.73 684.44,-9.44 684.59,-16.44"/>
+</g>
+<!-- interface~fold_north_corner -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node38" class="node">
+<title>interface~fold_north_corner</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node38"><a xlink:href="../interface/fold_north_corner.html" xlink:title="fold_north_corner">
+<polygon fill="#a7506f" stroke="#a7506f" points="776.58,-844.27 670.56,-844.27 670.56,-820 776.58,-820 776.58,-844.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-828.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_corner</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_north_faces&#45;&gt;interface~fold_north_corner -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge47" class="edge">
+<title>proc~metrics_fold_north_faces&#45;&gt;interface~fold_north_corner</title>
+<path fill="none" stroke="#00ffd6" d="M588.09,-760.69C593.87,-763.06 599.48,-765.85 604.56,-769.13 625.2,-782.5 619.68,-798.15 640.56,-811.13 646.46,-814.8 652.97,-817.83 659.67,-820.33"/>
+<polygon fill="#00ffd6" stroke="#00ffd6" points="658.27,-823.56 668.86,-823.37 660.47,-816.91 658.27,-823.56"/>
+</g>
+<!-- proc~metrics_fold_north_cu_scalar -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node42" class="node">
+<title>proc~metrics_fold_north_cu_scalar</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node42"><a xlink:href="../proc/metrics_fold_north_cu_scalar.html" xlink:title="metrics_fold_north_cu_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="806.58,-760.27 640.56,-760.27 640.56,-736 806.58,-736 806.58,-760.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-744.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_north_cu_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_north_faces&#45;&gt;proc~metrics_fold_north_cu_scalar -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge48" class="edge">
+<title>proc~metrics_fold_north_faces&#45;&gt;proc~metrics_fold_north_cu_scalar</title>
+<path fill="none" stroke="#00ffd6" d="M604.93,-748.13C612.75,-748.13 620.8,-748.13 628.84,-748.13"/>
+<polygon fill="#00ffd6" stroke="#00ffd6" points="628.66,-751.64 638.66,-748.14 628.66,-744.64 628.66,-751.64"/>
+</g>
+<!-- proc~metrics_fold_north_cv_scalar -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node43" class="node">
+<title>proc~metrics_fold_north_cv_scalar</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node43"><a xlink:href="../proc/metrics_fold_north_cv_scalar.html" xlink:title="metrics_fold_north_cv_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="806.2,-802.27 640.93,-802.27 640.93,-778 806.2,-778 806.2,-802.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-786.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_north_cv_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_north_faces&#45;&gt;proc~metrics_fold_north_cv_scalar -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge49" class="edge">
+<title>proc~metrics_fold_north_faces&#45;&gt;proc~metrics_fold_north_cv_scalar</title>
+<path fill="none" stroke="#00ffd6" d="M590.17,-760.74C610.47,-765.24 633.54,-770.37 654.68,-775.06"/>
+<polygon fill="#00ffd6" stroke="#00ffd6" points="653.86,-778.46 664.38,-777.21 655.38,-771.63 653.86,-778.46"/>
+</g>
+<!-- proc~metrics_periodic_x_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node44" class="node">
+<title>proc~metrics_periodic_x_2d</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node44"><a xlink:href="../proc/metrics_periodic_x_2d.html" xlink:title="metrics_periodic_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="788.58,-718.27 658.56,-718.27 658.56,-694 788.58,-694 788.58,-718.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-702.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge50" class="edge">
+<title>proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_2d</title>
+<path fill="none" stroke="#00d6ff" d="M590.17,-676.74C610.47,-681.24 633.54,-686.37 654.68,-691.06"/>
+<polygon fill="#00d6ff" stroke="#00d6ff" points="653.86,-694.46 664.38,-693.21 655.38,-687.63 653.86,-694.46"/>
+</g>
+<!-- proc~metrics_periodic_x_bu -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node45" class="node">
+<title>proc~metrics_periodic_x_bu</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node45"><a xlink:href="../proc/metrics_periodic_x_bu.html" xlink:title="metrics_periodic_x_bu">
+<polygon fill="#d9534f" stroke="#d9534f" points="788.58,-676.27 658.56,-676.27 658.56,-652 788.58,-652 788.58,-676.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-660.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_bu</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_bu -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge51" class="edge">
+<title>proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_bu</title>
+<path fill="none" stroke="#00d6ff" d="M597.46,-664.13C613.4,-664.13 630.63,-664.13 647.06,-664.13"/>
+<polygon fill="#00d6ff" stroke="#00d6ff" points="646.76,-667.64 656.76,-664.14 646.76,-660.64 646.76,-667.64"/>
+</g>
+<!-- proc~metrics_periodic_x_cu -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node46" class="node">
+<title>proc~metrics_periodic_x_cu</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node46"><a xlink:href="../proc/metrics_periodic_x_cu.html" xlink:title="metrics_periodic_x_cu">
+<polygon fill="#d9534f" stroke="#d9534f" points="788.2,-634.27 658.93,-634.27 658.93,-610 788.2,-610 788.2,-634.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-618.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_cu</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_cu -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge52" class="edge">
+<title>proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_cu</title>
+<path fill="none" stroke="#00d6ff" d="M590.17,-651.53C610.47,-647.03 633.54,-641.9 654.68,-637.21"/>
+<polygon fill="#00d6ff" stroke="#00d6ff" points="655.38,-640.64 664.38,-635.06 653.86,-633.81 655.38,-640.64"/>
+</g>
+<!-- proc~metrics_periodic_x_cv -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node47" class="node">
+<title>proc~metrics_periodic_x_cv</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node47"><a xlink:href="../proc/metrics_periodic_x_cv.html" xlink:title="metrics_periodic_x_cv">
+<polygon fill="#d9534f" stroke="#d9534f" points="787.83,-592.27 659.31,-592.27 659.31,-568 787.83,-568 787.83,-592.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-576.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_cv</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_cv -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge53" class="edge">
+<title>proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_cv</title>
+<path fill="none" stroke="#00d6ff" d="M551.19,-651.57C571.81,-637.5 607.25,-614.87 640.56,-601.13 644.92,-599.34 649.47,-597.66 654.1,-596.11"/>
+<polygon fill="#00d6ff" stroke="#00d6ff" points="655.05,-599.47 663.54,-593.14 652.95,-592.8 655.05,-599.47"/>
+</g>
+<!-- proc~nc_check&#45;&gt;proc~fail -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge55" class="edge">
+<title>proc~nc_check&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#0035ff" d="M749.89,-373.7C780.88,-389.07 833.52,-415.19 868.52,-432.55"/>
+<polygon fill="#0035ff" stroke="#0035ff" points="866.9,-435.65 877.42,-436.96 870.01,-429.38 866.9,-435.65"/>
+</g>
+<!-- nf90_strerror -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node39" class="node">
+<title>nf90_strerror</title>
+<polygon fill="#777777" stroke="#777777" points="944.85,-373.27 865.08,-373.27 865.08,-349 944.85,-349 944.85,-373.27"/>
+<text xml:space="preserve" text-anchor="middle" x="904.96" y="-357.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_strerror</text>
+</g>
+<!-- proc~nc_check&#45;&gt;nf90_strerror -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge54" class="edge">
+<title>proc~nc_check&#45;&gt;nf90_strerror</title>
+<path fill="none" stroke="#0035ff" d="M754.19,-361.13C781.14,-361.13 821.47,-361.13 853.49,-361.13"/>
+<polygon fill="#0035ff" stroke="#0035ff" points="853.36,-364.64 863.36,-361.14 853.36,-357.64 853.36,-364.64"/>
+</g>
+<!-- rdb_sm_atan2 -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node49" class="node">
+<title>rdb_sm_atan2</title>
+<polygon fill="#777777" stroke="#777777" points="766.83,-108.27 680.31,-108.27 680.31,-84 766.83,-84 766.83,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.57" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_atan2</text>
+</g>
+<!-- proc~safe_atan2&#45;&gt;rdb_sm_atan2 -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge56" class="edge">
+<title>proc~safe_atan2&#45;&gt;rdb_sm_atan2</title>
+<path fill="none" stroke="#1a00ff" d="M567.68,-96.13C595.87,-96.13 636.32,-96.13 668.82,-96.13"/>
+<polygon fill="#1a00ff" stroke="#1a00ff" points="668.44,-99.64 678.44,-96.14 668.44,-92.64 668.44,-99.64"/>
+</g>
+<!-- rdb_sm_cos -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node50" class="node">
+<title>rdb_sm_cos</title>
+<polygon fill="#777777" stroke="#777777" points="941.85,-66.27 868.08,-66.27 868.08,-42 941.85,-42 941.85,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="904.96" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_cos</text>
+</g>
+<!-- proc~safe_cos&#45;&gt;rdb_sm_cos -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge57" class="edge">
+<title>proc~safe_cos&#45;&gt;rdb_sm_cos</title>
+<path fill="none" stroke="#6b00ff" d="M752.6,-54.13C780.37,-54.13 823.42,-54.13 856.52,-54.13"/>
+<polygon fill="#6b00ff" stroke="#6b00ff" points="856.26,-57.64 866.26,-54.14 856.26,-50.64 856.26,-57.64"/>
+</g>
+<!-- proc~fold_north_corner_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node51" class="node">
+<title>proc~fold_north_corner_2d</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CallsGraph_node51"><a xlink:href="../proc/fold_north_corner_2d.html" xlink:title="fold_north_corner_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="967.35,-844.27 842.58,-844.27 842.58,-820 967.35,-820 967.35,-844.27"/>
+<text xml:space="preserve" text-anchor="middle" x="904.96" y="-828.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_corner_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_corner&#45;&gt;proc~fold_north_corner_2d -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge58" class="edge">
+<title>interface~fold_north_corner&#45;&gt;proc~fold_north_corner_2d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M776.94,-832.13C793.82,-832.13 812.84,-832.13 830.93,-832.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="830.83,-835.64 840.83,-832.14 830.83,-828.64 830.83,-835.64"/>
+</g>
+<!-- rdb_sm_sin -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node52" class="node">
+<title>rdb_sm_sin</title>
+<polygon fill="#777777" stroke="#777777" points="940.35,-24.27 869.58,-24.27 869.58,0 940.35,0 940.35,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="904.96" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_sin</text>
+</g>
+<!-- proc~safe_sin&#45;&gt;rdb_sm_sin -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge59" class="edge">
+<title>proc~safe_sin&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#9c00ff" d="M751.04,-12.13C779.11,-12.13 824,-12.13 857.9,-12.13"/>
+<polygon fill="#9c00ff" stroke="#9c00ff" points="857.87,-15.64 867.87,-12.14 857.87,-8.64 857.87,-15.64"/>
+</g>
+<!-- local -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_node53" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="1077.73,-844.27 1023.73,-844.27 1023.73,-820 1077.73,-820 1077.73,-844.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1050.73" y="-828.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~fold_north_corner_2d&#45;&gt;local -->
+<g id="proc~~metrics_fill_from_supergrid~~CallsGraph_edge60" class="edge">
+<title>proc~fold_north_corner_2d&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M967.77,-832.13C982.84,-832.13 998.51,-832.13 1012.07,-832.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1011.85,-835.64 1021.85,-832.14 1011.85,-828.64 1011.85,-835.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocmetrics_fill_from_supergridCallsGraph = svgPanZoom('#procmetrics_fill_from_supergridCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~metrics_fill_from_supergrid~~CalledByGraph Pages: 1 -->
+<svg id="procmetrics_fill_from_supergridCalledByGraph" width="641pt" height="99pt"
+ viewBox="0.00 0.00 641.00 99.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph" class="graph" transform="scale(0.623923 0.623923) rotate(0) translate(4 154.27)">
+<title>proc~~metrics_fill_from_supergrid~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 1023.37,-154.27 1023.37,4 -4,4"/>
+<!-- proc~metrics_fill_from_supergrid -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node1" class="node">
+<title>proc~metrics_fill_from_supergrid</title>
+<polygon fill="none" stroke="black" points="1019.37,-66.27 863.85,-66.27 863.85,-42 1019.37,-42 1019.37,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="941.61" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">metrics_fill_from_supergrid</text>
+</g>
+<!-- proc~configure_ocean_metrics -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node2" class="node">
+<title>proc~configure_ocean_metrics</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node2"><a xlink:href="../proc/configure_ocean_metrics.html" xlink:title="configure_ocean_metrics">
+<polygon fill="#d9534f" stroke="#d9534f" points="827.85,-66.27 682.83,-66.27 682.83,-42 827.85,-42 827.85,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="755.34" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_metrics&#45;&gt;proc~metrics_fill_from_supergrid -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge1" class="edge">
+<title>proc~configure_ocean_metrics&#45;&gt;proc~metrics_fill_from_supergrid</title>
+<path fill="none" stroke="#ff0000" d="M828.11,-54.13C836.01,-54.13 844.12,-54.13 852.19,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="852.04,-57.64 862.04,-54.14 852.04,-50.64 852.04,-57.64"/>
+</g>
+<!-- interface~configure_ocean_metrics -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node3" class="node">
+<title>interface~configure_ocean_metrics</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node3"><a xlink:href="../interface/configure_ocean_metrics.html" xlink:title="configure_ocean_metrics">
+<polygon fill="#a7506f" stroke="#a7506f" points="646.83,-66.27 501.81,-66.27 501.81,-42 646.83,-42 646.83,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="574.32" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_metrics&#45;&gt;proc~configure_ocean_metrics -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge2" class="edge">
+<title>interface~configure_ocean_metrics&#45;&gt;proc~configure_ocean_metrics</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M647.1,-54.13C655.04,-54.13 663.16,-54.13 671.22,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="671.03,-57.64 681.03,-54.14 671.03,-50.64 671.03,-57.64"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node4" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node4"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.81,-66.27 383.04,-66.27 383.04,-42 465.81,-42 465.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="424.42" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_metrics -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge3" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_metrics</title>
+<path fill="none" stroke="#ff0000" d="M466.23,-54.13C473.75,-54.13 481.85,-54.13 490.11,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="489.92,-57.64 499.92,-54.14 489.92,-50.64 489.92,-57.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node5" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node5"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.04,-108.27 208.02,-108.27 208.02,-84 347.04,-84 347.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge4" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-83.53C337.72,-78.98 355.61,-73.79 371.94,-69.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="372.87,-72.43 381.5,-66.29 370.92,-65.71 372.87,-72.43"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node6" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node6"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="329.79,-66.27 225.27,-66.27 225.27,-42 329.79,-42 329.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M330.02,-54.13C343.36,-54.13 357.73,-54.13 371.11,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="371.05,-57.64 381.05,-54.14 371.05,-50.64 371.05,-57.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node7" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node7"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="323.04,-24.27 232.02,-24.27 232.02,0 323.04,0 323.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-24.74C337.72,-29.29 355.61,-34.48 371.94,-39.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="370.92,-42.56 381.5,-41.98 372.87,-35.84 370.92,-42.56"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node8" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node8"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.14,-66.27 52.87,-66.27 52.87,-42 119.14,-42 119.14,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M119.59,-54.13C145.42,-54.13 182.28,-54.13 213.78,-54.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="213.61,-57.64 223.61,-54.14 213.61,-50.64 213.61,-57.64"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="161.14,-150.27 10.87,-150.27 10.87,-126 161.14,-126 161.14,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge7" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M143.87,-125.53C164.2,-121.03 187.32,-115.9 208.5,-111.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.22,-114.64 218.23,-109.05 207.71,-107.8 209.22,-114.64"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_node10" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~metrics_fill_from_supergrid~~CalledByGraph_node10"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="172.02,-108.27 0,-108.27 0,-84 172.02,-84 172.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_from_supergrid~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M172.34,-96.14C180.27,-96.14 188.28,-96.14 196.15,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.05,-99.64 206.05,-96.14 196.05,-92.64 196.05,-99.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocmetrics_fill_from_supergridCalledByGraph = svgPanZoom('#procmetrics_fill_from_supergridCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-band_top"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>band_top</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomposed~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomposed</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-file_folds"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>file_folds</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fold~4"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fold</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gband~2"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gband</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_angle"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_angle</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jb0~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jb0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jb1~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jb1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_ierr~18"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_ierr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mband"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mband</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n0~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nb~4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nb</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncid~49"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ncid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ng~76"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ng</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ni~9"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ni</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nj~9"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nj</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nnode"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nnode</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-per_x~12"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>per_x</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_angle"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sg_angle</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_area"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sg_area</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_dx"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sg_dx</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_dy"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sg_dy</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_nx"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sg_nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_nxp"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sg_nxp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_ny"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sg_ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_nyp"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sg_nyp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_x"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sg_x</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_y"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sg_y</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-top_x"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>top_x</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-top_y"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>top_y</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-varid_angle"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>varid_angle</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-varid_area"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>varid_area</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-varid_dx"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>varid_dx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-varid_dy"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>varid_dy</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-varid_x"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>varid_x</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-varid_y"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>varid_y</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-y_scale"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>y_scale</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-y_seam_err"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>y_seam_err</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">metrics_fill_from_supergrid</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">supergrid_file</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">north_fold</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Load an MOM6 supergrid (mosaic) NetCDF file and fill all metric</span>
+<span class="w">      </span><span class="c">!! arrays.  After this call the caller must invoke `metrics_finalize`</span>
+<span class="w">      </span><span class="c">!! to compute the inverses + hvisc ratio bundle.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! The file must contain variables `x`, `y` (degrees, shape</span>
+<span class="w">      </span><span class="c">!! `(2*ni+1, 2*nj+1)`), `dx` (m, shape `(2*ni, 2*nj+1)`), `dy` (m,</span>
+<span class="w">      </span><span class="c">!! shape `(2*ni+1, 2*nj)`), and `area` (m^2, shape `(2*ni, 2*nj)`),</span>
+<span class="w">      </span><span class="c">!! where `ni = grid%nx_global`, `nj = grid%ny_global` (the file</span>
+<span class="w">      </span><span class="c">!! always describes the WHOLE grid).  Dimensions must</span>
+<span class="w">      </span><span class="c">!! be named `nxp`/`nyp` (size 2ni+1 / 2nj+1) and `nx`/`ny` (size</span>
+<span class="w">      </span><span class="c">!! 2ni / 2nj).  Ghost rows are filled by constant extrapolation,</span>
+<span class="w">      </span><span class="c">!! then — on a periodic-x and/or tripolar-fold grid — replaced by the</span>
+<span class="w">      </span><span class="c">!! periodic / fold images through `metrics_fold_periodic_ghosts`, the</span>
+<span class="w">      </span><span class="c">!! routine the analytic tripolar generator uses.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Decomposed tile: only the full-width band of rows the tile needs</span>
+<span class="w">      </span><span class="c">!! (its storage rows plus one padding row each side) is read, with</span>
+<span class="w">      </span><span class="c">!! start/count windows; the band is assembled and ghost-filled as a</span>
+<span class="w">      </span><span class="c">!! whole grid of that height, and the tile's storage window is cut</span>
+<span class="w">      </span><span class="c">!! out of it, so every tile is bit-identical to its slice of the</span>
+<span class="w">      </span><span class="c">!! single-rank metrics (see the band note in the body).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Topology cross-check (fail-loud, `OCEAN_STATUS_ERR_SETUP`): whether</span>
+<span class="w">      </span><span class="c">!! the file IS tripolar is read off the file itself</span>
+<span class="w">      </span><span class="c">!! (`supergrid_top_row_folds`), and must agree with `north_fold`</span>
+<span class="w">      </span><span class="c">!! (the `&amp;ocean_bc_nml north = "tripolar_fold"` tag) — a folded grid</span>
+<span class="w">      </span><span class="c">!! with a north wall, or a fold tag on a grid whose top row does not</span>
+<span class="w">      </span><span class="c">!! fold, would silently exchange the wrong cells.  `periodic_x`</span>
+<span class="w">      </span><span class="c">!! requires the east and west node columns to lie on the same</span>
+<span class="w">      </span><span class="c">!! latitudes (`y`), which every periodic supergrid satisfies.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! The optional variable `angle_dx` (degrees, MOM6's grid rotation,</span>
+<span class="w">      </span><span class="c">!! counter-clockwise from true east) is read when present; absent, it</span>
+<span class="w">      </span><span class="c">!! is derived from the node geography</span>
+<span class="w">      </span><span class="c">!! (`supergrid_angle_dx_from_geography`).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">         </span><span class="c">!! Grid metadata — supplies the tile (`nx_phys`, `ny_phys`,</span>
+<span class="w">         </span><span class="c">!! `nghost`, offsets) and the whole grid (`nx_global`, `ny_global`).</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">supergrid_file</span>
+<span class="w">         </span><span class="c">!! Path to the MOM6 mosaic supergrid NetCDF file.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="w">         </span><span class="c">!! Non-zero on a dimension mismatch, an unreadable/missing file,</span>
+<span class="w">         </span><span class="c">!! a topology mismatch, or a missing NetCDF build when present;</span>
+<span class="w">         </span><span class="c">!! absent behaves as today (`error stop`).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">periodic_x</span>
+<span class="w">         </span><span class="c">!! The run is periodic east-west.  Absent ⇒ `.false.`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">north_fold</span>
+<span class="w">         </span><span class="c">!! The run closes the north edge with the tripolar fold.  Absent ⇒</span>
+<span class="w">         </span><span class="c">!! `.false.`.</span>
+<span class="cp">#ifndef RDB_NO_NETCDF</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ncid</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">nj</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nyp</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nx</span><span class="p">,</span><span class="w"> </span><span class="n">sg_ny</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">varid_x</span><span class="p">,</span><span class="w"> </span><span class="n">varid_y</span><span class="p">,</span><span class="w"> </span><span class="n">varid_dx</span><span class="p">,</span><span class="w"> </span><span class="n">varid_dy</span><span class="p">,</span><span class="w"> </span><span class="n">varid_area</span><span class="p">,</span><span class="w"> </span><span class="n">varid_angle</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">local_ierr</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">jb0</span><span class="p">,</span><span class="w"> </span><span class="n">jb1</span><span class="p">,</span><span class="w"> </span><span class="n">nb</span><span class="p">,</span><span class="w"> </span><span class="n">n0</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">fold</span><span class="p">,</span><span class="w"> </span><span class="n">file_folds</span><span class="p">,</span><span class="w"> </span><span class="n">has_angle</span><span class="p">,</span><span class="w"> </span><span class="n">decomposed</span><span class="p">,</span><span class="w"> </span><span class="n">band_top</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">y_seam_err</span><span class="p">,</span><span class="w"> </span><span class="n">y_scale</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sg_x</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">sg_y</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">sg_dy</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">sg_area</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sg_angle</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">top_x</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">top_y</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">gband</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mband</span>
+
+<span class="w">      </span><span class="n">per_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">periodic_x</span><span class="p">))</span><span class="w"> </span><span class="n">per_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">periodic_x</span>
+<span class="w">      </span><span class="n">fold</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">north_fold</span><span class="p">))</span><span class="w"> </span><span class="n">fold</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">north_fold</span>
+
+<span class="w">      </span><span class="c">! The file describes the WHOLE grid.  A decomposed tile reads only the</span>
+<span class="w">      </span><span class="c">! full-width band of rows it needs (see the band note below).</span>
+<span class="w">      </span><span class="n">ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_global</span>
+<span class="w">      </span><span class="n">nj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_global</span>
+<span class="w">      </span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">decomposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">nj</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Loading supergrid metrics from: "</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">supergrid_file</span><span class="p">))</span>
+<span class="w">      </span><span class="k">call </span><span class="n">nc_open_read</span><span class="p">(</span><span class="n">supergrid_file</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+
+<span class="w">      </span><span class="c">! ---- Validate supergrid dimensions against the (global) model grid ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">nc_get_dim_len</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"nxp"</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_dim_len</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"nyp"</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nyp</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_dim_len</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"nx"</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nx</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_dim_len</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"ny"</span><span class="p">,</span><span class="w"> </span><span class="n">sg_ny</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">sg_nxp</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">nc_close</span><span class="p">(</span><span class="n">ncid</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"Supergrid nxp mismatch: file has "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">sg_nxp</span><span class="p">)</span><span class="o">//</span><span class="s2">" but expected "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">//</span><span class="s2">" (2*nx+1)"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_IO</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">sg_nyp</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nj</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">nc_close</span><span class="p">(</span><span class="n">ncid</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"Supergrid nyp mismatch: file has "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">sg_nyp</span><span class="p">)</span><span class="o">//</span><span class="s2">" but expected "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">nj</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">//</span><span class="s2">" (2*ny+1)"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_IO</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">sg_nx</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ni</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">nc_close</span><span class="p">(</span><span class="n">ncid</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"Supergrid nx mismatch: file has "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">sg_nx</span><span class="p">)</span><span class="o">//</span><span class="s2">" but expected "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">ni</span><span class="p">)</span><span class="o">//</span><span class="s2">" (2*nx)"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_IO</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">sg_ny</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nj</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">nc_close</span><span class="p">(</span><span class="n">ncid</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"Supergrid ny mismatch: file has "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">sg_ny</span><span class="p">)</span><span class="o">//</span><span class="s2">" but expected "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">nj</span><span class="p">)</span><span class="o">//</span><span class="s2">" (2*ny)"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_IO</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- The band of cell rows this rank assembles ----</span>
+<span class="w">      </span><span class="c">! Undecomposed: every row.  Decomposed: the tile's storage rows</span>
+<span class="w">      </span><span class="c">! (physical +- nghost) plus ONE padding row on each side, clipped to</span>
+<span class="w">      </span><span class="c">! the grid, over the FULL width.  The band is assembled exactly as a</span>
+<span class="w">      </span><span class="c">! whole grid would be; the only rows where that can differ from the</span>
+<span class="w">      </span><span class="c">! undecomposed assembly are the band's own interior-side edge rows</span>
+<span class="w">      </span><span class="c">! (the assembler extrapolates the face/corner spans there), and the</span>
+<span class="w">      </span><span class="c">! padding row keeps those outside the tile's window.  At a GLOBAL</span>
+<span class="w">      </span><span class="c">! edge the band edge IS the grid edge, so its extrapolated ghosts are</span>
+<span class="w">      </span><span class="c">! the undecomposed ones.  Full width keeps the periodic-x wrap and the</span>
+<span class="w">      </span><span class="c">! fold (the north band holds the whole fold row) local.  Rows read:</span>
+<span class="w">      </span><span class="c">! 2*nb+1 node rows instead of 2*nj+1 -- a per-rank window of the file.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">decomposed</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">jb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">j_offset_global</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="n">jb1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">nj</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">j_offset_global</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">jb0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">jb1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nj</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      </span><span class="n">nb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jb1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">jb0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">n0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">jb0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="w">          </span><span class="c">! first supergrid node / segment row of the band</span>
+<span class="w">      </span><span class="n">nnode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nb</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">band_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">jb1</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">nj</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- Read the band of the supergrid arrays ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">nc_get_varid</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"x"</span><span class="p">,</span><span class="w"> </span><span class="n">varid_x</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_varid</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"y"</span><span class="p">,</span><span class="w"> </span><span class="n">varid_y</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_varid</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"dx"</span><span class="p">,</span><span class="w"> </span><span class="n">varid_dx</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_varid</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"dy"</span><span class="p">,</span><span class="w"> </span><span class="n">varid_dy</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_varid</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"area"</span><span class="p">,</span><span class="w"> </span><span class="n">varid_area</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      allocate</span><span class="w"> </span><span class="p">(</span><span class="n">sg_x</span><span class="p">(</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span><span class="p">))</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">sg_y</span><span class="p">(</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span><span class="p">))</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">sg_dx</span><span class="p">(</span><span class="n">sg_nx</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span><span class="p">))</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">sg_dy</span><span class="p">(</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nb</span><span class="p">))</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">sg_area</span><span class="p">(</span><span class="n">sg_nx</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nb</span><span class="p">))</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">nc_get_var_slab_2d</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">varid_x</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span><span class="p">],</span><span class="w"> </span><span class="n">sg_x</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_var_slab_2d</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">varid_y</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span><span class="p">],</span><span class="w"> </span><span class="n">sg_y</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_var_slab_2d</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">varid_dx</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">sg_nx</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span><span class="p">],</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_var_slab_2d</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">varid_dy</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nb</span><span class="p">],</span><span class="w"> </span><span class="n">sg_dy</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">nc_get_var_slab_2d</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">varid_area</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">sg_nx</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nb</span><span class="p">],</span><span class="w"> </span><span class="n">sg_area</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="w">      </span><span class="c">! Optional grid rotation.  Probed with the raw inquiry so an absent</span>
+<span class="w">      </span><span class="c">! variable is not logged as an error.  The geography-derived angle at a</span>
+<span class="w">      </span><span class="c">! T node reads only its own node row, so the band derives it exactly.</span>
+<span class="w">      </span><span class="n">has_angle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nf90_inq_varid</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="s2">"angle_dx"</span><span class="p">,</span><span class="w"> </span><span class="n">varid_angle</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">nf90_noerr</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">sg_angle</span><span class="p">(</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span><span class="p">))</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">has_angle</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">nc_get_var_slab_2d</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">varid_angle</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">nnode</span><span class="p">],</span><span class="w"> </span><span class="n">sg_angle</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      else</span>
+<span class="k">         </span><span class="n">sg_angle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">supergrid_angle_dx_from_geography</span><span class="p">(</span><span class="n">sg_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_y</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Supergrid has no angle_dx: grid rotation derived "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="s2">"from the node geography"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="w">      </span><span class="c">! The fold test reads the file's TOP node row, which a band that stops</span>
+<span class="w">      </span><span class="c">! short of it does not hold: read that one row on its own.</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">top_x</span><span class="p">(</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">top_y</span><span class="p">(</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">band_top</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">top_x</span><span class="p">(:,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sg_x</span><span class="p">(:,</span><span class="w"> </span><span class="n">nnode</span><span class="p">)</span>
+<span class="w">         </span><span class="n">top_y</span><span class="p">(:,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sg_y</span><span class="p">(:,</span><span class="w"> </span><span class="n">nnode</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">nc_get_var_slab_2d</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">varid_x</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nyp</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">],</span><span class="w"> </span><span class="n">top_x</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">         call </span><span class="n">nc_get_var_slab_2d</span><span class="p">(</span><span class="n">ncid</span><span class="p">,</span><span class="w"> </span><span class="n">varid_y</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nyp</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">],</span><span class="w"> </span><span class="n">top_y</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">supergrid_io_ok</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">ncid</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      call </span><span class="n">nc_close</span><span class="p">(</span><span class="n">ncid</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- Topology: the file must agree with the run's edge tags ----</span>
+<span class="w">      </span><span class="n">file_folds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">supergrid_top_row_folds</span><span class="p">(</span><span class="n">top_x</span><span class="p">,</span><span class="w"> </span><span class="n">top_y</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">file_folds</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">fold</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"Supergrid "</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">supergrid_file</span><span class="p">)</span><span class="o">//</span><span class="s2">" is TRIPOLAR (its top node row "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"folds onto itself, m &lt;-&gt; 2ni+2-m) but &amp;ocean_bc_nml north is not "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"'tripolar_fold': the fold row would be treated as an ordinary edge"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">fold</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">file_folds</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;ocean_bc_nml north = 'tripolar_fold' but the top node row of "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="nb">trim</span><span class="p">(</span><span class="n">supergrid_file</span><span class="p">)</span><span class="o">//</span><span class="s2">" does not fold onto itself (m &lt;-&gt; 2ni+2-m): "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"this is not a tripolar grid"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">per_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">y_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="nb">maxval</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">sg_y</span><span class="p">)),</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">y_seam_err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">sg_y</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="p">:)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sg_y</span><span class="p">(</span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="p">:)))</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">y_seam_err</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">1.0e-9_wp</span><span class="o">*</span><span class="n">y_scale</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;ocean_bc_nml west/east = 'periodic' but the west and east node "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="s2">"columns of "</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">supergrid_file</span><span class="p">)</span><span class="o">//</span><span class="s2">" are not the same line "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="s2">"(max |y(1,:) - y(nxp,:)| = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">y_seam_err</span><span class="p">)</span><span class="o">//</span><span class="s2">")"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">            </span><span class="k">return</span>
+<span class="k">         end if</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomposed</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! Assemble model metrics from the supergrid node/segment arrays via</span>
+<span class="w">         </span><span class="c">! the shared even/odd index-sum logic (also used by the tripolar</span>
+<span class="w">         </span><span class="c">! analytic generator).</span>
+<span class="w">         </span><span class="k">call </span><span class="n">metrics_assemble_from_supergrid_arrays</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                     </span><span class="n">sg_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_y</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dy</span><span class="p">,</span><span class="w"> </span><span class="n">sg_area</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                     </span><span class="n">periodic_x</span><span class="o">=</span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_angle_dx</span><span class="o">=</span><span class="n">sg_angle</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! Replace the constant-extrapolated seam ghosts with the periodic /</span>
+<span class="w">         </span><span class="c">! fold images -- the same treatment as the analytic tripolar.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">per_x</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">fold</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">metrics_fold_periodic_ghosts</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_x</span><span class="o">=</span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">north_fold</span><span class="o">=</span><span class="n">fold</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      else</span>
+<span class="w">         </span><span class="c">! Assemble the band as a whole grid of `ni x nb` cells (the fold</span>
+<span class="w">         </span><span class="c">! only on the band that holds the fold row), then cut the tile's</span>
+<span class="w">         </span><span class="c">! storage window -- ghosts included -- out of it.</span>
+<span class="w">         </span><span class="k">call </span><span class="n">gband</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">nb</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">dx</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">dy</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">mband</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">gband</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">metrics_assemble_from_supergrid_arrays</span><span class="p">(</span><span class="n">mband</span><span class="p">,</span><span class="w"> </span><span class="n">gband</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                     </span><span class="n">sg_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_y</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dy</span><span class="p">,</span><span class="w"> </span><span class="n">sg_area</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                     </span><span class="n">periodic_x</span><span class="o">=</span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_angle_dx</span><span class="o">=</span><span class="n">sg_angle</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">per_x</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">fold</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">band_top</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">metrics_fold_periodic_ghosts</span><span class="p">(</span><span class="n">mband</span><span class="p">,</span><span class="w"> </span><span class="n">gband</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_x</span><span class="o">=</span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">north_fold</span><span class="o">=</span><span class="p">(</span><span class="n">fold</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">band_top</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         call </span><span class="n">metrics_window_all</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">mband</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">i_offset_global</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">grid</span><span class="p">%</span><span class="n">j_offset_global</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">jb0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">         </span><span class="k">call </span><span class="n">mband</span><span class="p">%</span><span class="n">destroy</span><span class="p">()</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">sg_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_y</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dy</span><span class="p">,</span><span class="w"> </span><span class="n">sg_area</span><span class="p">,</span><span class="w"> </span><span class="n">sg_angle</span><span class="p">,</span><span class="w"> </span><span class="n">top_x</span><span class="p">,</span><span class="w"> </span><span class="n">top_y</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Supergrid metrics loaded for a "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                       </span><span class="n">to_string</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">)</span><span class="o">//</span><span class="s2">"x"</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                       </span><span class="s2">" tile (rows "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">jb0</span><span class="p">)</span><span class="o">//</span><span class="s2">"-"</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">jb1</span><span class="p">)</span><span class="o">//</span><span class="s2">" of "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                       </span><span class="n">to_string</span><span class="p">(</span><span class="n">ni</span><span class="p">)</span><span class="o">//</span><span class="s2">"x"</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">nj</span><span class="p">)</span><span class="o">//</span><span class="s2">")"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+<span class="cp">#else</span>
+<span class="w">      </span><span class="k">call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"grid_config='supergrid' requires RDB_ENABLE_NETCDF=ON "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                </span><span class="s2">"(the supergrid reader needs the NetCDF-backed rdb_io_netcdf)"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_IO</span><span class="p">)</span>
+<span class="w">      </span><span class="k">return</span>
+<span class="cp">#endif</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">metrics_fill_from_supergrid</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

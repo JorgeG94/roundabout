@@ -1,0 +1,914 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>grid_is_tiled &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>grid_is_tiled
+      <small>Function</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">5 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_grid_reduce.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_grid_reduce.f90.html'>rdb_grid_reduce.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_grid_reduce.html'>rdb_grid_reduce</a></li>
+            <li class="breadcrumb-item active" aria-current="page">grid_is_tiled</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/grid_is_tiled.html#src">grid_is_tiled</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure function grid_is_tiled(grid) result(tiled)  
+</h2>
+    
+
+    <p>True when this rank holds only part of the global domain.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~262"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+      <h3>Return Value
+        <small>
+          <span class="anchor" id="variable-tiled"></span>
+          logical
+        </small>
+      </h3>
+      
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~grid_is_tiled~~CalledByGraph Pages: 1 -->
+<svg id="procgrid_is_tiledCalledByGraph" width="641pt" height="186pt"
+ viewBox="0.00 0.00 641.00 186.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~grid_is_tiled~~CalledByGraph" class="graph" transform="scale(0.42821 0.42821) rotate(0) translate(4 431.27)">
+<title>proc~~grid_is_tiled~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-431.27 1492.93,-431.27 1492.93,4 -4,4"/>
+<!-- proc~grid_is_tiled -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node1" class="node">
+<title>proc~grid_is_tiled</title>
+<polygon fill="none" stroke="black" points="1488.93,-259.27 1414.41,-259.27 1414.41,-235 1488.93,-235 1488.93,-259.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1451.67" y="-243.53" font-family="Helvetica,sans-Serif" font-size="10.50">grid_is_tiled</text>
+</g>
+<!-- proc~grid_allreduce_efp_list -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node2" class="node">
+<title>proc~grid_allreduce_efp_list</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node2"><a xlink:href="../proc/grid_allreduce_efp_list.html" xlink:title="grid_allreduce_efp_list">
+<polygon fill="#d9534f" stroke="#d9534f" points="1378.41,-87.27 1248.39,-87.27 1248.39,-63 1378.41,-63 1378.41,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1313.4" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grid_allreduce_efp_list</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_efp_list&#45;&gt;proc~grid_is_tiled -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge1" class="edge">
+<title>proc~grid_allreduce_efp_list&#45;&gt;proc~grid_is_tiled</title>
+<path fill="none" stroke="#ff0000" d="M1324.2,-87.5C1347.28,-116.64 1405.27,-189.83 1434,-226.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1431.07,-228.03 1440.02,-233.69 1436.55,-223.68 1431.07,-228.03"/>
+</g>
+<!-- proc~grid_allreduce_max -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node3" class="node">
+<title>proc~grid_allreduce_max</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node3"><a xlink:href="../proc/grid_allreduce_max.html" xlink:title="grid_allreduce_max">
+<polygon fill="#d9534f" stroke="#d9534f" points="1371.29,-289.27 1255.52,-289.27 1255.52,-265 1371.29,-265 1371.29,-289.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1313.4" y="-273.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grid_allreduce_max</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_max&#45;&gt;proc~grid_is_tiled -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge2" class="edge">
+<title>proc~grid_allreduce_max&#45;&gt;proc~grid_is_tiled</title>
+<path fill="none" stroke="#ff0000" d="M1371.4,-264.59C1381.89,-262.28 1392.75,-259.89 1402.93,-257.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1403.6,-261.08 1412.61,-255.51 1402.09,-254.25 1403.6,-261.08"/>
+</g>
+<!-- proc~grid_allreduce_min -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node4" class="node">
+<title>proc~grid_allreduce_min</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node4"><a xlink:href="../proc/grid_allreduce_min.html" xlink:title="grid_allreduce_min">
+<polygon fill="#d9534f" stroke="#d9534f" points="976.25,-367.27 863.48,-367.27 863.48,-343 976.25,-343 976.25,-367.27"/>
+<text xml:space="preserve" text-anchor="middle" x="919.86" y="-351.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grid_allreduce_min</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_min&#45;&gt;proc~grid_is_tiled -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge3" class="edge">
+<title>proc~grid_allreduce_min&#45;&gt;proc~grid_is_tiled</title>
+<path fill="none" stroke="#ff0000" d="M976.48,-356.76C1064.77,-357.49 1241.05,-351.3 1378.41,-298.13 1396.91,-290.98 1415.14,-278.05 1428.66,-267.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1430.7,-269.87 1436.06,-260.74 1426.17,-264.53 1430.7,-269.87"/>
+</g>
+<!-- proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node5" class="node">
+<title>proc~grid_allreduce_sum_i8</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node5"><a xlink:href="../proc/grid_allreduce_sum_i8.html" xlink:title="grid_allreduce_sum_i8">
+<polygon fill="#d9534f" stroke="#d9534f" points="1378.41,-199.27 1248.39,-199.27 1248.39,-175 1378.41,-175 1378.41,-199.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1313.4" y="-183.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grid_allreduce_sum_i8</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_sum_i8&#45;&gt;proc~grid_is_tiled -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge4" class="edge">
+<title>proc~grid_allreduce_sum_i8&#45;&gt;proc~grid_is_tiled</title>
+<path fill="none" stroke="#ff0000" d="M1342.97,-199.71C1362.95,-208.51 1389.89,-220.37 1411.83,-230.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1410.19,-233.14 1420.76,-233.96 1413.01,-226.73 1410.19,-233.14"/>
+</g>
+<!-- proc~configure_ocean_cavity -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node6" class="node">
+<title>proc~configure_ocean_cavity</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node6"><a xlink:href="../proc/configure_ocean_cavity.html" xlink:title="configure_ocean_cavity">
+<polygon fill="#d9534f" stroke="#d9534f" points="789.98,-367.27 653.21,-367.27 653.21,-343 789.98,-343 789.98,-367.27"/>
+<text xml:space="preserve" text-anchor="middle" x="721.59" y="-351.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_cavity&#45;&gt;proc~grid_allreduce_max -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge7" class="edge">
+<title>proc~configure_ocean_cavity&#45;&gt;proc~grid_allreduce_max</title>
+<path fill="none" stroke="#7fff00" d="M779.85,-367.76C797.98,-371.2 818.17,-374.43 836.85,-376.13 1005.04,-391.46 1052.59,-372.79 1212.39,-318.13 1233.02,-311.08 1255.53,-301.98 1273.96,-294.15"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1275.09,-297.47 1282.9,-290.31 1272.33,-291.04 1275.09,-297.47"/>
+</g>
+<!-- proc~configure_ocean_cavity&#45;&gt;proc~grid_allreduce_min -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge13" class="edge">
+<title>proc~configure_ocean_cavity&#45;&gt;proc~grid_allreduce_min</title>
+<path fill="none" stroke="#00ffff" d="M790.41,-355.13C810.23,-355.13 831.88,-355.13 851.67,-355.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="851.56,-358.64 861.56,-355.14 851.56,-351.64 851.56,-358.64"/>
+</g>
+<!-- proc~configure_ocean_cavity_melt -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node7" class="node">
+<title>proc~configure_ocean_cavity_melt</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node7"><a xlink:href="../proc/configure_ocean_cavity_melt.html" xlink:title="configure_ocean_cavity_melt">
+<polygon fill="#d9534f" stroke="#d9534f" points="1002.87,-177.27 836.85,-177.27 836.85,-153 1002.87,-153 1002.87,-177.27"/>
+<text xml:space="preserve" text-anchor="middle" x="919.86" y="-161.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity_melt</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_cavity_melt&#45;&gt;proc~grid_allreduce_max -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge8" class="edge">
+<title>proc~configure_ocean_cavity_melt&#45;&gt;proc~grid_allreduce_max</title>
+<path fill="none" stroke="#7fff00" d="M1003.16,-177.27C1082.41,-189.24 1193.06,-206.76 1212.39,-214.13 1240.11,-224.71 1268.42,-243.43 1287.81,-257.73"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1285.53,-260.39 1295.62,-263.62 1289.74,-254.8 1285.53,-260.39"/>
+</g>
+<!-- proc~configure_ocean_cavity_melt&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge15" class="edge">
+<title>proc~configure_ocean_cavity_melt&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M1003.17,-169.54C1061.57,-172.69 1141.8,-177.08 1212.39,-181.13 1220.33,-181.59 1228.62,-182.08 1236.89,-182.56"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1236.41,-186.04 1246.6,-183.14 1236.83,-179.05 1236.41,-186.04"/>
+</g>
+<!-- proc~ocean_cavity_set_open_area -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node12" class="node">
+<title>proc~ocean_cavity_set_open_area</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node12"><a xlink:href="../proc/ocean_cavity_set_open_area.html" xlink:title="ocean_cavity_set_open_area">
+<polygon fill="#d9534f" stroke="#d9534f" points="1207.52,-87.27 1043.75,-87.27 1043.75,-63 1207.52,-63 1207.52,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1125.63" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_set_open_area</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_cavity_melt&#45;&gt;proc~ocean_cavity_set_open_area -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge27" class="edge">
+<title>proc~configure_ocean_cavity_melt&#45;&gt;proc~ocean_cavity_set_open_area</title>
+<path fill="none" stroke="#0000ff" d="M938.42,-152.67C960.77,-137.33 1001.03,-111.45 1038.87,-96.14 1043.47,-94.27 1048.28,-92.55 1053.17,-90.95"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1053.96,-94.37 1062.51,-88.1 1051.92,-87.67 1053.96,-94.37"/>
+</g>
+<!-- proc~configure_ocean_closed_faces -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node8" class="node">
+<title>proc~configure_ocean_closed_faces</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node8"><a xlink:href="../proc/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="1212.39,-247.27 1038.87,-247.27 1038.87,-223 1212.39,-223 1212.39,-247.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1125.63" y="-231.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~grid_allreduce_max -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge9" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~grid_allreduce_max</title>
+<path fill="none" stroke="#7fff00" d="M1182.37,-247.74C1202.3,-252.24 1224.96,-257.37 1245.72,-262.06"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1244.7,-265.42 1255.23,-264.21 1246.24,-258.59 1244.7,-265.42"/>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge16" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M1175.44,-222.52C1199.13,-216.4 1227.8,-208.99 1252.78,-202.54"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1253.32,-206.01 1262.13,-200.12 1251.57,-199.24 1253.32,-206.01"/>
+</g>
+<!-- proc~configure_ocean_k_bot -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node9" class="node">
+<title>proc~configure_ocean_k_bot</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node9"><a xlink:href="../proc/configure_ocean_k_bot.html" xlink:title="configure_ocean_k_bot">
+<polygon fill="#d9534f" stroke="#d9534f" points="788.48,-427.27 654.71,-427.27 654.71,-403 788.48,-403 788.48,-427.27"/>
+<text xml:space="preserve" text-anchor="middle" x="721.59" y="-411.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_k_bot</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_k_bot&#45;&gt;proc~grid_allreduce_max -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge10" class="edge">
+<title>proc~configure_ocean_k_bot&#45;&gt;proc~grid_allreduce_max</title>
+<path fill="none" stroke="#7fff00" d="M788.91,-419.76C886.3,-423.89 1071.69,-421.5 1212.39,-358.13 1244.22,-343.8 1274.45,-316.79 1293.18,-297.91"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1295.69,-300.35 1300.12,-290.73 1290.66,-295.49 1295.69,-300.35"/>
+</g>
+<!-- proc~ocean_cavity_flux_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node10" class="node">
+<title>proc~ocean_cavity_flux_step</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node10"><a xlink:href="../proc/ocean_cavity_flux_step.html" xlink:title="ocean_cavity_flux_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="1192.52,-129.27 1058.75,-129.27 1058.75,-105 1192.52,-105 1192.52,-129.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1125.63" y="-113.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_flux_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge17" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M1171.92,-129.76C1185.08,-133.72 1199.4,-138.33 1212.39,-143.13 1233.9,-151.1 1257.41,-161.36 1276.23,-169.96"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1274.51,-173.03 1285.06,-174.05 1277.45,-166.67 1274.51,-173.03"/>
+</g>
+<!-- proc~ocean_cavity_mass_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node11" class="node">
+<title>proc~ocean_cavity_mass_step</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node11"><a xlink:href="../proc/ocean_cavity_mass_step.html" xlink:title="ocean_cavity_mass_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="1196.64,-45.27 1054.62,-45.27 1054.62,-21 1196.64,-21 1196.64,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1125.63" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_mass_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~grid_allreduce_efp_list -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~grid_allreduce_efp_list</title>
+<path fill="none" stroke="#ff0000" d="M1182.37,-45.74C1202.3,-50.24 1224.96,-55.37 1245.72,-60.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1244.7,-63.42 1255.23,-62.21 1246.24,-56.59 1244.7,-63.42"/>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge18" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M1196.27,-45.73C1201.94,-48.07 1207.4,-50.84 1212.39,-54.13 1223.74,-61.62 1272.5,-130.05 1297.5,-165.72"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1294.4,-167.4 1303,-173.59 1300.14,-163.39 1294.4,-167.4"/>
+</g>
+<!-- proc~ocean_cavity_set_open_area&#45;&gt;proc~grid_allreduce_efp_list -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_cavity_set_open_area&#45;&gt;proc~grid_allreduce_efp_list</title>
+<path fill="none" stroke="#ff0000" d="M1207.84,-75.14C1217.42,-75.14 1227.17,-75.14 1236.67,-75.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1236.59,-78.64 1246.59,-75.14 1236.59,-71.64 1236.59,-78.64"/>
+</g>
+<!-- proc~ocean_state_seed_from_cfg -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node13" class="node">
+<title>proc~ocean_state_seed_from_cfg</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node13"><a xlink:href="../proc/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
+<polygon fill="#d9534f" stroke="#d9534f" points="800.85,-317.27 642.33,-317.27 642.33,-293 800.85,-293 800.85,-317.27"/>
+<text xml:space="preserve" text-anchor="middle" x="721.59" y="-301.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_seed_from_cfg&#45;&gt;proc~grid_allreduce_max -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge11" class="edge">
+<title>proc~ocean_state_seed_from_cfg&#45;&gt;proc~grid_allreduce_max</title>
+<path fill="none" stroke="#7fff00" d="M801.35,-308.66C898.37,-311.93 1068.07,-314.17 1212.39,-298.13 1224.94,-296.74 1238.24,-294.5 1250.9,-291.99"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1251.26,-295.49 1260.35,-290.04 1249.84,-288.63 1251.26,-295.49"/>
+</g>
+<!-- proc~ocean_state_seed_from_cfg&#45;&gt;proc~grid_allreduce_min -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge14" class="edge">
+<title>proc~ocean_state_seed_from_cfg&#45;&gt;proc~grid_allreduce_min</title>
+<path fill="none" stroke="#00ffff" d="M772.12,-317.75C798.27,-324.41 830.58,-332.65 858.22,-339.69"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="857.33,-343.07 867.88,-342.15 859.06,-336.29 857.33,-343.07"/>
+</g>
+<!-- interface~seed_cavity_draft -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node20" class="node">
+<title>interface~seed_cavity_draft</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node20"><a xlink:href="../interface/seed_cavity_draft.html" xlink:title="seed_cavity_draft">
+<polygon fill="#a7506f" stroke="#a7506f" points="972.12,-287.27 867.6,-287.27 867.6,-263 972.12,-263 972.12,-287.27"/>
+<text xml:space="preserve" text-anchor="middle" x="919.86" y="-271.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">seed_cavity_draft</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_seed_from_cfg&#45;&gt;interface~seed_cavity_draft -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge35" class="edge">
+<title>proc~ocean_state_seed_from_cfg&#45;&gt;interface~seed_cavity_draft</title>
+<path fill="none" stroke="#00a9ff" d="M801.29,-293.11C819.49,-290.32 838.61,-287.4 856.03,-284.74"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="856.34,-288.23 865.7,-283.26 855.29,-281.31 856.34,-288.23"/>
+</g>
+<!-- proc~seed_cavity_draft -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node14" class="node">
+<title>proc~seed_cavity_draft</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node14"><a xlink:href="../proc/seed_cavity_draft.html" xlink:title="seed_cavity_draft">
+<polygon fill="#d9534f" stroke="#d9534f" points="1177.89,-289.27 1073.37,-289.27 1073.37,-265 1177.89,-265 1177.89,-289.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1125.63" y="-273.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">seed_cavity_draft</text>
+</a>
+</g>
+</g>
+<!-- proc~seed_cavity_draft&#45;&gt;proc~grid_allreduce_max -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge12" class="edge">
+<title>proc~seed_cavity_draft&#45;&gt;proc~grid_allreduce_max</title>
+<path fill="none" stroke="#7fff00" d="M1178.38,-277.13C1198.58,-277.13 1222.04,-277.13 1243.63,-277.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1243.54,-280.64 1253.54,-277.14 1243.54,-273.64 1243.54,-280.64"/>
+</g>
+<!-- proc~seed_cavity_draft&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge19" class="edge">
+<title>proc~seed_cavity_draft&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M1177.99,-267.78C1189.57,-264.8 1201.62,-260.97 1212.39,-256.13 1240.83,-243.36 1269.77,-222.34 1289.15,-206.85"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1291.15,-209.74 1296.68,-200.7 1286.72,-204.31 1291.15,-209.74"/>
+</g>
+<!-- interface~configure_ocean_cavity -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node15" class="node">
+<title>interface~configure_ocean_cavity</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node15"><a xlink:href="../interface/configure_ocean_cavity.html" xlink:title="configure_ocean_cavity">
+<polygon fill="#a7506f" stroke="#a7506f" points="587.96,-359.27 451.19,-359.27 451.19,-335 587.96,-335 587.96,-359.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.57" y="-343.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_cavity&#45;&gt;proc~configure_ocean_cavity -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge20" class="edge">
+<title>interface~configure_ocean_cavity&#45;&gt;proc~configure_ocean_cavity</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M588.29,-349.84C605.39,-350.53 623.91,-351.27 641.52,-351.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="641.3,-355.47 651.43,-352.37 641.58,-348.47 641.3,-355.47"/>
+</g>
+<!-- interface~configure_ocean_cavity_melt -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node16" class="node">
+<title>interface~configure_ocean_cavity_melt</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node16"><a xlink:href="../interface/configure_ocean_cavity_melt.html" xlink:title="configure_ocean_cavity_melt">
+<polygon fill="#a7506f" stroke="#a7506f" points="602.58,-191.27 436.56,-191.27 436.56,-167 602.58,-167 602.58,-191.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.57" y="-175.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity_melt</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_cavity_melt&#45;&gt;proc~configure_ocean_cavity_melt -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge21" class="edge">
+<title>interface~configure_ocean_cavity_melt&#45;&gt;proc~configure_ocean_cavity_melt</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M602.61,-176.25C667.3,-173.98 757.56,-170.8 825.1,-168.43"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="825.2,-171.93 835.07,-168.08 824.95,-164.93 825.2,-171.93"/>
+</g>
+<!-- interface~configure_ocean_closed_faces -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node17" class="node">
+<title>interface~configure_ocean_closed_faces</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node17"><a xlink:href="../interface/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#a7506f" stroke="#a7506f" points="606.33,-251.27 432.81,-251.27 432.81,-227 606.33,-227 606.33,-251.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.57" y="-235.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_closed_faces&#45;&gt;proc~configure_ocean_closed_faces -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge22" class="edge">
+<title>interface~configure_ocean_closed_faces&#45;&gt;proc~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M606.8,-238.56C718,-237.83 910.9,-236.55 1027.27,-235.78"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="1027.14,-239.28 1037.12,-235.71 1027.1,-232.28 1027.14,-239.28"/>
+</g>
+<!-- interface~configure_ocean_k_bot -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node18" class="node">
+<title>interface~configure_ocean_k_bot</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node18"><a xlink:href="../interface/configure_ocean_k_bot.html" xlink:title="configure_ocean_k_bot">
+<polygon fill="#a7506f" stroke="#a7506f" points="586.46,-405.27 452.69,-405.27 452.69,-381 586.46,-381 586.46,-405.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.57" y="-389.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_k_bot</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_k_bot&#45;&gt;proc~configure_ocean_k_bot -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge23" class="edge">
+<title>interface~configure_ocean_k_bot&#45;&gt;proc~configure_ocean_k_bot</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M586.9,-400.43C604.88,-402.41 624.52,-404.57 643.06,-406.61"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="642.62,-410.08 652.94,-407.69 643.38,-403.12 642.62,-410.08"/>
+</g>
+<!-- interface~ocean_state_seed_from_cfg -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node19" class="node">
+<title>interface~ocean_state_seed_from_cfg</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node19"><a xlink:href="../interface/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
+<polygon fill="#a7506f" stroke="#a7506f" points="598.83,-309.27 440.31,-309.27 440.31,-285 598.83,-285 598.83,-309.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.57" y="-293.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_state_seed_from_cfg -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge28" class="edge">
+<title>interface~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_state_seed_from_cfg</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M599.05,-300.27C609.42,-300.69 620.11,-301.12 630.65,-301.54"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="630.36,-305.03 640.5,-301.93 630.64,-298.03 630.36,-305.03"/>
+</g>
+<!-- interface~seed_cavity_draft&#45;&gt;proc~seed_cavity_draft -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge29" class="edge">
+<title>interface~seed_cavity_draft&#45;&gt;proc~seed_cavity_draft</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M972.54,-275.64C999.59,-275.91 1032.93,-276.23 1061.5,-276.52"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1061.45,-280.02 1071.49,-276.61 1061.52,-273.02 1061.45,-280.02"/>
+</g>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node21" class="node">
+<title>proc~engine_step_finalize</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node21"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<polygon fill="#d9534f" stroke="#d9534f" points="396.81,-149.27 277.29,-149.27 277.29,-125 396.81,-125 396.81,-149.27"/>
+<text xml:space="preserve" text-anchor="middle" x="337.05" y="-133.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge24" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step</title>
+<path fill="none" stroke="#00ffa9" d="M397.17,-135.63C537.38,-132.07 890.02,-123.1 1047.08,-119.11"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="1047.07,-122.61 1056.98,-118.86 1046.9,-115.61 1047.07,-122.61"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node22" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node22"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="951.87,-66.27 887.85,-66.27 887.85,-42 951.87,-42 951.87,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="919.86" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_cavity_mass_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge25" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_cavity_mass_step</title>
+<path fill="none" stroke="#00a9ff" d="M952.25,-50.9C976.52,-48.4 1011.25,-44.82 1043.19,-41.53"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="1043.25,-45.04 1052.84,-40.53 1042.54,-38.08 1043.25,-45.04"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node23" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node23"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="965.37,-24.27 874.35,-24.27 874.35,0 965.37,0 965.37,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="919.86" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_cavity_mass_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge26" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_cavity_mass_step</title>
+<path fill="none" stroke="#00a9ff" d="M965.83,-16.77C988.49,-19.11 1016.69,-22.01 1043.01,-24.72"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="1042.34,-28.17 1052.64,-25.72 1043.06,-21.21 1042.34,-28.17"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node24" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node24"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="224.04,-200.27 119.52,-200.27 119.52,-176 224.04,-176 224.04,-200.27"/>
+<text xml:space="preserve" text-anchor="middle" x="171.78" y="-184.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge36" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#0000ff" d="M213.14,-175.53C234.9,-168.73 261.98,-160.27 285.18,-153.02"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="285.93,-156.46 294.43,-150.14 283.84,-149.78 285.93,-156.46"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node25" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node25"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="378.43,-269.27 295.66,-269.27 295.66,-245 378.43,-245 378.43,-269.27"/>
+<text xml:space="preserve" text-anchor="middle" x="337.05" y="-253.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge42" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#cbff00" d="M208.91,-200.67C219.42,-204.49 230.88,-208.83 241.29,-213.13 261.19,-221.37 283,-231.42 300.68,-239.85"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="298.68,-242.76 309.21,-243.93 301.7,-236.45 298.68,-242.76"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_cavity -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge30" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_cavity</title>
+<path fill="none" stroke="#ff0000" d="M354.77,-269.71C373.14,-283.09 403.9,-304.21 432.81,-318.13 442.58,-322.84 453.32,-327.12 463.79,-330.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="462.53,-334.13 473.12,-334.06 464.8,-327.51 462.53,-334.13"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_cavity_melt -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge31" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_cavity_melt</title>
+<path fill="none" stroke="#ffaa00" d="M367.05,-244.6C397.36,-231.51 445.11,-210.87 478.9,-196.28"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="480.16,-199.54 487.95,-192.37 477.38,-193.12 480.16,-199.54"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_closed_faces -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge32" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#aaff00" d="M378.56,-253.1C391.44,-251.81 406.29,-250.33 421.4,-248.82"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="421.31,-252.35 430.92,-247.88 420.62,-245.38 421.31,-252.35"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_k_bot -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge33" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_k_bot</title>
+<path fill="none" stroke="#00ff00" d="M345.2,-269.53C359.08,-292.49 391.96,-341.72 432.81,-368.13 437.65,-371.26 442.89,-374.01 448.32,-376.42"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="446.94,-379.64 457.52,-380.1 449.53,-373.14 446.94,-379.64"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~ocean_state_seed_from_cfg -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge34" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~ocean_state_seed_from_cfg</title>
+<path fill="none" stroke="#00ffa9" d="M378.56,-266.11C399.84,-270.83 426.47,-276.73 450.79,-282.12"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="449.77,-285.47 460.29,-284.22 451.28,-278.64 449.77,-285.47"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node26" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node26"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="770.1,-66.27 673.08,-66.27 673.08,-42 770.1,-42 770.1,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="721.59" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge38" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#aa00ff" d="M770.35,-54.13C802.65,-54.13 844.93,-54.13 876.12,-54.13"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="875.97,-57.64 885.97,-54.14 875.97,-50.64 875.97,-57.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node27" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node27"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="783.6,-24.27 659.58,-24.27 659.58,0 783.6,0 783.6,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="721.59" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge39" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#ff00aa" d="M783.88,-12.13C809.03,-12.13 837.96,-12.13 862.56,-12.13"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="862.38,-15.64 872.38,-12.14 862.38,-8.64 862.38,-15.64"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node28" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node28"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="219.54,-149.27 124.02,-149.27 124.02,-125 219.54,-125 219.54,-149.27"/>
+<text xml:space="preserve" text-anchor="middle" x="171.78" y="-133.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge37" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#0000ff" d="M220,-137.13C234.33,-137.13 250.38,-137.13 265.87,-137.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="265.51,-140.64 275.51,-137.14 265.51,-133.64 265.51,-140.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node29" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node29"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="241.29,-288.27 102.27,-288.27 102.27,-264 241.29,-264 241.29,-288.27"/>
+<text xml:space="preserve" text-anchor="middle" x="171.78" y="-272.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge41" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#cbff00" d="M241.55,-268.13C255.85,-266.47 270.68,-264.74 284.25,-263.16"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="284.27,-266.68 293.8,-262.05 283.46,-259.73 284.27,-266.68"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node30" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node30"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-200.27 0,-200.27 0,-176 66.27,-176 66.27,-200.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-184.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge40" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.52,-188.13C78.91,-188.13 93.51,-188.13 107.79,-188.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="107.62,-191.64 117.62,-188.14 107.62,-184.64 107.62,-191.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node31" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node31"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="217.29,-246.27 126.27,-246.27 126.27,-222 217.29,-222 217.29,-246.27"/>
+<text xml:space="preserve" text-anchor="middle" x="171.78" y="-230.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge43" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#cbff00" d="M217.39,-240.42C238.04,-243.33 262.7,-246.8 284.17,-249.83"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="283.51,-253.27 293.9,-251.2 284.49,-246.34 283.51,-253.27"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_node32" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~grid_is_tiled~~CalledByGraph_node32"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="557.58,-45.27 481.56,-45.27 481.56,-21 557.58,-21 557.58,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.57" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge44" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ff66" d="M557.72,-37.04C586.85,-40.09 627.95,-44.41 661.57,-47.94"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="660.85,-51.38 671.16,-48.94 661.58,-44.42 660.85,-51.38"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~grid_is_tiled~~CalledByGraph_edge45" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#0066ff" d="M557.72,-29.23C583.08,-26.57 617.5,-22.96 648.17,-19.74"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="648.19,-23.26 657.77,-18.73 647.46,-16.29 648.19,-23.26"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocgrid_is_tiledCalledByGraph = svgPanZoom('#procgrid_is_tiledCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure function </span><span class="n">grid_is_tiled</span><span class="p">(</span><span class="n">grid</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">tiled</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! True when this rank holds only part of the global domain.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tiled</span>
+<span class="w">      </span><span class="n">tiled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_global</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_global</span>
+<span class="w">   </span><span class="k">end function </span><span class="n">grid_is_tiled</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

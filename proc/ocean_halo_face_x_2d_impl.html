@@ -1,0 +1,2369 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_halo_face_x_2d_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_halo_face_x_2d_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">210 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_halo.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_halo.f90.html'>rdb_ocean_halo.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_halo.html'>rdb_ocean_halo</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_halo_face_x_2d_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-comm~6">comm</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-j~19">j</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-k~25">k</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-need_e~11">need_e</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-need_n~11">need_n</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-need_s~11">need_s</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-need_w~11">need_w</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-nreq~6">nreq</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-nxl~12">nxl</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-nxt~11">nxt</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-nxt1~2">nxt1</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-nyl~12">nyl</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-nyt~11">nyt</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-on_device~5">on_device</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-reqs~6">reqs</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-rk_e~6">rk_e</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-rk_n~6">rk_n</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-rk_s~6">rk_s</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-rk_w~6">rk_w</a>
+            <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#variable-stats~6">stats</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_halo_face_x_2d_impl.html#src">ocean_halo_face_x_2d_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine ocean_halo_face_x_2d_impl(fld, ng, device_resident)  
+</h2>
+    
+
+    <p>Two-pass X-then-Y halo exchange for a 2D x-face field.
+Core body shared by ocean_halo_face_x_2d (ng=oh_nghost) and
+ocean_halo_face_x_2d_wide (ng=ng_wide).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fld~16"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fld</strong>(oh_nx_local+2*ng+1,oh_ny_local+2*ng)</td>
+            <td>
+                <p>x-face field (nx_local + 2<em>ng + 1, ny_local + 2</em>ng)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ng~21"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ng</strong></td>
+            <td>
+                <p>Ghost cell width for this exchange</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-device_resident~13"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>device_resident</strong></td>
+            <td>
+                <p>If .false., operate on host memory.  Default = .true.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_halo_face_x_2d_impl~~CallsGraph Pages: 1 -->
+<svg id="prococean_halo_face_x_2d_implCallsGraph" width="579pt" height="452pt"
+ viewBox="0.00 0.00 579.00 452.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 448.27)">
+<title>proc~~ocean_halo_face_x_2d_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-448.27 574.81,-448.27 574.81,4 -4,4"/>
+<!-- proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node1" class="node">
+<title>proc~ocean_halo_face_x_2d_impl</title>
+<polygon fill="none" stroke="black" points="160.02,-234.27 0,-234.27 0,-210 160.02,-210 160.02,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="80.01" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_halo_face_x_2d_impl</text>
+</g>
+<!-- comm_irecv_real_sp_array_n -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node2" class="node">
+<title>comm_irecv_real_sp_array_n</title>
+<polygon fill="#777777" stroke="#777777" points="369.92,-444.27 205.4,-444.27 205.4,-420 369.92,-420 369.92,-444.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-428.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_irecv_real_sp_array_n</text>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#ff0000" d="M84.79,-234.64C95.81,-268.81 131.27,-364.33 196.02,-411.13 197.59,-412.27 199.22,-413.35 200.89,-414.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="199.06,-417.36 209.54,-418.91 202.31,-411.16 199.06,-417.36"/>
+</g>
+<!-- comm_isend_real_sp_array_n -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node3" class="node">
+<title>comm_isend_real_sp_array_n</title>
+<polygon fill="#777777" stroke="#777777" points="371.42,-402.27 203.9,-402.27 203.9,-378 371.42,-378 371.42,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_isend_real_sp_array_n</text>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#ff0000" d="M87.05,-234.73C101.52,-263.48 141.09,-334.14 196.02,-369.13 198.04,-370.42 200.13,-371.63 202.28,-372.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="200.76,-375.92 211.3,-376.93 203.69,-369.56 200.76,-375.92"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node4" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node4"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="368.42,-360.27 206.9,-360.27 206.9,-336 368.42,-336 368.42,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M90.93,-234.71C109.22,-256.98 150.55,-303.24 196.02,-327.13 199.07,-328.74 202.24,-330.22 205.48,-331.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="204.07,-334.79 214.66,-335.05 206.54,-328.24 204.07,-334.79"/>
+</g>
+<!-- proc~ew_rank_east -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node5" class="node">
+<title>proc~ew_rank_east</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node5"><a xlink:href="../proc/ew_rank_east.html" xlink:title="ew_rank_east">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="329.42,-318.27 245.9,-318.27 245.9,-294 329.42,-294 329.42,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ew_rank_east</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ew_rank_east -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ew_rank_east</title>
+<path fill="none" stroke="#ff0000" d="M99.77,-234.52C121.92,-248.63 160.28,-271.5 196.02,-285.13 208.28,-289.81 221.88,-293.63 234.74,-296.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="233.79,-300.05 244.32,-298.81 235.32,-293.22 233.79,-300.05"/>
+</g>
+<!-- proc~ew_rank_west -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node6" class="node">
+<title>proc~ew_rank_west</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node6"><a xlink:href="../proc/ew_rank_west.html" xlink:title="ew_rank_west">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="330.17,-276.27 245.15,-276.27 245.15,-252 330.17,-252 330.17,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ew_rank_west</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ew_rank_west -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ew_rank_west</title>
+<path fill="none" stroke="#ff0000" d="M142.71,-234.74C171.72,-240.66 205.96,-247.65 233.77,-253.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="232.88,-256.72 243.38,-255.3 234.28,-249.87 232.88,-256.72"/>
+</g>
+<!-- proc~needs_flags -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node7" class="node">
+<title>proc~needs_flags</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node7"><a xlink:href="../proc/needs_flags.html" xlink:title="needs_flags">
+<polygon fill="#d9534f" stroke="#d9534f" points="324.92,-234.27 250.4,-234.27 250.4,-210 324.92,-210 324.92,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">needs_flags</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~needs_flags -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~needs_flags</title>
+<path fill="none" stroke="#ff0000" d="M160.52,-222.13C186.91,-222.13 215.47,-222.13 238.73,-222.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="238.52,-225.64 248.52,-222.14 238.52,-218.64 238.52,-225.64"/>
+</g>
+<!-- proc~ns_rank_north -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node8" class="node">
+<title>proc~ns_rank_north</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node8"><a xlink:href="../proc/ns_rank_north.html" xlink:title="ns_rank_north">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="330.92,-192.27 244.4,-192.27 244.4,-168 330.92,-168 330.92,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ns_rank_north</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ns_rank_north -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ns_rank_north</title>
+<path fill="none" stroke="#ff0000" d="M142.71,-209.53C171.41,-203.67 205.23,-196.77 232.87,-191.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="233.33,-194.6 242.43,-189.17 231.93,-187.74 233.33,-194.6"/>
+</g>
+<!-- proc~ns_rank_south -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node9" class="node">
+<title>proc~ns_rank_south</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node9"><a xlink:href="../proc/ns_rank_south.html" xlink:title="ns_rank_south">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="331.29,-150.27 244.02,-150.27 244.02,-126 331.29,-126 331.29,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ns_rank_south</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ns_rank_south -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge8" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ns_rank_south</title>
+<path fill="none" stroke="#ff0000" d="M99.77,-209.75C121.92,-195.64 160.28,-172.77 196.02,-159.13 207.69,-154.68 220.58,-151.01 232.89,-148.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="233.53,-151.48 242.5,-145.85 231.97,-144.66 233.53,-151.48"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node10" class="node">
+<title>proc~ocean_periodic_wrap_face_x_2d</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node10"><a xlink:href="../proc/ocean_periodic_wrap_face_x_2d.html" xlink:title="ocean_periodic_wrap_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="379.29,-108.27 196.02,-108.27 196.02,-84 379.29,-84 379.29,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ocean_periodic_wrap_face_x_2d</title>
+<path fill="none" stroke="#ff0000" d="M90.93,-209.56C109.22,-187.29 150.55,-141.03 196.02,-117.14 199.07,-115.53 202.24,-114.05 205.48,-112.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="206.54,-116.03 214.66,-109.22 204.07,-109.48 206.54,-116.03"/>
+</g>
+<!-- proc~oh_count_msgs -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node11" class="node">
+<title>proc~oh_count_msgs</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node11"><a xlink:href="../proc/oh_count_msgs.html" xlink:title="oh_count_msgs">
+<polygon fill="#d9534f" stroke="#d9534f" points="334.29,-66.27 241.02,-66.27 241.02,-42 334.29,-42 334.29,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_msgs</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~oh_count_msgs -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~oh_count_msgs</title>
+<path fill="none" stroke="#ff0000" d="M87.05,-209.54C101.52,-180.79 141.09,-110.13 196.02,-75.14 206.14,-68.69 218.01,-64.22 229.77,-61.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.52,-64.53 239.48,-58.88 228.95,-57.71 230.52,-64.53"/>
+</g>
+<!-- waitall -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node12" class="node">
+<title>waitall</title>
+<polygon fill="#777777" stroke="#777777" points="314.66,-24.27 260.66,-24.27 260.66,0 314.66,0 314.66,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="287.66" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">waitall</text>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;waitall -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;waitall</title>
+<path fill="none" stroke="#ff0000" d="M84.79,-209.63C95.81,-175.46 131.27,-79.94 196.02,-33.13 211.38,-22.04 231.69,-16.7 249.19,-14.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="249.18,-17.7 258.71,-13.06 248.37,-10.75 249.18,-17.7"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node13" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="532.94,-360.27 453.17,-360.27 453.17,-336 532.94,-336 532.94,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="493.05" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge12" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#e7ff00" d="M368.75,-348.13C393.25,-348.13 419.5,-348.13 441.46,-348.13"/>
+<polygon fill="#e7ff00" stroke="#e7ff00" points="441.34,-351.64 451.34,-348.14 441.34,-344.64 441.34,-351.64"/>
+</g>
+<!-- proc~decomp_rank_from_coords -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node14" class="node">
+<title>proc~decomp_rank_from_coords</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CallsGraph_node14"><a xlink:href="../proc/decomp_rank_from_coords.html" xlink:title="decomp_rank_from_coords">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="570.81,-234.27 415.29,-234.27 415.29,-210 570.81,-210 570.81,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="493.05" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_rank_from_coords</text>
+</a>
+</g>
+</g>
+<!-- proc~ew_rank_east&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge13" class="edge">
+<title>proc~ew_rank_east&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#5cff00" d="M329.54,-299.21C345.38,-295.88 363.47,-291.25 379.29,-285.13 409.77,-273.36 442.07,-254.59 464.26,-240.59"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="465.89,-243.7 472.42,-235.36 462.11,-237.81 465.89,-243.7"/>
+</g>
+<!-- proc~ew_rank_west&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge14" class="edge">
+<title>proc~ew_rank_west&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#00ff2e" d="M330.31,-255.53C356.18,-250.19 390.14,-243.18 420.26,-236.96"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="420.59,-240.46 429.68,-235.01 419.18,-233.61 420.59,-240.46"/>
+</g>
+<!-- proc~ns_rank_north&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge15" class="edge">
+<title>proc~ns_rank_north&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#00b9ff" d="M331.29,-188.94C356.91,-194.23 390.18,-201.1 419.8,-207.22"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="418.96,-210.62 429.46,-209.21 420.38,-203.76 418.96,-210.62"/>
+</g>
+<!-- proc~ns_rank_south&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CallsGraph_edge16" class="edge">
+<title>proc~ns_rank_south&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#002eff" d="M331.36,-145.44C346.75,-148.75 364.07,-153.26 379.29,-159.13 409.77,-170.91 442.07,-189.68 464.26,-203.68"/>
+<polygon fill="#002eff" stroke="#002eff" points="462.11,-206.46 472.42,-208.91 465.89,-200.57 462.11,-206.46"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_halo_face_x_2d_impl~~CalledByGraph Pages: 1 -->
+<svg id="prococean_halo_face_x_2d_implCalledByGraph" width="641pt" height="381pt"
+ viewBox="0.00 0.00 641.00 381.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph" class="graph" transform="scale(0.35942 0.35942) rotate(0) translate(4 1057.26)">
+<title>proc~~ocean_halo_face_x_2d_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-1057.26 1779.43,-1057.26 1779.43,4 -4,4"/>
+<!-- proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node1" class="node">
+<title>proc~ocean_halo_face_x_2d_impl</title>
+<polygon fill="none" stroke="black" points="1775.43,-957.72 1615.41,-957.72 1615.41,-933.45 1775.43,-933.45 1775.43,-957.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1695.42" y="-941.98" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_halo_face_x_2d_impl</text>
+</g>
+<!-- proc~ocean_halo_bt_group_2d_wide -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node2" class="node">
+<title>proc~ocean_halo_bt_group_2d_wide</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node2"><a xlink:href="../proc/ocean_halo_bt_group_2d_wide.html" xlink:title="ocean_halo_bt_group_2d_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="1381.89,-1037.72 1208.37,-1037.72 1208.37,-1013.45 1381.89,-1013.45 1381.89,-1037.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1295.13" y="-1021.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_bt_group_2d_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_bt_group_2d_wide&#45;&gt;proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_halo_bt_group_2d_wide&#45;&gt;proc~ocean_halo_face_x_2d_impl</title>
+<path fill="none" stroke="#ff0000" d="M1358.8,-1013C1429.75,-998.75 1545.24,-975.55 1620.52,-960.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1621.19,-963.86 1630.3,-958.46 1619.81,-957 1621.19,-963.86"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node3" class="node">
+<title>proc~ocean_halo_face_x_2d</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node3"><a xlink:href="../proc/ocean_halo_face_x_2d.html" xlink:title="ocean_halo_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1564.41,-875.72 1432.89,-875.72 1432.89,-851.45 1564.41,-851.45 1564.41,-875.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1498.65" y="-859.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d&#45;&gt;proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_halo_face_x_2d&#45;&gt;proc~ocean_halo_face_x_2d_impl</title>
+<path fill="none" stroke="#ff0000" d="M1529.66,-876.22C1563.07,-890.28 1617.23,-913.09 1654.27,-928.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1652.73,-931.83 1663.3,-932.48 1655.45,-925.38 1652.73,-931.83"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_wide -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node4" class="node">
+<title>proc~ocean_halo_face_x_2d_wide</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node4"><a xlink:href="../proc/ocean_halo_face_x_2d_wide.html" xlink:title="ocean_halo_face_x_2d_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="1579.41,-957.72 1417.89,-957.72 1417.89,-933.45 1579.41,-933.45 1579.41,-957.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1498.65" y="-941.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_2d_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_wide&#45;&gt;proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_halo_face_x_2d_wide&#45;&gt;proc~ocean_halo_face_x_2d_impl</title>
+<path fill="none" stroke="#ff0000" d="M1579.71,-945.58C1587.63,-945.58 1595.7,-945.58 1603.72,-945.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1603.47,-949.08 1613.47,-945.58 1603.47,-942.08 1603.47,-949.08"/>
+</g>
+<!-- interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node5" class="node">
+<title>interface~ocean_halo_face_x</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node5"><a xlink:href="../interface/ocean_halo_face_x.html" xlink:title="ocean_halo_face_x">
+<polygon fill="#a7506f" stroke="#a7506f" points="1351.52,-629.72 1238.75,-629.72 1238.75,-605.45 1351.52,-605.45 1351.52,-629.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1295.13" y="-613.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_2d -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge6" class="edge">
+<title>interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_2d</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1306.4,-630.12C1338.88,-669.77 1439.6,-792.72 1480.31,-842.42"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1477.4,-844.38 1486.44,-849.9 1482.81,-839.95 1477.4,-844.38"/>
+</g>
+<!-- proc~bt_wide_entry_exchange_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node6" class="node">
+<title>proc~bt_wide_entry_exchange_impl</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node6"><a xlink:href="../proc/bt_wide_entry_exchange_impl.html" xlink:title="bt_wide_entry_exchange_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1380.39,-915.72 1209.87,-915.72 1209.87,-891.45 1380.39,-891.45 1380.39,-915.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1295.13" y="-899.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_entry_exchange_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_face_x_2d_wide -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_face_x_2d_wide</title>
+<path fill="none" stroke="#0000ff" d="M1356.59,-916.19C1378.51,-920.75 1403.48,-925.96 1426.25,-930.7"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1425.24,-934.07 1435.75,-932.68 1426.67,-927.22 1425.24,-934.07"/>
+</g>
+<!-- proc~bt_wide_init -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node7" class="node">
+<title>proc~bt_wide_init</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node7"><a xlink:href="../proc/bt_wide_init.html" xlink:title="bt_wide_t%bt_wide_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="1138.25,-995.72 1005.23,-995.72 1005.23,-971.45 1138.25,-971.45 1138.25,-995.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-979.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_t%bt_wide_init</text>
+</a>
+</g>
+</g>
+<!-- proc~bt_wide_init&#45;&gt;proc~ocean_halo_face_x_2d_wide -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~bt_wide_init&#45;&gt;proc~ocean_halo_face_x_2d_wide</title>
+<path fill="none" stroke="#0000ff" d="M1138.68,-982.33C1201.41,-980.58 1298.34,-976.42 1381.89,-966.58 1395.9,-964.94 1410.77,-962.65 1425.02,-960.19"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1425.56,-963.65 1434.8,-958.45 1424.34,-956.75 1425.56,-963.65"/>
+</g>
+<!-- proc~exchange_corner_host -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node9" class="node">
+<title>proc~exchange_corner_host</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node9"><a xlink:href="../proc/exchange_corner_host.html" xlink:title="exchange_corner_host">
+<polygon fill="#d9534f" stroke="#d9534f" points="1360.89,-957.72 1229.37,-957.72 1229.37,-933.45 1360.89,-933.45 1360.89,-957.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1295.13" y="-941.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">exchange_corner_host</text>
+</a>
+</g>
+</g>
+<!-- proc~bt_wide_init&#45;&gt;proc~exchange_corner_host -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge28" class="edge">
+<title>proc~bt_wide_init&#45;&gt;proc~exchange_corner_host</title>
+<path fill="none" stroke="#0000ff" d="M1138.56,-972.29C1163.43,-968.02 1191.94,-963.12 1217.7,-958.7"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1218.18,-962.17 1227.45,-957.03 1217,-955.27 1218.18,-962.17"/>
+</g>
+<!-- proc~engine_enter_data -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node8" class="node">
+<title>proc~engine_enter_data</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node8"><a xlink:href="../proc/engine_enter_data.html" xlink:title="engine_enter_data">
+<polygon fill="#d9534f" stroke="#d9534f" points="668.2,-877.72 556.93,-877.72 556.93,-853.45 668.2,-853.45 668.2,-877.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-861.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_enter_data</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_halo_bt_group_2d_wide -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_halo_bt_group_2d_wide</title>
+<path fill="none" stroke="#ff0000" d="M621.26,-877.85C639.97,-906.4 691.04,-977 754.83,-1004.58 906.42,-1070.13 1104.93,-1055.37 1213.88,-1039.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1214.22,-1043.31 1223.61,-1038.39 1213.21,-1036.38 1214.22,-1043.31"/>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge17" class="edge">
+<title>proc~engine_enter_data&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M654.98,-878.12C754.91,-905.66 1012.76,-960.19 1172.37,-844.58 1243.02,-793.41 1276.7,-688.42 1288.73,-641.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1292.12,-642.21 1291.09,-631.66 1285.32,-640.55 1292.12,-642.21"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node10" class="node">
+<title>proc~ocean_halo_bt_group_2d</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node10"><a xlink:href="../proc/ocean_halo_bt_group_2d.html" xlink:title="ocean_halo_bt_group_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="916.73,-877.72 773.21,-877.72 773.21,-853.45 916.73,-853.45 916.73,-877.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-861.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_bt_group_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_halo_bt_group_2d -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge29" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_halo_bt_group_2d</title>
+<path fill="none" stroke="#ff00ff" d="M668.46,-865.58C696.32,-865.58 730.73,-865.58 761.68,-865.58"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="761.39,-869.08 771.39,-865.58 761.39,-862.08 761.39,-869.08"/>
+</g>
+<!-- proc~ocean_dyn_enable_bt_wide -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node23" class="node">
+<title>proc~ocean_dyn_enable_bt_wide</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node23"><a xlink:href="../proc/ocean_dyn_enable_bt_wide.html" xlink:title="ocean_dyn_enable_bt_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="923.48,-995.72 766.46,-995.72 766.46,-971.45 923.48,-971.45 923.48,-995.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-979.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_enable_bt_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_dyn_enable_bt_wide -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge47" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_dyn_enable_bt_wide</title>
+<path fill="none" stroke="#3c00ff" d="M629.19,-877.99C654.33,-897.41 705.89,-935.11 754.83,-957.58 762.86,-961.27 771.55,-964.58 780.23,-967.49"/>
+<polygon fill="#3c00ff" stroke="#3c00ff" points="779.15,-970.82 789.74,-970.51 781.27,-964.15 779.15,-970.82"/>
+</g>
+<!-- proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node24" class="node">
+<title>proc~ocean_halo_exchange_ml_state</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node24"><a xlink:href="../proc/ocean_halo_exchange_ml_state.html" xlink:title="ocean_halo_exchange_ml_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="935.1,-389.72 754.83,-389.72 754.83,-365.45 935.1,-365.45 935.1,-389.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-373.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_exchange_ml_state</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge48" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#9500ff" d="M668.61,-866.75C687.15,-864.2 706.3,-857.8 718.83,-843.58 784.45,-769.18 690.15,-473.82 754.83,-398.58 755.18,-398.18 755.54,-397.78 755.9,-397.38"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="757.89,-400.29 763.17,-391.11 753.31,-394.99 757.89,-400.29"/>
+</g>
+<!-- proc~exchange_corner_host&#45;&gt;proc~ocean_halo_face_x_2d_wide -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~exchange_corner_host&#45;&gt;proc~ocean_halo_face_x_2d_wide</title>
+<path fill="none" stroke="#0000ff" d="M1361.28,-945.58C1375.57,-945.58 1390.97,-945.58 1406.08,-945.58"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1406.05,-949.08 1416.05,-945.58 1406.05,-942.08 1406.05,-949.08"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d&#45;&gt;proc~ocean_halo_face_x_2d -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_halo_bt_group_2d&#45;&gt;proc~ocean_halo_face_x_2d</title>
+<path fill="none" stroke="#00ff00" d="M916.95,-865.37C1040.55,-864.99 1294.25,-864.21 1421.43,-863.82"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1421.09,-867.32 1431.08,-863.79 1421.06,-860.32 1421.09,-867.32"/>
+</g>
+<!-- proc~barotropic_substep_nonlinear -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node11" class="node">
+<title>proc~barotropic_substep_nonlinear</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node11"><a xlink:href="../proc/barotropic_substep_nonlinear.html" xlink:title="barotropic_substep_nonlinear">
+<polygon fill="#d9534f" stroke="#d9534f" points="929.1,-511.72 760.83,-511.72 760.83,-487.45 929.1,-487.45 929.1,-511.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-495.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">barotropic_substep_nonlinear</text>
+</a>
+</g>
+</g>
+<!-- proc~barotropic_substep_nonlinear&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge10" class="edge">
+<title>proc~barotropic_substep_nonlinear&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M929.58,-493.59C997.25,-491.68 1093.86,-495.74 1172.37,-525.58 1213.25,-541.13 1252.04,-574.88 1274.44,-596.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1271.86,-599.27 1281.39,-603.9 1276.83,-594.34 1271.86,-599.27"/>
+</g>
+<!-- proc~barotropic_substep_nonlinear_interior -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node12" class="node">
+<title>proc~barotropic_substep_nonlinear_interior</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node12"><a xlink:href="../proc/barotropic_substep_nonlinear_interior.html" xlink:title="barotropic_substep_nonlinear_interior">
+<polygon fill="#d9534f" stroke="#d9534f" points="718.83,-511.72 506.31,-511.72 506.31,-487.45 718.83,-487.45 718.83,-511.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-495.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">barotropic_substep_nonlinear_interior</text>
+</a>
+</g>
+</g>
+<!-- proc~barotropic_substep_nonlinear_interior&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge11" class="edge">
+<title>proc~barotropic_substep_nonlinear_interior&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M684.48,-486.95C706.9,-483.52 731.83,-480.28 754.83,-478.58 939.96,-464.9 1003.5,-412.48 1172.37,-489.58 1222.03,-512.26 1261.5,-565.29 1280.94,-595.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1277.9,-597.23 1286.16,-603.86 1283.84,-593.52 1277.9,-597.23"/>
+</g>
+<!-- proc~barotropic_substep_nonlinear_interior&#45;&gt;proc~barotropic_substep_nonlinear -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge31" class="edge">
+<title>proc~barotropic_substep_nonlinear_interior&#45;&gt;proc~barotropic_substep_nonlinear</title>
+<path fill="none" stroke="#ff0000" d="M719.33,-499.58C729.27,-499.58 739.32,-499.58 749.15,-499.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="749.08,-503.08 759.08,-499.58 749.08,-496.08 749.08,-503.08"/>
+</g>
+<!-- proc~bt_wide_entry_exchange -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node13" class="node">
+<title>proc~bt_wide_entry_exchange</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node13"><a xlink:href="../proc/bt_wide_entry_exchange.html" xlink:title="bt_wide_t%bt_wide_entry_exchange">
+<polygon fill="#d9534f" stroke="#d9534f" points="713.2,-834.72 511.93,-834.72 511.93,-810.45 713.2,-810.45 713.2,-834.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-818.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_t%bt_wide_entry_exchange</text>
+</a>
+</g>
+</g>
+<!-- proc~bt_wide_entry_exchange&#45;&gt;proc~bt_wide_entry_exchange_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge24" class="edge">
+<title>proc~bt_wide_entry_exchange&#45;&gt;proc~bt_wide_entry_exchange_impl</title>
+<path fill="none" stroke="#ffff00" d="M698.74,-835.22C705.76,-837.79 712.56,-840.88 718.83,-844.58 739.99,-857.1 732.66,-875.96 754.83,-886.58 909.49,-960.69 1118.76,-937.5 1225.43,-918.27"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1225.99,-921.73 1235.19,-916.47 1224.72,-914.84 1225.99,-921.73"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node14" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node14"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.93,-866.72 330.91,-866.72 330.91,-842.45 469.93,-842.45 469.93,-866.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-850.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_enter_data -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge26" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_enter_data</title>
+<path fill="none" stroke="#00ffff" d="M470.23,-858.19C494.31,-859.45 521.27,-860.86 545.14,-862.11"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="544.91,-865.6 555.08,-862.63 545.27,-858.61 544.91,-865.6"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node21" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node21"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="653.95,-751.72 571.18,-751.72 571.18,-727.45 653.95,-727.45 653.95,-751.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-735.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge43" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#0078ff" d="M424.31,-842.06C461.66,-821.62 535.83,-781.04 578.76,-757.54"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="580.29,-760.69 587.38,-752.82 576.93,-754.55 580.29,-760.69"/>
+</g>
+<!-- proc~configure_ocean_closed_faces -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node15" class="node">
+<title>proc~configure_ocean_closed_faces</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node15"><a xlink:href="../proc/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="1158.5,-671.72 984.98,-671.72 984.98,-647.45 1158.5,-647.45 1158.5,-671.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-655.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge12" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M1139.16,-646.98C1167.04,-641.7 1199.39,-635.56 1227.31,-630.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1227.91,-633.71 1237.09,-628.41 1226.61,-626.83 1227.91,-633.71"/>
+</g>
+<!-- proc~configure_ocean_k_bot -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node16" class="node">
+<title>proc~configure_ocean_k_bot</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node16"><a xlink:href="../proc/configure_ocean_k_bot.html" xlink:title="configure_ocean_k_bot">
+<polygon fill="#d9534f" stroke="#d9534f" points="1138.62,-835.72 1004.85,-835.72 1004.85,-811.45 1138.62,-811.45 1138.62,-835.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-819.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_k_bot</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_k_bot&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge13" class="edge">
+<title>proc~configure_ocean_k_bot&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M1138.94,-817.2C1150.75,-814.01 1162.44,-809.35 1172.37,-802.58 1232.39,-761.68 1270.13,-680.41 1285.79,-640.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1289.04,-641.91 1289.33,-631.32 1282.5,-639.42 1289.04,-641.91"/>
+</g>
+<!-- proc~configure_ocean_k_top -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node17" class="node">
+<title>proc~configure_ocean_k_top</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node17"><a xlink:href="../proc/configure_ocean_k_top.html" xlink:title="configure_ocean_k_top">
+<polygon fill="#d9534f" stroke="#d9534f" points="1138.62,-793.72 1004.85,-793.72 1004.85,-769.45 1138.62,-769.45 1138.62,-793.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-777.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_k_top</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_k_top&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge14" class="edge">
+<title>proc~configure_ocean_k_top&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M1139.08,-773.98C1150.69,-770.9 1162.27,-766.59 1172.37,-760.58 1222.98,-730.48 1262.78,-671.69 1281.83,-639.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1284.74,-641.63 1286.73,-631.22 1278.68,-638.12 1284.74,-641.63"/>
+</g>
+<!-- proc~configure_ocean_top_drag -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node18" class="node">
+<title>proc~configure_ocean_top_drag</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node18"><a xlink:href="../proc/configure_ocean_top_drag.html" xlink:title="configure_ocean_top_drag">
+<polygon fill="#d9534f" stroke="#d9534f" points="1148,-751.72 995.48,-751.72 995.48,-727.45 1148,-727.45 1148,-751.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-735.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_top_drag</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_top_drag&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge15" class="edge">
+<title>proc~configure_ocean_top_drag&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M1136.88,-727.02C1149,-723.5 1161.33,-719.08 1172.37,-713.58 1211.95,-693.9 1250.85,-659.97 1273.66,-638.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1276.05,-640.73 1280.77,-631.25 1271.16,-635.72 1276.05,-640.73"/>
+</g>
+<!-- proc~drain_wrap_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node19" class="node">
+<title>proc~drain_wrap_face_x</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node19"><a xlink:href="../proc/drain_wrap_face_x.html" xlink:title="drain_wrap_face_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="1127,-629.72 1016.48,-629.72 1016.48,-605.45 1127,-605.45 1127,-629.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-613.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">drain_wrap_face_x</text>
+</a>
+</g>
+</g>
+<!-- proc~drain_wrap_face_x&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge16" class="edge">
+<title>proc~drain_wrap_face_x&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M1127.46,-617.58C1157.57,-617.58 1195.17,-617.58 1227.04,-617.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1226.98,-621.08 1236.98,-617.58 1226.98,-614.08 1226.98,-621.08"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node20" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node20"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="452.68,-803.72 348.16,-803.72 348.16,-779.45 452.68,-779.45 452.68,-803.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-787.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_enter_data -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge27" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_enter_data</title>
+<path fill="none" stroke="#00ffff" d="M422.82,-804.22C443.54,-815.96 476.16,-833.15 506.31,-843.58 518.78,-847.9 532.4,-851.51 545.57,-854.48"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="544.5,-857.83 555.01,-856.5 545.97,-850.98 544.5,-857.83"/>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge44" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#0078ff" d="M452.3,-779C484.89,-770.93 527.08,-760.49 559.84,-752.38"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="560.67,-755.79 569.54,-749.99 558.99,-748.99 560.67,-755.79"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge18" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M654.29,-732.91C682.46,-728.44 720.86,-722.65 754.83,-718.58 939.85,-696.43 993.5,-732.82 1172.37,-680.58 1206.55,-670.6 1242.37,-650.77 1266.24,-636.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1267.83,-639.14 1274.42,-630.84 1264.09,-633.22 1267.83,-639.14"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge50" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#9500ff" d="M623.01,-727.01C643.58,-699.01 692.69,-628.75 718.83,-562.58 746.25,-493.18 702.47,-451.75 754.83,-398.58 755.44,-397.97 756.06,-397.37 756.69,-396.79"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="758.52,-399.79 764.42,-391 754.32,-394.19 758.52,-399.79"/>
+</g>
+<!-- interface~configure_ocean_closed_faces -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node28" class="node">
+<title>interface~configure_ocean_closed_faces</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node28"><a xlink:href="../interface/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#a7506f" stroke="#a7506f" points="931.73,-671.72 758.21,-671.72 758.21,-647.45 931.73,-647.45 931.73,-671.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-655.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_closed_faces -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge64" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#ff0000" d="M644.17,-727.06C672.61,-715.62 716.26,-698.56 754.83,-685.58 765.37,-682.04 776.71,-678.52 787.64,-675.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="788.34,-678.7 796.95,-672.53 786.36,-671.99 788.34,-678.7"/>
+</g>
+<!-- interface~configure_ocean_k_bot -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node29" class="node">
+<title>interface~configure_ocean_k_bot</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node29"><a xlink:href="../interface/configure_ocean_k_bot.html" xlink:title="configure_ocean_k_bot">
+<polygon fill="#a7506f" stroke="#a7506f" points="911.85,-835.72 778.08,-835.72 778.08,-811.45 911.85,-811.45 911.85,-835.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-819.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_k_bot</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_k_bot -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge65" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_k_bot</title>
+<path fill="none" stroke="#ff3f00" d="M654.41,-745.42C674.73,-749.54 699.09,-756.4 718.83,-767.58 738.24,-778.59 735.26,-791.86 754.83,-802.58 758.72,-804.72 762.82,-806.63 767.04,-808.35"/>
+<polygon fill="#ff3f00" stroke="#ff3f00" points="765.7,-811.59 776.29,-811.73 768.1,-805.02 765.7,-811.59"/>
+</g>
+<!-- interface~configure_ocean_k_top -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node30" class="node">
+<title>interface~configure_ocean_k_top</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node30"><a xlink:href="../interface/configure_ocean_k_top.html" xlink:title="configure_ocean_k_top">
+<polygon fill="#a7506f" stroke="#a7506f" points="911.85,-793.72 778.08,-793.72 778.08,-769.45 911.85,-769.45 911.85,-793.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-777.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_k_top</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_k_top -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge66" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_k_top</title>
+<path fill="none" stroke="#ff7f00" d="M654.23,-747C685.39,-752.68 729.29,-760.68 767.03,-767.56"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="766.05,-770.94 776.51,-769.29 767.3,-764.05 766.05,-770.94"/>
+</g>
+<!-- interface~configure_ocean_top_drag -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node31" class="node">
+<title>interface~configure_ocean_top_drag</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node31"><a xlink:href="../interface/configure_ocean_top_drag.html" xlink:title="configure_ocean_top_drag">
+<polygon fill="#a7506f" stroke="#a7506f" points="921.23,-751.72 768.71,-751.72 768.71,-727.45 921.23,-727.45 921.23,-751.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-735.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_top_drag</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_top_drag -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge67" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_top_drag</title>
+<path fill="none" stroke="#ffbf00" d="M654.23,-739.58C682.67,-739.58 721.74,-739.58 757.03,-739.58"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="756.83,-743.08 766.83,-739.58 756.83,-736.08 756.83,-743.08"/>
+</g>
+<!-- proc~ocean_data_forcing_configure -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node42" class="node">
+<title>proc~ocean_data_forcing_configure</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node42"><a xlink:href="../proc/ocean_data_forcing_configure.html" xlink:title="ocean_data_forcing_configure">
+<polygon fill="#d9534f" stroke="#d9534f" points="930.6,-591.72 759.33,-591.72 759.33,-567.45 930.6,-567.45 930.6,-591.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-575.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_forcing_configure</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_data_forcing_configure -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge78" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_data_forcing_configure</title>
+<path fill="none" stroke="#007fff" d="M630.39,-727.26C656.73,-708.03 709.38,-669.86 754.83,-638.58 774.95,-624.74 797.95,-609.53 815.54,-598.03"/>
+<polygon fill="#007fff" stroke="#007fff" points="816.97,-601.27 823.44,-592.87 813.15,-595.41 816.97,-601.27"/>
+</g>
+<!-- proc~ice_evp_dynamics_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node22" class="node">
+<title>proc~ice_evp_dynamics_impl</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node22"><a xlink:href="../proc/ice_evp_dynamics_impl.html" xlink:title="ice_evp_dynamics_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1140.12,-431.72 1003.35,-431.72 1003.35,-407.45 1140.12,-407.45 1140.12,-431.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-415.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_dynamics_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge19" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M1140.4,-430.37C1151.69,-434.05 1162.81,-438.98 1172.37,-445.58 1228.55,-484.43 1267.54,-558.09 1284.54,-595.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1281.22,-596.28 1288.49,-603.99 1287.61,-593.43 1281.22,-596.28"/>
+</g>
+<!-- proc~ocean_dyn_enable_bt_wide&#45;&gt;proc~bt_wide_init -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge25" class="edge">
+<title>proc~ocean_dyn_enable_bt_wide&#45;&gt;proc~bt_wide_init</title>
+<path fill="none" stroke="#00ff00" d="M923.95,-983.58C946.51,-983.58 971.12,-983.58 993.63,-983.58"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="993.32,-987.08 1003.32,-983.58 993.32,-980.08 993.32,-987.08"/>
+</g>
+<!-- proc~ocean_halo_exchange_ml_state&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge20" class="edge">
+<title>proc~ocean_halo_exchange_ml_state&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M908.45,-364.96C978.42,-354.37 1092.46,-348.06 1172.37,-398.58 1244.09,-443.93 1277.21,-547.33 1288.91,-593.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1285.47,-594.65 1291.2,-603.57 1292.28,-593.03 1285.47,-594.65"/>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node25" class="node">
+<title>proc~ocean_seam_refresh_surface_stress</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node25"><a xlink:href="../proc/ocean_seam_refresh_surface_stress.html" xlink:title="ocean_seam_refresh_surface_stress">
+<polygon fill="#d9534f" stroke="#d9534f" points="1172.37,-149.72 971.1,-149.72 971.1,-125.45 1172.37,-125.45 1172.37,-149.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-133.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_seam_refresh_surface_stress</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge21" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M1084.39,-150.03C1104.69,-172.28 1146.81,-221.01 1172.37,-268.58 1234.19,-383.66 1274.68,-536.4 1288.68,-594.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1285.26,-594.88 1290.98,-603.79 1292.06,-593.25 1285.26,-594.88"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node26" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node26"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="445.93,-470.72 354.91,-470.72 354.91,-446.45 445.93,-446.45 445.93,-470.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-454.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge22" class="edge">
+<title>proc~run_stage_split&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M411.85,-471.08C433.43,-496.57 482.95,-552.97 506.31,-562.58 593.65,-598.55 624.52,-567.81 718.83,-562.58 734.9,-561.69 738.76,-559.47 754.83,-558.58 834.83,-554.15 855.23,-552.23 935.1,-558.58 1041.56,-567.06 1067.02,-579.06 1172.37,-596.58 1190.16,-599.54 1209.4,-602.82 1227.21,-605.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1226.45,-609.31 1236.9,-607.57 1227.64,-602.42 1226.45,-609.31"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_halo_bt_group_2d -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge30" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_halo_bt_group_2d</title>
+<path fill="none" stroke="#ff00ff" d="M415.92,-471C432,-485.66 457.37,-511.6 470.31,-539.58 512.08,-629.91 436.97,-689.2 506.31,-760.58 573.33,-829.59 635.94,-752.77 718.83,-801.58 740.31,-814.23 733.61,-831.5 754.83,-844.58 757.41,-846.17 760.09,-847.64 762.85,-849"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="761.2,-852.09 771.77,-852.84 763.97,-845.67 761.2,-852.09"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~barotropic_substep_nonlinear_interior -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge33" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~barotropic_substep_nonlinear_interior</title>
+<path fill="none" stroke="#ff5900" d="M446.25,-467.33C472.22,-472.4 505.61,-478.91 535.58,-484.76"/>
+<polygon fill="#ff5900" stroke="#ff5900" points="534.9,-488.19 545.39,-486.67 536.24,-481.32 534.9,-488.19"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~bt_wide_entry_exchange -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge34" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~bt_wide_entry_exchange</title>
+<path fill="none" stroke="#ffb300" d="M416.32,-471.21C432.52,-485.87 457.75,-511.63 470.31,-539.58 517.39,-644.39 429.71,-709.94 506.31,-795.58 509.18,-798.8 512.38,-801.65 515.82,-804.18"/>
+<polygon fill="#ffb300" stroke="#ffb300" points="513.83,-807.06 524.17,-809.37 517.52,-801.12 513.83,-807.06"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge54" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#9500ff" d="M446.27,-448.83C464.83,-444.88 486.58,-440.38 506.31,-436.58 553.45,-427.52 675.28,-406.45 758.94,-392.1"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="759.46,-395.57 768.73,-390.43 758.28,-388.67 759.46,-395.57"/>
+</g>
+<!-- proc~bt_wide_substep -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node32" class="node">
+<title>proc~bt_wide_substep</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node32"><a xlink:href="../proc/bt_wide_substep.html" xlink:title="bt_wide_substep">
+<polygon fill="#d9534f" stroke="#d9534f" points="661.83,-553.72 563.31,-553.72 563.31,-529.45 661.83,-529.45 661.83,-553.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-537.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_substep</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~bt_wide_substep -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge68" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~bt_wide_substep</title>
+<path fill="none" stroke="#ffff00" d="M418.32,-471.02C438.32,-485.15 473.12,-507.89 506.31,-520.58 520.74,-526.1 536.85,-530.25 552.06,-533.33"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="550.96,-536.69 561.44,-535.11 552.27,-529.81 550.96,-536.69"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node48" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node48"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="673.45,-389.72 551.68,-389.72 551.68,-365.45 673.45,-365.45 673.45,-389.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-373.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge82" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#ff00ff" d="M421.63,-446.1C442.27,-433.82 475.55,-415.25 506.31,-403.58 517.11,-399.49 528.79,-395.86 540.29,-392.71"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="540.99,-396.15 549.78,-390.23 539.22,-389.38 540.99,-396.15"/>
+</g>
+<!-- proc~visc_rem_precompute -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node50" class="node">
+<title>proc~visc_rem_precompute</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node50"><a xlink:href="../proc/visc_rem_precompute.html" xlink:title="visc_rem_precompute">
+<polygon fill="#d9534f" stroke="#d9534f" points="908.85,-301.72 781.08,-301.72 781.08,-277.45 908.85,-277.45 908.85,-301.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-285.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">visc_rem_precompute</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~visc_rem_precompute -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge84" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~visc_rem_precompute</title>
+<path fill="none" stroke="#ff007f" d="M418.39,-446.12C432.86,-435.12 453.87,-418.29 470.31,-401.58 488.27,-383.32 484.42,-369.88 506.31,-356.58 587.27,-307.39 697.44,-293.43 769.59,-289.93"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="769.48,-293.44 779.32,-289.52 769.19,-286.45 769.48,-293.44"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node51" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node51"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="673.08,-191.72 552.06,-191.72 552.06,-167.45 673.08,-167.45 673.08,-191.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-175.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge87" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff003f" d="M423.08,-446.14C438.6,-436.09 458.74,-420.53 470.31,-401.58 508.99,-338.28 462.08,-298.15 506.31,-238.58 520.29,-219.75 542.18,-206.1 562.39,-196.71"/>
+<polygon fill="#ff003f" stroke="#ff003f" points="563.6,-200 571.36,-192.79 560.8,-193.59 563.6,-200"/>
+</g>
+<!-- proc~visc_rem_halo_refresh -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node27" class="node">
+<title>proc~visc_rem_halo_refresh</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node27"><a xlink:href="../proc/visc_rem_halo_refresh.html" xlink:title="visc_rem_halo_refresh">
+<polygon fill="#d9534f" stroke="#d9534f" points="1136,-301.72 1007.48,-301.72 1007.48,-277.45 1136,-277.45 1136,-301.72"/>
+<text xml:space="preserve" text-anchor="middle" x="1071.74" y="-285.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">visc_rem_halo_refresh</text>
+</a>
+</g>
+</g>
+<!-- proc~visc_rem_halo_refresh&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge23" class="edge">
+<title>proc~visc_rem_halo_refresh&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff0000" d="M1094.99,-302.02C1116.97,-315.2 1150.4,-337.8 1172.37,-364.58 1232.81,-438.26 1271.94,-546.94 1287.07,-594.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1283.69,-595.14 1290.02,-603.64 1290.37,-593.06 1283.69,-595.14"/>
+</g>
+<!-- interface~configure_ocean_closed_faces&#45;&gt;proc~configure_ocean_closed_faces -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge37" class="edge">
+<title>interface~configure_ocean_closed_faces&#45;&gt;proc~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#96ff00" stroke-dasharray="5,2" d="M932.22,-659.58C945.67,-659.58 959.64,-659.58 973.31,-659.58"/>
+<polygon fill="#96ff00" stroke="#96ff00" points="973.19,-663.08 983.19,-659.58 973.19,-656.08 973.19,-663.08"/>
+</g>
+<!-- interface~configure_ocean_k_bot&#45;&gt;proc~configure_ocean_k_bot -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge38" class="edge">
+<title>interface~configure_ocean_k_bot&#45;&gt;proc~configure_ocean_k_bot</title>
+<path fill="none" stroke="#3cff00" stroke-dasharray="5,2" d="M912.19,-823.58C937.57,-823.58 966.75,-823.58 993.1,-823.58"/>
+<polygon fill="#3cff00" stroke="#3cff00" points="993.08,-827.08 1003.08,-823.58 993.08,-820.08 993.08,-827.08"/>
+</g>
+<!-- interface~configure_ocean_k_top&#45;&gt;proc~configure_ocean_k_top -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge39" class="edge">
+<title>interface~configure_ocean_k_top&#45;&gt;proc~configure_ocean_k_top</title>
+<path fill="none" stroke="#00ff1e" stroke-dasharray="5,2" d="M912.19,-781.58C937.57,-781.58 966.75,-781.58 993.1,-781.58"/>
+<polygon fill="#00ff1e" stroke="#00ff1e" points="993.08,-785.08 1003.08,-781.58 993.08,-778.08 993.08,-785.08"/>
+</g>
+<!-- interface~configure_ocean_top_drag&#45;&gt;proc~configure_ocean_top_drag -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge40" class="edge">
+<title>interface~configure_ocean_top_drag&#45;&gt;proc~configure_ocean_top_drag</title>
+<path fill="none" stroke="#00ff78" stroke-dasharray="5,2" d="M921.44,-739.58C941.45,-739.58 963.22,-739.58 983.79,-739.58"/>
+<polygon fill="#00ff78" stroke="#00ff78" points="983.57,-743.08 993.57,-739.58 983.57,-736.08 983.57,-743.08"/>
+</g>
+<!-- proc~bt_wide_substep&#45;&gt;proc~barotropic_substep_nonlinear -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge32" class="edge">
+<title>proc~bt_wide_substep&#45;&gt;proc~barotropic_substep_nonlinear</title>
+<path fill="none" stroke="#ff0000" d="M662.15,-532.73C691.57,-527.37 729.81,-520.39 763.63,-514.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="764.21,-517.68 773.42,-512.44 762.96,-510.79 764.21,-517.68"/>
+</g>
+<!-- proc~bulk_forcing_apply -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node33" class="node">
+<title>proc~bulk_forcing_apply</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node33"><a xlink:href="../proc/bulk_forcing_apply.html" xlink:title="bulk_forcing_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="258.54,-44.72 148.02,-44.72 148.02,-20.45 258.54,-20.45 258.54,-44.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-28.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_forcing_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_forcing_apply&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge55" class="edge">
+<title>proc~bulk_forcing_apply&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#f000ff" d="M258.66,-23.61C382.29,-5.36 692.56,28.29 935.1,-47.58 980.26,-61.71 1024.37,-95.86 1049.48,-117.8"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="1046.92,-120.2 1056.71,-124.26 1051.59,-114.98 1046.92,-120.2"/>
+</g>
+<!-- proc~configure_ocean_forcing -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node34" class="node">
+<title>proc~configure_ocean_forcing</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node34"><a xlink:href="../proc/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#d9534f" stroke="#d9534f" points="915.98,-191.72 773.96,-191.72 773.96,-167.45 915.98,-167.45 915.98,-191.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-175.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge56" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#f000ff" d="M913.4,-166.98C938.18,-162.35 966.46,-157.07 992.13,-152.27"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="992.67,-155.73 1001.86,-150.46 991.38,-148.85 992.67,-155.73"/>
+</g>
+<!-- proc~continuity_tracer_drain -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node35" class="node">
+<title>proc~continuity_tracer_drain</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node35"><a xlink:href="../proc/continuity_tracer_drain.html" xlink:title="continuity_tracer_drain">
+<polygon fill="#d9534f" stroke="#d9534f" points="467.68,-572.72 333.16,-572.72 333.16,-548.45 467.68,-548.45 467.68,-572.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-556.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_drain</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_drain&#45;&gt;proc~drain_wrap_face_x -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge41" class="edge">
+<title>proc~continuity_tracer_drain&#45;&gt;proc~drain_wrap_face_x</title>
+<path fill="none" stroke="#00ffd1" d="M431.57,-573.18C452.22,-581.17 480.44,-590.86 506.31,-595.58 684.14,-628.04 898.53,-625.16 1004.62,-621.01"/>
+<polygon fill="#00ffd1" stroke="#00ffd1" points="1004.73,-624.51 1014.57,-620.6 1004.44,-617.51 1004.73,-624.51"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node36" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node36"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="236.41,-803.72 170.14,-803.72 170.14,-779.45 236.41,-779.45 236.41,-803.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-787.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge42" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00d1ff" d="M236.5,-791.58C263.52,-791.58 302.91,-791.58 336.19,-791.58"/>
+<polygon fill="#00d1ff" stroke="#00d1ff" points="336.16,-795.08 346.16,-791.58 336.16,-788.08 336.16,-795.08"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node37" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node37"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="445.93,-751.72 354.91,-751.72 354.91,-727.45 445.93,-727.45 445.93,-751.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-735.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge45" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#0078ff" d="M446.25,-739.58C479.39,-739.58 524.6,-739.58 559.37,-739.58"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="559.22,-743.08 569.22,-739.58 559.22,-736.08 559.22,-743.08"/>
+</g>
+<!-- proc~engine_refresh_n_inner -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node38" class="node">
+<title>proc~engine_refresh_n_inner</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node38"><a xlink:href="../proc/engine_refresh_n_inner.html" xlink:title="engine_refresh_n_inner">
+<polygon fill="#d9534f" stroke="#d9534f" points="270.91,-172.72 135.64,-172.72 135.64,-148.45 270.91,-148.45 270.91,-172.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-156.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_refresh_n_inner</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_refresh_n_inner&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge49" class="edge">
+<title>proc~engine_refresh_n_inner&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#9500ff" d="M237.27,-173.13C262.46,-182.19 298.22,-193.96 330.54,-200.58 415.47,-217.99 647.39,-189.46 718.83,-238.58 748.31,-258.86 731.92,-283.1 754.83,-310.58 771.01,-330 793.87,-347.03 812.38,-359.07"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="810.28,-361.88 820.6,-364.25 814.01,-355.96 810.28,-361.88"/>
+</g>
+<!-- proc~ice_evp_dynamics -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node39" class="node">
+<title>proc~ice_evp_dynamics</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node39"><a xlink:href="../proc/ice_evp_dynamics.html" xlink:title="ice_evp_dynamics">
+<polygon fill="#d9534f" stroke="#d9534f" points="899.1,-431.72 790.83,-431.72 790.83,-407.45 899.1,-407.45 899.1,-431.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-415.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_dynamics</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics&#45;&gt;proc~ice_evp_dynamics_impl -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge46" class="edge">
+<title>proc~ice_evp_dynamics&#45;&gt;proc~ice_evp_dynamics_impl</title>
+<path fill="none" stroke="#001dff" d="M899.52,-419.58C927.04,-419.58 961.11,-419.58 991.59,-419.58"/>
+<polygon fill="#001dff" stroke="#001dff" points="991.57,-423.08 1001.57,-419.58 991.57,-416.08 991.57,-423.08"/>
+</g>
+<!-- proc~ice_ocean_stress_flux -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node40" class="node">
+<title>proc~ice_ocean_stress_flux</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node40"><a xlink:href="../proc/ice_ocean_stress_flux.html" xlink:title="ice_ocean_stress_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="907.73,-149.72 782.21,-149.72 782.21,-125.45 907.73,-125.45 907.73,-149.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-133.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ocean_stress_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_flux&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge57" class="edge">
+<title>proc~ice_ocean_stress_flux&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#f000ff" d="M907.98,-137.58C924.04,-137.58 941.84,-137.58 959.6,-137.58"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="959.42,-141.08 969.42,-137.58 959.42,-134.08 959.42,-141.08"/>
+</g>
+<!-- proc~ocean_data_forcing_apply -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node41" class="node">
+<title>proc~ocean_data_forcing_apply</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node41"><a xlink:href="../proc/ocean_data_forcing_apply.html" xlink:title="ocean_data_forcing_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="278.41,-115.72 128.14,-115.72 128.14,-91.45 278.41,-91.45 278.41,-115.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-99.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_forcing_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_data_forcing_apply&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge58" class="edge">
+<title>proc~ocean_data_forcing_apply&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#f000ff" d="M264.4,-90.98C390.5,-66.77 691.15,-20.69 935.1,-74.58 973.82,-83.14 1014.62,-103.91 1041.23,-119.27"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="1039.34,-122.23 1049.74,-124.3 1042.9,-116.2 1039.34,-122.23"/>
+</g>
+<!-- proc~ocean_data_forcing_configure&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge59" class="edge">
+<title>proc~ocean_data_forcing_configure&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#f000ff" d="M877.03,-567.12C896.94,-557.46 921.51,-542.07 935.1,-520.58 995.58,-424.97 927.45,-372.96 971.1,-268.58 989.56,-224.45 1026.49,-182 1049.84,-157.92"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="1052.16,-160.56 1056.7,-150.99 1047.18,-155.63 1052.16,-160.56"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node43" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node43"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="265.29,-431.72 141.27,-431.72 141.27,-407.45 265.29,-407.45 265.29,-431.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-415.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge61" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#ff00b4" d="M265.76,-431.87C290.64,-436.84 319.17,-442.55 343.46,-447.4"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="342.68,-450.81 353.17,-449.34 344.05,-443.95 342.68,-450.81"/>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge73" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#3fff00" d="M221.6,-432.1C255.81,-456.82 332.26,-512.05 372.87,-541.4"/>
+<polygon fill="#3fff00" stroke="#3fff00" points="370.76,-544.19 380.92,-547.21 374.86,-538.52 370.76,-544.19"/>
+</g>
+<!-- proc~run_gm_step -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node49" class="node">
+<title>proc~run_gm_step</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node49"><a xlink:href="../proc/run_gm_step.html" xlink:title="run_gm_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="440.31,-392.72 360.54,-392.72 360.54,-368.45 440.31,-368.45 440.31,-392.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-376.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_gm_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge83" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step</title>
+<path fill="none" stroke="#ff00bf" d="M265.76,-407.3C292.5,-401.95 323.45,-395.77 348.83,-390.7"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="349.46,-394.14 358.58,-388.75 348.08,-387.28 349.46,-394.14"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node44" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node44"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="278.41,-845.72 128.14,-845.72 128.14,-821.45 278.41,-821.45 278.41,-845.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-829.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge35" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#f0ff00" d="M278.89,-841.61C292.17,-843.04 306.06,-844.54 319.48,-845.98"/>
+<polygon fill="#f0ff00" stroke="#f0ff00" points="318.8,-849.43 329.12,-847.02 319.55,-842.47 318.8,-849.43"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node45" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node45"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="289.29,-887.72 117.27,-887.72 117.27,-863.45 289.29,-863.45 289.29,-887.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-871.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge36" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#f0ff00" d="M289.59,-866.4C299.47,-865.34 309.52,-864.26 319.32,-863.2"/>
+<polygon fill="#f0ff00" stroke="#f0ff00" points="319.62,-866.69 329.19,-862.14 318.87,-859.73 319.62,-866.69"/>
+</g>
+<!-- proc~rdb_ocean_set_wind -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node46" class="node">
+<title>proc~rdb_ocean_set_wind</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node46"><a xlink:href="../proc/rdb_ocean_set_wind.html" xlink:title="rdb_ocean_set_wind">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="904.35,-107.72 785.58,-107.72 785.58,-83.45 904.35,-83.45 904.35,-107.72"/>
+<text xml:space="preserve" text-anchor="middle" x="844.97" y="-91.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_set_wind</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_set_wind&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge60" class="edge">
+<title>proc~rdb_ocean_set_wind&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#f000ff" d="M904.73,-106.56C931.37,-111.54 963.26,-117.5 991.94,-122.86"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="991.21,-126.28 1001.68,-124.68 992.49,-119.4 991.21,-126.28"/>
+</g>
+<!-- proc~refresh_seam_ghosts -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node47" class="node">
+<title>proc~refresh_seam_ghosts</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node47"><a xlink:href="../proc/refresh_seam_ghosts.html" xlink:title="refresh_seam_ghosts">
+<polygon fill="#d9534f" stroke="#d9534f" points="673.83,-271.72 551.31,-271.72 551.31,-247.45 673.83,-247.45 673.83,-271.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-255.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">refresh_seam_ghosts</text>
+</a>
+</g>
+</g>
+<!-- proc~refresh_seam_ghosts&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge51" class="edge">
+<title>proc~refresh_seam_ghosts&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#9500ff" d="M638.23,-272.21C679.45,-293.33 762.47,-335.85 809.47,-359.92"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="807.64,-362.91 818.14,-364.36 810.83,-356.68 807.64,-362.91"/>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge52" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#9500ff" d="M673.8,-377.58C695.1,-377.58 719.66,-377.58 743.39,-377.58"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="743.07,-381.08 753.07,-377.58 743.07,-374.08 743.07,-381.08"/>
+</g>
+<!-- proc~run_gm_step&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge53" class="edge">
+<title>proc~run_gm_step&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#9500ff" d="M440.41,-369.46C460,-364.44 484.22,-359.08 506.31,-356.58 600.17,-345.98 624.7,-348.74 718.83,-356.58 735.58,-357.98 753.46,-360.41 770.3,-363.13"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="769.27,-366.51 779.71,-364.7 770.43,-359.6 769.27,-366.51"/>
+</g>
+<!-- proc~visc_rem_precompute&#45;&gt;proc~visc_rem_halo_refresh -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge62" class="edge">
+<title>proc~visc_rem_precompute&#45;&gt;proc~visc_rem_halo_refresh</title>
+<path fill="none" stroke="#ff005a" d="M909.17,-289.58C936.11,-289.58 967.73,-289.58 995.83,-289.58"/>
+<polygon fill="#ff005a" stroke="#ff005a" points="995.71,-293.08 1005.71,-289.58 995.71,-286.08 995.71,-293.08"/>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~visc_rem_halo_refresh -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge63" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~visc_rem_halo_refresh</title>
+<path fill="none" stroke="#ff005a" d="M666.01,-192.2C750.55,-212.54 916.66,-252.51 1007.58,-274.39"/>
+<polygon fill="#ff005a" stroke="#ff005a" points="1006.54,-277.74 1017.08,-276.67 1008.18,-270.93 1006.54,-277.74"/>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~visc_rem_precompute -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge85" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~visc_rem_precompute</title>
+<path fill="none" stroke="#ff007f" d="M673.32,-186.93C689.02,-190.78 705.33,-196.65 718.83,-205.58 741.07,-220.3 733.69,-237.33 754.83,-253.58 765.06,-261.45 777.25,-267.85 789.27,-272.95"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="787.75,-276.12 798.34,-276.55 790.33,-269.61 787.75,-276.12"/>
+</g>
+<!-- interface~configure_ocean_forcing -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node52" class="node">
+<title>interface~configure_ocean_forcing</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node52"><a xlink:href="../interface/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#a7506f" stroke="#a7506f" points="683.58,-149.72 541.56,-149.72 541.56,-125.45 683.58,-125.45 683.58,-149.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-133.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_forcing&#45;&gt;proc~configure_ocean_forcing -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge70" class="edge">
+<title>interface~configure_ocean_forcing&#45;&gt;proc~configure_ocean_forcing</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M682.7,-150.19C708.21,-154.84 737.34,-160.15 763.75,-164.96"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="762.93,-168.37 773.4,-166.72 764.19,-161.48 762.93,-168.37"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node53" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node53"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="76.02,-136.72 0,-136.72 0,-112.45 76.02,-112.45 76.02,-136.72"/>
+<text xml:space="preserve" text-anchor="middle" x="38.01" y="-120.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~bulk_forcing_apply -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge69" class="edge">
+<title>proc~engine_step&#45;&gt;proc~bulk_forcing_apply</title>
+<path fill="none" stroke="#bfff00" d="M60.68,-112C75.18,-103.6 94.7,-92.36 112.02,-82.58 131.19,-71.76 152.75,-59.81 169.99,-50.3"/>
+<polygon fill="#bfff00" stroke="#bfff00" points="171.2,-53.64 178.27,-45.75 167.82,-47.5 171.2,-53.64"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~engine_refresh_n_inner -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge74" class="edge">
+<title>proc~engine_step&#45;&gt;proc~engine_refresh_n_inner</title>
+<path fill="none" stroke="#00ff7f" d="M76.47,-132.84C93.55,-136.61 114.32,-141.19 134.02,-145.53"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="133.14,-148.92 143.66,-147.66 134.65,-142.09 133.14,-148.92"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_data_forcing_apply -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge77" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_data_forcing_apply</title>
+<path fill="none" stroke="#00bfff" d="M76.47,-119.77C88.5,-118.22 102.37,-116.44 116.4,-114.63"/>
+<polygon fill="#00bfff" stroke="#00bfff" points="116.69,-118.12 126.16,-113.37 115.8,-111.18 116.69,-118.12"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge79" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#003fff" d="M45.82,-136.88C70.76,-181.96 157.41,-338.52 189.87,-397.17"/>
+<polygon fill="#003fff" stroke="#003fff" points="186.81,-398.85 194.71,-405.91 192.93,-395.46 186.81,-398.85"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node54" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node54"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="661.08,-107.72 564.06,-107.72 564.06,-83.45 661.08,-83.45 661.08,-107.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-91.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_ocean_stress_flux -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge76" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_ocean_stress_flux</title>
+<path fill="none" stroke="#00ffff" d="M661.31,-104.29C692.96,-110.06 735.11,-117.74 770.94,-124.27"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="769.88,-127.64 780.35,-125.99 771.14,-120.75 769.88,-127.64"/>
+</g>
+<!-- proc~ice_evp_step -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node55" class="node">
+<title>proc~ice_evp_step</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node55"><a xlink:href="../proc/ice_evp_step.html" xlink:title="ice_evp_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="652.45,-469.72 572.68,-469.72 572.68,-445.45 652.45,-445.45 652.45,-469.72"/>
+<text xml:space="preserve" text-anchor="middle" x="612.57" y="-453.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_step&#45;&gt;proc~ice_evp_dynamics -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge75" class="edge">
+<title>proc~ice_evp_step&#45;&gt;proc~ice_evp_dynamics</title>
+<path fill="none" stroke="#00ffbf" d="M652.91,-451.1C687.57,-445.38 738.71,-436.94 779.37,-430.24"/>
+<polygon fill="#00ffbf" stroke="#00ffbf" points="779.74,-433.72 789.04,-428.64 778.6,-426.82 779.74,-433.72"/>
+</g>
+<!-- proc~ocean_balance_apply -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node56" class="node">
+<title>proc~ocean_balance_apply</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node56"><a xlink:href="../proc/ocean_balance_apply.html" xlink:title="ocean_balance_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="463.93,-271.72 336.91,-271.72 336.91,-247.45 463.93,-247.45 463.93,-271.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-255.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_apply&#45;&gt;proc~refresh_seam_ghosts -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge80" class="edge">
+<title>proc~ocean_balance_apply&#45;&gt;proc~refresh_seam_ghosts</title>
+<path fill="none" stroke="#bf00ff" d="M464.19,-259.58C487.89,-259.58 515.04,-259.58 539.52,-259.58"/>
+<polygon fill="#bf00ff" stroke="#bf00ff" points="539.42,-263.08 549.42,-259.58 539.42,-256.08 539.42,-263.08"/>
+</g>
+<!-- proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node57" class="node">
+<title>proc~ocean_dyn_flush_tracer_window</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node57"><a xlink:href="../proc/ocean_dyn_flush_tracer_window.html" xlink:title="ocean_dyn_flush_tracer_window">
+<polygon fill="#d9534f" stroke="#d9534f" points="294.54,-593.72 112.02,-593.72 112.02,-569.45 294.54,-569.45 294.54,-593.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-577.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_flush_tracer_window</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_flush_tracer_window&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge71" class="edge">
+<title>proc~ocean_dyn_flush_tracer_window&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#3fff00" d="M295,-571.82C303.86,-570.87 312.79,-569.91 321.51,-568.97"/>
+<polygon fill="#3fff00" stroke="#3fff00" points="321.74,-572.46 331.31,-567.91 320.99,-565.5 321.74,-572.46"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node58" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node58"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="251.79,-551.72 154.77,-551.72 154.77,-527.45 251.79,-527.45 251.79,-551.72"/>
+<text xml:space="preserve" text-anchor="middle" x="203.28" y="-535.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge72" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#3fff00" d="M252.27,-544.75C273.12,-546.99 298.09,-549.68 321.48,-552.2"/>
+<polygon fill="#3fff00" stroke="#3fff00" points="320.99,-555.66 331.31,-553.25 321.74,-548.7 320.99,-555.66"/>
+</g>
+<!-- proc~ocean_rebaseline_apply -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node59" class="node">
+<title>proc~ocean_rebaseline_apply</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node59"><a xlink:href="../proc/ocean_rebaseline_apply.html" xlink:title="ocean_rebaseline_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="470.31,-313.72 330.54,-313.72 330.54,-289.45 470.31,-289.45 470.31,-313.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-297.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_rebaseline_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_rebaseline_apply&#45;&gt;proc~refresh_seam_ghosts -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge81" class="edge">
+<title>proc~ocean_rebaseline_apply&#45;&gt;proc~refresh_seam_ghosts</title>
+<path fill="none" stroke="#bf00ff" d="M464.48,-288.98C488.27,-284.23 515.52,-278.78 540.04,-273.88"/>
+<polygon fill="#bf00ff" stroke="#bf00ff" points="540.48,-277.36 549.6,-271.97 539.11,-270.5 540.48,-277.36"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node60" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_node60"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="432.43,-191.72 368.41,-191.72 368.41,-167.45 432.43,-167.45 432.43,-191.72"/>
+<text xml:space="preserve" text-anchor="middle" x="400.42" y="-175.98" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~ocean_halo_face_x_2d_impl~~CalledByGraph_edge86" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff003f" d="M432.89,-179.58C461.32,-179.58 504.2,-179.58 540.83,-179.58"/>
+<polygon fill="#ff003f" stroke="#ff003f" points="540.46,-183.08 550.46,-179.58 540.46,-176.08 540.46,-183.08"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_halo_face_x_2d_implCalledByGraph = svgPanZoom('#prococean_halo_face_x_2d_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-comm~6"></span>
+              type(comm_t),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>comm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~19"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~25"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-need_e~11"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>need_e</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-need_n~11"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>need_n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-need_s~11"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>need_s</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-need_w~11"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>need_w</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nreq~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nreq</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nxl~12"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nxl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nxt~11"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nxt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nxt1~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nxt1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nyl~12"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nyl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nyt~11"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nyt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-on_device~5"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>on_device</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reqs~6"></span>
+              type(request_t),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reqs</strong>(MAX_REQS)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rk_e~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rk_e</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rk_n~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rk_n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rk_s~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rk_s</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rk_w~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rk_w</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stats~6"></span>
+              type(MPI_Status),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stats</strong>(MAX_REQS)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_halo_face_x_2d_impl</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">device_resident</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Two-pass X-then-Y halo exchange for a 2D x-face field.</span>
+<span class="w">      </span><span class="c">!! Core body shared by ocean_halo_face_x_2d (ng=oh_nghost) and</span>
+<span class="w">      </span><span class="c">!! ocean_halo_face_x_2d_wide (ng=ng_wide).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">         </span><span class="c">!! Ghost cell width for this exchange</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">oh_nx_local</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">oh_ny_local</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ng</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! x-face field (nx_local + 2*ng + 1, ny_local + 2*ng)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">device_resident</span>
+<span class="w">         </span><span class="c">!! If .false., operate on host memory.  Default = .true.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">nxt</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="p">,</span><span class="w"> </span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rk_e</span><span class="p">,</span><span class="w"> </span><span class="n">rk_w</span><span class="p">,</span><span class="w"> </span><span class="n">rk_n</span><span class="p">,</span><span class="w"> </span><span class="n">rk_s</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nreq</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">request_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">MAX_REQS</span><span class="p">)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">MPI_Status</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stats</span><span class="p">(</span><span class="n">MAX_REQS</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">need_e</span><span class="p">,</span><span class="w"> </span><span class="n">need_w</span><span class="p">,</span><span class="w"> </span><span class="n">need_n</span><span class="p">,</span><span class="w"> </span><span class="n">need_s</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">on_device</span>
+
+<span class="w">      </span><span class="n">on_device</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">device_resident</span><span class="p">))</span><span class="w"> </span><span class="n">on_device</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">device_resident</span>
+
+<span class="w">      </span><span class="n">nxl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_nx_local</span>
+<span class="w">      </span><span class="n">nyl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_ny_local</span>
+<span class="w">      </span><span class="n">nxt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nxl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ng</span>
+<span class="w">      </span><span class="n">nxt1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nxt</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">nyt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ng</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_decomp</span><span class="p">%</span><span class="n">px</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">oh_decomp</span><span class="p">%</span><span class="n">py</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_env_compute_comm</span><span class="p">()</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">needs_flags</span><span class="p">(</span><span class="n">need_w</span><span class="p">,</span><span class="w"> </span><span class="n">need_e</span><span class="p">,</span><span class="w"> </span><span class="n">need_s</span><span class="p">,</span><span class="w"> </span><span class="n">need_n</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- X pass ----</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_decomp</span><span class="p">%</span><span class="n">px</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_periodic_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">ocean_periodic_wrap_face_x_2d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="p">,</span><span class="w"> </span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.,</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      else</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">need_e</span><span class="p">)</span><span class="w"> </span><span class="n">rk_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ew_rank_east</span><span class="p">()</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">need_w</span><span class="p">)</span><span class="w"> </span><span class="n">rk_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ew_rank_west</span><span class="p">()</span>
+
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">on_device</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_e</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">oh_buf_send_east</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nxl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_w</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ng</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">oh_buf_send_west</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">         else</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_e</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nyt</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">                     </span><span class="n">oh_buf_send_east</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nxl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_w</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nyt</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">                     </span><span class="n">oh_buf_send_west</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">         end if</span>
+
+<span class="k">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">on_device</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_e</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">!$acc host_data use_device(oh_buf_send_east, oh_buf_recv_east)</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_send_east</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">rk_e</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_W_TO_E</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_recv_east</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="o">*</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">rk_e</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_E_TO_W</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="c">!$acc end host_data</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_w</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">!$acc host_data use_device(oh_buf_send_west, oh_buf_recv_west)</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_send_west</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="o">*</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">rk_w</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_E_TO_W</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_recv_west</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">rk_w</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_W_TO_E</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="c">!$acc end host_data</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         else</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_e</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_send_east</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">rk_e</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_W_TO_E</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_recv_east</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="o">*</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">rk_e</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_E_TO_W</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_w</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_send_west</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="o">*</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">rk_w</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_E_TO_W</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_recv_west</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">rk_w</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_W_TO_E</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">nreq</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">oh_count_msgs</span><span class="p">(</span><span class="n">nreq</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">waitall</span><span class="p">(</span><span class="n">reqs</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nreq</span><span class="p">),</span><span class="w"> </span><span class="n">stats</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end if</span>
+
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">on_device</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_w</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">fld</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_buf_recv_west</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_e</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ng</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">fld</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nxl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_buf_recv_east</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">         else</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_w</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nyt</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">                     </span><span class="n">fld</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_buf_recv_west</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_e</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nyt</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">                     </span><span class="n">fld</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nxl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_buf_recv_east</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">         end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- Y pass (spans full i=1..nxt1 including x-ghosts) ----</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_decomp</span><span class="p">%</span><span class="n">py</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_periodic_y</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">ocean_periodic_wrap_face_x_2d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="p">,</span><span class="w"> </span><span class="n">nyt</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.,</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      else</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">need_n</span><span class="p">)</span><span class="w"> </span><span class="n">rk_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ns_rank_north</span><span class="p">()</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">need_s</span><span class="p">)</span><span class="w"> </span><span class="n">rk_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ns_rank_south</span><span class="p">()</span>
+
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">on_device</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nxt1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">oh_buf_send_north</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nxt1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_s</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nxt1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">oh_buf_send_south</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nxt1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">         else</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span>
+<span class="w">                     </span><span class="n">oh_buf_send_north</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nxt1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_s</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span>
+<span class="w">                     </span><span class="n">oh_buf_send_south</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nxt1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">         end if</span>
+
+<span class="k">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">on_device</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">!$acc host_data use_device(oh_buf_send_north, oh_buf_recv_north)</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_send_north</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="o">*</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rk_n</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_S_TO_N</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_recv_north</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="o">*</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rk_n</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_N_TO_S</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="c">!$acc end host_data</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_s</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">!$acc host_data use_device(oh_buf_send_south, oh_buf_recv_south)</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_send_south</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="o">*</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rk_s</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_N_TO_S</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_recv_south</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="o">*</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rk_s</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_S_TO_N</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="c">!$acc end host_data</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         else</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_send_north</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="o">*</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rk_n</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_S_TO_N</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_recv_north</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="o">*</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rk_n</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_N_TO_S</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_s</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_send_south</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="o">*</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rk_s</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_N_TO_S</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">oh_buf_recv_south</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span><span class="o">*</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rk_s</span><span class="p">,</span><span class="w"> </span><span class="n">TAG_OC_S_TO_N</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">nreq</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">oh_count_msgs</span><span class="p">(</span><span class="n">nreq</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">waitall</span><span class="p">(</span><span class="n">reqs</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nreq</span><span class="p">),</span><span class="w"> </span><span class="n">stats</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end if</span>
+
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">on_device</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_s</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nxt1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">fld</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_buf_recv_south</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nxt1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nxt1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">fld</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_buf_recv_north</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nxt1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">         else</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_s</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span>
+<span class="w">                     </span><span class="n">fld</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_buf_recv_south</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nxt1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">need_n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nxt1</span>
+<span class="w">                     </span><span class="n">fld</span><span class="p">(</span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_buf_recv_north</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nxt1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">         end if</span>
+<span class="k">      end if</span>
+
+<span class="k">   end subroutine </span><span class="n">ocean_halo_face_x_2d_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

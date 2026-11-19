@@ -1,0 +1,797 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>remap_layer_to_sigma &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>remap_layer_to_sigma
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">11 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_diag_fills.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_diag_fills.f90.html'>rdb_ocean_diag_fills.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></li>
+            <li class="breadcrumb-item active" aria-current="page">remap_layer_to_sigma</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/remap_layer_to_sigma.html#src">remap_layer_to_sigma</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine remap_layer_to_sigma(state_handle, levels, layer_buf, output_buf, is_extensive)  
+</h2>
+    
+
+    <p>Layer→fixed-sigma vertical remap (terrain-following output grid).
+<code>levels(:)</code> are cumulative sigma fractions (0..1, shallow→deep); the
+m-th output cell spans <code>[levels(m-1), levels(m)] * col_h</code>.  Same
+conservative donor-cell overlap as <code>remap_layer_to_z</code>; see its
+docstring for the intensive/extensive contract.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state_handle~32"></span>
+              class(*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>state_handle</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-levels"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>levels</strong>(:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-layer_buf~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>layer_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_buf~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>output_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_extensive~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_extensive</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~remap_layer_to_sigma~~CallsGraph Pages: 1 -->
+<svg id="procremap_layer_to_sigmaCallsGraph" width="641pt" height="164pt"
+ viewBox="0.00 0.00 641.00 164.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_layer_to_sigma~~CallsGraph" class="graph" transform="scale(0.444781 0.444781) rotate(0) translate(4 363.89)">
+<title>proc~~remap_layer_to_sigma~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-363.89 1437.16,-363.89 1437.16,4 -4,4"/>
+<!-- proc~remap_layer_to_sigma -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node1" class="node">
+<title>proc~remap_layer_to_sigma</title>
+<polygon fill="none" stroke="black" points="131.52,-144.27 0,-144.27 0,-120 131.52,-120 131.52,-144.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-128.53" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_sigma</text>
+</g>
+<!-- proc~remap_layer_to_vcoord -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node2" class="node">
+<title>proc~remap_layer_to_vcoord</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node2"><a xlink:href="../proc/remap_layer_to_vcoord.html" xlink:title="remap_layer_to_vcoord">
+<polygon fill="#d9534f" stroke="#d9534f" points="303.54,-144.27 167.52,-144.27 167.52,-120 303.54,-120 303.54,-144.27"/>
+<text xml:space="preserve" text-anchor="middle" x="235.53" y="-128.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_vcoord</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge1" class="edge">
+<title>proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord</title>
+<path fill="none" stroke="#ff0000" d="M131.62,-132.13C139.52,-132.13 147.66,-132.13 155.73,-132.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="155.55,-135.64 165.55,-132.14 155.55,-128.64 155.55,-135.64"/>
+</g>
+<!-- proc~diag_remap_workspace_ensure -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node3" class="node">
+<title>proc~diag_remap_workspace_ensure</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node3"><a xlink:href="../proc/diag_remap_workspace_ensure.html" xlink:title="diag_remap_workspace_ensure">
+<polygon fill="#d9534f" stroke="#d9534f" points="522.06,-206.27 344.04,-206.27 344.04,-182 522.06,-182 522.06,-206.27"/>
+<text xml:space="preserve" text-anchor="middle" x="433.05" y="-190.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_remap_workspace_ensure</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord&#45;&gt;proc~diag_remap_workspace_ensure -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge2" class="edge">
+<title>proc~remap_layer_to_vcoord&#45;&gt;proc~diag_remap_workspace_ensure</title>
+<path fill="none" stroke="#ff0000" d="M276.1,-144.68C306.47,-154.31 348.63,-167.68 381.46,-178.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="380.17,-181.36 390.76,-181.04 382.29,-174.68 380.17,-181.36"/>
+</g>
+<!-- proc~remap_layer_to_vcoord_flat_impl -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node4" class="node">
+<title>proc~remap_layer_to_vcoord_flat_impl</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node4"><a xlink:href="../proc/remap_layer_to_vcoord_flat_impl.html" xlink:title="remap_layer_to_vcoord_flat_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="526.56,-83.27 339.54,-83.27 339.54,-59 526.56,-59 526.56,-83.27"/>
+<text xml:space="preserve" text-anchor="middle" x="433.05" y="-67.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_vcoord_flat_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord&#45;&gt;proc~remap_layer_to_vcoord_flat_impl -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge3" class="edge">
+<title>proc~remap_layer_to_vcoord&#45;&gt;proc~remap_layer_to_vcoord_flat_impl</title>
+<path fill="none" stroke="#ff0000" d="M276.57,-119.64C306.78,-110.22 348.45,-97.22 381.05,-87.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="381.78,-90.48 390.29,-84.17 379.7,-83.8 381.78,-90.48"/>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node5" class="node">
+<title>proc~remap_layer_to_vcoord_impl</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node5"><a xlink:href="../proc/remap_layer_to_vcoord_impl.html" xlink:title="remap_layer_to_vcoord_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="515.31,-144.27 350.79,-144.27 350.79,-120 515.31,-120 515.31,-144.27"/>
+<text xml:space="preserve" text-anchor="middle" x="433.05" y="-128.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_vcoord_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge4" class="edge">
+<title>proc~remap_layer_to_vcoord&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#ff0000" d="M303.82,-132.13C315.2,-132.13 327.2,-132.13 339.1,-132.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="338.95,-135.64 348.95,-132.14 338.95,-128.64 338.95,-135.64"/>
+</g>
+<!-- proc~diag_remap_workspace_cleanup -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node8" class="node">
+<title>proc~diag_remap_workspace_cleanup</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node8"><a xlink:href="../proc/diag_remap_workspace_cleanup.html" xlink:title="diag_remap_workspace_cleanup">
+<polygon fill="#d9534f" stroke="#d9534f" points="747.33,-226.27 562.56,-226.27 562.56,-202 747.33,-202 747.33,-226.27"/>
+<text xml:space="preserve" text-anchor="middle" x="654.95" y="-210.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_remap_workspace_cleanup</text>
+</a>
+</g>
+</g>
+<!-- proc~diag_remap_workspace_ensure&#45;&gt;proc~diag_remap_workspace_cleanup -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge5" class="edge">
+<title>proc~diag_remap_workspace_ensure&#45;&gt;proc~diag_remap_workspace_cleanup</title>
+<path fill="none" stroke="#ff0000" d="M522.54,-202.18C531.97,-203.04 541.63,-203.92 551.21,-204.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="550.62,-208.25 560.9,-205.67 551.26,-201.28 550.62,-208.25"/>
+</g>
+<!-- local -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node6" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="681.95,-104.27 627.95,-104.27 627.95,-80 681.95,-80 681.95,-104.27"/>
+<text xml:space="preserve" text-anchor="middle" x="654.95" y="-88.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_flat_impl&#45;&gt;local -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge6" class="edge">
+<title>proc~remap_layer_to_vcoord_flat_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff00" d="M526.99,-80.01C558.41,-83.01 591.74,-86.19 616.36,-88.55"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="615.91,-92.02 626.2,-89.49 616.58,-85.05 615.91,-92.02"/>
+</g>
+<!-- proc~diag_remap_src_q -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node7" class="node">
+<title>proc~diag_remap_src_q</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node7"><a xlink:href="../proc/diag_remap_src_q.html" xlink:title="diag_remap_src_q">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="708.33,-24.27 601.56,-24.27 601.56,0 708.33,0 708.33,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="654.95" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_remap_src_q</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord_flat_impl&#45;&gt;proc~diag_remap_src_q -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge7" class="edge">
+<title>proc~remap_layer_to_vcoord_flat_impl&#45;&gt;proc~diag_remap_src_q</title>
+<path fill="none" stroke="#00ff00" d="M480.95,-58.55C514.67,-49.5 560.35,-37.25 596.29,-27.6"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="596.9,-31.06 605.65,-25.09 595.09,-24.3 596.9,-31.06"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node10" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="884.1,-64.27 802.83,-64.27 802.83,-40 884.1,-40 884.1,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="843.47" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_flat_impl&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge8" class="edge">
+<title>proc~remap_layer_to_vcoord_flat_impl&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#00ff00" d="M526.98,-66.81C608.81,-63 724.96,-57.6 791.1,-54.52"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="791.11,-58.03 800.94,-54.07 790.79,-51.04 791.11,-58.03"/>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;local -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge9" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0000ff" d="M503.32,-119.53C540.72,-112.73 585.42,-104.6 616.37,-98.97"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="616.81,-102.45 626.02,-97.21 615.55,-95.56 616.81,-102.45"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node9" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node9"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="700.46,-184.27 609.44,-184.27 609.44,-160 700.46,-160 700.46,-184.27"/>
+<text xml:space="preserve" text-anchor="middle" x="654.95" y="-168.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge10" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#0000ff" d="M503.32,-144.74C533.89,-150.3 569.33,-156.74 598.16,-161.99"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="597.3,-165.39 607.77,-163.74 598.56,-158.5 597.3,-165.39"/>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge11" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#0000ff" d="M515.63,-141.73C580.93,-146.05 673.47,-144.47 747.33,-113.14 767.31,-104.66 765.32,-92.25 783.33,-80.14 788.89,-76.4 795.02,-72.9 801.17,-69.72"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="802.62,-72.91 810.07,-65.37 799.55,-66.62 802.62,-72.91"/>
+</g>
+<!-- proc~diag_remap_src_q&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge12" class="edge">
+<title>proc~diag_remap_src_q&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#cbff00" d="M708.4,-23.38C734.4,-28.96 765.67,-35.67 791.47,-41.2"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="790.53,-44.58 801.04,-43.25 792,-37.73 790.53,-44.58"/>
+</g>
+<!-- proc~remap_column_pcm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node11" class="node">
+<title>proc~remap_column_pcm</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node11"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<polygon fill="#d9534f" stroke="#d9534f" points="903.23,-224.27 783.71,-224.27 783.71,-200 903.23,-200 903.23,-224.27"/>
+<text xml:space="preserve" text-anchor="middle" x="843.47" y="-208.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge13" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
+<path fill="none" stroke="#0066ff" d="M700.62,-181.72C722.11,-186.33 748.38,-191.96 772.44,-197.12"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="771.69,-200.54 782.2,-199.21 773.16,-193.69 771.69,-200.54"/>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node12" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node12"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1254.77,-106.27 1138.25,-106.27 1138.25,-82 1254.77,-82 1254.77,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1196.51" y="-90.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge14" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#0066ff" d="M700.89,-160.48C725.21,-154.36 755.83,-146.94 783.33,-141.13 852.37,-126.56 869.6,-121.98 939.6,-113.14 1002.67,-105.16 1074.95,-100.18 1126.57,-97.32"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1126.6,-100.82 1136.4,-96.79 1126.23,-93.84 1126.6,-100.82"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node13" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node13"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1076.37,-224.27 956.1,-224.27 956.1,-200 1076.37,-200 1076.37,-224.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1016.24" y="-208.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge15" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#0066ff" d="M700.84,-174.1C750.57,-176.62 833.06,-181.82 903.6,-191.13 916.89,-192.89 930.99,-195.19 944.54,-197.63"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="943.8,-201.05 954.27,-199.42 945.07,-194.17 943.8,-201.05"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node14" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node14"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="1085.75,-146.27 946.73,-146.27 946.73,-122 1085.75,-122 1085.75,-146.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1016.24" y="-130.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge16" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#0066ff" d="M700.74,-167.14C725.15,-164.44 755.9,-161.06 783.33,-158.13 833.78,-152.75 890.42,-146.89 935.09,-142.3"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="935.38,-145.79 944.97,-141.29 934.66,-138.83 935.38,-145.79"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node15" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node15"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="903.6,-266.27 783.33,-266.27 783.33,-242 903.6,-242 903.6,-266.27"/>
+<text xml:space="preserve" text-anchor="middle" x="843.47" y="-250.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge17" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#0066ff" d="M700.76,-176.83C716.29,-179.87 733.3,-184.88 747.33,-193.13 767.94,-205.27 763.45,-219.84 783.33,-233.13 785.13,-234.34 787.01,-235.48 788.94,-236.57"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="787.07,-239.55 797.58,-240.85 790.17,-233.27 787.07,-239.55"/>
+</g>
+<!-- proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node16" class="node">
+<title>proc~boundary_half_jump</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node16"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
+<polygon fill="#d9534f" stroke="#d9534f" points="1426.79,-166.27 1306.52,-166.27 1306.52,-142 1426.79,-142 1426.79,-166.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1366.65" y="-150.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge18" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#cbff00" d="M1232.75,-106.71C1258.09,-115.75 1292.47,-128.02 1319.92,-137.82"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1318.43,-141 1329.02,-141.06 1320.78,-134.41 1318.43,-141"/>
+</g>
+<!-- proc~plm_slope_nonuniform -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node17" class="node">
+<title>proc~plm_slope_nonuniform</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node17"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1433.16,-106.27 1300.14,-106.27 1300.14,-82 1433.16,-82 1433.16,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1366.65" y="-90.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_slope_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge19" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform</title>
+<path fill="none" stroke="#cbff00" d="M1254.9,-94.14C1265.75,-94.14 1277.25,-94.14 1288.59,-94.14"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1288.32,-97.64 1298.32,-94.14 1288.32,-90.64 1288.32,-97.64"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge24" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff66" d="M1036.31,-199.51C1067.81,-178.66 1130.84,-136.94 1167.43,-112.72"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1168.9,-115.95 1175.3,-107.51 1165.03,-110.11 1168.9,-115.95"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge20" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#00ff66" d="M1076.85,-200.57C1093.65,-197.4 1111.96,-194.05 1128.87,-191.13 1184.55,-181.55 1247.79,-171.72 1294.9,-164.61"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1295.34,-168.08 1304.71,-163.13 1294.3,-161.16 1295.34,-168.08"/>
+</g>
+<!-- proc~ppm_edge_nonuniform -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node18" class="node">
+<title>proc~ppm_edge_nonuniform</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node18"><a xlink:href="../proc/ppm_edge_nonuniform.html" xlink:title="ppm_edge_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1264.14,-224.27 1128.87,-224.27 1128.87,-200 1264.14,-200 1264.14,-224.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1196.51" y="-208.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge21" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform</title>
+<path fill="none" stroke="#00ff66" d="M1076.6,-212.13C1089.57,-212.13 1103.5,-212.13 1117.09,-212.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1116.89,-215.64 1126.89,-212.14 1116.89,-208.64 1116.89,-215.64"/>
+</g>
+<!-- proc~ppm_edge_two_cell -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node19" class="node">
+<title>proc~ppm_edge_two_cell</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node19"><a xlink:href="../proc/ppm_edge_two_cell.html" xlink:title="ppm_edge_two_cell">
+<polygon fill="#d9534f" stroke="#d9534f" points="1254.39,-308.27 1138.62,-308.27 1138.62,-284 1254.39,-284 1254.39,-308.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1196.51" y="-292.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_two_cell</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge22" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell</title>
+<path fill="none" stroke="#00ff66" d="M1076.13,-224.71C1082,-227.06 1087.7,-229.84 1092.87,-233.13 1113.61,-246.33 1108.36,-261.58 1128.87,-275.13 1130.73,-276.36 1132.67,-277.52 1134.66,-278.62"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1133.09,-281.75 1143.62,-282.92 1136.12,-275.44 1133.09,-281.75"/>
+</g>
+<!-- proc~ppm_jump_nonuniform -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node20" class="node">
+<title>proc~ppm_jump_nonuniform</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node20"><a xlink:href="../proc/ppm_jump_nonuniform.html" xlink:title="ppm_jump_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1264.14,-266.27 1128.87,-266.27 1128.87,-242 1264.14,-242 1264.14,-266.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1196.51" y="-250.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_jump_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge23" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform</title>
+<path fill="none" stroke="#00ff66" d="M1070.72,-224.74C1089.67,-229.2 1111.19,-234.27 1130.97,-238.93"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1130.05,-242.31 1140.58,-241.2 1131.65,-235.5 1130.05,-242.31"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge26" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#0066ff" d="M1073.15,-121.59C1090.66,-117.66 1110.15,-113.29 1128.35,-109.2"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1129.01,-112.64 1138,-107.04 1127.48,-105.81 1129.01,-112.64"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge25" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#0066ff" d="M1086.07,-138.09C1146.44,-141.55 1233.84,-146.57 1294.8,-150.07"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1294.54,-153.56 1304.73,-150.64 1294.94,-146.57 1294.54,-153.56"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge30" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#cc00ff" d="M895.7,-241.53C913.69,-237.11 934.09,-232.09 952.88,-227.47"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="953.69,-230.88 962.56,-225.09 952.02,-224.08 953.69,-230.88"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge27" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#cc00ff" d="M857.63,-266.59C874.87,-281.96 906.78,-307.25 939.6,-317.13 1077.72,-358.72 1138.04,-387.16 1264.14,-317.13 1318.32,-287.05 1347.34,-214.72 1359.17,-177.35"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1362.45,-178.58 1361.98,-167.99 1355.75,-176.56 1362.45,-178.58"/>
+</g>
+<!-- proc~pqm_end_value_h4 -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node21" class="node">
+<title>proc~pqm_end_value_h4</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node21"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="1073.37,-308.27 959.1,-308.27 959.1,-284 1073.37,-284 1073.37,-308.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1016.24" y="-292.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge28" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
+<path fill="none" stroke="#cc00ff" d="M895.7,-266.74C913.69,-271.16 934.09,-276.18 952.88,-280.8"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="952.02,-284.19 962.56,-283.18 953.69,-277.39 952.02,-284.19"/>
+</g>
+<!-- proc~pqm_solve_diag_dominant -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_node22" class="node">
+<title>proc~pqm_solve_diag_dominant</title>
+<g id="a_proc~~remap_layer_to_sigma~~CallsGraph_node22"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<polygon fill="#d9534f" stroke="#d9534f" points="1092.87,-266.27 939.6,-266.27 939.6,-242 1092.87,-242 1092.87,-266.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1016.24" y="-250.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
+<g id="proc~~remap_layer_to_sigma~~CallsGraph_edge29" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
+<path fill="none" stroke="#cc00ff" d="M903.71,-254.13C911.5,-254.13 919.62,-254.13 927.76,-254.13"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="927.73,-257.64 937.73,-254.14 927.73,-250.64 927.73,-257.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocremap_layer_to_sigmaCallsGraph = svgPanZoom('#procremap_layer_to_sigmaCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">remap_layer_to_sigma</span><span class="p">(</span><span class="n">state_handle</span><span class="p">,</span><span class="w"> </span><span class="n">levels</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">output_buf</span><span class="p">,</span><span class="w"> </span><span class="n">is_extensive</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Layer→fixed-sigma vertical remap (terrain-following output grid).</span>
+<span class="w">      </span><span class="c">!! `levels(:)` are cumulative sigma fractions (0..1, shallow→deep); the</span>
+<span class="w">      </span><span class="c">!! m-th output cell spans `[levels(m-1), levels(m)] * col_h`.  Same</span>
+<span class="w">      </span><span class="c">!! conservative donor-cell overlap as `remap_layer_to_z`; see its</span>
+<span class="w">      </span><span class="c">!! docstring for the intensive/extensive contract.</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="o">*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state_handle</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">levels</span><span class="p">(:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">output_buf</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_extensive</span>
+
+<span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">state_handle</span><span class="p">)</span>
+<span class="w">      </span><span class="k">class is</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">remap_layer_to_vcoord</span><span class="p">(</span><span class="n">DIAG_VGRID_SIGMA</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">levels</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">output_buf</span><span class="p">,</span><span class="w"> </span><span class="n">is_extensive</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end select</span>
+<span class="k">   end subroutine </span><span class="n">remap_layer_to_sigma</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

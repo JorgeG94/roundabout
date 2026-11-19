@@ -1,0 +1,1892 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>remap_layer_to_vcoord_flat_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>remap_layer_to_vcoord_flat_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">169 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_diag_fills.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_diag_fills.f90.html'>rdb_ocean_diag_fills.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></li>
+            <li class="breadcrumb-item active" aria-current="page">remap_layer_to_vcoord_flat_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-acc~3">acc</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-col_h">col_h</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-dq~2">dq</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-dq_l">dq_l</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-dq_r">dq_r</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-dz~3">dz</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-dzo">dzo</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-e_l">e_l</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-e_r">e_r</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-h~4">h</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-hi~3">hi</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-href">href</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-i~58">i</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-integral">integral</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-j~58">j</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-k~40">k</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-ko">ko</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-lo~2">lo</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-lvl_scale">lvl_scale</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-m~6">m</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-mid">mid</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-overlap">overlap</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-q0~5">q0</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-q_6">q_6</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-q_l">q_l</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-q_max">q_max</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-q_min">q_min</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-q_r">q_r</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-qm1~5">qm1</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-qm2~4">qm2</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-qn">qn</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-qp1~5">qp1</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-qp2~4">qp2</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-slope~2">slope</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-xi_hi">xi_hi</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-xi_lo">xi_lo</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-z_hi">z_hi</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-z_lo">z_lo</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-zacc">zacc</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-zf">zf</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-zf_prev">zf_prev</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-zn_hi">zn_hi</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-zn_lo">zn_lo</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-zo_hi">zo_hi</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#variable-zo_lo">zo_lo</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/remap_layer_to_vcoord_flat_impl.html#src">remap_layer_to_vcoord_flat_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine remap_layer_to_vcoord_flat_impl(coord_type, nx, ny, nz, nz_out, n, h_layer, levels, layer_buf, output_buf, is_extensive, method, mask_vanished, missing, zo, zn, dzn)  
+</h2>
+    
+
+    <p>The remap of <code>remap_layer_to_vcoord_impl</code> (same source masking,
+target clipping, padding to <code>n = max(nz, nz_out)</code>, intensive /
+extensive and missing-value contract — read that docstring) for
+PCM / PLM / PPM, restructured for the device: ONE THREAD PER TARGET
+CELL over flat scratch, instead of one thread per column carrying
+<code>NZ_STACK_MAX</code>-wide private column arrays through <code>remap_column</code>.</p>
+<p>Why it exists: a time-MEAN diagnostic on a non-layer output grid is
+sampled — hence remapped — EVERY step, and the per-column kernel
+cost 76 ms per field per step on a 1440x378x50 domain (70 % of the
+run, 1/4-degree Southern Ocean, one output level).  Thread-private
+arrays are uncoalesced device memory, and <code>remap_column</code> builds all
+<code>n</code> source reconstructions whatever the target needs.  Here a
+target cell reconstructs only the source cells it overlaps:
+0.24 ms for that case, 4.7 ms for 50 output levels (was 113 ms).</p>
+<p>Kernel 1 (per column) accumulates the source interfaces <code>zo</code> and the
+clipped target interfaces <code>zn</code> / thicknesses <code>dzn</code>.  Kernel 2 (per
+target cell) bisects for the first overlapping source cell, then
+integrates the reconstruction of each overlapped source cell, built
+in place from its &lt;= 5-cell stencil with the SAME expressions, in
+the same order, as <code>remap_column_{pcm,plm,ppm}</code> (default closures:
+no boundary extrapolation, equal-thickness weights).</p>
+<p><strong>Equivalence.</strong>  Identical to the per-column kernel except in a
+target cell CLIPPED at the column bottom: the column total here is
+the last source interface <code>zo(n)</code> itself, where the per-column
+kernel sums it separately (and the optimiser is free to reassociate
+that sum), so the clip can land an ulp of <code>H</code> apart — a relative
+<code>ulp(H)/dz</code> difference in that one cell.  Gate:
+<code>test_ocean_diag_remap</code> (flat vs column).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~50"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~50"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~36"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_out~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_out</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~11"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-levels~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>levels</strong>(nz_out)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-layer_buf~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>layer_buf</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_buf~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>output_buf</strong>(nx,ny,nz_out)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_extensive~6"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_extensive</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-method~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>method</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_vanished"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_vanished</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-missing"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>missing</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zo"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zo</strong>(nx,ny,n)</td>
+            <td>
+                <p>Scratch: source interface below work layer <code>k</code> (top-down).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zn"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zn</strong>(nx,ny,nz_out)</td>
+            <td>
+                <p>Scratch: target interface below output cell <code>m</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dzn"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dzn</strong>(nx,ny,nz_out)</td>
+            <td>
+                <p>Scratch: clipped target thickness.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph Pages: 1 -->
+<svg id="procremap_layer_to_vcoord_flat_implCallsGraph" width="455pt" height="94pt"
+ viewBox="0.00 0.00 455.00 94.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 90.27)">
+<title>proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-90.27 451.06,-90.27 451.06,4 -4,4"/>
+<!-- proc~remap_layer_to_vcoord_flat_impl -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_node1" class="node">
+<title>proc~remap_layer_to_vcoord_flat_impl</title>
+<polygon fill="none" stroke="black" points="187.02,-44.27 0,-44.27 0,-20 187.02,-20 187.02,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="93.51" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_vcoord_flat_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="303.4,-86.27 249.4,-86.27 249.4,-62 303.4,-62 303.4,-86.27"/>
+<text xml:space="preserve" text-anchor="middle" x="276.4" y="-70.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_flat_impl&#45;&gt;local -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_edge1" class="edge">
+<title>proc~remap_layer_to_vcoord_flat_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M148.78,-44.74C177.66,-51.44 212.43,-59.51 238.23,-65.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="237.38,-68.9 247.92,-67.75 238.97,-62.08 237.38,-68.9"/>
+</g>
+<!-- proc~diag_remap_src_q -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_node3" class="node">
+<title>proc~diag_remap_src_q</title>
+<g id="a_proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_node3"><a xlink:href="../proc/diag_remap_src_q.html" xlink:title="diag_remap_src_q">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="329.79,-44.27 223.02,-44.27 223.02,-20 329.79,-20 329.79,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="276.4" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_remap_src_q</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord_flat_impl&#45;&gt;proc~diag_remap_src_q -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_edge2" class="edge">
+<title>proc~remap_layer_to_vcoord_flat_impl&#45;&gt;proc~diag_remap_src_q</title>
+<path fill="none" stroke="#ff0000" d="M187.34,-32.13C195.5,-32.13 203.64,-32.13 211.48,-32.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="211.21,-35.64 221.21,-32.14 211.21,-28.64 211.21,-35.64"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_node4" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="447.06,-24.27 365.79,-24.27 365.79,0 447.06,0 447.06,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="406.42" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_flat_impl&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_edge3" class="edge">
+<title>proc~remap_layer_to_vcoord_flat_impl&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#ff0000" d="M158.98,-19.5C179.37,-16.07 202.06,-12.84 223.02,-11.13 270.32,-7.3 282.34,-10.82 329.79,-11.13 337.64,-11.19 345.96,-11.27 354.09,-11.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="353.83,-14.86 363.87,-11.49 353.92,-7.86 353.83,-14.86"/>
+</g>
+<!-- proc~diag_remap_src_q&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CallsGraph_edge4" class="edge">
+<title>proc~diag_remap_src_q&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#00ff00" d="M330.21,-23.88C338.17,-22.64 346.37,-21.36 354.3,-20.12"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="354.81,-23.58 364.15,-18.58 353.73,-16.67 354.81,-23.58"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph Pages: 1 -->
+<svg id="procremap_layer_to_vcoord_flat_implCalledByGraph" width="535pt" height="116pt"
+ viewBox="0.00 0.00 535.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 112.27)">
+<title>proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112.27 530.56,-112.27 530.56,4 -4,4"/>
+<!-- proc~remap_layer_to_vcoord_flat_impl -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node1" class="node">
+<title>proc~remap_layer_to_vcoord_flat_impl</title>
+<polygon fill="none" stroke="black" points="526.56,-66.27 339.54,-66.27 339.54,-42 526.56,-42 526.56,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="433.05" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_vcoord_flat_impl</text>
+</g>
+<!-- proc~remap_layer_to_vcoord -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node2" class="node">
+<title>proc~remap_layer_to_vcoord</title>
+<g id="a_proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node2"><a xlink:href="../proc/remap_layer_to_vcoord.html" xlink:title="remap_layer_to_vcoord">
+<polygon fill="#d9534f" stroke="#d9534f" points="303.54,-66.27 167.52,-66.27 167.52,-42 303.54,-42 303.54,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="235.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_vcoord</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord&#45;&gt;proc~remap_layer_to_vcoord_flat_impl -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~remap_layer_to_vcoord&#45;&gt;proc~remap_layer_to_vcoord_flat_impl</title>
+<path fill="none" stroke="#ff0000" d="M303.82,-54.13C311.55,-54.13 319.57,-54.13 327.64,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="327.57,-57.64 337.57,-54.14 327.57,-50.64 327.57,-57.64"/>
+</g>
+<!-- proc~remap_layer_to_sigma -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node3" class="node">
+<title>proc~remap_layer_to_sigma</title>
+<g id="a_proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node3"><a xlink:href="../proc/remap_layer_to_sigma.html" xlink:title="remap_layer_to_sigma">
+<polygon fill="#d9534f" stroke="#d9534f" points="131.52,-108.27 0,-108.27 0,-84 131.52,-84 131.52,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_sigma</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord</title>
+<path fill="none" stroke="#ff0000" d="M117.1,-83.53C134.76,-79.11 154.81,-74.09 173.27,-69.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="173.91,-72.92 182.76,-67.1 172.21,-66.13 173.91,-72.92"/>
+</g>
+<!-- proc~remap_layer_to_z -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node4" class="node">
+<title>proc~remap_layer_to_z</title>
+<g id="a_proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node4"><a xlink:href="../proc/remap_layer_to_z.html" xlink:title="remap_layer_to_z">
+<polygon fill="#d9534f" stroke="#d9534f" points="118.02,-66.27 13.5,-66.27 13.5,-42 118.02,-42 118.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_z</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord</title>
+<path fill="none" stroke="#ff0000" d="M118.47,-54.13C130.38,-54.13 143.32,-54.13 156.08,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="155.71,-57.64 165.71,-54.14 155.71,-50.64 155.71,-57.64"/>
+</g>
+<!-- proc~remap_layer_to_zstar -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node5" class="node">
+<title>proc~remap_layer_to_zstar</title>
+<g id="a_proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_node5"><a xlink:href="../proc/remap_layer_to_zstar.html" xlink:title="remap_layer_to_zstar">
+<polygon fill="#d9534f" stroke="#d9534f" points="128.14,-24.27 3.38,-24.27 3.38,0 128.14,0 128.14,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_zstar</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_zstar&#45;&gt;proc~remap_layer_to_vcoord -->
+<g id="proc~~remap_layer_to_vcoord_flat_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~remap_layer_to_zstar&#45;&gt;proc~remap_layer_to_vcoord</title>
+<path fill="none" stroke="#ff0000" d="M117.1,-24.74C134.76,-29.16 154.81,-34.18 173.27,-38.8"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="172.21,-42.14 182.76,-41.17 173.91,-35.35 172.21,-42.14"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-acc~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>acc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-col_h"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>col_h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq_r"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq_r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dzo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dzo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_r"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hi~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-href"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>href</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~58"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-integral"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>integral</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~58"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~40"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ko"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ko</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lo~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lvl_scale"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lvl_scale</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mid"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-overlap"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>overlap</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q0~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_6</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_max"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_max</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_min"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_min</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_r"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm1~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm2~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qn"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qn</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp1~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp2~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xi_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xi_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xi_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xi_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zacc"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zacc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zf"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zf</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zf_prev"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zf_prev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zn_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zn_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zn_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zn_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zo_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zo_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zo_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zo_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">remap_layer_to_vcoord_flat_impl</span><span class="p">(</span><span class="n">coord_type</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">levels</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">output_buf</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">is_extensive</span><span class="p">,</span><span class="w"> </span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">mask_vanished</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">missing</span><span class="p">,</span><span class="w"> </span><span class="n">zo</span><span class="p">,</span><span class="w"> </span><span class="n">zn</span><span class="p">,</span><span class="w"> </span><span class="n">dzn</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! The remap of `remap_layer_to_vcoord_impl` (same source masking,</span>
+<span class="w">      </span><span class="c">!! target clipping, padding to `n = max(nz, nz_out)`, intensive /</span>
+<span class="w">      </span><span class="c">!! extensive and missing-value contract — read that docstring) for</span>
+<span class="w">      </span><span class="c">!! PCM / PLM / PPM, restructured for the device: ONE THREAD PER TARGET</span>
+<span class="w">      </span><span class="c">!! CELL over flat scratch, instead of one thread per column carrying</span>
+<span class="w">      </span><span class="c">!! `NZ_STACK_MAX`-wide private column arrays through `remap_column`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Why it exists: a time-MEAN diagnostic on a non-layer output grid is</span>
+<span class="w">      </span><span class="c">!! sampled — hence remapped — EVERY step, and the per-column kernel</span>
+<span class="w">      </span><span class="c">!! cost 76 ms per field per step on a 1440x378x50 domain (70 % of the</span>
+<span class="w">      </span><span class="c">!! run, 1/4-degree Southern Ocean, one output level).  Thread-private</span>
+<span class="w">      </span><span class="c">!! arrays are uncoalesced device memory, and `remap_column` builds all</span>
+<span class="w">      </span><span class="c">!! `n` source reconstructions whatever the target needs.  Here a</span>
+<span class="w">      </span><span class="c">!! target cell reconstructs only the source cells it overlaps:</span>
+<span class="w">      </span><span class="c">!! 0.24 ms for that case, 4.7 ms for 50 output levels (was 113 ms).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Kernel 1 (per column) accumulates the source interfaces `zo` and the</span>
+<span class="w">      </span><span class="c">!! clipped target interfaces `zn` / thicknesses `dzn`.  Kernel 2 (per</span>
+<span class="w">      </span><span class="c">!! target cell) bisects for the first overlapping source cell, then</span>
+<span class="w">      </span><span class="c">!! integrates the reconstruction of each overlapped source cell, built</span>
+<span class="w">      </span><span class="c">!! in place from its &lt;= 5-cell stencil with the SAME expressions, in</span>
+<span class="w">      </span><span class="c">!! the same order, as `remap_column_{pcm,plm,ppm}` (default closures:</span>
+<span class="w">      </span><span class="c">!! no boundary extrapolation, equal-thickness weights).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Equivalence.**  Identical to the per-column kernel except in a</span>
+<span class="w">      </span><span class="c">!! target cell CLIPPED at the column bottom: the column total here is</span>
+<span class="w">      </span><span class="c">!! the last source interface `zo(n)` itself, where the per-column</span>
+<span class="w">      </span><span class="c">!! kernel sums it separately (and the optimiser is free to reassociate</span>
+<span class="w">      </span><span class="c">!! that sum), so the clip can land an ulp of `H` apart — a relative</span>
+<span class="w">      </span><span class="c">!! `ulp(H)/dz` difference in that one cell.  Gate:</span>
+<span class="w">      </span><span class="c">!! `test_ocean_diag_remap` (flat vs column).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">coord_type</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">levels</span><span class="p">(</span><span class="n">nz_out</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">output_buf</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">is_extensive</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">method</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">mask_vanished</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">missing</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zo</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Scratch: source interface below work layer `k` (top-down).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Scratch: target interface below output cell `m`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dzn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Scratch: clipped target thickness.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="p">,</span><span class="w"> </span><span class="n">lo</span><span class="p">,</span><span class="w"> </span><span class="n">hi</span><span class="p">,</span><span class="w"> </span><span class="n">mid</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">href</span><span class="p">,</span><span class="w"> </span><span class="n">acc</span><span class="p">,</span><span class="w"> </span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">col_h</span><span class="p">,</span><span class="w"> </span><span class="n">lvl_scale</span><span class="p">,</span><span class="w"> </span><span class="n">zf_prev</span><span class="p">,</span><span class="w"> </span><span class="n">zf</span><span class="p">,</span><span class="w"> </span><span class="n">dz</span><span class="p">,</span><span class="w"> </span><span class="n">zacc</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zn_lo</span><span class="p">,</span><span class="w"> </span><span class="n">zn_hi</span><span class="p">,</span><span class="w"> </span><span class="n">zo_lo</span><span class="p">,</span><span class="w"> </span><span class="n">zo_hi</span><span class="p">,</span><span class="w"> </span><span class="n">z_lo</span><span class="p">,</span><span class="w"> </span><span class="n">z_hi</span><span class="p">,</span><span class="w"> </span><span class="n">overlap</span><span class="p">,</span><span class="w"> </span><span class="n">integral</span><span class="p">,</span><span class="w"> </span><span class="n">dzo</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">xi_lo</span><span class="p">,</span><span class="w"> </span><span class="n">xi_hi</span><span class="p">,</span><span class="w"> </span><span class="n">qm2</span><span class="p">,</span><span class="w"> </span><span class="n">qm1</span><span class="p">,</span><span class="w"> </span><span class="n">q0</span><span class="p">,</span><span class="w"> </span><span class="n">qp1</span><span class="p">,</span><span class="w"> </span><span class="n">qp2</span><span class="p">,</span><span class="w"> </span><span class="n">e_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_r</span><span class="p">,</span><span class="w"> </span><span class="n">q_l</span><span class="p">,</span><span class="w"> </span><span class="n">q_r</span><span class="p">,</span><span class="w"> </span><span class="n">q_6</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_min</span><span class="p">,</span><span class="w"> </span><span class="n">q_max</span><span class="p">,</span><span class="w"> </span><span class="n">dq</span><span class="p">,</span><span class="w"> </span><span class="n">dq_l</span><span class="p">,</span><span class="w"> </span><span class="n">dq_r</span><span class="p">,</span><span class="w"> </span><span class="n">slope</span><span class="p">,</span><span class="w"> </span><span class="n">qn</span>
+
+<span class="w">      </span><span class="n">href</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">levels</span><span class="p">(</span><span class="n">nz_out</span><span class="p">)</span><span class="w">   </span><span class="c">! ZSTAR reference total depth (deepest interface)</span>
+
+<span class="w">      </span><span class="c">! ---- kernel 1: source + target interfaces, one thread per column ----</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">acc</span><span class="p">,</span><span class="w"> </span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">col_h</span><span class="p">,</span><span class="w"> </span><span class="n">lvl_scale</span><span class="p">,</span><span class="w"> </span><span class="n">zf_prev</span><span class="p">,</span><span class="w"> </span><span class="n">zf</span><span class="p">,</span><span class="w"> </span><span class="n">dz</span><span class="p">,</span><span class="w"> </span><span class="n">zacc</span><span class="p">)</span>
+<span class="w">         </span><span class="n">acc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h</span><span class="p">))</span><span class="w"> </span><span class="n">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">acc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">acc</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">zo</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">acc</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         </span><span class="n">col_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">acc</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">coord_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">DIAG_VGRID_SIGMA</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">lvl_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col_h</span>
+<span class="w">         </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">coord_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">DIAG_VGRID_ZSTAR</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">href</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">1.0e-12_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">lvl_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col_h</span><span class="o">/</span><span class="n">href</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">lvl_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         else</span><span class="w">   </span><span class="c">! DIAG_VGRID_Z_FIXED: levels are absolute depths</span>
+<span class="w">            </span><span class="n">lvl_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         </span><span class="n">zf_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">zacc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span>
+<span class="w">            </span><span class="n">zf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">levels</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="o">*</span><span class="n">lvl_scale</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">),</span><span class="w"> </span><span class="n">col_h</span><span class="p">)</span>
+<span class="w">            </span><span class="n">dz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zf</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">zf_prev</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dz</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">dz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">dzn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dz</span>
+<span class="w">            </span><span class="n">zacc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zacc</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dz</span>
+<span class="w">            </span><span class="n">zn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zacc</span>
+<span class="w">            </span><span class="n">zf_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zf</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end do</span>
+
+<span class="w">      </span><span class="c">! ---- kernel 2: overlap integral + emit, one thread per target cell ----</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz_out</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">ko</span><span class="p">,</span><span class="w"> </span><span class="n">lo</span><span class="p">,</span><span class="w"> </span><span class="n">hi</span><span class="p">,</span><span class="w"> </span><span class="n">mid</span><span class="p">,</span><span class="w"> </span><span class="n">dz</span><span class="p">,</span><span class="w"> </span><span class="n">zn_lo</span><span class="p">,</span><span class="w"> </span><span class="n">zn_hi</span><span class="p">,</span><span class="w"> </span><span class="n">zo_lo</span><span class="p">,</span><span class="w"> </span><span class="n">zo_hi</span><span class="p">,</span><span class="w"> </span><span class="n">z_lo</span><span class="p">,</span><span class="w"> </span><span class="n">z_hi</span><span class="p">,</span><span class="w"> </span><span class="n">overlap</span><span class="p">,</span><span class="w"> </span><span class="n">integral</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">dzo</span><span class="p">,</span><span class="w"> </span><span class="n">xi_lo</span><span class="p">,</span><span class="w"> </span><span class="n">xi_hi</span><span class="p">,</span><span class="w"> </span><span class="n">qm2</span><span class="p">,</span><span class="w"> </span><span class="n">qm1</span><span class="p">,</span><span class="w"> </span><span class="n">q0</span><span class="p">,</span><span class="w"> </span><span class="n">qp1</span><span class="p">,</span><span class="w"> </span><span class="n">qp2</span><span class="p">,</span><span class="w"> </span><span class="n">e_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_r</span><span class="p">,</span><span class="w"> </span><span class="n">q_l</span><span class="p">,</span><span class="w"> </span><span class="n">q_r</span><span class="p">,</span><span class="w"> </span><span class="n">q_6</span><span class="p">,</span><span class="w"> </span><span class="n">q_min</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">q_max</span><span class="p">,</span><span class="w"> </span><span class="n">dq</span><span class="p">,</span><span class="w"> </span><span class="n">dq_l</span><span class="p">,</span><span class="w"> </span><span class="n">dq_r</span><span class="p">,</span><span class="w"> </span><span class="n">slope</span><span class="p">,</span><span class="w"> </span><span class="n">qn</span><span class="p">)</span>
+<span class="w">         </span><span class="n">dz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dzn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
+<span class="w">         </span><span class="n">qn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dz</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">zn_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
+<span class="w">            </span><span class="n">zn_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">m</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="n">zn_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="c">! First source cell reaching below the target's top: the smallest</span>
+<span class="w">            </span><span class="c">! ko with zo(ko) &gt; zn_lo (n+1 if none).  Everything above it has a</span>
+<span class="w">            </span><span class="c">! non-positive overlap, which `remap_column` skips too.</span>
+<span class="w">            </span><span class="n">lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">            </span><span class="n">hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">do while</span><span class="w"> </span><span class="p">(</span><span class="n">hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lo</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hi</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">zo</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">mid</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">zn_lo</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mid</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mid</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+<span class="k">            </span><span class="n">integral</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">do </span><span class="n">ko</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hi</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">               </span><span class="n">zo_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zo</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="p">)</span>
+<span class="w">               </span><span class="n">zo_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="n">zo_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zo</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">z_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">zn_lo</span><span class="p">,</span><span class="w"> </span><span class="n">zo_lo</span><span class="p">)</span>
+<span class="w">               </span><span class="n">z_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">zn_hi</span><span class="p">,</span><span class="w"> </span><span class="n">zo_hi</span><span class="p">)</span>
+<span class="w">               </span><span class="n">overlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_lo</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">overlap</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  if</span><span class="w"> </span><span class="p">(</span><span class="n">zo_hi</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">zn_hi</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">                  cycle</span>
+<span class="k">               end if</span>
+<span class="k">               </span><span class="n">dzo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">dzo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">dzo</span><span class="p">))</span><span class="w"> </span><span class="n">dzo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               </span><span class="n">q0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">diag_remap_src_q</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">is_extensive</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">REMAP_PCM</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">dzo</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">integral</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">integral</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">q0</span><span class="o">*</span><span class="n">overlap</span>
+<span class="w">                  </span><span class="k">cycle</span>
+<span class="k">               end if</span>
+<span class="k">               </span><span class="n">xi_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">z_lo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">zo_lo</span><span class="p">)</span><span class="o">/</span><span class="n">dzo</span>
+<span class="w">               </span><span class="n">xi_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">z_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">zo_lo</span><span class="p">)</span><span class="o">/</span><span class="n">dzo</span>
+<span class="w">               </span><span class="n">qm1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">               </span><span class="n">qp1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="n">qm1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">diag_remap_src_q</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">is_extensive</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="n">qp1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">diag_remap_src_q</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">is_extensive</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">REMAP_PLM</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">                  </span><span class="c">! minmod half-difference; the two end cells are PCM</span>
+<span class="w">                  </span><span class="n">slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">dq_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">qm1</span>
+<span class="w">                     </span><span class="n">dq_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">qp1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">                     </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dq_l</span><span class="o">*</span><span class="n">dq_r</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                        </span><span class="n">slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="nb">sign</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_l</span><span class="p">),</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_r</span><span class="p">)),</span><span class="w"> </span><span class="n">dq_l</span><span class="p">)</span>
+<span class="w">                     </span><span class="k">end if</span>
+<span class="k">                  end if</span>
+<span class="k">                  </span><span class="n">integral</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">integral</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">overlap</span><span class="o">*</span><span class="p">(</span><span class="n">q0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">slope</span><span class="o">*</span><span class="p">(</span><span class="n">xi_lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">xi_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">))</span>
+<span class="w">                  </span><span class="k">cycle</span>
+<span class="k">               end if</span>
+<span class="w">               </span><span class="c">! ---- PPM: unlimited edges.  Edge k|k+1 is the two-cell mean</span>
+<span class="w">               </span><span class="c">! at k = 1 and k = n-1, the 4th-order (7/12, -1/12) value</span>
+<span class="w">               </span><span class="c">! elsewhere; the column ends are PCM. ----</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">e_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">               </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">e_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">qm1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">q0</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">qm2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">diag_remap_src_q</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">is_extensive</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">e_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">7.0_wp</span><span class="o">/</span><span class="mi">1</span><span class="mf">2.0_wp</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">qm1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">q0</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="o">/</span><span class="mi">1</span><span class="mf">2.0_wp</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">qm2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">qp1</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">e_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">               </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">e_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">q0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">qp1</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">qp2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">diag_remap_src_q</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">is_extensive</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">e_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">7.0_wp</span><span class="o">/</span><span class="mi">1</span><span class="mf">2.0_wp</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">q0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">qp1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="o">/</span><span class="mi">1</span><span class="mf">2.0_wp</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">qm1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">qp2</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="w">               </span><span class="c">! ---- Colella-Woodward monotonicity limiting ----</span>
+<span class="w">               </span><span class="n">q_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">               </span><span class="n">q_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">q_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">q_min</span><span class="p">,</span><span class="w"> </span><span class="n">qm1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">q_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">q_max</span><span class="p">,</span><span class="w"> </span><span class="n">qm1</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">q_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">q_min</span><span class="p">,</span><span class="w"> </span><span class="n">qp1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">q_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">q_max</span><span class="p">,</span><span class="w"> </span><span class="n">qp1</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               </span><span class="n">q_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">q_min</span><span class="p">,</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">q_max</span><span class="p">,</span><span class="w"> </span><span class="n">e_l</span><span class="p">))</span>
+<span class="w">               </span><span class="n">q_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">q_min</span><span class="p">,</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">q_max</span><span class="p">,</span><span class="w"> </span><span class="n">e_r</span><span class="p">))</span>
+<span class="w">               </span><span class="n">dq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_r</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_l</span>
+<span class="w">               </span><span class="n">dq_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_l</span>
+<span class="w">               </span><span class="n">dq_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_r</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dq_l</span><span class="o">*</span><span class="n">dq_r</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">q_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">                  </span><span class="n">q_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q0</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">q_6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">6.0_wp</span><span class="o">*</span><span class="n">q0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="p">(</span><span class="n">q_l</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">q_r</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">q_6</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">dq</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     if</span><span class="w"> </span><span class="p">(</span><span class="n">q_6</span><span class="o">*</span><span class="n">dq</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                        </span><span class="n">q_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="n">q0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">q_r</span>
+<span class="w">                     </span><span class="k">else</span>
+<span class="k">                        </span><span class="n">q_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="n">q0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">q_l</span>
+<span class="w">                     </span><span class="k">end if</span>
+<span class="k">                  end if</span>
+<span class="k">               end if</span>
+<span class="k">               </span><span class="n">q_6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">6.0_wp</span><span class="o">*</span><span class="n">q0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="p">(</span><span class="n">q_l</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">q_r</span><span class="p">)</span>
+<span class="w">               </span><span class="n">integral</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">integral</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dzo</span><span class="o">*</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="p">(</span><span class="n">xi_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">xi_lo</span><span class="p">)</span><span class="o">*</span><span class="n">q_l</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">xi_hi</span><span class="o">*</span><span class="n">xi_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">xi_lo</span><span class="o">*</span><span class="n">xi_lo</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">q_r</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_l</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">q_6</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">xi_hi</span><span class="o">*</span><span class="n">xi_hi</span><span class="o">*</span><span class="n">xi_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">xi_lo</span><span class="o">*</span><span class="n">xi_lo</span><span class="o">*</span><span class="n">xi_lo</span><span class="p">)</span><span class="o">*</span><span class="n">q_6</span><span class="o">/</span><span class="mf">3.0_wp</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">            </span><span class="n">qn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">integral</span><span class="o">/</span><span class="n">dz</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">mask_vanished</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dz</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">VANISHED_TARGET_FLOOR</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">output_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">missing</span>
+<span class="w">         </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">is_extensive</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">output_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">qn</span><span class="o">*</span><span class="n">dz</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">output_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">qn</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">remap_layer_to_vcoord_flat_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

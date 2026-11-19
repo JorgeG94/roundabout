@@ -1,0 +1,932 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>init_ctx &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>init_ctx
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">52 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_fold_exchange.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_fold_exchange.f90.html'>rdb_ocean_fold_exchange.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_fold_exchange.html'>rdb_ocean_fold_exchange</a></li>
+            <li class="breadcrumb-item active" aria-current="page">init_ctx</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/init_ctx.html#variable-f~17">f</a>
+            <a class="list-group-item" href="../proc/init_ctx.html#variable-p~34">p</a>
+            <a class="list-group-item" href="../proc/init_ctx.html#variable-status~18">status</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/init_ctx.html#src">init_ctx</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine init_ctx(c, decomp, nghost, north_fold, ierr)  
+</h2>
+    
+
+    <p>Initialise one context (see <code>ocean_fold_exchange_init</code>).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c~86"></span>
+              type(<a href='../type/fx_ctx_t.html'>fx_ctx_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>c</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~11"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~91"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-north_fold~8"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>north_fold</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~162"></span>
+              integer,
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~init_ctx~~CallsGraph Pages: 1 -->
+<svg id="procinit_ctxCallsGraph" width="540pt" height="200pt"
+ viewBox="0.00 0.00 540.00 200.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~init_ctx~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 196.27)">
+<title>proc~~init_ctx~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-196.27 535.81,-196.27 535.81,4 -4,4"/>
+<!-- proc~init_ctx -->
+<g id="proc~~init_ctx~~CallsGraph_node1" class="node">
+<title>proc~init_ctx</title>
+<polygon fill="none" stroke="black" points="54,-108.27 0,-108.27 0,-84 54,-84 54,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="27" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50">init_ctx</text>
+</g>
+<!-- proc~decomp_rank_from_coords -->
+<g id="proc~~init_ctx~~CallsGraph_node2" class="node">
+<title>proc~decomp_rank_from_coords</title>
+<g id="a_proc~~init_ctx~~CallsGraph_node2"><a xlink:href="../proc/decomp_rank_from_coords.html" xlink:title="decomp_rank_from_coords">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="245.52,-192.27 90,-192.27 90,-168 245.52,-168 245.52,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="167.76" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_rank_from_coords</text>
+</a>
+</g>
+</g>
+<!-- proc~init_ctx&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~init_ctx~~CallsGraph_edge1" class="edge">
+<title>proc~init_ctx&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#ff0000" d="M37.06,-108.73C48.01,-123.04 67.76,-146.1 90,-159.13 92.45,-160.57 95,-161.91 97.63,-163.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="96.05,-166.3 106.62,-166.97 98.78,-159.85 96.05,-166.3"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~init_ctx~~CallsGraph_node3" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~init_ctx~~CallsGraph_node3"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="194.76,-150.27 140.76,-150.27 140.76,-126 194.76,-126 194.76,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="167.76" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~init_ctx&#45;&gt;proc~fail -->
+<g id="proc~~init_ctx~~CallsGraph_edge2" class="edge">
+<title>proc~init_ctx&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M54.44,-105.48C65.39,-109.25 78.26,-113.55 90,-117.13 102.75,-121.03 116.79,-124.98 129.33,-128.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="128.33,-131.73 138.9,-130.94 130.14,-124.97 128.33,-131.73"/>
+</g>
+<!-- proc~fold_plan_build -->
+<g id="proc~~init_ctx~~CallsGraph_node4" class="node">
+<title>proc~fold_plan_build</title>
+<g id="a_proc~~init_ctx~~CallsGraph_node4"><a xlink:href="../proc/fold_plan_build.html" xlink:title="fold_plan_build">
+<polygon fill="#d9534f" stroke="#d9534f" points="213.64,-108.27 121.88,-108.27 121.88,-84 213.64,-84 213.64,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="167.76" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_plan_build</text>
+</a>
+</g>
+</g>
+<!-- proc~init_ctx&#45;&gt;proc~fold_plan_build -->
+<g id="proc~~init_ctx~~CallsGraph_edge3" class="edge">
+<title>proc~init_ctx&#45;&gt;proc~fold_plan_build</title>
+<path fill="none" stroke="#ff0000" d="M54.43,-96.13C70.19,-96.13 90.84,-96.13 110.13,-96.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="110.08,-99.64 120.08,-96.14 110.08,-92.64 110.08,-99.64"/>
+</g>
+<!-- proc~grow_buffers -->
+<g id="proc~~init_ctx~~CallsGraph_node5" class="node">
+<title>proc~grow_buffers</title>
+<g id="a_proc~~init_ctx~~CallsGraph_node5"><a xlink:href="../proc/grow_buffers.html" xlink:title="grow_buffers">
+<polygon fill="#d9534f" stroke="#d9534f" points="207.64,-66.27 127.88,-66.27 127.88,-42 207.64,-42 207.64,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="167.76" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grow_buffers</text>
+</a>
+</g>
+</g>
+<!-- proc~init_ctx&#45;&gt;proc~grow_buffers -->
+<g id="proc~~init_ctx~~CallsGraph_edge4" class="edge">
+<title>proc~init_ctx&#45;&gt;proc~grow_buffers</title>
+<path fill="none" stroke="#ff0000" d="M54.44,-86.79C65.39,-83.02 78.26,-78.72 90,-75.13 98.55,-72.52 107.67,-69.89 116.55,-67.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="117.41,-70.8 126.12,-64.77 115.55,-64.05 117.41,-70.8"/>
+</g>
+<!-- to_string -->
+<g id="proc~~init_ctx~~CallsGraph_node6" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="196.39,-24.27 139.12,-24.27 139.12,0 196.39,0 196.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="167.76" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~init_ctx&#45;&gt;to_string -->
+<g id="proc~~init_ctx~~CallsGraph_edge5" class="edge">
+<title>proc~init_ctx&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M37.06,-83.54C48.01,-69.23 67.76,-46.17 90,-33.13 101.41,-26.45 115.01,-21.83 127.58,-18.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="128.27,-22.09 137.26,-16.48 126.73,-15.26 128.27,-22.09"/>
+</g>
+<!-- error -->
+<g id="proc~~init_ctx~~CallsGraph_node7" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="369.78,-191.27 315.78,-191.27 315.78,-167 369.78,-167 369.78,-191.27"/>
+<text xml:space="preserve" text-anchor="middle" x="342.78" y="-175.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~init_ctx~~CallsGraph_edge6" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#cbff00" d="M195.04,-144.36C224.21,-151.28 271.53,-162.49 304.52,-170.31"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="303.53,-173.67 314.07,-172.57 305.14,-166.86 303.53,-173.67"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~init_ctx~~CallsGraph_node8" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~init_ctx~~CallsGraph_node8"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="390.16,-149.27 295.39,-149.27 295.39,-125 390.16,-125 390.16,-149.27"/>
+<text xml:space="preserve" text-anchor="middle" x="342.78" y="-133.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~init_ctx~~CallsGraph_edge7" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#cbff00" d="M195.04,-137.98C218.51,-137.85 253.72,-137.64 283.77,-137.47"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="283.51,-140.97 293.49,-137.41 283.47,-133.97 283.51,-140.97"/>
+</g>
+<!-- proc~fold_receiver_entries -->
+<g id="proc~~init_ctx~~CallsGraph_node9" class="node">
+<title>proc~fold_receiver_entries</title>
+<g id="a_proc~~init_ctx~~CallsGraph_node9"><a xlink:href="../proc/fold_receiver_entries.html" xlink:title="fold_receiver_entries">
+<polygon fill="#d9534f" stroke="#d9534f" points="404.04,-69.27 281.52,-69.27 281.52,-45 404.04,-45 404.04,-69.27"/>
+<text xml:space="preserve" text-anchor="middle" x="342.78" y="-53.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_receiver_entries</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_plan_build&#45;&gt;proc~fold_receiver_entries -->
+<g id="proc~~init_ctx~~CallsGraph_edge8" class="edge">
+<title>proc~fold_plan_build&#45;&gt;proc~fold_receiver_entries</title>
+<path fill="none" stroke="#00ff66" d="M213.77,-85.99C232.35,-81.8 254.29,-76.86 274.7,-72.25"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="275.39,-75.69 284.38,-70.07 273.85,-68.86 275.39,-75.69"/>
+</g>
+<!-- proc~fold_tile_extent -->
+<g id="proc~~init_ctx~~CallsGraph_node10" class="node">
+<title>proc~fold_tile_extent</title>
+<g id="a_proc~~init_ctx~~CallsGraph_node10"><a xlink:href="../proc/fold_tile_extent.html" xlink:title="fold_tile_extent">
+<polygon fill="#d9534f" stroke="#d9534f" points="531.81,-109.27 440.04,-109.27 440.04,-85 531.81,-85 531.81,-109.27"/>
+<text xml:space="preserve" text-anchor="middle" x="485.92" y="-93.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_tile_extent</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_plan_build&#45;&gt;proc~fold_tile_extent -->
+<g id="proc~~init_ctx~~CallsGraph_edge9" class="edge">
+<title>proc~fold_plan_build&#45;&gt;proc~fold_tile_extent</title>
+<path fill="none" stroke="#00ff66" d="M214.06,-96.28C270.52,-96.46 367.04,-96.76 428.32,-96.96"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="428.19,-100.46 438.2,-96.99 428.21,-93.46 428.19,-100.46"/>
+</g>
+<!-- proc~fold_receiver_entries&#45;&gt;proc~fold_tile_extent -->
+<g id="proc~~init_ctx~~CallsGraph_edge10" class="edge">
+<title>proc~fold_receiver_entries&#45;&gt;proc~fold_tile_extent</title>
+<path fill="none" stroke="#00ffff" d="M388.05,-69.68C401.32,-73.44 416.04,-77.61 429.91,-81.54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="428.78,-84.86 439.35,-84.22 430.69,-78.13 428.78,-84.86"/>
+</g>
+<!-- proc~fold_tile_owner -->
+<g id="proc~~init_ctx~~CallsGraph_node11" class="node">
+<title>proc~fold_tile_owner</title>
+<g id="a_proc~~init_ctx~~CallsGraph_node11"><a xlink:href="../proc/fold_tile_owner.html" xlink:title="fold_tile_owner">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="531.81,-67.27 440.04,-67.27 440.04,-43 531.81,-43 531.81,-67.27"/>
+<text xml:space="preserve" text-anchor="middle" x="485.92" y="-51.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_tile_owner</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_receiver_entries&#45;&gt;proc~fold_tile_owner -->
+<g id="proc~~init_ctx~~CallsGraph_edge11" class="edge">
+<title>proc~fold_receiver_entries&#45;&gt;proc~fold_tile_owner</title>
+<path fill="none" stroke="#00ffff" d="M404.46,-56.28C412.39,-56.16 420.49,-56.05 428.35,-55.94"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="428.18,-59.44 438.13,-55.8 428.08,-52.44 428.18,-59.44"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~init_ctx~~CalledByGraph Pages: 1 -->
+<svg id="procinit_ctxCalledByGraph" width="641pt" height="136pt"
+ viewBox="0.00 0.00 641.00 136.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~init_ctx~~CalledByGraph" class="graph" transform="scale(0.856288 0.856288) rotate(0) translate(4 154.27)">
+<title>proc~~init_ctx~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 744.58,-154.27 744.58,4 -4,4"/>
+<!-- proc~init_ctx -->
+<g id="proc~~init_ctx~~CalledByGraph_node1" class="node">
+<title>proc~init_ctx</title>
+<polygon fill="none" stroke="black" points="740.58,-66.27 686.58,-66.27 686.58,-42 740.58,-42 740.58,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="713.58" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">init_ctx</text>
+</g>
+<!-- proc~ocean_fold_exchange_init -->
+<g id="proc~~init_ctx~~CalledByGraph_node2" class="node">
+<title>proc~ocean_fold_exchange_init</title>
+<g id="a_proc~~init_ctx~~CalledByGraph_node2"><a xlink:href="../proc/ocean_fold_exchange_init.html" xlink:title="ocean_fold_exchange_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="650.58,-66.27 501.81,-66.27 501.81,-42 650.58,-42 650.58,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="576.19" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_exchange_init</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_exchange_init&#45;&gt;proc~init_ctx -->
+<g id="proc~~init_ctx~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_fold_exchange_init&#45;&gt;proc~init_ctx</title>
+<path fill="none" stroke="#ff0000" d="M650.83,-54.13C659.13,-54.13 667.32,-54.13 674.87,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="674.65,-57.64 684.65,-54.14 674.65,-50.64 674.65,-57.64"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~init_ctx~~CalledByGraph_node3" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~init_ctx~~CalledByGraph_node3"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.81,-66.27 383.04,-66.27 383.04,-42 465.81,-42 465.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="424.42" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_fold_exchange_init -->
+<g id="proc~~init_ctx~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_fold_exchange_init</title>
+<path fill="none" stroke="#ff0000" d="M465.95,-54.13C473.52,-54.13 481.68,-54.13 490.01,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="489.93,-57.64 499.93,-54.14 489.93,-50.64 489.93,-57.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~init_ctx~~CalledByGraph_node4" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~init_ctx~~CalledByGraph_node4"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.04,-108.27 208.02,-108.27 208.02,-84 347.04,-84 347.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~init_ctx~~CalledByGraph_edge3" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-83.53C337.72,-78.98 355.61,-73.79 371.94,-69.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="372.87,-72.43 381.5,-66.29 370.92,-65.71 372.87,-72.43"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~init_ctx~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~init_ctx~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="329.79,-66.27 225.27,-66.27 225.27,-42 329.79,-42 329.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~init_ctx~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M330.02,-54.13C343.36,-54.13 357.73,-54.13 371.11,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="371.05,-57.64 381.05,-54.14 371.05,-50.64 371.05,-57.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~init_ctx~~CalledByGraph_node6" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~init_ctx~~CalledByGraph_node6"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="323.04,-24.27 232.02,-24.27 232.02,0 323.04,0 323.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~init_ctx~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-24.74C337.72,-29.29 355.61,-34.48 371.94,-39.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="370.92,-42.56 381.5,-41.98 372.87,-35.84 370.92,-42.56"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~init_ctx~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~init_ctx~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.14,-66.27 52.87,-66.27 52.87,-42 119.14,-42 119.14,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~init_ctx~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M119.59,-54.13C145.42,-54.13 182.28,-54.13 213.78,-54.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="213.61,-57.64 223.61,-54.14 213.61,-50.64 213.61,-57.64"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~init_ctx~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~init_ctx~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="161.14,-150.27 10.87,-150.27 10.87,-126 161.14,-126 161.14,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~init_ctx~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M143.87,-125.53C164.2,-121.03 187.32,-115.9 208.5,-111.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.22,-114.64 218.23,-109.05 207.71,-107.8 209.22,-114.64"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~init_ctx~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~init_ctx~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="172.02,-108.27 0,-108.27 0,-84 172.02,-84 172.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~init_ctx~~CalledByGraph_edge7" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M172.34,-96.14C180.27,-96.14 188.28,-96.14 196.15,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.05,-99.64 206.05,-96.14 196.05,-92.64 196.05,-99.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocinit_ctxCalledByGraph = svgPanZoom('#procinit_ctxCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~17"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p~34"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-status~18"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>status</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">init_ctx</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">north_fold</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Initialise one context (see `ocean_fold_exchange_init`).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">fx_ctx_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">decomp_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">decomp</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">north_fold</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">f</span>
+
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">grow_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">nxl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">nx_local</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">nyl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">ny_local</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">px</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">ry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">ry</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">north_fold</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">initialised</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      call </span><span class="n">fold_plan_build</span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">nx_global</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">status</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">FOLD_PLAN_OK</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"ocean_fold_exchange_init: cannot build the fold plan for nx = "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">decomp</span><span class="p">%</span><span class="n">nx_global</span><span class="p">)</span><span class="o">//</span><span class="s2">", px = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">", nghost = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">nghost</span><span class="p">)</span><span class="o">//</span><span class="s2">" (need nx &gt;= px, nghost &gt;= 1)."</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="n">c</span><span class="p">%</span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">c</span><span class="p">%</span><span class="n">npeer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">self</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">self_peer</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">nmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">peer_rank</span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">npeer</span><span class="p">))</span>
+<span class="w">      </span><span class="k">do </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">npeer</span>
+<span class="w">         </span><span class="n">c</span><span class="p">%</span><span class="n">peer_rank</span><span class="p">(</span><span class="n">p</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp_rank_from_coords</span><span class="p">(</span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">peer_rx</span><span class="p">(</span><span class="n">p</span><span class="p">),</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">ry</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      allocate</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">sn</span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">npeer</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="p">),</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">rn</span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">npeer</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="p">))</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">sn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">send_n</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">rn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_n</span>
+<span class="w">      </span><span class="k">do </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span>
+<span class="w">         </span><span class="n">c</span><span class="p">%</span><span class="n">ns</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">nsend</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<span class="w">         </span><span class="n">c</span><span class="p">%</span><span class="n">nr</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">nrecv</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<span class="w">         </span><span class="n">c</span><span class="p">%</span><span class="n">s0</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">         </span><span class="n">c</span><span class="p">%</span><span class="n">r0</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">npeer</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">c</span><span class="p">%</span><span class="n">s0</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">send_start</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c</span><span class="p">%</span><span class="n">r0</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_start</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">      </span><span class="n">c</span><span class="p">%</span><span class="n">scol</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">send_col</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">speer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">send_peer</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">se</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">send_e</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">rcol</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_col</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">rpeer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_peer</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">re</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_e</span>
+<span class="w">      </span><span class="n">c</span><span class="p">%</span><span class="n">rcls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_cls</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">reqs</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="nb">max</span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">npeer</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)),</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">stats</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="nb">max</span><span class="p">(</span><span class="n">c</span><span class="p">%</span><span class="n">npeer</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)))</span>
+<span class="w">      </span><span class="c">!$acc enter data copyin(c%sn, c%rn, c%scol, c%speer, c%se, &amp;</span>
+<span class="w">      </span><span class="c">!$acc&amp;                  c%rcol, c%rpeer, c%re, c%rcls)</span>
+
+<span class="w">      </span><span class="c">! Base capacity: one field of the widest stagger, one layer.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">grow_buffers</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">%</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">init_ctx</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

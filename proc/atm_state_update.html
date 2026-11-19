@@ -1,0 +1,1209 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>atm_state_update &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>atm_state_update
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">34 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_atm_state.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_atm_state.f90.html'>rdb_atm_state.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_atm_state.html'>rdb_atm_state</a></li>
+            <li class="breadcrumb-item active" aria-current="page">atm_state_update</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/atm_state_update.html#variable-shift~2">shift</a>
+            <a class="list-group-item" href="../proc/atm_state_update.html#variable-wlen">wlen</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/atm_state_update.html#src">atm_state_update</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine atm_state_update(this, reader, metrics, t, dt, win_shift, win_len)  
+</h2>
+    
+
+    <p>Blend + regrid every one of the nine fields&rsquo; current bracket,
+then (<code>sw_interp = "coszen"</code>) restore <code>rsds</code>&rsquo;s diurnal shape
+from the held bucket mean &ndash; see the module docstring&rsquo;s <code>rsds</code>
+paragraph. <code>t</code> must be the same model time
+<code>ocean_data_input_update_all</code> was just called with &ndash; the
+reader enforces this and aborts otherwise (see
+<code>ocean_data_input_update_2d</code>&rsquo;s fail-loud freshness check).
+<code>dt</code> is the model step; the coszen window is <code>[t, t + dt)</code> unless the
+caller passes <code>win_shift</code>/<code>win_len</code> (from <code>atm_sw_window</code>: the
+interval a thermo-cadence flux is really applied over).  Unused
+under <code>sw_interp = "linear"</code>.
+<code>metrics</code> supplies <code>geolonT</code>/<code>geolatT</code> for the coszen kernel
+(unused, and not read, when <code>sw_interp = "linear"</code>).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~217"></span>
+              class(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reader~7"></span>
+              type(<a href='../type/ocean_data_input_t.html'>ocean_data_input_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reader</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~29"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~25"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~53"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-win_shift"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>win_shift</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-win_len"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>win_len</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~atm_state_update~~CallsGraph Pages: 1 -->
+<svg id="procatm_state_updateCallsGraph" width="641pt" height="307pt"
+ viewBox="0.00 0.00 641.00 307.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~atm_state_update~~CallsGraph" class="graph" transform="scale(0.643174 0.643174) rotate(0) translate(4 473.27)">
+<title>proc~~atm_state_update~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-473.27 992.62,-473.27 992.62,4 -4,4"/>
+<!-- proc~atm_state_update -->
+<g id="proc~~atm_state_update~~CallsGraph_node1" class="node">
+<title>proc~atm_state_update</title>
+<polygon fill="none" stroke="black" points="106.77,-285.27 0,-285.27 0,-261 106.77,-261 106.77,-285.27"/>
+<text xml:space="preserve" text-anchor="middle" x="53.38" y="-269.53" font-family="Helvetica,sans-Serif" font-size="10.50">atm_state_update</text>
+</g>
+<!-- proc~atm_apply_field -->
+<g id="proc~~atm_state_update~~CallsGraph_node2" class="node">
+<title>proc~atm_apply_field</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node2"><a xlink:href="../proc/atm_apply_field.html" xlink:title="atm_apply_field">
+<polygon fill="#d9534f" stroke="#d9534f" points="252.16,-385.27 156.64,-385.27 156.64,-361 252.16,-361 252.16,-385.27"/>
+<text xml:space="preserve" text-anchor="middle" x="204.4" y="-369.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_apply_field</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_state_update&#45;&gt;proc~atm_apply_field -->
+<g id="proc~~atm_state_update~~CallsGraph_edge1" class="edge">
+<title>proc~atm_state_update&#45;&gt;proc~atm_apply_field</title>
+<path fill="none" stroke="#ff0000" d="M72.96,-285.6C98.61,-302.81 145.12,-334.02 175.11,-354.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="173.09,-357.01 183.34,-359.67 176.99,-351.19 173.09,-357.01"/>
+</g>
+<!-- proc~atm_state_copy_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_node3" class="node">
+<title>proc~atm_state_copy_impl</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node3"><a xlink:href="../proc/atm_state_copy_impl.html" xlink:title="atm_state_copy_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="266.04,-245.27 142.77,-245.27 142.77,-221 266.04,-221 266.04,-245.27"/>
+<text xml:space="preserve" text-anchor="middle" x="204.4" y="-229.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_state_copy_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_state_update&#45;&gt;proc~atm_state_copy_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_edge2" class="edge">
+<title>proc~atm_state_update&#45;&gt;proc~atm_state_copy_impl</title>
+<path fill="none" stroke="#ff0000" d="M101.13,-260.59C115.21,-256.81 130.83,-252.62 145.54,-248.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="146.36,-252.07 155.11,-246.1 144.55,-245.31 146.36,-252.07"/>
+</g>
+<!-- proc~atm_sw_coszen_refresh -->
+<g id="proc~~atm_state_update~~CallsGraph_node4" class="node">
+<title>proc~atm_sw_coszen_refresh</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node4"><a xlink:href="../proc/atm_sw_coszen_refresh.html" xlink:title="atm_sw_coszen_refresh">
+<polygon fill="#d9534f" stroke="#d9534f" points="453.43,-245.27 318.16,-245.27 318.16,-221 453.43,-221 453.43,-245.27"/>
+<text xml:space="preserve" text-anchor="middle" x="385.8" y="-229.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_sw_coszen_refresh</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_state_update&#45;&gt;proc~atm_sw_coszen_refresh -->
+<g id="proc~~atm_state_update~~CallsGraph_edge3" class="edge">
+<title>proc~atm_state_update&#45;&gt;proc~atm_sw_coszen_refresh</title>
+<path fill="none" stroke="#ff0000" d="M107.15,-269.66C150.05,-266.53 212.1,-261.31 266.04,-254.13 279.71,-252.32 294.22,-250.04 308.22,-247.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="308.56,-251.16 317.82,-246.01 307.37,-244.26 308.56,-251.16"/>
+</g>
+<!-- proc~atm_state_scatter_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_node7" class="node">
+<title>proc~atm_state_scatter_impl</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node7"><a xlink:href="../proc/atm_state_scatter_impl.html" xlink:title="atm_state_scatter_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="453.06,-448.27 318.54,-448.27 318.54,-424 453.06,-424 453.06,-448.27"/>
+<text xml:space="preserve" text-anchor="middle" x="385.8" y="-432.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_state_scatter_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_apply_field&#45;&gt;proc~atm_state_scatter_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_edge4" class="edge">
+<title>proc~atm_apply_field&#45;&gt;proc~atm_state_scatter_impl</title>
+<path fill="none" stroke="#ff0000" d="M231.2,-385.71C250.42,-394.73 277.46,-406.74 302.04,-415.13 307.65,-417.05 313.53,-418.88 319.45,-420.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="318.09,-423.86 328.66,-423.18 319.98,-417.12 318.09,-423.86"/>
+</g>
+<!-- proc~ocean_data_input_update_2d -->
+<g id="proc~~atm_state_update~~CallsGraph_node9" class="node">
+<title>proc~ocean_data_input_update_2d</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node9"><a xlink:href="../proc/ocean_data_input_update_2d.html" xlink:title="ocean_data_input_update_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.56,-406.27 302.04,-406.27 302.04,-382 469.56,-382 469.56,-406.27"/>
+<text xml:space="preserve" text-anchor="middle" x="385.8" y="-390.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_input_update_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_apply_field&#45;&gt;proc~ocean_data_input_update_2d -->
+<g id="proc~~atm_state_update~~CallsGraph_edge5" class="edge">
+<title>proc~atm_apply_field&#45;&gt;proc~ocean_data_input_update_2d</title>
+<path fill="none" stroke="#ff0000" d="M252.54,-378.65C264.3,-380.03 277.33,-381.55 290.49,-383.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="289.71,-386.53 300.05,-384.21 290.53,-379.58 289.71,-386.53"/>
+</g>
+<!-- proc~regrid_apply_2d_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_node10" class="node">
+<title>proc~regrid_apply_2d_impl</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node10"><a xlink:href="../proc/regrid_apply_2d_impl.html" xlink:title="regrid_apply_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="448.18,-364.27 323.41,-364.27 323.41,-340 448.18,-340 448.18,-364.27"/>
+<text xml:space="preserve" text-anchor="middle" x="385.8" y="-348.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">regrid_apply_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_apply_field&#45;&gt;proc~regrid_apply_2d_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_edge6" class="edge">
+<title>proc~atm_apply_field&#45;&gt;proc~regrid_apply_2d_impl</title>
+<path fill="none" stroke="#ff0000" d="M252.54,-367.62C270.67,-365.49 291.83,-363.02 311.83,-360.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="312.1,-364.17 321.62,-359.53 311.28,-357.22 312.1,-364.17"/>
+</g>
+<!-- proc~atm_coszen_apply_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_node5" class="node">
+<title>proc~atm_coszen_apply_impl</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node5"><a xlink:href="../proc/atm_coszen_apply_impl.html" xlink:title="atm_coszen_apply_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="649.45,-86.27 511.93,-86.27 511.93,-62 649.45,-62 649.45,-86.27"/>
+<text xml:space="preserve" text-anchor="middle" x="580.69" y="-70.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_coszen_apply_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_coszen_apply_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_edge7" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_coszen_apply_impl</title>
+<path fill="none" stroke="#0000ff" d="M398.15,-220.56C418.41,-198.5 462.73,-152.05 505.56,-119.13 518.31,-109.34 533.32,-99.88 546.49,-92.19"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="547.87,-95.43 554.82,-87.43 544.4,-89.36 547.87,-95.43"/>
+</g>
+<!-- proc~atm_spencer_sun -->
+<g id="proc~~atm_state_update~~CallsGraph_node6" class="node">
+<title>proc~atm_spencer_sun</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node6"><a xlink:href="../proc/atm_spencer_sun.html" xlink:title="atm_spencer_sun">
+<polygon fill="#d9534f" stroke="#d9534f" points="632.95,-225.27 528.43,-225.27 528.43,-201 632.95,-201 632.95,-225.27"/>
+<text xml:space="preserve" text-anchor="middle" x="580.69" y="-209.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_spencer_sun</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_spencer_sun -->
+<g id="proc~~atm_state_update~~CallsGraph_edge8" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~atm_spencer_sun</title>
+<path fill="none" stroke="#0000ff" d="M453.72,-226.2C474.19,-224.07 496.63,-221.75 516.82,-219.65"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="517.01,-223.15 526.59,-218.64 516.28,-216.19 517.01,-223.15"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~atm_state_update~~CallsGraph_node8" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node8"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="607.69,-305.27 553.69,-305.27 553.69,-281 607.69,-281 607.69,-305.27"/>
+<text xml:space="preserve" text-anchor="middle" x="580.69" y="-289.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~fail -->
+<g id="proc~~atm_state_update~~CallsGraph_edge9" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#0000ff" d="M427.24,-245.71C461.28,-256.3 509.57,-271.32 542.63,-281.61"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="541.18,-284.82 551.77,-284.45 543.26,-278.14 541.18,-284.82"/>
+</g>
+<!-- proc~safe_cos -->
+<g id="proc~~atm_state_update~~CallsGraph_node11" class="node">
+<title>proc~safe_cos</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node11"><a xlink:href="../proc/safe_cos.html" xlink:title="safe_cos">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="783.22,-185.27 725.95,-185.27 725.95,-161 783.22,-161 783.22,-185.27"/>
+<text xml:space="preserve" text-anchor="middle" x="754.59" y="-169.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">safe_cos</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~safe_cos -->
+<g id="proc~~atm_state_update~~CallsGraph_edge10" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~safe_cos</title>
+<path fill="none" stroke="#0000ff" d="M416.47,-220.51C440.14,-211.03 474.38,-198.6 505.56,-192.13 578.22,-177.07 665.09,-173.67 714.35,-173.06"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="714.26,-176.56 724.23,-172.98 714.2,-169.56 714.26,-176.56"/>
+</g>
+<!-- proc~safe_sin -->
+<g id="proc~~atm_state_update~~CallsGraph_node12" class="node">
+<title>proc~safe_sin</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node12"><a xlink:href="../proc/safe_sin.html" xlink:title="safe_sin">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="781.72,-143.27 727.45,-143.27 727.45,-119 781.72,-119 781.72,-143.27"/>
+<text xml:space="preserve" text-anchor="middle" x="754.59" y="-127.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">safe_sin</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~safe_sin -->
+<g id="proc~~atm_state_update~~CallsGraph_edge11" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~safe_sin</title>
+<path fill="none" stroke="#0000ff" d="M406.11,-220.56C428.92,-206.3 468.48,-183.45 505.56,-171.13 577.65,-147.2 666.43,-137.32 715.84,-133.45"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="716,-136.95 725.72,-132.72 715.49,-129.97 716,-136.95"/>
+</g>
+<!-- proc~seconds_to_date -->
+<g id="proc~~atm_state_update~~CallsGraph_node13" class="node">
+<title>proc~seconds_to_date</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node13"><a xlink:href="../proc/seconds_to_date.html" xlink:title="seconds_to_date">
+<polygon fill="#d9534f" stroke="#d9534f" points="804.6,-265.27 704.58,-265.27 704.58,-241 804.6,-241 804.6,-265.27"/>
+<text xml:space="preserve" text-anchor="middle" x="754.59" y="-249.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">seconds_to_date</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;proc~seconds_to_date -->
+<g id="proc~~atm_state_update~~CallsGraph_edge12" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;proc~seconds_to_date</title>
+<path fill="none" stroke="#0000ff" d="M453.65,-236.78C521.87,-240.5 626.84,-246.22 692.79,-249.82"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="692.54,-253.31 702.72,-250.36 692.92,-246.32 692.54,-253.31"/>
+</g>
+<!-- to_string -->
+<g id="proc~~atm_state_update~~CallsGraph_node14" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="783.22,-409.27 725.95,-409.27 725.95,-385 783.22,-385 783.22,-409.27"/>
+<text xml:space="preserve" text-anchor="middle" x="754.59" y="-393.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~atm_sw_coszen_refresh&#45;&gt;to_string -->
+<g id="proc~~atm_state_update~~CallsGraph_edge13" class="edge">
+<title>proc~atm_sw_coszen_refresh&#45;&gt;to_string</title>
+<path fill="none" stroke="#0000ff" d="M401.51,-245.73C422.99,-263.5 464.83,-295.79 505.56,-314.13 568.37,-342.42 592.87,-324.18 655.83,-352.13 673.41,-359.94 674.58,-367.63 691.83,-376.13 699.08,-379.71 707.09,-382.92 714.87,-385.7"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="713.58,-388.96 724.18,-388.84 715.82,-382.32 713.58,-388.96"/>
+</g>
+<!-- proc~atm_cosz_cumulative -->
+<g id="proc~~atm_state_update~~CallsGraph_node16" class="node">
+<title>proc~atm_cosz_cumulative</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node16"><a xlink:href="../proc/atm_cosz_cumulative.html" xlink:title="atm_cosz_cumulative">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="817.35,-25.27 691.83,-25.27 691.83,-1 817.35,-1 817.35,-25.27"/>
+<text xml:space="preserve" text-anchor="middle" x="754.59" y="-9.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_cosz_cumulative</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;proc~atm_cosz_cumulative -->
+<g id="proc~~atm_state_update~~CallsGraph_edge14" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;proc~atm_cosz_cumulative</title>
+<path fill="none" stroke="#ff0000" d="M616.9,-61.64C643.11,-52.34 679.14,-39.55 707.63,-29.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="708.46,-32.86 716.72,-26.22 706.12,-26.27 708.46,-32.86"/>
+</g>
+<!-- rdb_sm_cos -->
+<g id="proc~~atm_state_update~~CallsGraph_node23" class="node">
+<title>rdb_sm_cos</title>
+<polygon fill="#777777" stroke="#777777" points="957.87,-146.27 884.1,-146.27 884.1,-122 957.87,-122 957.87,-146.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.98" y="-130.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_cos</text>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_cos -->
+<g id="proc~~atm_state_update~~CallsGraph_edge15" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_cos</title>
+<path fill="none" stroke="#ff0000" d="M649.74,-83.1C696.94,-89.66 761.17,-99.29 817.35,-110.13 835.63,-113.66 855.58,-118.18 873,-122.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="872.02,-125.7 882.56,-124.65 873.66,-118.89 872.02,-125.7"/>
+</g>
+<!-- rdb_sm_sin -->
+<g id="proc~~atm_state_update~~CallsGraph_node24" class="node">
+<title>rdb_sm_sin</title>
+<polygon fill="#777777" stroke="#777777" points="956.37,-66.27 885.6,-66.27 885.6,-42 956.37,-42 956.37,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.98" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_sin</text>
+</g>
+<!-- proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_sin -->
+<g id="proc~~atm_state_update~~CallsGraph_edge16" class="edge">
+<title>proc~atm_coszen_apply_impl&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#ff0000" d="M649.75,-70.11C716.35,-66.17 815.99,-60.28 873.84,-56.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="873.89,-60.37 883.67,-56.28 873.48,-53.38 873.89,-60.37"/>
+</g>
+<!-- proc~atm_spencer_sun&#45;&gt;proc~safe_cos -->
+<g id="proc~~atm_state_update~~CallsGraph_edge18" class="edge">
+<title>proc~atm_spencer_sun&#45;&gt;proc~safe_cos</title>
+<path fill="none" stroke="#ff9900" d="M633.27,-201.13C659.27,-195.08 690.31,-187.86 714.34,-182.27"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="715.11,-185.68 724.05,-180.01 713.52,-178.87 715.11,-185.68"/>
+</g>
+<!-- proc~atm_spencer_sun&#45;&gt;proc~safe_sin -->
+<g id="proc~~atm_state_update~~CallsGraph_edge19" class="edge">
+<title>proc~atm_spencer_sun&#45;&gt;proc~safe_sin</title>
+<path fill="none" stroke="#ff9900" d="M601.84,-200.54C623.51,-187.34 659.25,-166.56 691.83,-152.13 699.59,-148.7 708.1,-145.48 716.25,-142.63"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="717.25,-145.99 725.62,-139.49 715.02,-139.36 717.25,-145.99"/>
+</g>
+<!-- proc~atm_spencer_sun&#45;&gt;proc~seconds_to_date -->
+<g id="proc~~atm_state_update~~CallsGraph_edge20" class="edge">
+<title>proc~atm_spencer_sun&#45;&gt;proc~seconds_to_date</title>
+<path fill="none" stroke="#ff9900" d="M633.27,-225.14C652.12,-229.52 673.62,-234.53 693.17,-239.08"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="692.11,-242.42 702.64,-241.28 693.7,-235.6 692.11,-242.42"/>
+</g>
+<!-- proc~gregorian_day_number -->
+<g id="proc~~atm_state_update~~CallsGraph_node22" class="node">
+<title>proc~gregorian_day_number</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node22"><a xlink:href="../proc/gregorian_day_number.html" xlink:title="gregorian_day_number">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="988.62,-225.27 853.35,-225.27 853.35,-201 988.62,-201 988.62,-225.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.98" y="-209.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gregorian_day_number</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_spencer_sun&#45;&gt;proc~gregorian_day_number -->
+<g id="proc~~atm_state_update~~CallsGraph_edge17" class="edge">
+<title>proc~atm_spencer_sun&#45;&gt;proc~gregorian_day_number</title>
+<path fill="none" stroke="#ff9900" d="M633.44,-213.13C688.97,-213.13 777.79,-213.13 841.84,-213.13"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="841.58,-216.64 851.58,-213.14 841.58,-209.64 841.58,-216.64"/>
+</g>
+<!-- error -->
+<g id="proc~~atm_state_update~~CallsGraph_node15" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="781.59,-367.27 727.59,-367.27 727.59,-343 781.59,-343 781.59,-367.27"/>
+<text xml:space="preserve" text-anchor="middle" x="754.59" y="-351.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~atm_state_update~~CallsGraph_edge21" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#33ff00" d="M608.15,-302.3C622.31,-307.24 640.04,-313.46 655.83,-319.13 675.99,-326.38 698.41,-334.63 716.7,-341.4"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="715.48,-344.68 726.07,-344.87 717.91,-338.11 715.48,-344.68"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~atm_state_update~~CallsGraph_node21" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node21"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="801.97,-307.27 707.2,-307.27 707.2,-283 801.97,-283 801.97,-307.27"/>
+<text xml:space="preserve" text-anchor="middle" x="754.59" y="-291.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~atm_state_update~~CallsGraph_edge22" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#33ff00" d="M608.18,-293.44C631.37,-293.71 665.9,-294.11 695.49,-294.46"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="695.43,-297.96 705.47,-294.58 695.51,-290.96 695.43,-297.96"/>
+</g>
+<!-- proc~check_fresh -->
+<g id="proc~~atm_state_update~~CallsGraph_node17" class="node">
+<title>proc~check_fresh</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node17"><a xlink:href="../proc/check_fresh.html" xlink:title="check_fresh">
+<polygon fill="#d9534f" stroke="#d9534f" points="617.95,-427.27 543.43,-427.27 543.43,-403 617.95,-403 617.95,-427.27"/>
+<text xml:space="preserve" text-anchor="middle" x="580.69" y="-411.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">check_fresh</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_data_input_update_2d&#45;&gt;proc~check_fresh -->
+<g id="proc~~atm_state_update~~CallsGraph_edge23" class="edge">
+<title>proc~ocean_data_input_update_2d&#45;&gt;proc~check_fresh</title>
+<path fill="none" stroke="#00ff66" d="M470,-403.19C491.02,-405.48 512.88,-407.86 531.51,-409.89"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="531.12,-413.37 541.44,-410.97 531.88,-406.41 531.12,-413.37"/>
+</g>
+<!-- proc~check_registered -->
+<g id="proc~~atm_state_update~~CallsGraph_node18" class="node">
+<title>proc~check_registered</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node18"><a xlink:href="../proc/check_registered.html" xlink:title="check_registered">
+<polygon fill="#d9534f" stroke="#d9534f" points="631.45,-385.27 529.93,-385.27 529.93,-361 631.45,-361 631.45,-385.27"/>
+<text xml:space="preserve" text-anchor="middle" x="580.69" y="-369.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">check_registered</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_data_input_update_2d&#45;&gt;proc~check_registered -->
+<g id="proc~~atm_state_update~~CallsGraph_edge24" class="edge">
+<title>proc~ocean_data_input_update_2d&#45;&gt;proc~check_registered</title>
+<path fill="none" stroke="#00ff66" d="M470,-385.08C486.17,-383.32 502.85,-381.5 518.17,-379.83"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="518.52,-383.32 528.08,-378.75 517.76,-376.36 518.52,-383.32"/>
+</g>
+<!-- proc~data_input_blend_2d_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_node19" class="node">
+<title>proc~data_input_blend_2d_impl</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node19"><a xlink:href="../proc/data_input_blend_2d_impl.html" xlink:title="data_input_blend_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="655.83,-469.27 505.56,-469.27 505.56,-445 655.83,-445 655.83,-469.27"/>
+<text xml:space="preserve" text-anchor="middle" x="580.69" y="-453.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">data_input_blend_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_data_input_update_2d&#45;&gt;proc~data_input_blend_2d_impl -->
+<g id="proc~~atm_state_update~~CallsGraph_edge25" class="edge">
+<title>proc~ocean_data_input_update_2d&#45;&gt;proc~data_input_blend_2d_impl</title>
+<path fill="none" stroke="#00ff66" d="M444.9,-406.68C453.3,-409.12 461.74,-411.94 469.56,-415.13 486.7,-422.15 488.51,-428.89 505.56,-436.13 509.6,-437.85 513.82,-439.47 518.11,-441"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="516.83,-444.26 527.42,-444.1 519.04,-437.62 516.83,-444.26"/>
+</g>
+<!-- proc~safe_cos&#45;&gt;rdb_sm_cos -->
+<g id="proc~~atm_state_update~~CallsGraph_edge26" class="edge">
+<title>proc~safe_cos&#45;&gt;rdb_sm_cos</title>
+<path fill="none" stroke="#0066ff" d="M783.48,-166.52C807.9,-160.73 843.9,-152.18 872.8,-145.33"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="873.5,-148.76 882.42,-143.05 871.88,-141.95 873.5,-148.76"/>
+</g>
+<!-- proc~safe_sin&#45;&gt;rdb_sm_sin -->
+<g id="proc~~atm_state_update~~CallsGraph_edge27" class="edge">
+<title>proc~safe_sin&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#3200ff" d="M782,-118.76C809.28,-105.99 852.08,-85.94 882.78,-71.56"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="884.15,-74.78 891.72,-67.37 881.18,-68.45 884.15,-74.78"/>
+</g>
+<!-- proc~day_number_to_date -->
+<g id="proc~~atm_state_update~~CallsGraph_node20" class="node">
+<title>proc~day_number_to_date</title>
+<g id="a_proc~~atm_state_update~~CallsGraph_node20"><a xlink:href="../proc/day_number_to_date.html" xlink:title="day_number_to_date">
+<polygon fill="#d9534f" stroke="#d9534f" points="982.62,-267.27 859.35,-267.27 859.35,-243 982.62,-243 982.62,-267.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.98" y="-251.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">day_number_to_date</text>
+</a>
+</g>
+</g>
+<!-- proc~seconds_to_date&#45;&gt;proc~day_number_to_date -->
+<g id="proc~~atm_state_update~~CallsGraph_edge28" class="edge">
+<title>proc~seconds_to_date&#45;&gt;proc~day_number_to_date</title>
+<path fill="none" stroke="#cc00ff" d="M804.91,-253.74C818.35,-253.9 833.18,-254.08 847.61,-254.25"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="847.5,-257.75 857.54,-254.38 847.58,-250.75 847.5,-257.75"/>
+</g>
+<!-- proc~seconds_to_date&#45;&gt;proc~gregorian_day_number -->
+<g id="proc~~atm_state_update~~CallsGraph_edge29" class="edge">
+<title>proc~seconds_to_date&#45;&gt;proc~gregorian_day_number</title>
+<path fill="none" stroke="#cc00ff" d="M804.91,-241.13C821.28,-237.15 839.74,-232.66 856.99,-228.46"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="857.77,-231.88 866.66,-226.11 856.11,-225.07 857.77,-231.88"/>
+</g>
+<!-- proc~atm_cosz_cumulative&#45;&gt;rdb_sm_sin -->
+<g id="proc~~atm_state_update~~CallsGraph_edge31" class="edge">
+<title>proc~atm_cosz_cumulative&#45;&gt;rdb_sm_sin</title>
+<path fill="none" stroke="#ff9900" d="M805.81,-25.66C827.58,-31.09 852.89,-37.4 874.15,-42.7"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="873.15,-46.06 883.7,-45.09 874.85,-39.27 873.15,-46.06"/>
+</g>
+<!-- rdb_sm_atan2 -->
+<g id="proc~~atm_state_update~~CallsGraph_node25" class="node">
+<title>rdb_sm_atan2</title>
+<polygon fill="#777777" stroke="#777777" points="964.24,-24.27 877.72,-24.27 877.72,0 964.24,0 964.24,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.98" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_sm_atan2</text>
+</g>
+<!-- proc~atm_cosz_cumulative&#45;&gt;rdb_sm_atan2 -->
+<g id="proc~~atm_state_update~~CallsGraph_edge30" class="edge">
+<title>proc~atm_cosz_cumulative&#45;&gt;rdb_sm_atan2</title>
+<path fill="none" stroke="#ff9900" d="M817.74,-12.76C833.68,-12.66 850.69,-12.56 866.17,-12.46"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="866.18,-15.96 876.16,-12.4 866.13,-8.96 866.18,-15.96"/>
+</g>
+<!-- proc~check_fresh&#45;&gt;to_string -->
+<g id="proc~~atm_state_update~~CallsGraph_edge33" class="edge">
+<title>proc~check_fresh&#45;&gt;to_string</title>
+<path fill="none" stroke="#cbff00" d="M618.15,-411.32C646.39,-408.36 685.44,-404.27 714.35,-401.24"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="714.59,-404.74 724.17,-400.22 713.86,-397.78 714.59,-404.74"/>
+</g>
+<!-- proc~check_fresh&#45;&gt;error -->
+<g id="proc~~atm_state_update~~CallsGraph_edge32" class="edge">
+<title>proc~check_fresh&#45;&gt;error</title>
+<path fill="none" stroke="#cbff00" d="M618.34,-406.22C630.44,-402.89 643.86,-398.78 655.83,-394.13 672.51,-387.67 675.32,-383.03 691.83,-376.13 699.66,-372.86 708.2,-369.71 716.36,-366.88"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="717.36,-370.24 725.72,-363.73 715.12,-363.6 717.36,-370.24"/>
+</g>
+<!-- proc~check_registered&#45;&gt;to_string -->
+<g id="proc~~atm_state_update~~CallsGraph_edge35" class="edge">
+<title>proc~check_registered&#45;&gt;to_string</title>
+<path fill="none" stroke="#33ff00" d="M631.88,-380.14C658.11,-383.8 689.74,-388.22 714.19,-391.63"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="713.67,-395.1 724.06,-393.01 714.64,-388.16 713.67,-395.1"/>
+</g>
+<!-- proc~check_registered&#45;&gt;error -->
+<g id="proc~~atm_state_update~~CallsGraph_edge34" class="edge">
+<title>proc~check_registered&#45;&gt;error</title>
+<path fill="none" stroke="#33ff00" d="M631.88,-367.88C658.79,-365.06 691.39,-361.65 716.08,-359.06"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="716.42,-362.55 726,-358.02 715.69,-355.58 716.42,-362.55"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocatm_state_updateCallsGraph = svgPanZoom('#procatm_state_updateCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~atm_state_update~~CalledByGraph Pages: 1 -->
+<svg id="procatm_state_updateCalledByGraph" width="470pt" height="74pt"
+ viewBox="0.00 0.00 470.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~atm_state_update~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70.27)">
+<title>proc~~atm_state_update~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 465.58,-70.27 465.58,4 -4,4"/>
+<!-- proc~atm_state_update -->
+<g id="proc~~atm_state_update~~CalledByGraph_node1" class="node">
+<title>proc~atm_state_update</title>
+<polygon fill="none" stroke="black" points="461.58,-45.27 354.81,-45.27 354.81,-21 461.58,-21 461.58,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="408.19" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">atm_state_update</text>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~atm_state_update~~CalledByGraph_node2" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~atm_state_update~~CalledByGraph_node2"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.81,-45.27 242.79,-45.27 242.79,-21 318.81,-21 318.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="280.8" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~atm_state_update -->
+<g id="proc~~atm_state_update~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_step&#45;&gt;proc~atm_state_update</title>
+<path fill="none" stroke="#ff0000" d="M319.08,-33.13C326.73,-33.13 334.98,-33.13 343.26,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="343,-36.64 353,-33.14 343,-29.64 343,-36.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~atm_state_update~~CalledByGraph_node3" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~atm_state_update~~CalledByGraph_node3"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~atm_state_update~~CalledByGraph_edge2" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M207.15,-45.41C215.13,-44.06 223.34,-42.68 231.25,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.77,-44.8 241.05,-39.68 230.61,-37.9 231.77,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~atm_state_update~~CalledByGraph_node4" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~atm_state_update~~CalledByGraph_node4"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~atm_state_update~~CalledByGraph_edge3" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M202.51,-20.07C211.89,-21.66 221.77,-23.33 231.2,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.49,-28.35 240.94,-26.57 231.66,-21.45 230.49,-28.35"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~atm_state_update~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~atm_state_update~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~atm_state_update~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-shift~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>shift</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wlen"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wlen</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">atm_state_update</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">win_shift</span><span class="p">,</span><span class="w"> </span><span class="n">win_len</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Blend + regrid every one of the nine fields' current bracket,</span>
+<span class="w">      </span><span class="c">!! then (`sw_interp = "coszen"`) restore `rsds`'s diurnal shape</span>
+<span class="w">      </span><span class="c">!! from the held bucket mean -- see the module docstring's `rsds`</span>
+<span class="w">      </span><span class="c">!! paragraph. `t` must be the same model time</span>
+<span class="w">      </span><span class="c">!! `ocean_data_input_update_all` was just called with -- the</span>
+<span class="w">      </span><span class="c">!! reader enforces this and aborts otherwise (see</span>
+<span class="w">      </span><span class="c">!! `ocean_data_input_update_2d`'s fail-loud freshness check).</span>
+<span class="w">      </span><span class="c">!! `dt` is the model step; the coszen window is `[t, t + dt)` unless the</span>
+<span class="w">      </span><span class="c">!! caller passes `win_shift`/`win_len` (from `atm_sw_window`: the</span>
+<span class="w">      </span><span class="c">!! interval a thermo-cadence flux is really applied over).  Unused</span>
+<span class="w">      </span><span class="c">!! under `sw_interp = "linear"`.</span>
+<span class="w">      </span><span class="c">!! `metrics` supplies `geolonT`/`geolatT` for the coszen kernel</span>
+<span class="w">      </span><span class="c">!! (unused, and not read, when `sw_interp = "linear"`).</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">atm_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_data_input_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reader</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">win_shift</span><span class="p">,</span><span class="w"> </span><span class="n">win_len</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">shift</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_TAS</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tas</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_HUSS</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">huss</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_UAS</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">uas</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_VAS</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vas</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_PSL</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">psl</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">fluxes_conservative</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_RLDS</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">win_cv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_cv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rlds</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_PRRA</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">win_cv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_cv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">prra</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_PRSN</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">win_cv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_cv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">prsn</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_RSDS</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wc</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">win_cv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_cv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rsds_rec</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_RLDS</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rlds</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_PRRA</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">prra</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_PRSN</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">prsn</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">atm_apply_field</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id</span><span class="p">(</span><span class="n">IDX_RSDS</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nmax</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsx</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">nsy</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_i</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">idx_j</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">wb</span><span class="p">%</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">win_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tgt_bl</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rsds_rec</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">sw_coszen</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">shift</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">wlen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">win_shift</span><span class="p">))</span><span class="w"> </span><span class="n">shift</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">win_shift</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">win_len</span><span class="p">))</span><span class="w"> </span><span class="n">wlen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">win_len</span>
+<span class="w">         </span><span class="k">call </span><span class="n">atm_sw_coszen_refresh</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">shift</span><span class="p">,</span><span class="w"> </span><span class="n">wlen</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">atm_state_copy_impl</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rsds_rec</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rsds</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">atm_state_update</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

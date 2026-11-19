@@ -1,0 +1,968 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>boundary_half_jump &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>boundary_half_jump
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">8 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_remap_column.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_remap_column.f90.html'>rdb_remap_column.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_remap_column.html'>rdb_remap_column</a></li>
+            <li class="breadcrumb-item active" aria-current="page">boundary_half_jump</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/boundary_half_jump.html#src">boundary_half_jump</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine boundary_half_jump(h_self, h_nbr, dq_up, d)  
+</h2>
+    
+
+    <p>Linear-exact half-jump across a BOUNDARY cell (k=1 or k=nz),
+where a centred stencil has no second neighbour.</p>
+<p><code>dq_up</code> is the cell-mean increment toward the SURFACE across the
+two cell centres (<code>q(2)-q(1)</code> at the bed, <code>q(nz)-q(nz-1)</code> at the
+surface).  The centres are <code>(h_self + h_nbr)/2</code> apart, so the
+per-metre slope is <code>dq_up/((h_self+h_nbr)/2)</code> and the half-jump
+across this cell is</p>
+<div class="codehilite"><pre><span></span><code>d = dq_up * h_self / (h_self + h_nbr)
+</code></pre></div>
+
+<p>giving edges <code>q ± d</code> that reproduce a profile linear in z EXACTLY,
+for any thickness pair.  The default closure — a PCM flatten —
+does not: it leaves a first-order reconstruction error in the two
+cells adjacent to the boundary.  Same device (and same clamp) as
+<code>rdb_ocean_pgf_reconstruct :: boundary_edges_linear</code>, which fixed
+the mirror-image defect in the FV pressure-gradient quadrature.</p>
+<p>Clamp <code>|d| &lt;= |dq_up|</code>: since <code>h_self/(h_self+h_nbr) &lt; 1</code> it never
+bites on a real thickness pair — it is armour against a degenerate
+<code>h_nbr &lt;= 0</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_self~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_self</strong></td>
+            <td>
+                <p>Thickness of the boundary cell itself.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_nbr~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_nbr</strong></td>
+            <td>
+                <p>Thickness of its single interior neighbour.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq_up~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq_up</strong></td>
+            <td>
+                <p>Cell-mean increment toward the surface (neighbour -&gt; self at
+the surface cell, self -&gt; neighbour at the bed cell).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d</strong></td>
+            <td>
+                <p>Half-jump across the boundary cell; edges are <code>q ± d</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~boundary_half_jump~~CalledByGraph Pages: 1 -->
+<svg id="procboundary_half_jumpCalledByGraph" width="641pt" height="179pt"
+ viewBox="0.00 0.00 641.00 179.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~boundary_half_jump~~CalledByGraph" class="graph" transform="scale(0.435489 0.435489) rotate(0) translate(4 406.27)">
+<title>proc~~boundary_half_jump~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-406.27 1467.91,-406.27 1467.91,4 -4,4"/>
+<!-- proc~boundary_half_jump -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node1" class="node">
+<title>proc~boundary_half_jump</title>
+<polygon fill="none" stroke="black" points="1463.91,-194.27 1343.64,-194.27 1343.64,-170 1463.91,-170 1463.91,-194.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1403.77" y="-178.53" font-family="Helvetica,sans-Serif" font-size="10.50">boundary_half_jump</text>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node2" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node2"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1307.64,-174.27 1191.12,-174.27 1191.12,-150 1307.64,-150 1307.64,-174.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1249.38" y="-158.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge1" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#ff0000" d="M1307.99,-169.7C1315.84,-170.73 1323.97,-171.79 1332.02,-172.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1331.43,-176.3 1341.8,-174.13 1332.34,-169.36 1331.43,-176.3"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node3" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node3"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1145.74,-214.27 1025.47,-214.27 1025.47,-190 1145.74,-190 1145.74,-214.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1085.61" y="-198.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge2" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#ff0000" d="M1146.08,-198.37C1198.88,-195.03 1276.11,-190.15 1332.06,-186.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1332.04,-190.12 1341.79,-185.99 1331.59,-183.13 1332.04,-190.12"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge7" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M1137.35,-189.59C1152.94,-185.74 1170.26,-181.45 1186.5,-177.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1187.2,-180.87 1196.07,-175.07 1185.52,-174.07 1187.2,-180.87"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node4" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node4"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="1155.12,-92.27 1016.1,-92.27 1016.1,-68 1155.12,-68 1155.12,-92.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1085.61" y="-76.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge3" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#ff0000" d="M1139.94,-92.66C1185.11,-103.79 1251.31,-121.33 1307.64,-141.13 1327.31,-148.05 1348.68,-157.11 1366.17,-164.96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1364.58,-168.08 1375.13,-169.03 1367.47,-161.71 1364.58,-168.08"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge8" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M1134.07,-92.77C1141.25,-95.22 1148.47,-98.02 1155.12,-101.14 1179.73,-112.67 1205.42,-129.92 1223.59,-143.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1221.03,-145.59 1231.15,-148.73 1225.19,-139.96 1221.03,-145.59"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node5" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node5"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="963.97,-253.27 843.7,-253.27 843.7,-229 963.97,-229 963.97,-253.27"/>
+<text xml:space="preserve" text-anchor="middle" x="903.84" y="-237.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge4" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#ff0000" d="M964.33,-239.4C1043.33,-236.31 1186.94,-227.98 1307.64,-206.13 1320.47,-203.81 1334.14,-200.73 1347,-197.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1347.74,-200.98 1356.58,-195.13 1346.02,-194.19 1347.74,-200.98"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge10" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#7fff00" d="M962.71,-228.58C979.47,-224.95 997.93,-220.94 1015.31,-217.17"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1016.03,-220.59 1025.06,-215.05 1014.55,-213.75 1016.03,-220.59"/>
+</g>
+<!-- proc~ebt_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node6" class="node">
+<title>proc~ebt_column</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node6"><a xlink:href="../proc/ebt_column.html" xlink:title="ebt_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="1122.49,-134.27 1048.72,-134.27 1048.72,-110 1122.49,-110 1122.49,-134.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1085.61" y="-118.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ebt_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ebt_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge5" class="edge">
+<title>proc~ebt_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M1122.91,-131.11C1141.64,-135.74 1164.99,-141.52 1186.46,-146.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1185.46,-150.18 1196.01,-149.18 1187.14,-143.39 1185.46,-150.18"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node7" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node7"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="760.83,-213.27 669.81,-213.27 669.81,-189 760.83,-189 760.83,-213.27"/>
+<text xml:space="preserve" text-anchor="middle" x="715.32" y="-197.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge6" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M761.22,-197.84C854.26,-191.02 1068.62,-175.31 1179.36,-167.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1179.49,-170.69 1189.21,-166.47 1178.98,-163.71 1179.49,-170.69"/>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge9" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#7fff00" d="M761.11,-201.26C824.11,-201.43 939.51,-201.74 1014.09,-201.94"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1013.72,-205.44 1023.73,-201.97 1013.74,-198.44 1013.72,-205.44"/>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge11" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#00ffff" d="M739.22,-188.68C761.34,-177.02 796.04,-159.7 827.58,-148.13 888.95,-125.62 961.07,-107.21 1013.27,-95.25"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1013.97,-98.68 1022.95,-93.06 1012.43,-91.85 1013.97,-98.68"/>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge12" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#7f00ff" d="M761,-210.72C782.49,-215.33 808.76,-220.96 832.82,-226.12"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="832.07,-229.54 842.58,-228.21 833.54,-222.69 832.07,-229.54"/>
+</g>
+<!-- proc~ocean_remap_tracer_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node8" class="node">
+<title>proc~ocean_remap_tracer_column</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node8"><a xlink:href="../proc/ocean_remap_tracer_column.html" xlink:title="ocean_remap_tracer_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="603.06,-360.27 436.29,-360.27 436.29,-336 603.06,-336 603.06,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_remap_tracer_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_column&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge14" class="edge">
+<title>proc~ocean_remap_tracer_column&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M585.62,-335.59C591.72,-333.23 597.64,-330.44 603.06,-327.13 646.53,-300.57 682.45,-251.65 700.9,-223.21"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="703.7,-225.34 706.08,-215.02 697.78,-221.6 703.7,-225.34"/>
+</g>
+<!-- proc~ocean_remap_tracer_field -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node9" class="node">
+<title>proc~ocean_remap_tracer_field</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node9"><a xlink:href="../proc/ocean_remap_tracer_field.html" xlink:title="ocean_remap_tracer_field">
+<polygon fill="#d9534f" stroke="#d9534f" points="594.81,-402.27 444.54,-402.27 444.54,-378 594.81,-378 594.81,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_remap_tracer_field</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_field&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge15" class="edge">
+<title>proc~ocean_remap_tracer_field&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M587.79,-377.64C593.19,-375.27 598.37,-372.47 603.06,-369.13 655.81,-331.66 690.42,-260.62 705.56,-224.1"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="708.76,-225.53 709.23,-214.94 702.26,-222.92 708.76,-225.53"/>
+</g>
+<!-- proc~remap_layer_to_density_impl -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node10" class="node">
+<title>proc~remap_layer_to_density_impl</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node10"><a xlink:href="../proc/remap_layer_to_density_impl.html" xlink:title="remap_layer_to_density_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="602.68,-234.27 436.66,-234.27 436.66,-210 602.68,-210 602.68,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_density_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_density_impl&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge16" class="edge">
+<title>proc~remap_layer_to_density_impl&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M603.08,-213.2C621.74,-211.17 641.13,-209.07 658.4,-207.2"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="658.34,-210.73 667.91,-206.17 657.59,-203.77 658.34,-210.73"/>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node11" class="node">
+<title>proc~remap_layer_to_vcoord_impl</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node11"><a xlink:href="../proc/remap_layer_to_vcoord_impl.html" xlink:title="remap_layer_to_vcoord_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="601.93,-192.27 437.41,-192.27 437.41,-168 601.93,-168 601.93,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_vcoord_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge17" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M602.24,-188.98C621.14,-191.03 640.85,-193.17 658.37,-195.07"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="657.71,-198.52 668.03,-196.11 658.46,-191.56 657.71,-198.52"/>
+</g>
+<!-- proc~remap_tracer_grounded -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node12" class="node">
+<title>proc~remap_tracer_grounded</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node12"><a xlink:href="../proc/remap_tracer_grounded.html" xlink:title="remap_tracer_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="589.56,-66.27 449.79,-66.27 449.79,-42 589.56,-42 589.56,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_tracer_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_tracer_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge18" class="edge">
+<title>proc~remap_tracer_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M585.62,-66.68C591.72,-69.04 597.64,-71.83 603.06,-75.14 646.53,-101.7 682.45,-150.62 700.9,-179.06"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="697.78,-180.67 706.08,-187.25 703.7,-176.93 697.78,-180.67"/>
+</g>
+<!-- proc~remap_x_face_grounded -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node13" class="node">
+<title>proc~remap_x_face_grounded</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node13"><a xlink:href="../proc/remap_x_face_grounded.html" xlink:title="remap_x_face_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="590.68,-150.27 448.66,-150.27 448.66,-126 590.68,-126 590.68,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_x_face_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_x_face_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge19" class="edge">
+<title>proc~remap_x_face_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M573.66,-150.71C583.49,-153.31 593.63,-156.16 603.06,-159.13 626.7,-166.59 652.64,-176.29 673.53,-184.49"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="671.95,-187.63 682.54,-188.06 674.53,-181.12 671.95,-187.63"/>
+</g>
+<!-- proc~remap_x_face_velocity -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node14" class="node">
+<title>proc~remap_x_face_velocity</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node14"><a xlink:href="../proc/remap_x_face_velocity.html" xlink:title="remap_x_face_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="585.81,-276.27 453.54,-276.27 453.54,-252 585.81,-252 585.81,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_x_face_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_x_face_velocity&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge20" class="edge">
+<title>proc~remap_x_face_velocity&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M573.66,-251.56C583.49,-248.96 593.63,-246.11 603.06,-243.13 626.7,-235.68 652.64,-225.98 673.53,-217.78"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="674.53,-221.15 682.54,-214.21 671.95,-214.64 674.53,-221.15"/>
+</g>
+<!-- proc~remap_y_face_grounded -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node15" class="node">
+<title>proc~remap_y_face_grounded</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node15"><a xlink:href="../proc/remap_y_face_grounded.html" xlink:title="remap_y_face_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="590.68,-108.27 448.66,-108.27 448.66,-84 590.68,-84 590.68,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_y_face_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_y_face_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge21" class="edge">
+<title>proc~remap_y_face_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M581.5,-108.69C588.92,-111.08 596.28,-113.87 603.06,-117.14 637.61,-133.74 671.99,-161.95 693.19,-181.05"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="690.59,-183.41 700.32,-187.59 695.32,-178.25 690.59,-183.41"/>
+</g>
+<!-- proc~remap_y_face_velocity -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node16" class="node">
+<title>proc~remap_y_face_velocity</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node16"><a xlink:href="../proc/remap_y_face_velocity.html" xlink:title="remap_y_face_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="585.81,-318.27 453.54,-318.27 453.54,-294 585.81,-294 585.81,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_y_face_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_y_face_velocity&#45;&gt;proc~remap_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge22" class="edge">
+<title>proc~remap_y_face_velocity&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M581.5,-293.58C588.92,-291.19 596.28,-288.4 603.06,-285.13 637.61,-268.53 671.99,-240.32 693.19,-221.22"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="695.32,-224.02 700.32,-214.68 690.59,-218.86 695.32,-224.02"/>
+</g>
+<!-- proc~wavespeed_mode_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node17" class="node">
+<title>proc~wavespeed_mode_column</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node17"><a xlink:href="../proc/wavespeed_mode_column.html" xlink:title="wavespeed_mode_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="980.1,-93.27 827.58,-93.27 827.58,-69 980.1,-69 980.1,-93.27"/>
+<text xml:space="preserve" text-anchor="middle" x="903.84" y="-77.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wavespeed_mode_column</text>
+</a>
+</g>
+</g>
+<!-- proc~wavespeed_mode_column&#45;&gt;proc~ebt_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge13" class="edge">
+<title>proc~wavespeed_mode_column&#45;&gt;proc~ebt_column</title>
+<path fill="none" stroke="#ff0000" d="M959.75,-93.66C984.51,-99.31 1013.46,-105.91 1037.25,-111.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1036.47,-114.74 1047,-113.56 1038.02,-107.92 1036.47,-114.74"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_centres -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node18" class="node">
+<title>proc~ocean_apply_ale_remap_centres</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node18"><a xlink:href="../proc/ocean_apply_ale_remap_centres.html" xlink:title="ocean_apply_ale_remap_centres">
+<polygon fill="#d9534f" stroke="#d9534f" points="376.29,-402.27 191.52,-402.27 191.52,-378 376.29,-378 376.29,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="283.9" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_centres</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_centres&#45;&gt;proc~ocean_remap_tracer_field -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge23" class="edge">
+<title>proc~ocean_apply_ale_remap_centres&#45;&gt;proc~ocean_remap_tracer_field</title>
+<path fill="none" stroke="#ff9900" d="M376.63,-390.13C395.08,-390.13 414.4,-390.13 432.65,-390.13"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="432.65,-393.64 442.65,-390.14 432.65,-386.64 432.65,-393.64"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_faces -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node19" class="node">
+<title>proc~ocean_apply_ale_remap_faces</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node19"><a xlink:href="../proc/ocean_apply_ale_remap_faces.html" xlink:title="ocean_apply_ale_remap_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="371.04,-276.27 196.77,-276.27 196.77,-252 371.04,-252 371.04,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="283.9" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_x_face_velocity -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge29" class="edge">
+<title>proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_x_face_velocity</title>
+<path fill="none" stroke="#0066ff" d="M371.29,-264.13C394.43,-264.13 419.29,-264.13 441.88,-264.13"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="441.6,-267.64 451.6,-264.14 441.6,-260.64 441.6,-267.64"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_y_face_velocity -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge32" class="edge">
+<title>proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_y_face_velocity</title>
+<path fill="none" stroke="#cc00ff" d="M355.04,-276.74C382.59,-281.69 414.28,-287.38 442.39,-292.43"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="441.43,-295.81 451.89,-294.14 442.67,-288.92 441.43,-295.81"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_step -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node20" class="node">
+<title>proc~ocean_apply_ale_remap_step</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node20"><a xlink:href="../proc/ocean_apply_ale_remap_step.html" xlink:title="ocean_apply_ale_remap_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="368.04,-318.27 199.77,-318.27 199.77,-294 368.04,-294 368.04,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="283.9" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_remap_tracer_field -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge24" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_remap_tracer_field</title>
+<path fill="none" stroke="#ff9900" d="M311.8,-318.72C341.72,-332.4 391.73,-354.27 436.29,-369.13 441.98,-371.03 447.94,-372.86 453.93,-374.58"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="452.7,-377.87 463.27,-377.17 454.57,-371.13 452.7,-377.87"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_x_face_velocity -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge30" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_x_face_velocity</title>
+<path fill="none" stroke="#0066ff" d="M355.04,-293.53C382.59,-288.58 414.28,-282.89 442.39,-277.84"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="442.67,-281.35 451.89,-276.13 441.43,-274.46 442.67,-281.35"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_y_face_velocity -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge33" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_y_face_velocity</title>
+<path fill="none" stroke="#cc00ff" d="M368.31,-306.13C392.31,-306.13 418.37,-306.13 441.95,-306.13"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="441.79,-309.64 451.79,-306.14 441.79,-302.64 441.79,-309.64"/>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node21" class="node">
+<title>proc~ocean_apply_conservative_min_thickness</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node21"><a xlink:href="../proc/ocean_apply_conservative_min_thickness.html" xlink:title="ocean_apply_conservative_min_thickness">
+<polygon fill="#d9534f" stroke="#d9534f" points="400.29,-108.27 167.52,-108.27 167.52,-84 400.29,-84 400.29,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="283.9" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_conservative_min_thickness</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_tracer_grounded -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge27" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_tracer_grounded</title>
+<path fill="none" stroke="#00ff66" d="M355.04,-83.53C381.28,-78.82 411.29,-73.43 438.38,-68.56"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="438.68,-72.06 447.9,-66.85 437.44,-65.17 438.68,-72.06"/>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_x_face_grounded -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge28" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_x_face_grounded</title>
+<path fill="none" stroke="#00ffff" d="M355.04,-108.74C380.93,-113.39 410.49,-118.7 437.29,-123.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="436.63,-126.95 447.1,-125.27 437.87,-120.06 436.63,-126.95"/>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_y_face_grounded -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge31" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_y_face_grounded</title>
+<path fill="none" stroke="#3200ff" d="M400.76,-96.14C413.12,-96.14 425.49,-96.14 437.32,-96.14"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="436.97,-99.64 446.97,-96.14 436.97,-92.64 436.97,-99.64"/>
+</g>
+<!-- proc~remap_layer_to_density -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node22" class="node">
+<title>proc~remap_layer_to_density</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node22"><a xlink:href="../proc/remap_layer_to_density.html" xlink:title="remap_layer_to_density">
+<polygon fill="#d9534f" stroke="#d9534f" points="352.66,-234.27 215.14,-234.27 215.14,-210 352.66,-210 352.66,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="283.9" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_density</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_density&#45;&gt;proc~remap_layer_to_density_impl -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge25" class="edge">
+<title>proc~remap_layer_to_density&#45;&gt;proc~remap_layer_to_density_impl</title>
+<path fill="none" stroke="#cbff00" d="M353.15,-222.13C375.6,-222.13 400.97,-222.13 424.98,-222.13"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="424.75,-225.64 434.75,-222.14 424.75,-218.64 424.75,-225.64"/>
+</g>
+<!-- proc~remap_layer_to_vcoord -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node23" class="node">
+<title>proc~remap_layer_to_vcoord</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node23"><a xlink:href="../proc/remap_layer_to_vcoord.html" xlink:title="remap_layer_to_vcoord">
+<polygon fill="#d9534f" stroke="#d9534f" points="351.91,-192.27 215.89,-192.27 215.89,-168 351.91,-168 351.91,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="283.9" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_vcoord</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge26" class="edge">
+<title>proc~remap_layer_to_vcoord&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#33ff00" d="M352.21,-180.13C375.03,-180.13 400.95,-180.13 425.42,-180.13"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="425.41,-183.64 435.41,-180.14 425.41,-176.64 425.41,-183.64"/>
+</g>
+<!-- proc~wavespeed_cg1_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node24" class="node">
+<title>proc~wavespeed_cg1_column</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node24"><a xlink:href="../proc/wavespeed_cg1_column.html" xlink:title="wavespeed_cg1_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="785.95,-93.27 644.68,-93.27 644.68,-69 785.95,-69 785.95,-93.27"/>
+<text xml:space="preserve" text-anchor="middle" x="715.32" y="-77.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wavespeed_cg1_column</text>
+</a>
+</g>
+</g>
+<!-- proc~wavespeed_cg1_column&#45;&gt;proc~wavespeed_mode_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge34" class="edge">
+<title>proc~wavespeed_cg1_column&#45;&gt;proc~wavespeed_mode_column</title>
+<path fill="none" stroke="#ff0098" d="M786.3,-81.14C795.89,-81.14 805.82,-81.14 815.67,-81.14"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="815.64,-84.64 825.64,-81.14 815.64,-77.64 815.64,-84.64"/>
+</g>
+<!-- proc~wavespeed_compute_impl -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node25" class="node">
+<title>proc~wavespeed_compute_impl</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node25"><a xlink:href="../proc/wavespeed_compute_impl.html" xlink:title="wavespeed_compute_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="791.58,-46.27 639.06,-46.27 639.06,-22 791.58,-22 791.58,-46.27"/>
+<text xml:space="preserve" text-anchor="middle" x="715.32" y="-30.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wavespeed_compute_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~wavespeed_compute_impl&#45;&gt;proc~wavespeed_mode_column -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge35" class="edge">
+<title>proc~wavespeed_compute_impl&#45;&gt;proc~wavespeed_mode_column</title>
+<path fill="none" stroke="#ff0098" d="M766.3,-46.73C789.51,-52.58 817.31,-59.58 841.75,-65.74"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="840.7,-69.09 851.25,-68.14 842.41,-62.3 840.7,-69.09"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node26" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node26"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="127.77,-318.27 3.75,-318.27 3.75,-294 127.77,-294 127.77,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge36" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step</title>
+<path fill="none" stroke="#7fff00" d="M128.12,-306.13C146.86,-306.13 167.93,-306.13 188.34,-306.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="188.09,-309.64 198.09,-306.14 188.09,-302.64 188.09,-309.64"/>
+</g>
+<!-- proc~remap_layer_to_sigma -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node27" class="node">
+<title>proc~remap_layer_to_sigma</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node27"><a xlink:href="../proc/remap_layer_to_sigma.html" xlink:title="remap_layer_to_sigma">
+<polygon fill="#d9534f" stroke="#d9534f" points="131.52,-150.27 0,-150.27 0,-126 131.52,-126 131.52,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_sigma</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge38" class="edge">
+<title>proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord</title>
+<path fill="none" stroke="#003fff" d="M131.61,-150.74C155.33,-155.35 182.38,-160.6 206.99,-165.38"/>
+<polygon fill="#003fff" stroke="#003fff" points="206.13,-168.78 216.61,-167.25 207.47,-161.91 206.13,-168.78"/>
+</g>
+<!-- proc~remap_layer_to_z -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node28" class="node">
+<title>proc~remap_layer_to_z</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node28"><a xlink:href="../proc/remap_layer_to_z.html" xlink:title="remap_layer_to_z">
+<polygon fill="#d9534f" stroke="#d9534f" points="118.02,-234.27 13.5,-234.27 13.5,-210 118.02,-210 118.02,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_z</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge39" class="edge">
+<title>proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord</title>
+<path fill="none" stroke="#003fff" d="M118.49,-211.09C134.22,-207.8 151.56,-204.25 167.52,-201.13 179.38,-198.82 191.94,-196.45 204.24,-194.18"/>
+<polygon fill="#003fff" stroke="#003fff" points="204.74,-197.64 213.94,-192.39 203.47,-190.76 204.74,-197.64"/>
+</g>
+<!-- proc~remap_layer_to_zstar -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node29" class="node">
+<title>proc~remap_layer_to_zstar</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node29"><a xlink:href="../proc/remap_layer_to_zstar.html" xlink:title="remap_layer_to_zstar">
+<polygon fill="#d9534f" stroke="#d9534f" points="128.14,-192.27 3.38,-192.27 3.38,-168 128.14,-168 128.14,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_zstar</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_zstar&#45;&gt;proc~remap_layer_to_vcoord -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge40" class="edge">
+<title>proc~remap_layer_to_zstar&#45;&gt;proc~remap_layer_to_vcoord</title>
+<path fill="none" stroke="#003fff" d="M128.41,-180.13C152,-180.13 179.23,-180.13 204.2,-180.13"/>
+<polygon fill="#003fff" stroke="#003fff" points="203.98,-183.64 213.98,-180.14 203.98,-176.64 203.98,-183.64"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node30" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node30"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="126.64,-108.27 4.87,-108.27 4.87,-84 126.64,-84 126.64,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~ocean_apply_conservative_min_thickness -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge37" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~ocean_apply_conservative_min_thickness</title>
+<path fill="none" stroke="#00ff3f" d="M126.97,-96.14C136.13,-96.14 145.88,-96.14 155.84,-96.14"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="155.65,-99.64 165.65,-96.14 155.65,-92.64 155.65,-99.64"/>
+</g>
+<!-- proc~wavespeed_compute -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_node31" class="node">
+<title>proc~wavespeed_compute</title>
+<g id="a_proc~~boundary_half_jump~~CalledByGraph_node31"><a xlink:href="../proc/wavespeed_compute.html" xlink:title="wavespeed_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="581.68,-24.27 457.66,-24.27 457.66,0 581.68,0 581.68,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="519.67" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wavespeed_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~wavespeed_compute&#45;&gt;proc~wavespeed_compute_impl -->
+<g id="proc~~boundary_half_jump~~CalledByGraph_edge41" class="edge">
+<title>proc~wavespeed_compute&#45;&gt;proc~wavespeed_compute_impl</title>
+<path fill="none" stroke="#ff00bf" d="M581.95,-19.1C596.48,-20.75 612.25,-22.54 627.68,-24.29"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="626.99,-27.74 637.32,-25.39 627.78,-20.78 626.99,-27.74"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocboundary_half_jumpCalledByGraph = svgPanZoom('#procboundary_half_jumpCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">boundary_half_jump</span><span class="p">(</span><span class="n">h_self</span><span class="p">,</span><span class="w"> </span><span class="n">h_nbr</span><span class="p">,</span><span class="w"> </span><span class="n">dq_up</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="c">!! Linear-exact half-jump across a BOUNDARY cell (k=1 or k=nz),</span>
+<span class="w">      </span><span class="c">!! where a centred stencil has no second neighbour.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `dq_up` is the cell-mean increment toward the SURFACE across the</span>
+<span class="w">      </span><span class="c">!! two cell centres (`q(2)-q(1)` at the bed, `q(nz)-q(nz-1)` at the</span>
+<span class="w">      </span><span class="c">!! surface).  The centres are `(h_self + h_nbr)/2` apart, so the</span>
+<span class="w">      </span><span class="c">!! per-metre slope is `dq_up/((h_self+h_nbr)/2)` and the half-jump</span>
+<span class="w">      </span><span class="c">!! across this cell is</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!     d = dq_up * h_self / (h_self + h_nbr)</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! giving edges `q ± d` that reproduce a profile linear in z EXACTLY,</span>
+<span class="w">      </span><span class="c">!! for any thickness pair.  The default closure — a PCM flatten —</span>
+<span class="w">      </span><span class="c">!! does not: it leaves a first-order reconstruction error in the two</span>
+<span class="w">      </span><span class="c">!! cells adjacent to the boundary.  Same device (and same clamp) as</span>
+<span class="w">      </span><span class="c">!! `rdb_ocean_pgf_reconstruct :: boundary_edges_linear`, which fixed</span>
+<span class="w">      </span><span class="c">!! the mirror-image defect in the FV pressure-gradient quadrature.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Clamp `|d| &lt;= |dq_up|`: since `h_self/(h_self+h_nbr) &lt; 1` it never</span>
+<span class="w">      </span><span class="c">!! bites on a real thickness pair — it is armour against a degenerate</span>
+<span class="w">      </span><span class="c">!! `h_nbr &lt;= 0`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_self</span>
+<span class="w">         </span><span class="c">!! Thickness of the boundary cell itself.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_nbr</span>
+<span class="w">         </span><span class="c">!! Thickness of its single interior neighbour.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dq_up</span>
+<span class="w">         </span><span class="c">!! Cell-mean increment toward the surface (neighbour -&gt; self at</span>
+<span class="w">         </span><span class="c">!! the surface cell, self -&gt; neighbour at the bed cell).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">d</span>
+<span class="w">         </span><span class="c">!! Half-jump across the boundary cell; edges are `q ± d`.</span>
+
+<span class="w">      </span><span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dq_up</span><span class="o">*</span><span class="n">h_self</span><span class="o">/</span><span class="nb">max</span><span class="p">(</span><span class="n">h_self</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_nbr</span><span class="p">,</span><span class="w"> </span><span class="n">H_NEGLECT</span><span class="p">)</span>
+<span class="w">      </span><span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sign</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">d</span><span class="p">),</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_up</span><span class="p">)),</span><span class="w"> </span><span class="n">d</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">boundary_half_jump</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-19 09:33 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
