@@ -185,7 +185,7 @@ contains
          end do
       end do
 
-      fname = "/tmp/test_data_input_linear.nc"
+      fname = "test_data_input_linear.nc"
       call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, f)
 
       grid = make_grid(NX, NY)
@@ -247,7 +247,7 @@ contains
          end do
       end do
 
-      fname = "/tmp/test_data_input_linear_3d.nc"
+      fname = "test_data_input_linear_3d.nc"
       call write_3d_time_file(trim(fname), NX, NY, NZ, NT, t_axis, f)
 
       grid = make_grid(NX, NY)
@@ -338,7 +338,7 @@ contains
          end do
       end do
 
-      fname = "/tmp/test_data_input_cyclic.nc"
+      fname = "test_data_input_cyclic.nc"
       call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, f)
       grid = make_grid(NX, NY)
 
@@ -422,7 +422,7 @@ contains
          end do
       end do
 
-      fname = "/tmp/test_data_input_static.nc"
+      fname = "test_data_input_static.nc"
       call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, f)
       grid = make_grid(NX, NY)
 
@@ -502,7 +502,7 @@ contains
          end do
       end do
 
-      fname = "/tmp/test_data_input_scale.nc"
+      fname = "test_data_input_scale.nc"
       call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, f_raw)
       grid = make_grid(NX, NY)
 
@@ -586,7 +586,7 @@ contains
             end do
          end do
       end do
-      fname = "/tmp/test_data_input_oor.nc"
+      fname = "test_data_input_oor.nc"
       call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, f)
       grid = make_grid(NX, NY)
 
@@ -651,7 +651,7 @@ contains
       t_axis = [0.0_wp, 10.0_wp]
       f = 1.0_wp
 
-      fname = "/tmp/test_data_input_mismatch.nc"
+      fname = "test_data_input_mismatch.nc"
       call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, f)
 
       call check(error, data_input_dims_ok(trim(fname), "field", NX, NY, .false.), &
@@ -756,7 +756,7 @@ contains
          end do
       end do
 
-      fname = "/tmp/test_data_input_gpu_resident.nc"
+      fname = "test_data_input_gpu_resident.nc"
       call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, f)
       grid = make_grid(NX, NY)
 
@@ -830,7 +830,7 @@ contains
          end do
       end do
 
-      fname = "/tmp/test_data_input_fill_static.nc"
+      fname = "test_data_input_fill_static.nc"
       call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, f)
       grid = make_grid(NX, NY)
 

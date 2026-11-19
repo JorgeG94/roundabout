@@ -80,15 +80,22 @@
          !! Array extents; `k = nz` is the surface.
       real(wp), intent(in) :: h_layer(nx, ny, nz)
          !! Layer thicknesses (m).
-      integer, intent(in) :: i, j
-         !! Column.
-      integer, intent(in) :: kstart
+      integer, value :: i, j
+         !! Column (by value: a `do concurrent` index must not be passed by
+         !! reference to a device helper).
+      integer, value :: kstart
          !! Layer to start the downward scan from.
       integer :: k_fl
 
       rdb_vl_first_live = kstart
       do k_fl = kstart, 1, -1
-         if (rdb_vl_is_live(h_layer(i, j, k_fl))) then
+         ! The live test is written out (the same strict `>` as
+         ! `rdb_vl_is_live`), not called: nvfortran 26.5 at -O2 and up drops
+         ! the copy-in of this function's `value` dummies when it inlines a
+         ! function that itself inlines another AND the array actual is a
+         ! derived-type component (`ms%h_layer`), so `i`, `j` and `kstart`
+         ! were read uninitialised (KPP wrong, EPBL hung, CPU build).
+         if (h_layer(i, j, k_fl) > H_VANISHED) then
             rdb_vl_first_live = k_fl
             exit
          end if

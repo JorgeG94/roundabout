@@ -64,7 +64,9 @@ contains
                   new_unittest("ideal_age_default_knobs_short_circuit", &
                                test_default_knobs_short_circuit), &
                   new_unittest("age_index_survives_passive_registration", &
-                               test_age_survives_passive_registration) &
+                               test_age_survives_passive_registration), &
+                  new_unittest("ideal_age_reset_lands_on_first_live_layer", &
+                               test_reset_first_live_layer) &
                   ]
    end subroutine collect_ocean_ideal_age_tests
 
@@ -82,6 +84,21 @@ contains
       call ms%init(grid, with_ideal_age=with_age)
       ms%h_layer = H_EACH
    end subroutine setup
+
+   subroutine reset_mapped(c_age, h_layer, young_eff, nx, ny, nz)
+      !! `ocean_ideal_age_reset_step` on explicitly mapped arrays.  The
+      !! kernel picks the surface layer per column from `h_layer`, so it
+      !! needs `h_layer` and the whole of `c_age` on the device
+      !! (`mem:separate`): an unmapped `c_age` is only copied back for
+      !! the slices the compiler can prove were written.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(inout) :: c_age(nx, ny, nz)
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: young_eff
+      !$acc enter data copyin(c_age, h_layer)
+      call ocean_ideal_age_reset_step(c_age, h_layer, young_eff, nx, ny, nz)
+      !$acc exit data copyout(c_age) delete(h_layer)
+   end subroutine reset_mapped
 
    subroutine test_init_registers(error)
       !! When with_ideal_age=.true., the registry holds 3 tracers and
@@ -167,8 +184,8 @@ contains
       ms%tracers(ms%idx_age)%c = 0.0_wp
       ms%tracers(ms%idx_age)%c(:, :, NZ) = 5.0e8_wp   ! garbage to clear
 
-      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
-                                      0.0_wp, nx, ny, NZ)
+      call reset_mapped(ms%tracers(ms%idx_age)%c, ms%h_layer, &
+                        0.0_wp, nx, ny, NZ)
 
       surface_val = maxval(abs(ms%tracers(ms%idx_age)%c(:, :, NZ)))
       call check(error, surface_val < 1.0e-12_wp, &
@@ -227,8 +244,8 @@ contains
                                     DT, nx, ny, NZ)
       call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                     DT, nx, ny, NZ)
-      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
-                                      0.0_wp, nx, ny, NZ)
+      call reset_mapped(ms%tracers(ms%idx_age)%c, ms%h_layer, &
+                        0.0_wp, nx, ny, NZ)
 
       sub_age = ms%tracers(ms%idx_age)%c(nx/2, ny/2, 1)
       surface_age = ms%tracers(ms%idx_age)%c(nx/2, ny/2, NZ)
@@ -258,8 +275,8 @@ contains
                                     DT, nx, ny, NZ)
       sub_before = ms%tracers(ms%idx_age)%c(nx/2, ny/2, 1)
 
-      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
-                                      YOUNG_EFF, nx, ny, NZ)
+      call reset_mapped(ms%tracers(ms%idx_age)%c, ms%h_layer, &
+                        YOUNG_EFF, nx, ny, NZ)
 
       expected_hTr = YOUNG_EFF
       actual_hTr = ms%tracers(ms%idx_age)%c(nx/2, ny/2, NZ)
@@ -336,5 +353,42 @@ contains
                                              "the new tracer must be the last registry slot")
       call ms%destroy()
    end subroutine test_age_survives_passive_registration
+
+   subroutine test_reset_first_live_layer(error)
+      !! Analytical: the surface Dirichlet value lands on the first LIVE
+      !! layer.  Column (i,j) has its top layer collapsed to 1e-5 m
+      !! (<= H_VANISHED), so the surface layer is `NZ-1` and `young_eff`
+      !! must land there; the dead layer above keeps its last value (a
+      !! filler is left alone) and the layers below are untouched.  A
+      !! fully live neighbour column still resets `NZ`, and a fully dead
+      !! column resets `NZ` (nothing to land on, as before).  On the
+      !! old kernel the value lands on the dead layer and the real
+      !! surface layer keeps its age.  Flat arrays, mapped explicitly
+      !! (`mem:separate`).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 3, NY = 2
+      real(wp), parameter :: YOUNG_EFF = 42.0_wp, OLD = 777.0_wp
+      real(wp) :: c_age(NX, NY, NZ), h(NX, NY, NZ)
+
+      c_age = OLD
+      h = H_EACH
+      h(1, 1, NZ) = 1.0e-5_wp          ! collapsed top layer
+      h(3, 1, :) = 1.0e-5_wp           ! fully dead column
+      !$acc enter data copyin(c_age, h)
+      call ocean_ideal_age_reset_step(c_age, h, YOUNG_EFF, NX, NY, NZ)
+      !$acc exit data copyout(c_age) delete(h)
+
+      call check(error, abs(c_age(1, 1, NZ - 1) - YOUNG_EFF) < 1.0e-12_wp, &
+                 "first live layer under a collapsed top layer must be reset")
+      if (.not. allocated(error)) call check(error, abs(c_age(1, 1, NZ) - OLD) < 1.0e-12_wp, &
+                                             "the collapsed top layer must be left alone")
+      if (.not. allocated(error)) call check(error, maxval(abs(c_age(1, 1, 1:NZ - 2) - OLD)) < 1.0e-12_wp, &
+                                             "layers below the surface layer must be untouched")
+      if (.not. allocated(error)) call check(error, abs(c_age(2, 1, NZ) - YOUNG_EFF) < 1.0e-12_wp .and. &
+                                             abs(c_age(2, 1, NZ - 1) - OLD) < 1.0e-12_wp, &
+                                             "a fully live column must still reset k = nz only")
+      if (.not. allocated(error)) call check(error, abs(c_age(3, 1, NZ) - YOUNG_EFF) < 1.0e-12_wp, &
+                                             "a fully dead column keeps the k = nz reset")
+   end subroutine test_reset_first_live_layer
 
 end module test_ocean_ideal_age
