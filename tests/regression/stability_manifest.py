@@ -865,6 +865,20 @@ STABILITY_CASES = [
                "tier 2, 0.5 d): worst |Error| Salt 1.663E-13, Heat "
                "3.396E-13, Mass 1.804E-14 (ssp_rk2 twin 2.108E-13 / "
                "3.836E-13 / 2.043E-14), peak En 1.025E-08.",
+          known_failure={
+              "tiers": [1],
+              "assertions": ["energy:rest-settles"],
+              "reason":
+                  "A SATURATED PLATEAU against a gate that wants the final "
+                  "sample below 95% of the peak. The run reaches its level "
+                  "inside the first day and stays there: V100, 2 days, peak "
+                  "En 8.638E-09 -> final 8.360E-09 (97%) on beta 73eccdded, "
+                  "and 95-97% at every one of ten commits back to 2026-09-24 "
+                  "(1.025E-08 -> 9.980E-09 there), so nothing regressed. "
+                  "energy:rest, at 1E-05, is the gate this row is carried "
+                  "for and it holds by three decades.",
+              "ref": "tests/regression/README.md",
+          },
           tags=["isomip_plus", "vcoord_z_fixed", "closed_faces",
                 "partial_steps", "rest", "pgf_fv_mom6", "zinit_linear"]),
     _case("isomip_plus_ocean0_idealised",
@@ -900,54 +914,14 @@ STABILITY_CASES = [
           # tier-1 row does not already say. Not downscaled -- 240x40x36 is
           # the COM resolution the grounding line is resolved at, and halving
           # it moves the grounding line rather than the numerics.
-          known_failure={
-              "tiers": [1],
-              # Scoped to `completed` ALONE, and measured: at 1000 steps the
-              # run aborts at step 910 and EVERY other assertion still
-              # passes -- conserve:{Mass,Salt,Heat} at round-off, energy and
-              # CFL inside their bars over the 3 days before the abort. So
-              # this marker excuses the abort and nothing else, and a budget
-              # or energy regression still turns the row red.
-              "assertions": ["completed"],
-              "reason":
-                  "OPEN, and the sigma pressure-gradient truncation over the "
-                  "RESOLVED ISOMIP+ BED -- the same term as "
-                  "cavity_sloping_lid_rest, 3958x larger. The ISOMIP+ "
-                  "channel-wall term (their Eq. 4, d_c = 500 m, f_c = 4 km) "
-                  "drops the bed 122 m across one 2 km cell, so at the trough "
-                  "sidewall a 23.1 m water column sits beside a 145.5 m one: "
-                  "stiffness rx0 = |dH|/(Ha+Hb) = 0.726, 3.6x the classical "
-                  "Beckmann-Haidvogel (1993) sigma bound of 0.2, with 168 "
-                  "wet-wet faces over it. Cubed, a_peak = N^2 De^3/(6 dx Hbar) "
-                  "= 1.48E-05 m/s^2 against the sloping lid's 3.73E-09, i.e. "
-                  "U = a/|f| = 10.5 cm/s of spurious geostrophic flow on one "
-                  "row of cells. En e-folds on ~1 day, hits &ocean_pgf_nml "
-                  "maxvel at step 907, drives bt_eta to -36.8 m in a <= 23 m "
-                  "column at step 909, and mints a NEGATIVE h_layer "
-                  "(-0.710 m) at step 910; the melt driver's non-finite guard "
-                  "is the detector, not the site. Substituted and INERT: melt "
-                  "(off merely moves it to day 3.6), the freshwater form, "
-                  "both implicit drag folds, the sponge, the calving front, "
-                  "convective adjustment, Gamma_T, n_inner (4x), and the "
-                  "outer split. Uniform density holds En = 8.5E-22 -- machine "
-                  "zero -- for 7 days on the identical geometry; nz = "
-                  "12/18/36/72 all fail within 0.2 day of each other (the "
-                  "truncation is nz-independent, as derived); a FLAT lid over "
-                  "the same bed still fails, so the tilted boundary that "
-                  "matters is the bed, not the ice base. Every palliative only "
-                  "postpones (h_min_cavity 25/30/50 m -> day 7.6/11.2/19.8; "
-                  "nu_h 20/60 -> day 14.2/25.2), and the only two changes that "
-                  "reach 30 days -- nu_h = 600 (100x Table 4) and dt = 75 s -- "
-                  "do it by letting the mode SATURATE at En 1.4E-04 / 9.4E-04, "
-                  "which is a quiet wrong answer rather than a fix. The "
-                  "namelist is therefore NOT tuned to pass this row. "
-                  "conserve:{Mass,Salt,Heat} are deliberately NOT excused: "
-                  "they are what this case is carried for, they are evaluated "
-                  "over the 3 days before the abort, and they still hold at "
-                  "round-off. The fix is Phase 6 (the sloping-coordinate PGF "
-                  "corrections), not a tolerance and not a shorter run.",
-              "ref": "validation_examples/ocean/isomip_plus/README.md",
-          },
+          # No known_failure. Until 2026-11 this row carried one scoped to
+          # `completed`: the sigma pressure-gradient truncation over the
+          # resolved ISOMIP+ bed (rx0 = 0.726 at the trough sidewall) grew a
+          # mode that aborted the run at step 910. On beta 73eccdded the run
+          # completes all 1000 steps on a V100 (peak En 1.951E-05, final
+          # 1.914E-05, budgets at round-off; tier-1 sweep 2026-11-18), so the
+          # marker was an XPASS and is gone. Which change removed the abort
+          # was not bisected. If it returns, localise before re-marking.
           t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 300.0,
                             "nu_h": 6.0, "nghost": 2,
                             "has_western_boundary": False, "eddying": False},
@@ -987,6 +961,8 @@ STABILITY_CASES = [
           t1_timeout=3000, t1_samples=360,
           t1_overrides={"ocean_cavity_melt_nml": {"enable": False},
                         "ocean_tdrag_nml": {"enable": False},
+                        # (the namelist itself starts balanced --
+                        # trim_ic_for_p_surf -- which these rows rely on.)
                         # the shipped melt diagnostics refuse to register
                         # with melt off (a plane of missing values).
                         "ocean_diag_nml": {"diags": '""'}},
@@ -1024,12 +1000,32 @@ STABILITY_CASES = [
                           "e-folding still running: the jet did not "
                           "saturate."},
           ],
-          # No known_failure: energy:rest-settles PASSES here (final En
-          # 3.147E-06 = 83% of the 3.804E-06 peak at d173.5, V100
-          # 2026-09-24, bebt = 0.1 defaults). Regime 2 OSCILLATES about its
-          # saturation level, so this gate reads the phase of that
-          # oscillation at day 180 -- it missed by a hair (95.3%) on the
-          # pre-bebt tree. If it trips again, localise before re-marking.
+          # RE-MEASURED 2026-11-18 (V100, beta 73eccdded + the balanced start
+          # in the namelist). The claims' checkpoint numbers in their `text` are the
+          # 2026-09-24 ones and predate both the barotropic baroclinic-PGF
+          # forcing (50b1b5d96, 2026-09-25) and the balanced start; without
+          # the balanced start that forcing put a barotropic adjustment
+          # transient of 2.58E-06 into the first days and En(d30) at
+          # 3.80E-07. With it: En 6.373E-08 d30, 5.215E-07 d150, 6.707E-07
+          # d180, and on a 360-day leg 9.402E-07 d240, 1.175E-06 d300,
+          # 1.372E-06 d360 -- close to linear in time and decelerating, with
+          # no calving-front jet (the old regime 2, 3.1E-06 at d180) in it.
+          known_failure={
+              "tiers": [1],
+              "assertions": ["energy:rest-settles"],
+              "reason":
+                  "With the balanced start the run stays on the regime-1 "
+                  "power law to the end (En ~ t, 6.373E-08 d30 -> 6.707E-07 "
+                  "d180 -> 1.372E-06 d360, 30-day increments falling from "
+                  "1.5E-07 to 1.0E-07; V100, 2026-11-18), so its final "
+                  "sample IS its peak, as on the nu_h = 30 twin. That is "
+                  "the kappa_v boundary current (Phillips 1970 / Wunsch "
+                  "1970), protocol physics. The four day-anchored claims "
+                  "are the gates this row is carried for, and all four "
+                  "pass. Why the calving-front jet of the 2026-09-24 "
+                  "measurement no longer appears was not localised.",
+              "ref": "docs/CAPABILITIES_AND_LIMITATIONS.md",
+          },
           note="ISOMIP+ Ocean0 idealised, z_fixed + zfixed_closed_faces, melt "
                "and top drag OFF, 180 days: gate E6 of v0.1.0 (bounded and "
                "explained). See the namelist header and "
@@ -1043,6 +1039,8 @@ STABILITY_CASES = [
           t1_timeout=3000, t1_samples=360,
           t1_overrides={"ocean_cavity_melt_nml": {"enable": False},
                         "ocean_tdrag_nml": {"enable": False},
+                        # (the namelist itself starts balanced --
+                        # trim_ic_for_p_surf -- which these rows rely on.)
                         "ocean_hvisc_nml": {"nu_h": 30.0},
                         "ocean_diag_nml": {"diags": '""'}},
           t2_skip=True,
