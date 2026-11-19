@@ -197,16 +197,16 @@ contains
       type(ocean_metrics_t) :: metrics
 
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(state%multilayer, state%pressure_force)
+      !$omp target enter data map(to: state%multilayer, state%pressure_force)
       call state%multilayer%enter_data()
       call state%pressure_force%enter_data()
-      !$acc update device(state%multilayer%h_layer, state%multilayer%rho_layer)
+      !$omp target update to(state%multilayer%h_layer, state%multilayer%rho_layer)
       call ocean_pressure_force_compute(grid, metrics, state%pressure_force, &
                                         state%multilayer)
-      !$acc update self(state%pressure_force%dpdx_face%data)
+      !$omp target update from(state%pressure_force%dpdx_face%data)
       call state%pressure_force%exit_data()
       call state%multilayer%exit_data()
-      !$acc exit data delete(state%multilayer, state%pressure_force)
+      !$omp target exit data map(delete: state%multilayer, state%pressure_force)
       call destroy_cartesian_metrics(metrics)
    end subroutine run_pgf
 

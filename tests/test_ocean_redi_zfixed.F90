@@ -180,7 +180,7 @@ contains
          metrics%use_closed_faces = .true.
          ! The masks are device-present (grown before the map), so the
          ! builder wrote the device copy; pull it back for the host census.
-         !$acc update self(metrics%open_u, metrics%open_v)
+         !$omp target update from(metrics%open_u, metrics%open_v)
       end if
 
       ms%nz_ml = NZ
@@ -237,19 +237,19 @@ contains
    subroutine map_in(ms, rd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_redi_t), intent(inout) :: rd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(rd)
+      !$omp target enter data map(to: rd)
       call rd%enter_data()
    end subroutine map_in
 
    subroutine pull_back(ms, rd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_redi_t), intent(inout) :: rd
-      !$acc update self(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR)
-      !$acc update self(rd%vKoL, rd%vKoR, rd%vhEff, rd%vPoL, rd%vPoR)
-      !$acc update self(ms%tracers(ms%idx_temperature)%c)
-      !$acc update self(ms%tracers(ms%idx_salinity)%c)
+      !$omp target update from(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR)
+      !$omp target update from(rd%vKoL, rd%vKoR, rd%vhEff, rd%vPoL, rd%vPoR)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%c)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%c)
    end subroutine pull_back
 
    subroutine map_out(ms, rd, metrics)
@@ -257,9 +257,9 @@ contains
       type(ocean_redi_t), intent(inout) :: rd
       type(ocean_metrics_t), intent(inout) :: metrics
       call rd%exit_data()
-      !$acc exit data delete(rd)
+      !$omp target exit data map(delete: rd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -461,8 +461,8 @@ contains
             n_pair_tot = n_pair_tot + n_pair
             n_bad_tot = n_bad_tot + n_bad
             wh_max = max(wh_max, worst_heff)
-            !$acc update self(ms%tracers(ms%idx_temperature)%c)
-            !$acc update self(ms%tracers(ms%idx_salinity)%c)
+            !$omp target update from(ms%tracers(ms%idx_temperature)%c)
+            !$omp target update from(ms%tracers(ms%idx_salinity)%c)
             finite_all = finite_all .and. &
                          all_finite_3d(ms%tracers(ms%idx_temperature)%c) .and. &
                          all_finite_3d(ms%tracers(ms%idx_salinity)%c) .and. &
@@ -657,13 +657,13 @@ contains
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
          ! ... then continuity over-drains the cell to the observed -8.2e-4 m,
          ! its content advected with it, and Phase B runs on that state.
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
-         !$acc update self(ms%tracers(ms%idx_salinity)%c)
+         !$omp target update from(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
+         !$omp target update from(ms%tracers(ms%idx_salinity)%c)
          ms%h_layer(id, jd, kd) = -8.2e-4_wp
          ms%tracers(ms%idx_temperature)%c(id, jd, kd) = c_t
          ms%tracers(ms%idx_salinity)%c(id, jd, kd) = c_s
-         !$acc update device(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
-         !$acc update device(ms%tracers(ms%idx_salinity)%c)
+         !$omp target update to(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
+         !$omp target update to(ms%tracers(ms%idx_salinity)%c)
          call redi_apply_flux(grid, metrics, rd, ms, DT)
          call pull_back(ms, rd)
          call map_out(ms, rd, metrics)
@@ -748,8 +748,8 @@ contains
 
          call map_in(ms, rd)
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)   ! kb/kt windows, sizes
-         !$acc update self(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR)
-         !$acc update self(rd%vhEff)
+         !$omp target update from(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR)
+         !$omp target update from(rd%vhEff)
          ! Replace Phase A's pairing by the two hand-built sublayers (top-down
          ! layer index = NZ + 1 - native layer; one sublayer inside one layer).
          rd%uhEff = 0.0_wp
@@ -764,7 +764,7 @@ contains
          rd%uPoL(ib, jb, 1) = 0.0_wp; rd%uPoL(ib, jb, 2) = 1.0_wp
          rd%uPoR(ib, jb, 1) = 0.0_wp; rd%uPoR(ib, jb, 2) = 1.0_wp
          rd%uhEff(ib, jb, 1) = 1.0_wp
-         !$acc update device(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR, rd%vhEff)
+         !$omp target update to(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR, rd%vhEff)
          call redi_apply_flux(grid, metrics, rd, ms, DT)
          call pull_back(ms, rd)
          call map_out(ms, rd, metrics)

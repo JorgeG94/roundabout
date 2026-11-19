@@ -82,23 +82,23 @@ contains
       call wrap_c(np, hprev(:, :, 1))
       call wrap_c(np, hTr(:, :, 1))
       if (h3) then
-         !$acc data copyin(areaT, uhh, hprev, hTr, wet) create(tr) copyout(F)
+         !$omp target data map(to: areaT, uhh, hprev, hTr, wet) map(alloc: tr) map(from: F)
          call drain_fill_conc(nx, NY, 1, hTr, hprev, tr)
-         !$acc update self(tr)
+         !$omp target update from(tr)
          call wrap_c(np, tr(:, :, 1))
-         !$acc update device(tr)
+         !$omp target update to(tr)
          call drain_swept_flux_x_h3(nx, NY, 1, areaT, uhh, hprev, tr, wet, F)
-         !$acc end data
+         !$omp end target data
       else
-         !$acc data copyin(areaT, uhh, hprev, hTr, wet) create(tr, pal, par, pa6) copyout(F)
+         !$omp target data map(to: areaT, uhh, hprev, hTr, wet) map(alloc: tr, pal, par, pa6) map(from: F)
          call drain_parabola_x(nx, NY, 1, wet, hTr, hprev, tr, pal, par, pa6)
-         !$acc update self(pal, par, pa6)
+         !$omp target update from(pal, par, pa6)
          call wrap_c(np, pal(:, :, 1))
          call wrap_c(np, par(:, :, 1))
          call wrap_c(np, pa6(:, :, 1))
-         !$acc update device(pal, par, pa6)
+         !$omp target update to(pal, par, pa6)
          call drain_swept_flux_x(nx, NY, 1, areaT, uhh, hprev, pal, par, pa6, F)
-         !$acc end data
+         !$omp end target data
       end if
       ! Concentration update (as drain_update_tracer_x): c is the prognostic.
       do i = 1, nx
@@ -280,21 +280,21 @@ contains
             end do
          end do
       end do
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
-      !$acc enter data copyin(bc)
+      !$omp target enter data map(to: bc)
       call continuity_tracer_drain(grid, metrics, ct, ms, RATIO, bc=bc)
-      !$acc exit data delete(bc)
+      !$omp target exit data map(delete: bc)
       call metrics%exit_data()
-      !$acc exit data delete(metrics)
+      !$omp target exit data map(delete: metrics)
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       mass1 = sum(ms%h_layer(i0:NG + NXP, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:NG + NXP, j0:j1, :))
       allocate (hTr_out(NXP, NYP))
       hTr_out = ms%tracers(ms%idx_salinity)%c(i0:NG + NXP, j0:j1, 1)

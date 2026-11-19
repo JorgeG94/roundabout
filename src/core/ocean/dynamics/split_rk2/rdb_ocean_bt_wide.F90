@@ -372,7 +372,7 @@ contains
 
    pure function ring_value(mode, i, j) result(v)
       !! Garbage for the ring-poison hook: finite (mode 1) or NaN (mode 2).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: mode, i, j
       real(wp) :: v
       if (mod(mode, 100) == 2) then
@@ -471,19 +471,19 @@ contains
       ! Static wide metrics + Coriolis (host-filled from the owners by
       ! `bt_wide_init`: this copyin is what puts the owners' values on the
       ! device).
-      !$acc enter data copyin(this%w_area_cu, this%w_area_cv, this%w_dx_cu, this%w_dx_cv)
-      !$acc enter data copyin(this%w_dy_cu, this%w_dy_cv, this%w_iarea_bu, this%w_iarea_t)
-      !$acc enter data copyin(this%w_idx_cu, this%w_idy_cv, this%f_corner_w)
-      !$acc enter data copyin(this%w_eta_forcing)
+      !$omp target enter data map(to: this%w_area_cu, this%w_area_cv, this%w_dx_cu, this%w_dx_cv)
+      !$omp target enter data map(to: this%w_dy_cu, this%w_dy_cv, this%w_iarea_bu, this%w_iarea_t)
+      !$omp target enter data map(to: this%w_idx_cu, this%w_idy_cv, this%f_corner_w)
+      !$omp target enter data map(to: this%w_eta_forcing)
       ! Wide shadow arrays.
-      !$acc enter data copyin(this%w_eta, this%w_H_ref, this%w_eta_new, this%w_ke)
-      !$acc enter data copyin(this%w_eta_sum, this%w_eta_end)
-      !$acc enter data copyin(this%w_ubt, this%w_ubt_prev, this%w_rem_u)
-      !$acc enter data copyin(this%w_ubt_sum, this%w_uhbt_sum, this%w_uhbt, this%w_ubt_end)
-      !$acc enter data copyin(this%w_vbt, this%w_vbt_prev, this%w_rem_v)
-      !$acc enter data copyin(this%w_vbt_sum, this%w_vhbt_sum, this%w_vhbt, this%w_vbt_end)
-      !$acc enter data copyin(this%w_zeta)
-      !$acc enter data copyin(this%w_force_u, this%w_force_v)
+      !$omp target enter data map(to: this%w_eta, this%w_H_ref, this%w_eta_new, this%w_ke)
+      !$omp target enter data map(to: this%w_eta_sum, this%w_eta_end)
+      !$omp target enter data map(to: this%w_ubt, this%w_ubt_prev, this%w_rem_u)
+      !$omp target enter data map(to: this%w_ubt_sum, this%w_uhbt_sum, this%w_uhbt, this%w_ubt_end)
+      !$omp target enter data map(to: this%w_vbt, this%w_vbt_prev, this%w_rem_v)
+      !$omp target enter data map(to: this%w_vbt_sum, this%w_vhbt_sum, this%w_vhbt, this%w_vbt_end)
+      !$omp target enter data map(to: this%w_zeta)
+      !$omp target enter data map(to: this%w_force_u, this%w_force_v)
    end subroutine bt_wide_enter_data_impl
 
    subroutine bt_wide_exit_data(this)
@@ -498,18 +498,18 @@ contains
    subroutine bt_wide_exit_data_impl(this)
       !! Non-polymorphic exit_data body.
       type(bt_wide_t), intent(inout) :: this
-      !$acc exit data delete(this%w_force_u, this%w_force_v)
-      !$acc exit data delete(this%w_zeta)
-      !$acc exit data delete(this%w_vbt_sum, this%w_vhbt_sum, this%w_vhbt, this%w_vbt_end)
-      !$acc exit data delete(this%w_vbt, this%w_vbt_prev, this%w_rem_v)
-      !$acc exit data delete(this%w_ubt_sum, this%w_uhbt_sum, this%w_uhbt, this%w_ubt_end)
-      !$acc exit data delete(this%w_ubt, this%w_ubt_prev, this%w_rem_u)
-      !$acc exit data delete(this%w_eta_sum, this%w_eta_end)
-      !$acc exit data delete(this%w_eta, this%w_H_ref, this%w_eta_new, this%w_ke)
-      !$acc exit data delete(this%w_eta_forcing)
-      !$acc exit data delete(this%w_idx_cu, this%w_idy_cv, this%f_corner_w)
-      !$acc exit data delete(this%w_dy_cu, this%w_dy_cv, this%w_iarea_bu, this%w_iarea_t)
-      !$acc exit data delete(this%w_area_cu, this%w_area_cv, this%w_dx_cu, this%w_dx_cv)
+      !$omp target exit data map(delete: this%w_force_u, this%w_force_v)
+      !$omp target exit data map(delete: this%w_zeta)
+      !$omp target exit data map(delete: this%w_vbt_sum, this%w_vhbt_sum, this%w_vhbt, this%w_vbt_end)
+      !$omp target exit data map(delete: this%w_vbt, this%w_vbt_prev, this%w_rem_v)
+      !$omp target exit data map(delete: this%w_ubt_sum, this%w_uhbt_sum, this%w_uhbt, this%w_ubt_end)
+      !$omp target exit data map(delete: this%w_ubt, this%w_ubt_prev, this%w_rem_u)
+      !$omp target exit data map(delete: this%w_eta_sum, this%w_eta_end)
+      !$omp target exit data map(delete: this%w_eta, this%w_H_ref, this%w_eta_new, this%w_ke)
+      !$omp target exit data map(delete: this%w_eta_forcing)
+      !$omp target exit data map(delete: this%w_idx_cu, this%w_idy_cv, this%f_corner_w)
+      !$omp target exit data map(delete: this%w_dy_cu, this%w_dy_cv, this%w_iarea_bu, this%w_iarea_t)
+      !$omp target exit data map(delete: this%w_area_cu, this%w_area_cv, this%w_dx_cu, this%w_dx_cv)
    end subroutine bt_wide_exit_data_impl
 
    subroutine bt_wide_copy_in(this, grid, &

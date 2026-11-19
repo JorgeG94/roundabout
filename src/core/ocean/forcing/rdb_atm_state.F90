@@ -251,10 +251,10 @@ contains
    subroutine atm_state_enter_data(this)
       class(atm_state_t), intent(inout) :: this
       if (.not. this%enable) return
-      !$acc enter data copyin(this%tas, this%huss, this%uas, this%vas, this%psl)
-      !$acc enter data copyin(this%rlds, this%prra, this%prsn, this%rsds)
-      !$acc enter data copyin(this%rsds_rec, this%cosz, this%cosz_mean)
-      !$acc enter data create(this%win_bl, this%win_cv, this%tgt_bl, this%tgt_cv)
+      !$omp target enter data map(to: this%tas, this%huss, this%uas, this%vas, this%psl)
+      !$omp target enter data map(to: this%rlds, this%prra, this%prsn, this%rsds)
+      !$omp target enter data map(to: this%rsds_rec, this%cosz, this%cosz_mean)
+      !$omp target enter data map(alloc: this%win_bl, this%win_cv, this%tgt_bl, this%tgt_cv)
       call this%wb%enter_data()
       call this%wc%enter_data()
       this%on_device = .true.
@@ -265,10 +265,10 @@ contains
       if (.not. this%enable) return
       call this%wb%exit_data()
       call this%wc%exit_data()
-      !$acc exit data delete(this%win_bl, this%win_cv, this%tgt_bl, this%tgt_cv)
-      !$acc exit data delete(this%tas, this%huss, this%uas, this%vas, this%psl)
-      !$acc exit data delete(this%rlds, this%prra, this%prsn, this%rsds)
-      !$acc exit data delete(this%rsds_rec, this%cosz, this%cosz_mean)
+      !$omp target exit data map(delete: this%win_bl, this%win_cv, this%tgt_bl, this%tgt_cv)
+      !$omp target exit data map(delete: this%tas, this%huss, this%uas, this%vas, this%psl)
+      !$omp target exit data map(delete: this%rlds, this%prra, this%prsn, this%rsds)
+      !$omp target exit data map(delete: this%rsds_rec, this%cosz, this%cosz_mean)
       this%on_device = .false.
    end subroutine atm_state_exit_data
 
@@ -1088,7 +1088,7 @@ contains
       !! `|w mod 2 pi| < w0`, `cos w0 = -a/b`, and `C` adds the per-day
       !! integral `P = 2 (a w0 + b sin w0)` once per elapsed day.
       !! Device-callable (`routine seq`, same-module).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in), value :: x, a, b
       real(wp) :: c
 

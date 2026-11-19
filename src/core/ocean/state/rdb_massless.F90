@@ -57,7 +57,7 @@ contains
       !! blend in `massless_interp_back`).
       !! Identity case (no layer < h_min): `nzc==nz`, `kc(k)==k`, `kf(k)==0`,
       !! `hc==h` bit-for-bit.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz
       real(wp), intent(in) :: h(NZL)
          !! Local surface-down layer thicknesses (m), >= 0.
@@ -113,7 +113,7 @@ contains
       !! MEANS, not integrals, and must not re-divide. Accumulation runs in the
       !! same surface-down `k` order as `massless_build_maps` so the
       !! column-integral conservation holds to round-off.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz, nzc
       real(wp), intent(in) :: h(NZL)
       integer, intent(in) :: kc(NZLI)
@@ -159,7 +159,7 @@ contains
       !! pure lookup; interior interfaces take the linear blend between merged
       !! interfaces `kc(K)` and `kc(K)+1` (in range since `kf>0` only when
       !! `kc(K) < nzc+1`). Identity case: `kf==0` everywhere -> `q==qc`.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz
       real(wp), intent(in) :: qc(NZLI)
          !! Interface quantity on the merged grid (valid 1..nzc+1).

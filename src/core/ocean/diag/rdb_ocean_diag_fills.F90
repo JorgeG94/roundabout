@@ -1220,13 +1220,13 @@ contains
       diag_remap_zo = 0.0_wp
       diag_remap_zn = 0.0_wp
       diag_remap_dzn = 0.0_wp
-      !$acc enter data copyin(diag_remap_zo, diag_remap_zn, diag_remap_dzn)
+      !$omp target enter data map(to: diag_remap_zo, diag_remap_zn, diag_remap_dzn)
    end subroutine diag_remap_workspace_ensure
 
    subroutine diag_remap_workspace_cleanup()
       !! Release the flat remap's scratch (engine teardown; idempotent).
       if (.not. allocated(diag_remap_zo)) return
-      !$acc exit data delete(diag_remap_zo, diag_remap_zn, diag_remap_dzn)
+      !$omp target exit data map(delete: diag_remap_zo, diag_remap_zn, diag_remap_dzn)
       deallocate (diag_remap_zo, diag_remap_zn, diag_remap_dzn)
    end subroutine diag_remap_workspace_cleanup
 
@@ -1274,7 +1274,7 @@ contains
 
    pure function diag_remap_src_q(nx, ny, nz, i, j, kw, h_layer, layer_buf, is_extensive) &
       result(q)
-      !$acc routine seq
+      !$omp declare target
       !! Source value of TOP-DOWN work layer `kw` (state layer `nz-kw+1`)
       !! as the remap sees it: 0 for a vanished layer (zero weight, its
       !! buffer value — possibly the NaN sentinel — is never read) and for

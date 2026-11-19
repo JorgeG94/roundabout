@@ -162,9 +162,9 @@ contains
       end do
 
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ct%enter_data(); call cor%enter_data(); call pgf%enter_data()
       call hv%enter_data(); call bd%enter_data(); call ss%enter_data()
       call va%enter_data(); call hd%enter_data()
@@ -176,7 +176,7 @@ contains
                                    va, hd, vd, vmix, ms, DT, N_INNER, vcoord=vc)
       end do
 
-      !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+      !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
       finite = .true.
       mass1 = 0.0_wp
       do j = j0, j1
@@ -198,9 +198,9 @@ contains
       call hd%exit_data(); call va%exit_data()
       call ss%exit_data(); call bd%exit_data(); call hv%exit_data()
       call pgf%exit_data(); call cor%exit_data(); call ct%exit_data()
-      !$acc exit data delete(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
       call ms%destroy()
    end subroutine run_jet

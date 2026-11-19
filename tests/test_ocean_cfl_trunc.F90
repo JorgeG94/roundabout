@@ -72,14 +72,14 @@ contains
 
    subroutine map_in(ms)
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
    end subroutine map_in
 
    subroutine map_out(ms)
       type(multilayer_state_t), intent(inout) :: ms
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------
@@ -369,7 +369,7 @@ contains
          ! push to the device (mapped arrays get no implicit updates).
          metrics%idxT(5, 4) = SPIKE          ! u-face (5,4): max(idxT(4,4), idxT(5,4)) = SPIKE
          metrics%idyT(6, 6) = SPIKE          ! v-face (6,6): max(idyT(6,5), idyT(6,6)) = SPIKE
-         !$acc update device(metrics%idxT, metrics%idyT)
+         !$omp target update to(metrics%idxT, metrics%idyT)
 
          ms%h_layer = 10.0_wp
          ms%u_face_x_layer = 0.0_wp
@@ -383,7 +383,7 @@ contains
          ! (a) face-metric mode: the escape — theta-edge faces untouched,
          !     only the uniform control face clips.
          call apply_velocity_truncation(ms, metrics, DT, CFLT, 0.0_wp, ntrunc)
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
          call check(error, ms%u_face_x_layer(5, 4, 2) == u0, &
                     "T6a: face-metric mode must NOT clip the theta-edge u face (the escape)")
          if (allocated(error)) then

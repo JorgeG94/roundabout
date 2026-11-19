@@ -253,38 +253,38 @@ contains
       gm%khth_slope_max = slope_max
       gm%khth = 100.0_wp
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call sl%set_bathymetry(sum(ms%h_layer, dim=3))
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
-      !$acc enter data copyin(cg1)
+      !$omp target enter data map(to: cg1)
 
       call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
       gm%use_fgnv = .false.
       call gm_compute_transports(grid, metrics, gm, sl, ms, DT, cg1=cg1)
-      !$acc update self(gm%uhD, gm%vhD)
+      !$omp target update from(gm%uhD, gm%vhD)
       uh_loc = gm%uhD
       vh_loc = gm%vhD
       call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
-      !$acc update self(gm%uhD)
+      !$omp target update from(gm%uhD)
       uh_nocg = gm%uhD
       gm%use_fgnv = .true.
       call gm_compute_transports(grid, metrics, gm, sl, ms, DT, cg1=cg1)
-      !$acc update self(gm%uhD, gm%vhD, gm%gm_src)
+      !$omp target update from(gm%uhD, gm%vhD, gm%gm_src)
       uh_fg = gm%uhD
       vh_fg = gm%vhD
       src_fg = gm%gm_src
 
-      !$acc exit data delete(cg1)
+      !$omp target exit data map(delete: cg1)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call gm%destroy()
       call sl%destroy()
       call ms%destroy()
@@ -428,16 +428,16 @@ contains
             end do
          end do
 
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
          call sl%set_bathymetry(sum(ms%h_layer, dim=3))
-         !$acc enter data copyin(sl)
+         !$omp target enter data map(to: sl)
          call sl%enter_data()
-         !$acc enter data copyin(gm)
+         !$omp target enter data map(to: gm)
          call gm%enter_data()
-         !$acc enter data copyin(ct)
+         !$omp target enter data map(to: ct)
          call ct%enter_data()
-         !$acc enter data copyin(cg1)
+         !$omp target enter data map(to: cg1)
 
          pe0 = column_pe(ms, grid, NZ)
          prev = pe0
@@ -447,22 +447,22 @@ contains
             call ocean_slopes_compute(grid, metrics, eos, sl, ms, DTL)
             call gm_compute_transports(grid, metrics, gm, sl, ms, DTL, cg1=cg1)
             call continuity_gm_apply(grid, metrics, ct, ms, gm, DTL, 1.0_wp, TR_MODE_ADVECT)
-            !$acc update self(ms%h_layer)
-            !$acc update self(ms%tracers(ms%idx_temperature)%c)
+            !$omp target update from(ms%h_layer)
+            !$omp target update from(ms%tracers(ms%idx_temperature)%c)
             pe = column_pe(ms, grid, NZ)
             if (pe > prev + 1.0e-12_wp*abs(pe0)) monotone = .false.
             prev = pe
          end do
 
-         !$acc exit data delete(cg1)
+         !$omp target exit data map(delete: cg1)
          call ct%exit_data()
-         !$acc exit data delete(ct)
+         !$omp target exit data map(delete: ct)
          call gm%exit_data()
-         !$acc exit data delete(gm)
+         !$omp target exit data map(delete: gm)
          call sl%exit_data()
-         !$acc exit data delete(sl)
+         !$omp target exit data map(delete: sl)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          call check(error, pe < pe0 - 1.0e-9_wp*abs(pe0), "PE must decrease under FGNV GM")
          if (allocated(error)) exit checks
@@ -510,31 +510,31 @@ contains
       do k = 1, nz
          ebt(:, :, k) = merge(1.0_wp, 0.0_wp, k > k0)
       end do
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call sl%set_bathymetry(sum(ms%h_layer, dim=3))
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
-      !$acc enter data copyin(cg1, ebt)
+      !$omp target enter data map(to: cg1, ebt)
       call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
       gm%use_fgnv = .false.
       call gm_compute_transports(grid, metrics, gm, sl, ms, DT, ebt_struct=ebt, cg1=cg1)
-      !$acc update self(gm%uhD)
+      !$omp target update from(gm%uhD)
       uh_ebt = gm%uhD
       gm%use_fgnv = .true.
       call gm_compute_transports(grid, metrics, gm, sl, ms, DT, ebt_struct=ebt, cg1=cg1)
-      !$acc update self(gm%uhD, gm%vhD)
+      !$omp target update from(gm%uhD, gm%vhD)
       uh_both = gm%uhD
       vh_both = gm%vhD
-      !$acc exit data delete(cg1, ebt)
+      !$omp target exit data map(delete: cg1, ebt)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call gm%destroy()
       call sl%destroy()
       call ms%destroy()

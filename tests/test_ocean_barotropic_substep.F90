@@ -84,12 +84,12 @@ contains
       real(wp), intent(in) :: fu(:, :), fv(:, :)
       integer, intent(in) :: n_steps
       real(wp), intent(in) :: dt_inner
-      !$acc enter data copyin(dyn, fu, fv)
+      !$omp target enter data map(to: dyn, fu, fv)
       call dyn%enter_data()
       call barotropic_substep_linear(grid, metrics, dyn%bt_work, fu, fv, n_steps, dt_inner)
-      !$acc update self(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
+      !$omp target update from(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
       call dyn%exit_data()
-      !$acc exit data delete(dyn, fu, fv)
+      !$omp target exit data map(delete: dyn, fu, fv)
    end subroutine run_fast
 
    ! -----------------------------------------------------------------
@@ -289,7 +289,7 @@ contains
       real(wp), intent(in) :: fu(:, :), fv(:, :)
       integer, intent(in) :: n_steps
       real(wp), intent(in) :: dt_inner
-      !$acc enter data copyin(dyn, cor, fu, fv)
+      !$omp target enter data map(to: dyn, cor, fu, fv)
       call dyn%enter_data()
       call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn%bt_work, &
@@ -311,10 +311,10 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
+      !$omp target update from(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
       call cor%exit_data()
       call dyn%exit_data()
-      !$acc exit data delete(dyn, cor, fu, fv)
+      !$omp target exit data map(delete: dyn, cor, fu, fv)
    end subroutine run_fast_nonlinear
 
    subroutine test_nonlinear_rest(error)
@@ -665,7 +665,7 @@ contains
       allocate (fu(nx + 1, ny), source=0.0_wp)
       allocate (fv(nx, ny + 1), source=0.0_wp)
 
-      !$acc enter data copyin(dyn, cor, fu, fv)
+      !$omp target enter data map(to: dyn, cor, fu, fv)
       call dyn%enter_data()
       call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn%bt_work, &
@@ -687,10 +687,10 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn%bt_work%bt_uhbt, dyn%bt_work%bt_vhbt)
+      !$omp target update from(dyn%bt_work%bt_uhbt, dyn%bt_work%bt_vhbt)
       call cor%exit_data()
       call dyn%exit_data()
-      !$acc exit data delete(dyn, cor, fu, fv)
+      !$omp target exit data map(delete: dyn, cor, fu, fv)
 
       i_w = grid%nghost + 1
       i_e = grid%nghost + NX_PHYS + 1
@@ -782,7 +782,7 @@ contains
       allocate (fv(nx, ny + 1), source=0.0_wp)
 
       ! Reference run — all walls closed (no bc passed).
-      !$acc enter data copyin(dyn_ref, cor, fu, fv)
+      !$omp target enter data map(to: dyn_ref, cor, fu, fv)
       call dyn_ref%enter_data(); call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn_ref%bt_work, &
                                         fu, fv, &
@@ -803,12 +803,12 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn_ref%bt_work%bt_eta)
+      !$omp target update from(dyn_ref%bt_work%bt_eta)
       call cor%exit_data(); call dyn_ref%exit_data()
-      !$acc exit data delete(dyn_ref, cor, fu, fv)
+      !$omp target exit data map(delete: dyn_ref, cor, fu, fv)
 
       ! OBC_OPEN run — west wall radiating.
-      !$acc enter data copyin(dyn_open, cor, fu, fv, bc)
+      !$omp target enter data map(to: dyn_open, cor, fu, fv, bc)
       call dyn_open%enter_data(); call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn_open%bt_work, &
                                         fu, fv, &
@@ -830,9 +830,9 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn_open%bt_work%bt_eta)
+      !$omp target update from(dyn_open%bt_work%bt_eta)
       call cor%exit_data(); call dyn_open%exit_data()
-      !$acc exit data delete(dyn_open, cor, fu, fv, bc)
+      !$omp target exit data map(delete: dyn_open, cor, fu, fv, bc)
 
       e2_ref = sum(dyn_ref%bt_work%bt_eta(grid%nghost + 1:grid%nghost + NX_PHYS, :)**2)
       e2_open = sum(dyn_open%bt_work%bt_eta(grid%nghost + 1:grid%nghost + NX_PHYS, :)**2)
@@ -889,7 +889,7 @@ contains
       allocate (fu(nx + 1, ny), source=0.0_wp)
       allocate (fv(nx, ny + 1), source=0.0_wp)
 
-      !$acc enter data copyin(dyn, cor, fu, fv, bc)
+      !$omp target enter data map(to: dyn, cor, fu, fv, bc)
       call dyn%enter_data(); call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn%bt_work, &
                                         fu, fv, &
@@ -911,9 +911,9 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn%bt_work%bt_eta)
+      !$omp target update from(dyn%bt_work%bt_eta)
       call cor%exit_data(); call dyn%exit_data()
-      !$acc exit data delete(dyn, cor, fu, fv, bc)
+      !$omp target exit data map(delete: dyn, cor, fu, fv, bc)
 
       eta_mean = sum(dyn%bt_work%bt_eta(grid%nghost + 1:grid%nghost + NX_PHYS, &
                                         grid%nghost + 1:grid%nghost + NY_PHYS))/ &
@@ -982,7 +982,7 @@ contains
       allocate (fv(nx, ny + 1), source=0.0_wp)
 
       ! Run at t = 0 (eta_target = AMP).  Inflow at west wall expected.
-      !$acc enter data copyin(dyn_a, cor, fu, fv, bc)
+      !$omp target enter data map(to: dyn_a, cor, fu, fv, bc)
       call dyn_a%enter_data(); call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn_a%bt_work, &
                                         fu, fv, &
@@ -1004,12 +1004,12 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn_a%bt_work%bt_ubt)
+      !$omp target update from(dyn_a%bt_work%bt_ubt)
       call cor%exit_data(); call dyn_a%exit_data()
-      !$acc exit data delete(dyn_a, cor, fu, fv, bc)
+      !$omp target exit data map(delete: dyn_a, cor, fu, fv, bc)
 
       ! Run at t = T_M2 / 4 (eta_target ≈ 0).  Should reduce to OPEN.
-      !$acc enter data copyin(dyn_b, cor, fu, fv, bc)
+      !$omp target enter data map(to: dyn_b, cor, fu, fv, bc)
       call dyn_b%enter_data(); call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn_b%bt_work, &
                                         fu, fv, &
@@ -1031,9 +1031,9 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn_b%bt_work%bt_ubt)
+      !$omp target update from(dyn_b%bt_work%bt_ubt)
       call cor%exit_data(); call dyn_b%exit_data()
-      !$acc exit data delete(dyn_b, cor, fu, fv, bc)
+      !$omp target exit data map(delete: dyn_b, cor, fu, fv, bc)
 
       u_at_t0 = dyn_a%bt_work%bt_ubt(grid%nghost + 1, grid%nghost + 1)
       u_at_t_quarter = dyn_b%bt_work%bt_ubt(grid%nghost + 1, grid%nghost + 1)
@@ -1101,7 +1101,7 @@ contains
                  "Chapman eta_old should start at zero")
       if (allocated(error)) goto 200
 
-      !$acc enter data copyin(dyn, cor, fu, fv, bc)
+      !$omp target enter data map(to: dyn, cor, fu, fv, bc)
       call dyn%enter_data(); call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn%bt_work, &
                                         fu, fv, &
@@ -1123,11 +1123,11 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn%bt_work%bt_eta_end)
+      !$omp target update from(dyn%bt_work%bt_eta_end)
       ! Note: `bc%eta_old_chapman_w` lives on host only — the fast
       ! loop writes it host-side, so no `acc update self` needed.
       call cor%exit_data(); call dyn%exit_data()
-      !$acc exit data delete(dyn, cor, fu, fv, bc)
+      !$omp target exit data map(delete: dyn, cor, fu, fv, bc)
 
       eta_old_after = bc%eta_old_chapman_w
       eta_int_mean_end = sum(dyn%bt_work%bt_eta_end(grid%nghost + 1, &

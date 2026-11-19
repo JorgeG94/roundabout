@@ -200,10 +200,10 @@ contains
       integer :: is, it
       is = engine%state%multilayer%idx_salinity
       it = engine%state%multilayer%idx_temperature
-      !$acc update self(engine%state%multilayer%h_layer)
+      !$omp target update from(engine%state%multilayer%h_layer)
       associate (hs => engine%state%multilayer%tracers(is)%c, &
                  ht => engine%state%multilayer%tracers(it)%c)
-         !$acc update self(hs, ht)
+         !$omp target update from(hs, ht)
       end associate
       h = engine%state%multilayer%h_layer
       st = engine%state%multilayer%tracers(is)%c
@@ -391,11 +391,11 @@ contains
       do e = 1, ra%n
          associate (a => ra%entries(e), b => rb%entries(e))
             if (a%device_mapped .and. a%rank == 2) then
-               !$acc update self(a%p2)
-               !$acc update self(b%p2)
+               !$omp target update from(a%p2)
+               !$omp target update from(b%p2)
             else if (a%device_mapped .and. a%rank == 3) then
-               !$acc update self(a%p3)
-               !$acc update self(b%p3)
+               !$omp target update from(a%p3)
+               !$omp target update from(b%p3)
             end if
             nfield = nfield + 1
             select case (a%rank)
@@ -476,7 +476,7 @@ contains
       if (allocated(error)) return
       if (present(extra)) then
          associate (kt_ => eb%state%vmix_tidal%kd_int, kb_ => eb%state%vdiff%bbl_mix%kd_int)
-            !$acc update self(kt_, kb_)
+            !$omp target update from(kt_, kb_)
             call check(error, maxval(kt_) > 0.0_wp .and. maxval(kb_) > 0.0_wp, &
                        "tidal/BBL kd_int is zero at the checkpoint: restart test would be vacuous")
          end associate
@@ -826,7 +826,7 @@ contains
       integer :: ng, nz, ia
       ia = engine%state%multilayer%idx_age
       associate (ha => engine%state%multilayer%tracers(ia)%c)
-         !$acc update self(ha)
+         !$omp target update from(ha)
       end associate
       a = engine%state%multilayer%tracers(ia)%c
       ng = engine%grid%nghost
@@ -887,7 +887,7 @@ contains
             merge(a_left, a_right, i <= i_step)
       end do
       associate (ha => engine%state%multilayer%tracers(ia)%c)
-         !$acc update device(ha)
+         !$omp target update to(ha)
       end associate
    end subroutine set_age_step
 
@@ -911,11 +911,11 @@ contains
       call advance(e, c, t, nsteps, ok)
       ia = e%state%multilayer%idx_age
       associate (ha => e%state%multilayer%tracers(ia)%c)
-         !$acc update self(ha)
+         !$omp target update from(ha)
       end associate
       hage = e%state%multilayer%tracers(ia)%c
       if (present(hlay)) then
-         !$acc update self(e%state%multilayer%h_layer)
+         !$omp target update from(e%state%multilayer%h_layer)
          hlay = e%state%multilayer%h_layer
       end if
       call engine_exit_data(e)
@@ -1039,7 +1039,7 @@ contains
       real(wp), allocatable, intent(out) :: kt(:, :, :), kb(:, :, :), kv(:, :, :)
       associate (a_ => engine%state%vmix_tidal%kd_int, b_ => engine%state%vdiff%bbl_mix%kd_int, &
                  c_ => engine%state%vmix%kv)
-         !$acc update self(a_, b_, c_)
+         !$omp target update from(a_, b_, c_)
       end associate
       kt = engine%state%vmix_tidal%kd_int
       kb = engine%state%vdiff%bbl_mix%kd_int

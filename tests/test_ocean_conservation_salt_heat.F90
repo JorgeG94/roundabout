@@ -109,9 +109,9 @@ contains
    subroutine map_in(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
    end subroutine map_in
 
@@ -119,10 +119,10 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call pull_budgets(ms)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    subroutine pull_budgets(ms)
@@ -134,15 +134,15 @@ contains
       !! pull them itself.  `if_present` ⇒ inert when nothing is mapped (host
       !! build / un-mapped subtest) and on non-OpenACC compilers.
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc update self(ms%mass_budget_continuity, &
-      !$acc&            ms%heat_budget_surface, ms%salt_budget_surface, &
-      !$acc&            ms%heat_budget_geothermal, &
-      !$acc&            ms%heat_budget_vert_adv, ms%salt_budget_vert_adv, &
-      !$acc&            ms%heat_budget_vdiff, ms%salt_budget_vdiff, &
-      !$acc&            ms%heat_budget_hdiff, ms%salt_budget_hdiff, &
-      !$acc&            ms%heat_budget_horiz_adv, ms%salt_budget_horiz_adv, &
-      !$acc&            ms%mass_budget_remap, ms%heat_budget_remap, &
-      !$acc&            ms%salt_budget_remap) if_present
+      !$omp target update from(ms%mass_budget_continuity, &
+      !$omp&            ms%heat_budget_surface, ms%salt_budget_surface, &
+      !$omp&            ms%heat_budget_geothermal, &
+      !$omp&            ms%heat_budget_vert_adv, ms%salt_budget_vert_adv, &
+      !$omp&            ms%heat_budget_vdiff, ms%salt_budget_vdiff, &
+      !$omp&            ms%heat_budget_hdiff, ms%salt_budget_hdiff, &
+      !$omp&            ms%heat_budget_horiz_adv, ms%salt_budget_horiz_adv, &
+      !$omp&            ms%mass_budget_remap, ms%heat_budget_remap, &
+      !$omp&            ms%salt_budget_remap)
    end subroutine pull_budgets
 
    pure function area_sum(field, nx, ny, area_w) result(s)
@@ -226,7 +226,7 @@ contains
          ! on-device every step), so the host-set flux above is NOT on the
          ! device yet — push it (else the -gpu=mem:separate kernel reads
          ! uninitialised device flux and the budget never fills).
-         !$acc update device(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
+         !$omp target update to(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
          call tracer_advect_zonal(grid, metrics, ct, ms, DT, ms%h_layer, ms%h_layer)
          call tracer_advect_meridional(grid, metrics, ct, ms, DT, ms%h_layer, ms%h_layer)
          call map_out(ms, ct)
@@ -261,7 +261,7 @@ contains
          iareaT_val = metrics%iareaT(nx_phys/2 + NGHOST, ny_phys/2 + NGHOST)
 
          call map_in(ms, ct)
-         !$acc update device(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
+         !$omp target update to(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
          call tracer_advect_zonal(grid, metrics, ct, ms, DT, ms%h_layer, ms%h_layer)
          call map_out(ms, ct)
 
@@ -385,7 +385,7 @@ contains
                         ms%tracers(ms%idx_temperature)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)) &
                     *grid%dx*grid%dy*RHO_WATER
 
-         !$acc enter data copyin(ms, sf, ct)
+         !$omp target enter data map(to: ms, sf, ct)
          call ms%enter_data()
          call sf%enter_data()
          call ct%enter_data()
@@ -402,7 +402,7 @@ contains
          call ct%exit_data()
          call ms%exit_data()
          call sf%exit_data()
-         !$acc exit data delete(ms, sf, ct)
+         !$omp target exit data map(delete: ms, sf, ct)
 
          ! Post-run totals (host-side, ghosts excluded)
          total_salt = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
@@ -550,7 +550,7 @@ contains
          ref_heat = sum(hH0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
                         hT0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
 
-         !$acc enter data copyin(ms, sf, ct)
+         !$omp target enter data map(to: ms, sf, ct)
          call ms%enter_data()
          call sf%enter_data()
          call ct%enter_data()
@@ -567,7 +567,7 @@ contains
          call ct%exit_data()
          call ms%exit_data()
          call sf%exit_data()
-         !$acc exit data delete(ms, sf, ct)
+         !$omp target exit data map(delete: ms, sf, ct)
 
          ! ---- Manual RK2 average of the tracers (mirrors rk2_average_field_3d) ----
          ! Literal 0.5 = the physics RK2 scheme.  The console weight lives in
@@ -901,7 +901,7 @@ contains
          ref_salt = sum(hH0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
                         hS0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
 
-         !$acc enter data copyin(ms, geo)
+         !$omp target enter data map(to: ms, geo)
          call ms%enter_data()
 
          ! Faithful RK2 outer step: geothermal each stage (fills hTr +
@@ -911,7 +911,7 @@ contains
 
          call pull_budgets(ms)
          call ms%exit_data()
-         !$acc exit data delete(ms, geo)
+         !$omp target exit data map(delete: ms, geo)
 
          ! Manual RK2 average (physics 0.5).
          ms%tracers(is)%c = (hH0*hS0 + ms%h_layer*ms%tracers(is)%c)/(hH0 + ms%h_layer)
@@ -1059,9 +1059,9 @@ contains
          ! tracers%c) goes through the production deep-map; the local scratch
          ! (mfx / fxl / fxr / budget) is mapped explicitly.  metrics is already
          ! device-resident (make_cartesian_metrics).  All inert on host builds.
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(mfx) create(fxl, fxr) copyin(budget)
+         !$omp target enter data map(to: mfx) map(alloc: fxl, fxr) map(to: budget)
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
                                            metrics%wet_T, ms%h_layer, ms%h_layer, &
                                            ms%tracers(ms%idx_temperature)%c, mfx, &
@@ -1072,10 +1072,10 @@ contains
                                            metrics%wet_T, ms%h_layer, ms%h_layer, &
                                            ms%tracers(ms%idx_temperature)%c, mfx, &
                                            fxl, fxr, budget_adv=budget)
-         !$acc update self(budget)
-         !$acc exit data delete(mfx, fxl, fxr, budget)
+         !$omp target update from(budget)
+         !$omp target exit data map(delete: mfx, fxl, fxr, budget)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          ! Manual RK2 average (physics 0.5).
          ms%tracers(ms%idx_temperature)%c = &
             0.5_wp*(hTr0 + ms%tracers(ms%idx_temperature)%c)
@@ -1186,13 +1186,13 @@ contains
          ! the flux compute, and the local scratch (mfx / hTr_* / fx*_* /
          ! budget) must be mapped explicitly around the impl calls.  All inert
          ! on host builds.
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(ct)
+         !$omp target enter data map(to: ct)
          call ct%enter_data()
 
          call continuity_zonal_flux(grid, metrics, ct, ms, DT)
-         !$acc update self(ms%mass_flux_x_layer)
+         !$omp target update from(ms%mass_flux_x_layer)
          allocate (mfx, source=ms%mass_flux_x_layer)
 
          allocate (hTr0, source=ms%tracers(ms%idx_temperature)%c)
@@ -1206,16 +1206,16 @@ contains
 
          ! Zonal: run A WITH budget_adv, run B WITHOUT — identical everything
          ! else, independent face buffers.
-         !$acc enter data copyin(mfx, hTr_a, hTr_b, budget) &
-         !$acc            create(fxl_a, fxr_a, fxl_b, fxr_b)
+         !$omp target enter data map(to: mfx, hTr_a, hTr_b, budget) &
+         !$omp            map(alloc: fxl_a, fxr_a, fxl_b, fxr_b)
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
                                            metrics%wet_T, ms%h_layer, ms%h_layer, hTr_a, mfx, &
                                            fxl_a, fxr_a, budget_adv=budget)
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
                                            metrics%wet_T, ms%h_layer, ms%h_layer, hTr_b, mfx, &
                                            fxl_b, fxr_b)
-         !$acc update self(hTr_a, hTr_b, budget)
-         !$acc exit data delete(mfx, hTr_a, hTr_b, budget, fxl_a, fxr_a, fxl_b, fxr_b)
+         !$omp target update from(hTr_a, hTr_b, budget)
+         !$omp target exit data map(delete: mfx, hTr_a, hTr_b, budget, fxl_a, fxr_a, fxl_b, fxr_b)
 
          max_diff = maxval(abs(hTr_a - hTr_b))
          call check(error, max_diff == 0.0_wp, &
@@ -1229,9 +1229,9 @@ contains
          ! mass flux, then repeat the WITH-vs-WITHOUT contrast.  Reuse hTr_a as
          ! the common input for both runs (it equals hTr_b bit-for-bit here).
          ms%tracers(ms%idx_temperature)%c = hTr_a
-         !$acc update device(ms%tracers(ms%idx_temperature)%c)
+         !$omp target update to(ms%tracers(ms%idx_temperature)%c)
          call continuity_meridional_flux(grid, metrics, ct, ms, DT)
-         !$acc update self(ms%mass_flux_y_layer)
+         !$omp target update from(ms%mass_flux_y_layer)
          allocate (mfy, source=ms%mass_flux_y_layer)
          deallocate (hTr_b)
          allocate (hTr_b, source=hTr_a)
@@ -1241,16 +1241,16 @@ contains
          allocate (fyr_b(nx, ny + 1, NZ), source=0.0_wp)
          budget = 0.0_wp
 
-         !$acc enter data copyin(mfy, hTr_a, hTr_b, budget) &
-         !$acc            create(fyl_a, fyr_a, fyl_b, fyr_b)
+         !$omp target enter data map(to: mfy, hTr_a, hTr_b, budget) &
+         !$omp            map(alloc: fyl_a, fyr_a, fyl_b, fyr_b)
          call tracer_advect_meridional_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
                                                 metrics%wet_T, ms%h_layer, ms%h_layer, hTr_a, mfy, &
                                                 fyl_a, fyr_a, budget_adv=budget)
          call tracer_advect_meridional_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
                                                 metrics%wet_T, ms%h_layer, ms%h_layer, hTr_b, mfy, &
                                                 fyl_b, fyr_b)
-         !$acc update self(hTr_a, hTr_b, budget)
-         !$acc exit data delete(mfy, hTr_a, hTr_b, budget, fyl_a, fyr_a, fyl_b, fyr_b)
+         !$omp target update from(hTr_a, hTr_b, budget)
+         !$omp target exit data map(delete: mfy, hTr_a, hTr_b, budget, fyl_a, fyr_a, fyl_b, fyr_b)
 
          max_diff = maxval(abs(hTr_a - hTr_b))
          call check(error, max_diff == 0.0_wp, &
@@ -1261,9 +1261,9 @@ contains
 
       end block checks
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call ct%destroy()
       call ms%destroy()
       call destroy_cartesian_metrics(metrics)
@@ -1422,11 +1422,11 @@ contains
          ref_salt = area_sum(ms%h_layer*ms%tracers(is)%c, nx, ny, area_w)*RHO_WATER
          ref_heat = area_sum(ms%h_layer*ms%tracers(it)%c, nx, ny, area_w)*RHO_WATER
 
-         !$acc enter data copyin(ms, sf, ct)
+         !$omp target enter data map(to: ms, sf, ct)
          call ms%enter_data()
          call sf%enter_data()
          call ct%enter_data()
-         !$acc enter data create(h_save, hs_save, ht_save)
+         !$omp target enter data map(alloc: h_save, hs_save, ht_save)
 
          ! ---- Outer step 1 of the window (accumulate; no drain) ----
          call window_outer_step(grid, metrics, ct, ms, sf, DT, nx, ny, NZ, is, it, &
@@ -1456,11 +1456,11 @@ contains
          call window_totals(ms, nx, ny, is, it, area_w, total_salt, total_heat, &
                             src_salt, src_heat, out_salt, out_heat)
 
-         !$acc exit data delete(h_save, hs_save, ht_save)
+         !$omp target exit data map(delete: h_save, hs_save, ht_save)
          call ct%exit_data()
          call ms%exit_data()
          call sf%exit_data()
-         !$acc exit data delete(ms, sf, ct)
+         !$omp target exit data map(delete: ms, sf, ct)
 
          res_salt = (total_salt - ref_salt) + out_salt - src_salt
          res_heat = (total_heat - ref_heat) + out_heat - src_heat
@@ -1562,7 +1562,7 @@ contains
          ref_salt = area_sum(ms%h_layer*ms%tracers(is)%c, nx, ny, area_w)*RHO_WATER
          ref_heat = area_sum(ms%h_layer*ms%tracers(it)%c, nx, ny, area_w)*RHO_WATER
 
-         !$acc enter data copyin(ms, sf, ct)
+         !$omp target enter data map(to: ms, sf, ct)
          call ms%enter_data()
          call sf%enter_data()
          call ct%enter_data()
@@ -1596,7 +1596,7 @@ contains
          call ct%exit_data()
          call ms%exit_data()
          call sf%exit_data()
-         !$acc exit data delete(ms, sf, ct)
+         !$omp target exit data map(delete: ms, sf, ct)
 
          res_salt = (total_salt - ref_salt) + out_salt - src_salt
          res_heat = (total_heat - ref_heat) + out_heat - src_heat
@@ -1689,9 +1689,9 @@ contains
 
       call pull_budgets(ms)
       associate (hs => ms%tracers(is)%c, ht => ms%tracers(it)%c)
-         !$acc update self(hs, ht) if_present
+         !$omp target update from(hs, ht)
       end associate
-      !$acc update self(ms%h_layer) if_present
+      !$omp target update from(ms%h_layer)
 
       total_salt = area_sum(ms%h_layer*ms%tracers(is)%c, nx, ny, area_w)*RHO_WATER
       total_heat = area_sum(ms%h_layer*ms%tracers(it)%c, nx, ny, area_w)*RHO_WATER
@@ -1749,16 +1749,16 @@ contains
          t_before = ms%tracers(ms%idx_temperature)%c(i, j, :)
          s_before = ms%tracers(ms%idx_salinity)%c(i, j, :)
 
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call sf%enter_data()
          call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
          call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
          call pull_budgets(ms)
-         !$acc update self(ms%tracers(ms%idx_temperature)%c, ms%tracers(ms%idx_salinity)%c)
+         !$omp target update from(ms%tracers(ms%idx_temperature)%c, ms%tracers(ms%idx_salinity)%c)
          call sf%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          heat_exp = Q_HEAT*DT/(sf%rho0*sf%cp)
          salt_exp = Q_SALT*DT/sf%rho0

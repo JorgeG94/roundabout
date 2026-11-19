@@ -175,13 +175,13 @@ contains
       !! COMPONENT array — never the aggregate.
       type(multilayer_state_t), intent(inout) :: ms
       type(eos_t), intent(in) :: eos
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc update device(ms%p_top)
+      !$omp target update to(ms%p_top)
       call ocean_eos_compute(eos, ms)
-      !$acc update self(ms%rho_layer)
+      !$omp target update from(ms%rho_layer)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine compute_density
 
    subroutine run_column_sweep(grid, eos, rho_seed, p_top_val, p_edge, rho_insitu)
@@ -206,14 +206,14 @@ contains
       allocate (p_edge(nx, ny, NZ + 1), source=-1.0_wp)
       allocate (rho_insitu(nx, ny, NZ), source=0.0_wp)
 
-      !$acc enter data copyin(h_layer, hS, hT, seed, p_top_fld)
-      !$acc enter data create(p_edge, rho_insitu)
+      !$omp target enter data map(to: h_layer, hS, hT, seed, p_top_fld)
+      !$omp target enter data map(alloc: p_edge, rho_insitu)
       call eos_wright_pgf_column_sweep_impl(h_layer, hS, hT, seed, p_top_fld, &
                                             p_edge, rho_insitu, &
                                             GRAVITY, eos%rho0, nx, ny, NZ)
-      !$acc update self(p_edge, rho_insitu)
-      !$acc exit data delete(p_edge, rho_insitu)
-      !$acc exit data delete(h_layer, hS, hT, seed, p_top_fld)
+      !$omp target update from(p_edge, rho_insitu)
+      !$omp target exit data map(delete: p_edge, rho_insitu)
+      !$omp target exit data map(delete: h_layer, hS, hT, seed, p_top_fld)
    end subroutine run_column_sweep
 
    ! ------------------------------------------------------------------
@@ -562,7 +562,7 @@ contains
       psurf%rho0 = eos%rho0
       call p_surf_configure(psurf, nx, ny)
 
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, psurf, sf)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, psurf, sf)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -577,14 +577,14 @@ contains
       call dyn%enter_data()
       call psurf%enter_data()
       call sf%enter_data()
-      !$acc update device(ms%p_top, sf%p_surf)
+      !$omp target update to(ms%p_top, sf%p_surf)
 
       do step = 1, N_STEPS
          call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, DT, N_INNER, sf=sf, psurf=psurf)
       end do
 
-      !$acc update self(ms%rho_layer, ms%p_top)
+      !$omp target update from(ms%rho_layer, ms%p_top)
       allocate (rho_out, source=ms%rho_layer)
       allocate (ptop_out, source=ms%p_top)
 
@@ -602,7 +602,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, psurf, sf)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, psurf, sf)
       call metrics%exit_data()
 
       call check(error, all(rho_out == rho_out), "rho_out is NaN")

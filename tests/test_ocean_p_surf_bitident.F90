@@ -145,7 +145,7 @@ contains
       psurf%enable = .false.
       call p_surf_configure(psurf, nx, ny)
 
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, psurf)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, psurf)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -170,7 +170,7 @@ contains
          end if
       end do
 
-      !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer, dyn%bt_work%bt_eta)
+      !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer, dyn%bt_work%bt_eta)
       ! C-grid faces are staggered (u has nx+1 in dim 1, v has ny+1 in
       ! dim 2), so take the arrays' own shapes via source-only allocation.
       allocate (eta_out, source=dyn%bt_work%bt_eta)
@@ -190,7 +190,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, psurf)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, psurf)
       call metrics%exit_data()
 
       call check(error, all(eta_out == eta_out), "eta_out is NaN")

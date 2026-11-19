@@ -236,18 +236,18 @@ contains
          ip = grid%nghost + 2
          jp = grid%nghost + 2
 
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
-         !$acc enter data copyin(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-         !$acc                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-         !$acc                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+         !$omp target enter data map(to: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+         !$omp                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+         !$omp                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
 
          ice%m_ice(ip, jp, 1) = m_ice_seed
          ice%m_snow(ip, jp, 1) = m_snow_seed
          ice%enth_ice(ip, jp, 1, :) = enth_ice_seed
          ice%enth_snow(ip, jp, 1, 1) = enth_snow_seed
          ice%sal_ice(ip, jp, 1, :) = sal_ice_seed
-         !$acc update device(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
+         !$omp target update to(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
 
          t_elapsed = DAY_S
          recorded = .false.
@@ -263,7 +263,7 @@ contains
                                     heat_to_ocn, sw_thru, snow_to_ice)
             t_elapsed = t_elapsed + DTT
 
-            !$acc update self(ice%m_ice, h2o_ocn_to_ice, h2o_ice_to_ocn)
+            !$omp target update from(ice%m_ice, h2o_ocn_to_ice, h2o_ice_to_ocn)
             sum_ocn_to_ice = sum_ocn_to_ice + h2o_ocn_to_ice(ip, jp, 1)
             sum_ice_to_ocn = sum_ice_to_ocn + h2o_ice_to_ocn(ip, jp, 1)
 
@@ -293,11 +293,11 @@ contains
 
       end block checks
 
-      !$acc exit data delete(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-      !$acc                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-      !$acc                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+      !$omp target exit data map(delete: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+      !$omp                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+      !$omp                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
       call ice%exit_data()
-      !$acc exit data delete(ice)
+      !$omp target exit data map(delete: ice)
       call ice%destroy()
    end subroutine test_stefan_growth
 
@@ -370,18 +370,18 @@ contains
          ip = grid%nghost + 2
          jp = grid%nghost + 2
 
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
-         !$acc enter data copyin(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-         !$acc                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-         !$acc                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+         !$omp target enter data map(to: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+         !$omp                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+         !$omp                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
 
          ice%m_ice(ip, jp, 1) = m_ice_seed
          ice%m_snow(ip, jp, 1) = m_snow_seed
          ice%enth_ice(ip, jp, 1, :) = enth_ice_seed
          ice%enth_snow(ip, jp, 1, 1) = enth_snow_seed
          ice%sal_ice(ip, jp, 1, :) = sal_ice_seed
-         !$acc update device(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
+         !$omp target update to(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
 
          sum_ocn_to_ice = 0.0_wp
          sum_ice_to_ocn = 0.0_wp
@@ -394,12 +394,12 @@ contains
                                     tsurf_out, h2o_ocn_to_ice, h2o_ice_to_ocn, &
                                     heat_to_ocn, sw_thru, snow_to_ice)
 
-            !$acc update self(h2o_ocn_to_ice, h2o_ice_to_ocn)
+            !$omp target update from(h2o_ocn_to_ice, h2o_ice_to_ocn)
             sum_ocn_to_ice = sum_ocn_to_ice + h2o_ocn_to_ice(ip, jp, 1)
             sum_ice_to_ocn = sum_ice_to_ocn + h2o_ice_to_ocn(ip, jp, 1)
          end do
 
-         !$acc update self(ice%m_ice)
+         !$omp target update from(ice%m_ice)
          m_ice_end = ice%m_ice(ip, jp, 1)
 
          call check(error, m_ice_end < m_ice0 - 1.0_wp, &
@@ -417,11 +417,11 @@ contains
 
       end block checks
 
-      !$acc exit data delete(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-      !$acc                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-      !$acc                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+      !$omp target exit data map(delete: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+      !$omp                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+      !$omp                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
       call ice%exit_data()
-      !$acc exit data delete(ice)
+      !$omp target exit data map(delete: ice)
       call ice%destroy()
    end subroutine test_melt_ablation
 
@@ -616,18 +616,18 @@ contains
          ip = grid%nghost + 2
          jp = grid%nghost + 2
 
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
-         !$acc enter data copyin(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-         !$acc                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-         !$acc                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+         !$omp target enter data map(to: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+         !$omp                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+         !$omp                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
 
          ice%m_ice(ip, jp, 1) = m_ice_seed
          ice%m_snow(ip, jp, 1) = m_snow_seed
          ice%enth_ice(ip, jp, 1, :) = enth_ice_seed
          ice%enth_snow(ip, jp, 1, 1) = enth_snow_seed
          ice%sal_ice(ip, jp, 1, :) = sal_ice_seed
-         !$acc update device(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
+         !$omp target update to(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
 
          do step = 1, N_STEPS
             call ice_thermo_columns(grid%nghost, nx, ny, 1, NK, DTT, .false., wet_mask, &
@@ -638,18 +638,18 @@ contains
                                     heat_to_ocn, sw_thru, snow_to_ice)
          end do
 
-         !$acc update self(ice%m_ice)
+         !$omp target update from(ice%m_ice)
          h_end = ice%m_ice(ip, jp, 1)/ICE_RHO_ICE
          call check(error, abs(h_end - H_EQ) < 1.0e-6_wp, &
                     "equilibrium thickness must drift by < 1e-6 m over 10 days")
 
       end block checks
 
-      !$acc exit data delete(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-      !$acc                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-      !$acc                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+      !$omp target exit data map(delete: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+      !$omp                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+      !$omp                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
       call ice%exit_data()
-      !$acc exit data delete(ice)
+      !$omp target exit data map(delete: ice)
       call ice%destroy()
    end subroutine test_equilibrium_fixed_point
 
@@ -1122,18 +1122,18 @@ contains
          ip = grid%nghost + 2
          jp = grid%nghost + 2
 
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
-         !$acc enter data copyin(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-         !$acc                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-         !$acc                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+         !$omp target enter data map(to: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+         !$omp                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+         !$omp                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
 
          ice%m_ice(ip, jp, 1) = M_ICE0
          ice%m_snow(ip, jp, 1) = M_SNOW0
          ice%enth_ice(ip, jp, 1, :) = enth_ice_seed
          ice%enth_snow(ip, jp, 1, 1) = enth_snow_seed
          ice%sal_ice(ip, jp, 1, :) = sal_ice_seed
-         !$acc update device(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
+         !$omp target update to(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
 
          m_ice_before = M_ICE0
          m_snow_before = M_SNOW0
@@ -1146,7 +1146,7 @@ contains
                                  tsurf_out, h2o_ocn_to_ice, h2o_ice_to_ocn, &
                                  heat_to_ocn, sw_thru, snow_to_ice)
 
-         !$acc update self(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, snow_to_ice)
+         !$omp target update from(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, snow_to_ice)
 
          call check(error, snow_to_ice(ip, jp, 1) > 0.0_wp, &
                     "snow_to_ice must be nonzero on the flooded cell -- the mem:separate canary")
@@ -1182,11 +1182,11 @@ contains
 
       end block checks
 
-      !$acc exit data delete(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-      !$acc                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-      !$acc                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+      !$omp target exit data map(delete: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+      !$omp                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+      !$omp                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
       call ice%exit_data()
-      !$acc exit data delete(ice)
+      !$omp target exit data map(delete: ice)
       call ice%destroy()
    end subroutine test_snow_ice_column_device
 
@@ -1298,18 +1298,18 @@ contains
       ip = grid%nghost + 2
       jp = grid%nghost + 2
 
-      !$acc enter data copyin(ice)
+      !$omp target enter data map(to: ice)
       call ice%enter_data()
-      !$acc enter data copyin(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-      !$acc                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-      !$acc                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+      !$omp target enter data map(to: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+      !$omp                   sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+      !$omp                   h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
 
       ice%m_ice(ip, jp, 1) = M_ICE0
       ice%m_snow(ip, jp, 1) = M_SNOW0
       ice%enth_ice(ip, jp, 1, :) = ice_enth_from_ts(TFW, ICE_BULK_SALINITY)
       ice%enth_snow(ip, jp, 1, 1) = ice_enth_from_ts(-10.0_wp, 0.0_wp)
       ice%sal_ice(ip, jp, 1, :) = ICE_BULK_SALINITY
-      !$acc update device(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
+      !$omp target update to(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
 
       snow_to_ice_all_zero = .true.
 
@@ -1320,22 +1320,22 @@ contains
                                  sst_arr, s_surf_arr, &
                                  tsurf_out, h2o_ocn_to_ice, h2o_ice_to_ocn, &
                                  heat_to_ocn, sw_thru, snow_to_ice)
-         !$acc update self(snow_to_ice)
+         !$omp target update from(snow_to_ice)
          if (snow_to_ice(ip, jp, 1) /= 0.0_wp) snow_to_ice_all_zero = .false.
       end do
 
-      !$acc update self(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
+      !$omp target update from(ice%m_ice, ice%m_snow, ice%enth_ice, ice%enth_snow, ice%sal_ice)
       m_ice_out = ice%m_ice(ip, jp, 1)
       m_snow_out = ice%m_snow(ip, jp, 1)
       enth_snow_out = ice%enth_snow(ip, jp, 1, 1)
       enth_ice_out(:) = ice%enth_ice(ip, jp, 1, :)
       sal_ice_out(:) = ice%sal_ice(ip, jp, 1, :)
 
-      !$acc exit data delete(wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
-      !$acc                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
-      !$acc                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
+      !$omp target exit data map(delete: wet_mask, sf_0, dsf_dt, sw_dn, fprec, tfw_arr, fb_arr, &
+      !$omp                  sst_arr, s_surf_arr, tsurf_out, h2o_ocn_to_ice, &
+      !$omp                  h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice)
       call ice%exit_data()
-      !$acc exit data delete(ice)
+      !$omp target exit data map(delete: ice)
       call ice%destroy()
    end subroutine run_snowy_trajectory_no_flood
 

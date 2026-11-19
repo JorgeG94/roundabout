@@ -246,11 +246,11 @@ contains
    subroutine sponge_workspace_cleanup()
       !! Release the persistent sponge workspaces (device first).  Idempotent.
       if (allocated(band_decay)) then
-         !$acc exit data delete(band_decay)
+         !$omp target exit data map(delete: band_decay)
          deallocate (band_decay)
       end if
       if (allocated(map_decay)) then
-         !$acc exit data delete(map_decay)
+         !$omp target exit data map(delete: map_decay)
          deallocate (map_decay)
       end if
       band_cap = 0
@@ -275,11 +275,11 @@ contains
 
       if (band > band_cap) then
          if (allocated(band_decay)) then
-            !$acc exit data delete(band_decay)
+            !$omp target exit data map(delete: band_decay)
             deallocate (band_decay)
          end if
          allocate (band_decay(0:band - 1, 4), source=0.0_wp)
-         !$acc enter data create(band_decay)
+         !$omp target enter data map(alloc: band_decay)
          band_cap = band
          band_key_n = -1
       end if
@@ -289,7 +289,7 @@ contains
          tau = strength*alpha
          band_decay(d, e) = rdb_sm_exp(-tau*dt)
       end do
-      !$acc update device(band_decay)
+      !$omp target update to(band_decay)
       band_key_n(e) = band
       band_key_s(e) = strength
       band_key_dt(e) = dt
@@ -304,13 +304,13 @@ contains
 
       if (nxi > map_nx .or. nyi > map_ny) then
          if (allocated(map_decay)) then
-            !$acc exit data delete(map_decay)
+            !$omp target exit data map(delete: map_decay)
             deallocate (map_decay)
          end if
          map_nx = max(map_nx, nxi)
          map_ny = max(map_ny, nyi)
          allocate (map_decay(map_nx, map_ny), source=1.0_wp)
-         !$acc enter data create(map_decay)
+         !$omp target enter data map(alloc: map_decay)
       end if
       call map_decay_fill_impl(idamp, map_decay, nxi, nyi, map_nx, map_ny, dt)
    end subroutine map_decay_fill
@@ -388,10 +388,10 @@ contains
    subroutine ocean_sponge_enter_data_impl(this)
       type(ocean_sponge_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&                  this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
-      !$acc update device(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&               this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
+      !$omp target enter data map(to: this%idamp_h, this%idamp_u, this%idamp_v, &
+      !$omp&                  this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
+      !$omp target update to(this%idamp_h, this%idamp_u, this%idamp_v, &
+      !$omp&               this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
    end subroutine ocean_sponge_enter_data_impl
 
    subroutine ocean_sponge_exit_data(this)
@@ -406,8 +406,8 @@ contains
       type(ocean_sponge_t), intent(inout) :: this
       call sponge_workspace_cleanup()
       if (.not. this%is_init) return
-      !$acc exit data delete(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&                 this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
+      !$omp target exit data map(delete: this%idamp_h, this%idamp_u, this%idamp_v, &
+      !$omp&                 this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
    end subroutine ocean_sponge_exit_data_impl
 
    pure function ocean_sponge_bytes(this) result(nbytes)
@@ -839,7 +839,7 @@ contains
       !! from the legacy edge/band cosine ramp; the map kernels above derive
       !! it directly from a per-cell `Idamp`). "One home" for the algebra
       !! per the plan (§3.1 / step 10).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: cur, tgt, decay
       res = cur*decay + tgt*(1.0_wp - decay)
    end function relax_toward

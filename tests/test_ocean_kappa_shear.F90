@@ -997,7 +997,7 @@ contains
          ! ---- Mapped run with poisoned host inputs ----
          call ms%enter_data()
          call ks%enter_data()
-         !$acc enter data copyin(wet_t, wet_u, wet_v)
+         !$omp target enter data map(to: wet_t, wet_u, wet_v)
 #ifdef RDB_GPU_OFFLOAD
          call poison_3d(ms%h_layer)
          call poison_3d(ms%u_face_x_layer)
@@ -1008,8 +1008,8 @@ contains
          call poison_3d(ks%kd_corner)   ! the kernel-1 -> kernel-2 carrier
 #endif
          call kappa_shear_compute(grid, ks, ms, DT, wet_t, wet_u, wet_v)
-         !$acc update self(ks%kd_int)
-         !$acc exit data delete(wet_t, wet_u, wet_v)
+         !$omp target update from(ks%kd_int)
+         !$omp target exit data map(delete: wet_t, wet_u, wet_v)
          call ks%exit_data()
          call ms%exit_data()
 
@@ -1369,11 +1369,11 @@ contains
          ! ---- Mapped run with poisoned host inputs ----
          ms%u_face_x_layer = u0
          ms%v_face_y_layer = v0
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(vd)
+         !$omp target enter data map(to: vd)
          call vd%enter_data()
-         !$acc enter data copyin(kv_zero, corner)
+         !$omp target enter data map(to: kv_zero, corner)
 #ifdef RDB_GPU_OFFLOAD
          call poison_3d(ms%h_layer)
          call poison_3d(kv_zero)
@@ -1382,12 +1382,12 @@ contains
          call vdiff_apply_momentum(grid, vd, ms, DT, kv_source=kv_zero, &
                                    kv_corner_source=corner, &
                                    kv_corner_prandtl=1.0_wp)
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
-         !$acc exit data delete(kv_zero, corner)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target exit data map(delete: kv_zero, corner)
          call vd%exit_data()
-         !$acc exit data delete(vd)
+         !$omp target exit data map(delete: vd)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          dmax = max(maxval(abs(ms%u_face_x_layer - u_ref)), &
                     maxval(abs(ms%v_face_y_layer - v_ref)))

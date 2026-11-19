@@ -73,17 +73,17 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(ocean_surface_flux_t), intent(inout) :: sf
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
       associate (hT => ms%tracers(ms%idx_temperature)%c)
-         !$acc update self(hT)
+         !$omp target update from(hT)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine run_full
 
    !> Run ONLY the SW penetration kernel (no surface deposition first),
@@ -92,16 +92,16 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(ocean_surface_flux_t), intent(inout) :: sf
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
       associate (hT => ms%tracers(ms%idx_temperature)%c)
-         !$acc update self(hT)
+         !$omp target update from(hT)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine run_sw_only
 
    subroutine setup(grid, ms, eos, sf, frac)
@@ -321,18 +321,18 @@ contains
          call sf%set_surface_flux_const(qsw + swice, 0.0_wp)
          call sf%set_sw_penetration(FRAC, R, ZETA1, ZETA2)
       end if
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_refresh_sw_net(sf)
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
       associate (c => ms%tracers(ms%idx_temperature)%c)
-         !$acc update self(c)
+         !$omp target update from(c)
       end associate
       hT = ms%tracers(ms%idx_temperature)%c
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
       call sf%destroy(); call eos%destroy(); call ms%destroy()
    end subroutine pen_run
 

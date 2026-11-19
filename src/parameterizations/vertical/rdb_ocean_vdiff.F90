@@ -419,8 +419,8 @@ contains
       call scratch_3d_buffer_enter_data_impl(this%c_diag_v)
       call scratch_3d_buffer_enter_data_impl(this%rhs_v)
       call scratch_3d_buffer_enter_data_impl(this%kv_scalar_buf)
-      !$acc enter data copyin(this%kv_bbl_u, this%kv_bbl_v, this%bbl_thick_u, this%bbl_thick_v)
-      !$acc enter data copyin(this%bbl_conc_t, this%bbl_conc_s)
+      !$omp target enter data map(to: this%kv_bbl_u, this%kv_bbl_v, this%bbl_thick_u, this%bbl_thick_v)
+      !$omp target enter data map(to: this%bbl_conc_t, this%bbl_conc_s)
       if (this%bbl_mix%enable) call this%bbl_mix%enter_data()
    end subroutine ocean_vdiff_enter_data_impl
 
@@ -447,9 +447,9 @@ contains
       call scratch_3d_buffer_exit_data_impl(this%c_diag_v)
       call scratch_3d_buffer_exit_data_impl(this%rhs_v)
       call scratch_3d_buffer_exit_data_impl(this%kv_scalar_buf)
-      !$acc exit data delete(this%kv_bbl_u, this%kv_bbl_v, this%bbl_thick_u, this%bbl_thick_v)
+      !$omp target exit data map(delete: this%kv_bbl_u, this%kv_bbl_v, this%bbl_thick_u, this%bbl_thick_v)
       if (this%bbl_mix%enable) call this%bbl_mix%exit_data()
-      !$acc exit data delete(this%bbl_conc_t, this%bbl_conc_s)
+      !$omp target exit data map(delete: this%bbl_conc_t, this%bbl_conc_s)
    end subroutine ocean_vdiff_exit_data_impl
 
    subroutine vdiff_apply_momentum(grid, this, ms, dt, kv_source, &
@@ -1943,7 +1943,7 @@ contains
       !! Marked `pure` + `!$acc routine seq` so NVHPC can inline the
       !! body into the `do concurrent` callers without descriptor
       !! marshalling.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: h_a, h_b
       logical, intent(in) :: use_harmonic
       real(wp) :: dz
@@ -1970,7 +1970,7 @@ contains
       !! `zcol_l` / `zcol_r`.  Called for k = 1, 2, ..., nz in order by
       !! `diffuse_velocity_columns_impl`.  k = 1 is the BED (MOM6 counts
       !! from the surface), so the height accumulates UPWARD.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: hl_c, hr_c
          !! The two abutting cells' thickness of layer k.
       real(wp), intent(in) :: u_k
@@ -2064,7 +2064,7 @@ contains
       !! distance `dz`, so that each of the two rows it couples takes
       !! `num/(hf_k·dz)` as its alpha (row lo) / beta (row hi).  `cut` is the
       !! z-level partial-step decoupling.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: hv_lo, hv_hi
          !! Unfloored face thicknesses of the two layers.
       real(wp), intent(in) :: zint_lo

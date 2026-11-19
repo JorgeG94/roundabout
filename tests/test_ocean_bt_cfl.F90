@@ -436,10 +436,10 @@ contains
       end do
       call bt_dtbt_dt_max(NX, NY, NZ, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
                           fc, GRAVITY, BEBT, .false., dt_host)
-      !$acc enter data copyin(h, wet, dyc, dxc, idxc, idyc, ia, fc)
+      !$omp target enter data map(to: h, wet, dyc, dxc, idxc, idyc, ia, fc)
       call bt_dtbt_dt_max(NX, NY, NZ, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
                           fc, GRAVITY, BEBT, .true., dt_dev)
-      !$acc exit data delete(h, wet, dyc, dxc, idxc, idyc, ia, fc)
+      !$omp target exit data map(delete: h, wet, dyc, dxc, idxc, idyc, ia, fc)
       call check(error, abs(dt_dev - dt_host) <= 1.0e-13_wp*dt_host, &
                  "device dt_max differs from the host loop")
    end subroutine test_dtbt_device

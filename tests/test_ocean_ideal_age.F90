@@ -95,9 +95,9 @@ contains
       real(wp), intent(inout) :: c_age(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: young_eff
-      !$acc enter data copyin(c_age, h_layer)
+      !$omp target enter data map(to: c_age, h_layer)
       call ocean_ideal_age_reset_step(c_age, h_layer, young_eff, nx, ny, nz)
-      !$acc exit data copyout(c_age) delete(h_layer)
+      !$omp target exit data map(from: c_age) map(delete: h_layer)
    end subroutine reset_mapped
 
    subroutine test_init_registers(error)
@@ -374,9 +374,9 @@ contains
       h = H_EACH
       h(1, 1, NZ) = 1.0e-5_wp          ! collapsed top layer
       h(3, 1, :) = 1.0e-5_wp           ! fully dead column
-      !$acc enter data copyin(c_age, h)
+      !$omp target enter data map(to: c_age, h)
       call ocean_ideal_age_reset_step(c_age, h, YOUNG_EFF, NX, NY, NZ)
-      !$acc exit data copyout(c_age) delete(h)
+      !$omp target exit data map(from: c_age) map(delete: h)
 
       call check(error, abs(c_age(1, 1, NZ - 1) - YOUNG_EFF) < 1.0e-12_wp, &
                  "first live layer under a collapsed top layer must be reset")

@@ -61,7 +61,7 @@ contains
                                         t_t, t_b, t_mean, &
                                         s_t, s_b, s_mean, &
                                         parabolic, dpa, intz_dpa)
-      !$acc routine seq
+      !$omp declare target
       !! 5-point Boole-quadrature density-anomaly integral over one layer
       !! (Adcroft, Hallberg & Harrison 2008; White, Adcroft & Hallberg
       !! 2009).  Returns the layer-integrated pressure-anomaly increment
@@ -143,7 +143,7 @@ contains
                                   t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
                                   s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
                                   dpa_l, dpa_r, parabolic, dpa_face)
-      !$acc routine seq
+      !$omp declare target
       !! HORIZONTAL (cross-face) Boole quadrature of the layer pressure
       !! increment `dpa = g * int rho' dz` — the face integral the FV
       !! pressure-gradient contour needs (Adcroft, Hallberg & Harrison
@@ -242,7 +242,7 @@ contains
                                       e_top_l, e_top_r, dz_l, dz_r, &
                                       t_l, t_r, s_l, s_r, dpa_l, dpa_r, &
                                       hwt_ll, hwt_lr, hwt_rr, hwt_rl, dpa_face)
-      !$acc routine seq
+      !$omp declare target
       !! The cross-face Boole quadrature of `boole_dpa_face` for a
       !! CONSTANT-BY-LAYER (PCM) T/S column, with MOM6's near-bottom
       !! mass-weighting of the interpolated T/S (MOM6

@@ -229,14 +229,14 @@ contains
       end if
       nzm = h%state%multilayer%nz_ml
       it = h%state%multilayer%idx_temperature
-      !$acc update self(h%state%multilayer%tracers(it)%c)
+      !$omp target update from(h%state%multilayer%tracers(it)%c)
       out%tt = h%state%multilayer%tracers(it)%c(ng + 1:ng + NX, ng + 1:ng + NY, 1:nzm)
       it = h%state%multilayer%idx_salinity
-      !$acc update self(h%state%multilayer%tracers(it)%c)
+      !$omp target update from(h%state%multilayer%tracers(it)%c)
       out%ss = h%state%multilayer%tracers(it)%c(ng + 1:ng + NX, ng + 1:ng + NY, 1:nzm)
       allocate (out%sw(0, 0))
       if (h%state%surface_flux%sw_from_qsw) then
-         !$acc update self(h%state%surface_flux%sw_net)
+         !$omp target update from(h%state%surface_flux%sw_net)
          out%sw = h%state%surface_flux%sw_net
       end if
       status = rdb_ocean_destroy(handle)
@@ -597,7 +597,7 @@ contains
          call check(error, status == OCEAN_STATUS_OK, "cavity: the run must step cleanly")
          if (allocated(error)) return
          status = rdb_ocean_refresh_host(handle)
-         !$acc update self(h%state%surface_flux%heat_cavity)
+         !$omp target update from(h%state%surface_flux%heat_cavity)
          hcmax = max(hcmax, maxval(abs(h%state%surface_flux%heat_cavity(ng + 1:ng + NXC, ng + 1:ng + NYC))))
          status = rdb_ocean_get_q_heat_ptr(handle, ptr, nxt, nyt, gen)
          call c_f_pointer(ptr, p2, [nxt, nyt])

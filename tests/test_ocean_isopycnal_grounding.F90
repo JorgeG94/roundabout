@@ -212,8 +212,8 @@ contains
                                       vcoord=vc)
 
             if (mod(step, 5) == 0 .or. step == N_STEPS) then
-               !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-               !$acc&            ms%rho_layer)
+               !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
+               !$omp&            ms%rho_layer)
 
                ! (a) No NaN/Inf anywhere
                if (.not. all_finite_grounding(ms, NZ, culprit)) then
@@ -323,9 +323,9 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_dyn_t), intent(inout) :: dyn
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ct%enter_data(); call cor%enter_data(); call pgf%enter_data()
       call hv%enter_data(); call bd%enter_data(); call ss%enter_data()
       call va%enter_data(); call hd%enter_data()
@@ -352,7 +352,7 @@ contains
       call bd%exit_data(); call hv%exit_data(); call pgf%exit_data()
       call cor%exit_data(); call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
    end subroutine map_out_grounding
 
 end module test_ocean_isopycnal_grounding

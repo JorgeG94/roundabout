@@ -1188,12 +1188,12 @@ contains
          status(i) = -1
       end do
 
-      !$acc enter data copyin(t_w, s_w, p_b, u_s, s_i) &
-      !$acc            create(t_b, s_b, m_mass, q_oc, status)
+      !$omp target enter data map(to: t_w, s_w, p_b, u_s, s_i) &
+      !$omp            map(alloc: t_b, s_b, m_mass, q_oc, status)
       call cavity_melt_columns(NCOL, t_w, s_w, p_b, u_s, s_i, par, ice, eos, con, &
                                t_b, s_b, m_mass, q_oc, status)
-      !$acc update self(t_b, s_b, m_mass, q_oc, status)
-      !$acc exit data delete(t_w, s_w, p_b, u_s, s_i, t_b, s_b, m_mass, q_oc, status)
+      !$omp target update from(t_b, s_b, m_mass, q_oc, status)
+      !$omp target exit data map(delete: t_w, s_w, p_b, u_s, s_i, t_b, s_b, m_mass, q_oc, status)
 
       do i = 1, NCOL
          call check(error, status(i) == CAVITY_MELT_OK, &

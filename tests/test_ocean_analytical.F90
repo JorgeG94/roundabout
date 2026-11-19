@@ -171,9 +171,9 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_dyn_t), intent(inout) :: dyn
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
       call ct%enter_data()
       call cor%enter_data()
       call pgf%enter_data()
@@ -214,9 +214,9 @@ contains
       call pgf%exit_data()
       call cor%exit_data()
       call ct%exit_data()
-      !$acc exit data delete(ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out_slots
 
    ! ------------------------------------------------------------------
@@ -448,7 +448,7 @@ contains
             ! Diagnostic: every 1/4 of run, print current peak position
             ! and inferred speed.
             if (mod(step, max(1, N_STEPS/4)) == 0) then
-               !$acc update self(ms%h_layer)
+               !$omp target update from(ms%h_layer)
                block
                   integer :: ii, ii_pk
                   real(wp) :: pk, loc
@@ -640,7 +640,7 @@ contains
                ! Pull the full array — single-element `update self` is
                ! unreliable on NVHPC OpenACC (D->H of one slot may be
                ! optimised away).
-               !$acc update self(ms%v_face_y_layer)
+               !$omp target update from(ms%v_face_y_layer)
                v_sum = v_sum + ms%v_face_y_layer(i_probe, j_probe, k_probe)
                n_avg_samples = n_avg_samples + 1
             end if

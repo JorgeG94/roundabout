@@ -105,7 +105,7 @@ contains
                                       periodic_x=.false., periodic_y=.false., &
                                       north_fold=.false.)
       end if
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
    end subroutine make_cartesian_metrics
 
@@ -122,7 +122,7 @@ contains
       call metrics_fill_spherical(metrics, grid, lon_west, lat_south, &
                                   dlon_deg, dlat_deg, rad_earth)
       call metrics_finalize(metrics)
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
    end subroutine make_spherical_metrics
 
@@ -139,7 +139,7 @@ contains
       call metrics_fill_tripolar(metrics, grid, lon_west, lat_south, &
                                  dlon_deg, dlat_deg, rad_earth, phi_join, lon_pole)
       call metrics_finalize(metrics)
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
    end subroutine make_tripolar_metrics
 
@@ -147,7 +147,7 @@ contains
       !! Device-unmap + deallocate a metrics slot.
       type(ocean_metrics_t), intent(inout) :: metrics
       call metrics%exit_data()
-      !$acc exit data delete(metrics)
+      !$omp target exit data map(delete: metrics)
       call metrics%destroy()
    end subroutine destroy_cartesian_metrics
 
@@ -234,7 +234,7 @@ contains
       ! Single-source inverses + ratio bundle via finalize.
       call metrics_finalize(metrics)
 
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
    end subroutine make_anisotropic_metrics
 

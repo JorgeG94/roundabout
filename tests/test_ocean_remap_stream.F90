@@ -521,15 +521,15 @@ contains
       bud_ref = bud0
       bud_str = bud0
 
-      !$acc enter data copyin(h_old, h_new, tr_ref, tr_str, bud_ref, bud_str, cn_ref, cn_str, cl_ref, cl_str)
-      !$acc enter data copyin(c_old, z_old, z_new, q_lft, q_rgt, q_six)
+      !$omp target enter data map(to: h_old, h_new, tr_ref, tr_str, bud_ref, bud_str, cn_ref, cn_str, cl_ref, cl_str)
+      !$omp target enter data map(to: c_old, z_old, z_new, q_lft, q_rgt, q_six)
       call ocean_remap_tracer_field(NC, 1, nz, h_old, h_new, tr_ref, REMAP_PPM, &
                                     .false., .false., budget=bud_ref, &
                                     c_new_out=cn_ref, clamp_out=cl_ref)
       call ocean_remap_tracer_field_stream(NC, 1, nz, h_old, h_new, tr_str, &
                                            c_old, z_old, z_new, q_lft, q_rgt, q_six, &
                                            budget=bud_str, c_new_out=cn_str, clamp_out=cl_str)
-      !$acc update self(tr_ref, tr_str, bud_ref, bud_str, cn_ref, cn_str, cl_ref, cl_str)
+      !$omp target update from(tr_ref, tr_str, bud_ref, bud_str, cn_ref, cn_str, cl_ref, cl_str)
 
       worst = 0.0_wp
       worst_free = 0.0_wp
@@ -567,12 +567,12 @@ contains
       ! tracer-type call shape).
       tr_ref = tr0
       tr_str = tr0
-      !$acc update device(tr_ref, tr_str)
+      !$omp target update to(tr_ref, tr_str)
       call ocean_remap_tracer_field(NC, 1, nz, h_old, h_new, tr_ref, REMAP_PPM, &
                                     .false., .false.)
       call ocean_remap_tracer_field_stream(NC, 1, nz, h_old, h_new, tr_str, &
                                            c_old, z_old, z_new, q_lft, q_rgt, q_six)
-      !$acc update self(tr_ref, tr_str)
+      !$omp target update from(tr_ref, tr_str)
       worst2 = 0.0_wp
       do ic = 1, NC
          do k = 1, nz
@@ -583,8 +583,8 @@ contains
       end do
       ! Unmap BEFORE any check can return, so a failing assertion cannot
       ! leave the next test a partially present table.
-      !$acc exit data delete(h_old, h_new, tr_ref, tr_str, bud_ref, bud_str, cn_ref, cn_str, cl_ref, cl_str)
-      !$acc exit data delete(c_old, z_old, z_new, q_lft, q_rgt, q_six)
+      !$omp target exit data map(delete: h_old, h_new, tr_ref, tr_str, bud_ref, bud_str, cn_ref, cn_str, cl_ref, cl_str)
+      !$omp target exit data map(delete: c_old, z_old, z_new, q_lft, q_rgt, q_six)
 
       call check(error, n_free_cols > 4, .true., "adversarial field must hold filler-free columns")
       if (allocated(error)) return
@@ -634,12 +634,12 @@ contains
       call fill_field(NZ, h_old, h_new, tr0, bud)
       c = tr0
       bud = 0.0_wp
-      !$acc enter data copyin(h_old, h_new, c, bud, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+      !$omp target enter data map(to: h_old, h_new, c, bud, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
       call ocean_remap_tracer_field_stream(NC, 1, NZ, h_old, h_new, c, &
                                            c_old, z_old, z_new, q_lft, q_rgt, q_six, &
                                            budget=bud, c_new_out=cn, clamp_out=cl)
-      !$acc update self(c, bud, cn, cl)
-      !$acc exit data delete(h_old, h_new, c, bud, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+      !$omp target update from(c, bud, cn, cl)
+      !$omp target exit data map(delete: h_old, h_new, c, bud, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
 
       n_cons = 0
       n_bound = 0
@@ -758,11 +758,11 @@ contains
             bud = 0.0_wp
             cn = 0.0_wp
             cl = 0.0_wp
-            !$acc enter data copyin(h_old, h_new, hTr, bud, cn, cl)
+            !$omp target enter data map(to: h_old, h_new, hTr, bud, cn, cl)
             call ocean_remap_tracer_field(NCOL, 1, NZ, h_old, h_new, hTr, METHODS(im), &
                                           .true., nu, budget=bud, c_new_out=cn, clamp_out=cl)
-            !$acc update self(hTr, bud, cn, cl)
-            !$acc exit data delete(h_old, h_new, hTr, bud, cn, cl)
+            !$omp target update from(hTr, bud, cn, cl)
+            !$omp target exit data map(delete: h_old, h_new, hTr, bud, cn, cl)
             do ic = 1, NCOL
                s0 = sum(h_old(ic, 1, :)*tr0(ic, 1, :))
                s1 = sum(h_new(ic, 1, :)*hTr(ic, 1, :))
@@ -843,7 +843,7 @@ contains
             q_lft = 0.0_wp
             q_rgt = 0.0_wp
             q_six = 0.0_wp
-            !$acc enter data copyin(h_old, h_new, c, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+            !$omp target enter data map(to: h_old, h_new, c, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
             if (ik == 1) then
                call ocean_remap_tracer_field_stream(NCOL, 1, NZ, h_old, h_new, c, &
                                                     c_old, z_old, z_new, q_lft, q_rgt, q_six, &
@@ -852,8 +852,8 @@ contains
                call ocean_remap_tracer_field(NCOL, 1, NZ, h_old, h_new, c, REMAP_PPM, &
                                              .false., .false., c_new_out=cn, clamp_out=cl)
             end if
-            !$acc update self(c, cn, cl)
-            !$acc exit data delete(h_old, h_new, c, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+            !$omp target update from(c, cn, cl)
+            !$omp target exit data map(delete: h_old, h_new, c, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
             res(:, :, :, ik, icase) = c
             if (icase == 1) clamp(:, :, :, ik) = cl
          end do

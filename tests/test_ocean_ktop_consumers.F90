@@ -125,18 +125,18 @@ contains
       sf%cp = SEAWATER_CP
       call sf%set_surface_flux_const(q_heat, q_salt)
 
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_STEP)
       associate (hT => ms%tracers(ms%idx_temperature)%c, &
                  hS => ms%tracers(ms%idx_salinity)%c, &
                  bT => ms%heat_budget_surface, bS => ms%salt_budget_surface)
-         !$acc update self(hT, hS, bT, bS)
+         !$omp target update from(hT, hS, bT, bS)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
       call sf%destroy()
    end subroutine apply_flux
 
@@ -154,17 +154,17 @@ contains
       call sf%set_surface_flux_const(q_heat, 0.0_wp)
       call sf%set_sw_penetration(0.5_wp, 0.58_wp, 0.35_wp, 23.0_wp)
 
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_STEP)
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT_STEP)
       associate (hT => ms%tracers(ms%idx_temperature)%c, bT => ms%heat_budget_surface)
-         !$acc update self(hT, bT)
+         !$omp target update from(hT, bT)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
       call sf%destroy()
    end subroutine apply_flux_sw
 
@@ -193,16 +193,16 @@ contains
          vmix%gamma_s(:, :, k) = A_S*sigma*(1.0_wp - sigma)**2
       end do
 
-      !$acc enter data copyin(ms, vmix)
+      !$omp target enter data map(to: ms, vmix)
       call ms%enter_data()
       call vmix%enter_data()
       call vmix_apply_nonlocal_tendencies(grid, vmix, ms, DT_STEP)
       associate (hT => ms%tracers(ms%idx_temperature)%c, hS => ms%tracers(ms%idx_salinity)%c)
-         !$acc update self(hT, hS)
+         !$omp target update from(hT, hS)
       end associate
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix)
+      !$omp target exit data map(delete: ms, vmix)
       call vmix%destroy()
    end subroutine apply_nonlocal
 

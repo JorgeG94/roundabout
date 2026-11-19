@@ -48,7 +48,7 @@ contains
       !! `1/dt_max^2` of one cell from its four face conductances
       !! `c = D_face dy_face / dx_face` (m), `1/A_T` (1/m^2) and the four
       !! corner Coriolis parameters.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: cE, cW, cN, cS
          !! Face conductances `D dy/dx` (E, W) and `D dx/dy` (N, S) (m).
       real(wp), intent(in) :: iarea
@@ -70,7 +70,7 @@ contains
       !! `1/dt_max(i,j)^2` for T cell `(i,j)` from the layer thicknesses `h`
       !! (column depth `D = sum_k h`).  0 for a land cell.  Needs one ghost
       !! ring of `h` and `wet`.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nx, ny, nz
       integer, intent(in) :: i, j
       real(wp), intent(in) :: h(nx, ny, nz)

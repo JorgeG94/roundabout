@@ -287,7 +287,7 @@ contains
                metrics%open_u(:, :, j) = op(j)
                metrics%open_v(:, :, j) = op(j)
             end do
-            !$acc update device(metrics%open_u, metrics%open_v)
+            !$omp target update to(metrics%open_u, metrics%open_v)
             metrics%use_closed_faces = .true.
             call seed(ms, bt, h, u0, ubar_o, DELTA)
             if (pass == 2) then

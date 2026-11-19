@@ -320,7 +320,7 @@ contains
 
    pure subroutine remap_bound_column(nz, h_old_col, h_new_col, c_old, c_own, c_new, clamp_amt, &
                                       bnd_extrap)
-      !$acc routine seq
+      !$omp declare target
       !! Concentration-form closure of one remapped column (reference path;
       !! the stream kernel 3 does the same per cell).  For each target layer
       !! `k`, with the source cells that CONTRIBUTE to it (`overlap > 0` and
@@ -452,7 +452,7 @@ contains
    end subroutine remap_bound_column
 
    pure subroutine remap_add_filler_excess(nz, h_old_col, h_new_col, c_don, c_own, c_new)
-      !$acc routine seq
+      !$omp declare target
       !! Reference-path half of the filler rule (the stream kernel 2 shifts the
       !! filler's parabola instead).  The column kernel ran on the
       !! donor-substituted `c_don`; each source filler `m` (`0 < h_old <=
@@ -513,7 +513,7 @@ contains
    end function remap_use_stream
 
    pure function remap_ppm_edge(ko, nz, c_m1, c_0, c_p1, c_p2) result(e_hi)
-      !$acc routine seq
+      !$omp declare target
       !! Raw (unlimited) PPM edge between source cells `ko` and `ko+1` from
       !! the four-cell window `c(ko-1..ko+2)`: Colella & Woodward (1984) eq.
       !! 1.9 for uniform cells, the two-point mean next to either boundary.
@@ -531,7 +531,7 @@ contains
    end function remap_ppm_edge
 
    pure function remap_c_at(nx, ny, nz, i, j, kk, c_old) result(c)
-      !$acc routine seq
+      !$omp declare target
       !! Source concentration of layer `kk` of column `(i,j)`, `0` outside
       !! `1..nz`.
       integer, intent(in) :: nx, ny, nz, i, j, kk
@@ -545,7 +545,7 @@ contains
    end function remap_c_at
 
    pure function remap_c_don_at(nx, ny, nz, i, j, kk, c_old, h_old) result(c)
-      !$acc routine seq
+      !$omp declare target
       !! DONOR-substituted source concentration of layer `kk` of column
       !! `(i,j)` (`0` outside `1..nz`): the stored value on a live layer; on a
       !! filler (`h_old <= H_VANISHED`) the nearest live layer above it, or the
@@ -582,7 +582,7 @@ contains
    end function remap_c_don_at
 
    pure subroutine remap_ppm_cell(ko, nz, c_m1, c_0, c_p1, c_p2, e_lo, e_hi, q_l, q_r, q_6)
-      !$acc routine seq
+      !$omp declare target
       !! One source cell of the uniform-weight PPM column, from its window:
       !! the RAW right edge `e_hi` shared with cell `ko+1`, and the Colella &
       !! Woodward (1984) limited parabola `(q_l, q_r, q_6)` of cell `ko`.
@@ -1129,7 +1129,6 @@ contains
    end subroutine remap_y_face_velocity
 
    pure subroutine rescale_anomaly_ke(nz, h_old_face, h_new_face, u_old_col, u_new_col)
-      !$acc routine seq
       !$omp declare target
       !! KE-conserving rescale of a remapped face-velocity column.
       !! The column remap conserves momentum (Σ h·u) but not KE; restore it by

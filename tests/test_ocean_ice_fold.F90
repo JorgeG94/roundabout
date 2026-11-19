@@ -340,7 +340,7 @@ contains
       ! above (setup-time host edits must precede the map), pull the
       ! touched arrays back every step for the per-step symmetry check,
       ! unmap once at the end.
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
 
@@ -349,7 +349,7 @@ contains
          call check(error, ok, "ice_transport_step reported not-ok")
          if (.not. allocated(error)) then
             associate (ps => ice%part_size, mi => ice%m_ice)
-               !$acc update self(ps, mi)
+               !$omp target update from(ps, mi)
             end associate
          end if
          if (allocated(error)) exit
@@ -375,7 +375,7 @@ contains
       end do
       if (allocated(error)) then
          call ice%exit_data(); call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          call ice%destroy(); call ms%destroy(); call ocean_bc_state_destroy(bc)
          call destroy_cartesian_metrics(metrics); call ocean_halo_destroy()
          return
@@ -383,7 +383,7 @@ contains
 
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
 
       mass1 = global_ice_mass(grid, ice, i_lo, i_hi, j_lo, j_hi)
       h_max1 = max_fold_row_thickness(grid, ice, i_lo, i_hi, j_hi)

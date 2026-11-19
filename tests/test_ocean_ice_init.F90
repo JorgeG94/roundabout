@@ -334,17 +334,17 @@ contains
             allocate (es0, source=ice%enth_snow)
             allocate (si0, source=ice%sal_ice)
 
-            !$acc enter data copyin(ms)
+            !$omp target enter data map(to: ms)
             call ms%enter_data()
             call ice%enter_data()
             call ice_adjust_categories(grid, ms, ice)
             associate (ps => ice%part_size, mi => ice%m_ice, msn => ice%m_snow, &
                        ei => ice%enth_ice, es => ice%enth_snow, si => ice%sal_ice)
-               !$acc update self(ps, mi, msn, ei, es, si)
+               !$omp target update from(ps, mi, msn, ei, es, si)
             end associate
             call ice%exit_data()
             call ms%exit_data()
-            !$acc exit data delete(ms)
+            !$omp target exit data map(delete: ms)
 
             call check(error, maxval(abs(ice%part_size - ps0)) == 0.0_wp, &
                        "itd_fixed_point: part_size must be bit-exact")
@@ -638,7 +638,7 @@ contains
          associate (ps => b_state%ice%part_size, mi => b_state%ice%m_ice, &
                     msn => b_state%ice%m_snow, ei => b_state%ice%enth_ice, &
                     es => b_state%ice%enth_snow, si => b_state%ice%sal_ice)
-            !$acc update self(ps, mi, msn, ei, es, si)
+            !$omp target update from(ps, mi, msn, ei, es, si)
          end associate
 
          call check(error, all(b_state%ice%part_size == ps_a), "restart: part_size mismatch")
@@ -747,10 +747,10 @@ contains
       par%tdamp = -0.2_wp
       par%evp_sub_steps = 432
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
-      !$acc enter data copyin(f_corner)
+      !$omp target enter data map(to: f_corner)
 
       periodic_bc%periodic_x = .true.
       periodic_bc%periodic_y = .true.
@@ -773,7 +773,7 @@ contains
             associate (ui => ice%u_ice, vi => ice%v_ice, sd => ice%str_d, &
                        st => ice%str_t, ss => ice%str_s, fx => ice%fxoc, &
                        fy => ice%fyoc, tx => ice%tau_a_x, ty => ice%tau_a_y)
-               !$acc update device(ui, vi, sd, st, ss, fx, fy, tx, ty)
+               !$omp target update to(ui, vi, sd, st, ss, fx, fy, tx, ty)
             end associate
 
             do n = 1, N_OUTER
@@ -782,7 +782,7 @@ contains
             end do
 
             associate (ui => ice%u_ice, vi => ice%v_ice)
-               !$acc update self(ui, vi)
+               !$omp target update from(ui, vi)
             end associate
 
             u_mean = sum(ice%u_ice(NGH + 1:NGH + NXP + 1, NGH + 1:NGH + NYP)) &
@@ -801,10 +801,10 @@ contains
          end do
       end block checks
 
-      !$acc exit data delete(f_corner)
+      !$omp target exit data map(delete: f_corner)
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call ice%destroy()
       call ms%destroy()
       call destroy_cartesian_metrics(metrics)

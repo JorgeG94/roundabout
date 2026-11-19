@@ -167,13 +167,13 @@ contains
             end do
          end do
       end do
-      !$acc enter data copyin(h, u, v, fx, fy, kec, iu, iv)
+      !$omp target enter data map(to: h, u, v, fx, fy, kec, iu, iv)
       ! (copyin happens after every host fill, poison included)
       call ke_regions_efp_local(h, u, v, nx, ny, NZ, NG, nxp, nyp, poff, qoff, &
                                 pnx, pny, RIM, EAST, per_x, per_y, kt)
       call coradv_split_efp_local(h, u, v, fx, fy, kec, iu, iv, nx, ny, NZ, NG, nxp, nyp, &
                                   poff, qoff, pnx, pny, RIM, EAST, DT, per_x, per_y, ct)
-      !$acc exit data delete(h, u, v, fx, fy, kec, iu, iv)
+      !$omp target exit data map(delete: h, u, v, fx, fy, kec, iu, iv)
    end subroutine local_partials
 
    subroutine serial_ref(kt, ct)

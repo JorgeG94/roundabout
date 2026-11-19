@@ -147,15 +147,15 @@ contains
       real(wp), intent(in) :: dx
       type(ocean_metrics_t) :: metrics
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms, pgf)
+      !$omp target enter data map(to: ms, pgf)
       call ms%enter_data()
       call pgf%enter_data()
       call ocean_pressure_force_compute(grid, metrics, pgf, ms, eos=eos)
-      !$acc update self(pgf%dpdx_face%data, pgf%dpdy_face%data, &
-      !$acc&            pgf%intz_dpa%data, pgf%pa%data)
+      !$omp target update from(pgf%dpdx_face%data, pgf%dpdy_face%data, &
+      !$omp&            pgf%intz_dpa%data, pgf%pa%data)
       call pgf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, pgf)
+      !$omp target exit data map(delete: ms, pgf)
       call destroy_cartesian_metrics(metrics)
    end subroutine run_pgf
 

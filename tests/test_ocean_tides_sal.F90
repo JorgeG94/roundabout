@@ -92,7 +92,7 @@ contains
       ! stdpar=gpu kernels (the `update device` in tides_update_eta_eq and
       ! the fold in tides_update_eta_sal both run on device).
       call tides%enter_data()
-      !$acc enter data copyin(eta_ssh)
+      !$omp target enter data map(to: eta_ssh)
 
       call tides_update_eta_eq(tides, 0.0_wp)
 
@@ -100,12 +100,12 @@ contains
       tides%use_sal = .false.
       tides%beta_sal = BETA           ! non-zero beta must be IGNORED when off
       call tides_update_eta_sal(tides, eta_ssh)
-      !$acc update self(tides%eta_forcing, tides%eta_eq)
+      !$omp target update from(tides%eta_forcing, tides%eta_eq)
       maxdev = maxval(abs(tides%eta_forcing - tides%eta_eq))
       call check(error, maxdev == 0.0_wp, &
                  "use_sal=.false. must give eta_forcing bit-identical to eta_eq")
       if (allocated(error)) then
-         !$acc exit data delete(eta_ssh)
+         !$omp target exit data map(delete: eta_ssh)
          call tides%exit_data()
          call metrics%exit_data()
          deallocate (eta_ssh)
@@ -122,7 +122,7 @@ contains
       tides%use_sal = .true.
       tides%beta_sal = BETA
       call tides_update_eta_sal(tides, eta_ssh)
-      !$acc update self(tides%eta_forcing, tides%eta_sal, tides%eta_eq)
+      !$omp target update from(tides%eta_forcing, tides%eta_sal, tides%eta_eq)
       maxdev = 0.0_wp
       do j = 1, ny
          do i = 1, nx
@@ -135,7 +135,7 @@ contains
       call check(error, maxdev < 1.0e-14_wp, &
                  "eta_forcing must equal eta_eq + beta_sal*eta")
 
-      !$acc exit data delete(eta_ssh)
+      !$omp target exit data map(delete: eta_ssh)
       call tides%exit_data()
       call metrics%exit_data()
       deallocate (eta_ssh)
@@ -233,7 +233,7 @@ contains
       call tides_configure_astronomy(tides, cat_idx, 1, 0.0_wp, 0.0_wp, .false., nx, ny)
       call tides_build_struct(tides, metrics%geolatT, metrics%geolonT, nx, ny)
 
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -255,7 +255,7 @@ contains
          call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, DT, N_INNER, t=t, tides=tides)
          t = t + DT
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
          ssh_probe = 0.0_wp
          do k = 1, NZ
             ssh_probe = ssh_probe + ms%h_layer(ip, jp, k)
@@ -281,7 +281,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call metrics%exit_data()
 
       call check(error, rms == rms, "RMS is NaN")

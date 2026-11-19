@@ -161,12 +161,12 @@ contains
                snaps(e)%a = [en%p0]
             case (2)
                if (en%device_mapped) then
-                  !$acc update self(en%p2)
+                  !$omp target update from(en%p2)
                end if
                snaps(e)%a = reshape(en%p2, [size(en%p2)])
             case (3)
                if (en%device_mapped) then
-                  !$acc update self(en%p3)
+                  !$omp target update from(en%p3)
                end if
                snaps(e)%a = reshape(en%p3, [size(en%p3)])
             end select
@@ -176,8 +176,8 @@ contains
       ! Explicit pull: the registry loop above already refreshes these
       ! (`ml_u_face_x_layer` / `ml_v_face_y_layer` alias them), but the
       ! bound must not depend on that aliasing on the mem:separate build.
-      !$acc update self(engine%state%multilayer%u_face_x_layer, &
-      !$acc&            engine%state%multilayer%v_face_y_layer)
+      !$omp target update from(engine%state%multilayer%u_face_x_layer, &
+      !$omp&            engine%state%multilayer%v_face_y_layer)
       max_u = max(maxval(abs(engine%state%multilayer%u_face_x_layer)), &
                   maxval(abs(engine%state%multilayer%v_face_y_layer)))
       call reg%clear()

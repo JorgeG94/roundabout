@@ -706,18 +706,18 @@ contains
          x(1:NSPEC) = special_args()
          r = 0.0_wp
          r1 = 0.0_wp
-         !$acc enter data copyin(x, y2, r, r1)
+         !$omp target enter data map(to: x, y2, r, r1)
          ! one-element launches: the scalar reference
          do i = 1, NMAX + NOFF
             call kern(fid, 1, i - 1, x, y2, r1)
          end do
-         !$acc update self(r1)
+         !$omp target update from(r1)
          nspec = nspec + special_violations(fid, r1)
          do il = 1, size(LENS)
             n = LENS(il)
             do off = 0, NOFF
                call kern(fid, n, off, x, y2, r)
-               !$acc update self(r)
+               !$omp target update from(r)
                do i = off + 1, off + n
                   if (bits(r(i)) /= bits(r1(i))) nbad = nbad + 1
 #ifndef RDB_GPU_OFFLOAD
@@ -726,7 +726,7 @@ contains
                end do
             end do
          end do
-         !$acc exit data delete(x, y2, r, r1)
+         !$omp target exit data map(delete: x, y2, r, r1)
       end do
       call check(error, nbad, 0, "array (do concurrent) results differ from one-element launches")
       if (allocated(error)) return

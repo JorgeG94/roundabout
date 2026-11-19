@@ -293,7 +293,7 @@ contains
       ! host one is stale.  Pull it back for the census below.  Inert on
       ! a host/multicore build; without it the host census reads the
       ! seeded all-OPEN mask and declares the staircase vacuous.
-      !$acc update self(metrics%open_u, metrics%open_v)
+      !$omp target update from(metrics%open_u, metrics%open_v)
 
       n_closed = 0
       do k = 1, NZ
@@ -342,9 +342,9 @@ contains
 
       energy0 = basin_energy(ms, dyn, i0, i1, j0, j1)
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ct%enter_data(); call cor%enter_data(); call pgf%enter_data()
       call hv%enter_data(); call bd%enter_data(); call ss%enter_data()
       call va%enter_data(); call hd%enter_data()
@@ -365,7 +365,7 @@ contains
          ! prognostics and the barotropic velocity down every step.  The
          ! COMPONENT arrays only -- never the aggregate derived type (that
          ! overwrites the host descriptors with device addresses).
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          call scan_closed_faces(ms, metrics, i0, i1, j0, j1, closed_u_max)
          d_now = ssh_tilt(ms, dyn, i0, i1, j0, j1)
          if (d_prev*d_now < 0.0_wp) then
@@ -377,7 +377,7 @@ contains
          d_prev = d_now
       end do
 
-      !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+      !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
       finite = .true.
       do j = j0, j1
          do i = i0, i1
@@ -407,9 +407,9 @@ contains
       call hd%exit_data(); call va%exit_data()
       call ss%exit_data(); call bd%exit_data(); call hv%exit_data()
       call pgf%exit_data(); call cor%exit_data(); call ct%exit_data()
-      !$acc exit data delete(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
       call ms%destroy()
       deallocate (tgt, tot_h, eta0f, z_top)
@@ -600,7 +600,7 @@ contains
       metrics%open_v(:, :, 1) = 0.0_wp
       metrics%use_closed_faces = .true.
       ! Host fill after the map — see the twin in `run_seiche`.
-      !$acc update device(metrics%open_u, metrics%open_v)
+      !$omp target update to(metrics%open_u, metrics%open_v)
 
       iface = ig + 5
       jface = ig + 2

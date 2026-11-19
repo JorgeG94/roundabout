@@ -139,11 +139,11 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_gm_t), intent(inout) :: gm
       type(ocean_meke_t), intent(inout) :: meke
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
-      !$acc enter data copyin(meke)
+      !$omp target enter data map(to: meke)
       call meke%enter_data()
    end subroutine map_in
 
@@ -151,13 +151,13 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_gm_t), intent(inout) :: gm
       type(ocean_meke_t), intent(inout) :: meke
-      !$acc update self(meke%meke, meke%kh_diff, meke%le, meke%ku, meke%barotr_fac2)
+      !$omp target update from(meke%meke, meke%kh_diff, meke%le, meke%ku, meke%barotr_fac2)
       call meke%exit_data()
-      !$acc exit data delete(meke)
+      !$omp target exit data map(delete: meke)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! ------------------------------------------------------------------
@@ -216,14 +216,14 @@ contains
          ! interior pick (well away from walls; ku uniform ⇒ face-avg = KU)
          ii = NGHOST + 2
          jj = NGHOST + 2
-         !$acc enter data copyin(meke)
+         !$omp target enter data map(to: meke)
          call meke%enter_data()
-         !$acc enter data copyin(ahx, ahy)
+         !$omp target enter data map(to: ahx, ahy)
          call meke_backscatter_apply(grid, metrics, meke, DT, ahx, ahy)
-         !$acc update self(ahx, ahy)
-         !$acc exit data delete(ahx, ahy)
+         !$omp target update from(ahx, ahy)
+         !$omp target exit data map(delete: ahx, ahy)
          call meke%exit_data()
-         !$acc exit data delete(meke)
+         !$omp target exit data map(delete: meke)
          ! interior: net = A0 - KU exactly (KU << CFL floor magnitude).
          call check(error, abs(ahx(ii, jj, 1) - (A0 - KU)) < 1.0e-10_wp, &
                     "u-face interior: net = A_resolved - ku")
@@ -242,14 +242,14 @@ contains
          ahx = A0
          ahy = A0
          meke%backscatter = .false.
-         !$acc enter data copyin(meke)
+         !$omp target enter data map(to: meke)
          call meke%enter_data()
-         !$acc enter data copyin(ahx, ahy)
+         !$omp target enter data map(to: ahx, ahy)
          call meke_backscatter_apply(grid, metrics, meke, DT, ahx, ahy)
-         !$acc update self(ahx, ahy)
-         !$acc exit data delete(ahx, ahy)
+         !$omp target update from(ahx, ahy)
+         !$omp target exit data map(delete: ahx, ahy)
          call meke%exit_data()
-         !$acc exit data delete(meke)
+         !$omp target exit data map(delete: meke)
          call check(error, maxval(abs(ahx - ahx0)) < 1.0e-30_wp .and. &
                     maxval(abs(ahy - ahy0)) < 1.0e-30_wp, &
                     "backscatter off ⇒ ah_face bit-identical (no-op)")
@@ -294,14 +294,14 @@ contains
          allocate (ahy(nxt, nyt + 1, NZ), source=A0)
          ii = NGHOST + 2
          jj = NGHOST + 2
-         !$acc enter data copyin(meke)
+         !$omp target enter data map(to: meke)
          call meke%enter_data()
-         !$acc enter data copyin(ahx, ahy)
+         !$omp target enter data map(to: ahx, ahy)
          call meke_backscatter_apply(grid, metrics, meke, DT, ahx, ahy)
-         !$acc update self(ahx, ahy)
-         !$acc exit data delete(ahx, ahy)
+         !$omp target update from(ahx, ahy)
+         !$omp target exit data map(delete: ahx, ahy)
          call meke%exit_data()
-         !$acc exit data delete(meke)
+         !$omp target exit data map(delete: meke)
          a_net = ahx(ii, jj, 1)
          ! Cartesian square grid: idxCu = idyCu = 1/DX.
          idx2 = 1.0_wp/(DX*DX)
@@ -357,14 +357,14 @@ contains
          ii = NGHOST + 2
          jj = NGHOST + 2
          a_resolved = A0
-         !$acc enter data copyin(meke)
+         !$omp target enter data map(to: meke)
          call meke%enter_data()
-         !$acc enter data copyin(ahx, ahy)
+         !$omp target enter data map(to: ahx, ahy)
          call meke_backscatter_apply(grid, metrics, meke, DT, ahx, ahy)
-         !$acc update self(ahx, ahy)
-         !$acc exit data delete(ahx, ahy)
+         !$omp target update from(ahx, ahy)
+         !$omp target exit data map(delete: ahx, ahy)
          call meke%exit_data()
-         !$acc exit data delete(meke)
+         !$omp target exit data map(delete: meke)
          a_net = ahx(ii, jj, 1)
          ! Grid-scale mode forward-Euler decrement: u^{n+1} = (1 - lam*A)*u,
          ! lam = dt*(idx²+idy²)*c (c>0 a fixed stencil constant) — only the

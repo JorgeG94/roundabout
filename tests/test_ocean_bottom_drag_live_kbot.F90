@@ -126,15 +126,15 @@ contains
 
    subroutine map_in(ms)
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
    end subroutine map_in
 
    subroutine map_out(ms)
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+      !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! ------------------------------------------------------------------
@@ -188,12 +188,12 @@ contains
          !! here and cannot change the analytic answer above.
 
       call map_in(ms)
-      !$acc enter data copyin(bd)
+      !$omp target enter data map(to: bd)
       call bd%enter_data()
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, DT)
       call ocean_bottom_drag_apply_tendencies(bd, ms, DT)
       call bd%exit_data()
-      !$acc exit data delete(bd)
+      !$omp target exit data map(delete: bd)
       call map_out(ms)
 
       u_live = ms%u_face_x_layer(3, 2, nzl)
@@ -258,15 +258,15 @@ contains
       allocate (visc_rem_v(nx, ny + 1, nzl), source=1.0_wp)
 
       call map_in(ms)
-      !$acc enter data copyin(vd)
+      !$omp target enter data map(to: vd)
       call vd%enter_data()
-      !$acc enter data copyin(visc_rem_u, visc_rem_v)
+      !$omp target enter data map(to: visc_rem_u, visc_rem_v)
       call vdiff_apply_momentum(grid, vd, ms, DT, &
                                 visc_rem_u=visc_rem_u, visc_rem_v=visc_rem_v)
-      !$acc update self(visc_rem_u, visc_rem_v)
-      !$acc exit data delete(visc_rem_u, visc_rem_v)
+      !$omp target update from(visc_rem_u, visc_rem_v)
+      !$omp target exit data map(delete: visc_rem_u, visc_rem_v)
       call vd%exit_data()
-      !$acc exit data delete(vd)
+      !$omp target exit data map(delete: vd)
       call map_out(ms)
 
       u_live = ms%u_face_x_layer(3, 2, nzl)

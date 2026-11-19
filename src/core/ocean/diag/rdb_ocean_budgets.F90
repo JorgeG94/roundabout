@@ -276,7 +276,7 @@ contains
             if (.not. c%is_active) cycle
             if (.not. associated(c%per_cell)) cycle
             if (c%device_resident) then
-               !$acc update self(c%per_cell) if_present
+               !$omp target update from(c%per_cell)
             end if
             nx = min(this%mask%nx, size(c%per_cell, 1))
             ny = min(this%mask%ny, size(c%per_cell, 2))
@@ -296,7 +296,7 @@ contains
             c%total_integrated = c%total_integrated + increment
             c%per_cell = 0.0_wp
             if (c%device_resident) then
-               !$acc update device(c%per_cell) if_present
+               !$omp target update to(c%per_cell)
             end if
          end associate
       end do

@@ -603,14 +603,14 @@ contains
       !! configure-time host fill that MUST reach the device, and the
       !! rest carry the zero `init` promised on both toolchains.
       type(ocean_cavity_flux_t), intent(inout) :: this
-      !$acc enter data copyin(this%f_cor, this%active, this%t_far, this%s_far, &
-      !$acc&                  this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&                  this%s_b, this%melt, this%q_ocean, this%gamma_t, &
-      !$acc&                  this%gamma_s, this%status, this%comp_scale)
-      !$acc update device(this%f_cor, this%active, this%t_far, this%s_far, &
-      !$acc&              this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&              this%s_b, this%melt, this%q_ocean, this%gamma_t, &
-      !$acc&              this%gamma_s, this%status, this%comp_scale)
+      !$omp target enter data map(to: this%f_cor, this%active, this%t_far, this%s_far, &
+      !$omp&                  this%u_far, this%v_far, this%ustar, this%t_b, &
+      !$omp&                  this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$omp&                  this%gamma_s, this%status, this%comp_scale)
+      !$omp target update to(this%f_cor, this%active, this%t_far, this%s_far, &
+      !$omp&              this%u_far, this%v_far, this%ustar, this%t_b, &
+      !$omp&              this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$omp&              this%gamma_s, this%status, this%comp_scale)
    end subroutine ocean_cavity_flux_enter_data_impl
 
    subroutine ocean_cavity_flux_exit_data(this)
@@ -623,10 +623,10 @@ contains
 
    subroutine ocean_cavity_flux_exit_data_impl(this)
       type(ocean_cavity_flux_t), intent(inout) :: this
-      !$acc exit data delete(this%f_cor, this%active, this%t_far, this%s_far, &
-      !$acc&                 this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&                 this%s_b, this%melt, this%q_ocean, this%gamma_t, &
-      !$acc&                 this%gamma_s, this%status, this%comp_scale)
+      !$omp target exit data map(delete: this%f_cor, this%active, this%t_far, this%s_far, &
+      !$omp&                 this%u_far, this%v_far, this%ustar, this%t_b, &
+      !$omp&                 this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$omp&                 this%gamma_s, this%status, this%comp_scale)
    end subroutine ocean_cavity_flux_exit_data_impl
 
    pure function ocean_cavity_flux_bytes(this) result(nbytes)
@@ -893,7 +893,7 @@ contains
    ! ======================================================================
 
    pure subroutine cavity_melt_thickness_pair(h0, dh, hn, thin)
-      !$acc routine seq
+      !$omp declare target
       !! The explicit `h_before -> h_after` PAIR of the melt-with-mass
       !! source in the top live layer: `h_after = h_before + dh`, with a
       !! withdrawal (`dh < 0`) clamped at `H_CAVITY_FLOOR`.  Shared by
@@ -1213,8 +1213,8 @@ contains
       e5 = 0_int64
       e6 = 0_int64
       epoison = 0_int64
-      !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-      !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(active, melt, areaT)
+      !$omp target teams distribute parallel do collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+      !$omp&         private(val, d1, d2, d3, d4, d5, d6, dpoison)
       do j = j_lo, j_hi
          do i = i_lo, i_hi
             val = 0.0_real64

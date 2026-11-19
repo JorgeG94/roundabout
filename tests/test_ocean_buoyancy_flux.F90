@@ -129,18 +129,18 @@ contains
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
 
-      !$acc enter data copyin(ms, vmix, ss, sf)
+      !$omp target enter data map(to: ms, vmix, ss, sf)
       call ms%enter_data()
       call vmix%enter_data()
       call ss%enter_data()
       call sf%enter_data()
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth, vmix%b0)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth, vmix%b0)
       call sf%exit_data()
       call ss%exit_data()
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss, sf)
+      !$omp target exit data map(delete: ms, vmix, ss, sf)
    end subroutine run_kpp
 
    subroutine run_epbl(grid, ms, epbl, ss, sf, dt)
@@ -151,18 +151,18 @@ contains
       type(ocean_surface_flux_t), intent(inout) :: sf
       real(wp), intent(in) :: dt
 
-      !$acc enter data copyin(ms, epbl, ss, sf)
+      !$omp target enter data map(to: ms, epbl, ss, sf)
       call ms%enter_data()
       call epbl%enter_data()
       call ss%enter_data()
       call sf%enter_data()
       call epbl_compute(grid, epbl, ms, ss, dt, sf=sf)
-      !$acc update self(epbl%b0, epbl%mld)
+      !$omp target update from(epbl%b0, epbl%mld)
       call sf%exit_data()
       call ss%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, sf)
+      !$omp target exit data map(delete: ms, epbl, ss, sf)
    end subroutine run_epbl
 
    ! -----------------------------------------------------------------

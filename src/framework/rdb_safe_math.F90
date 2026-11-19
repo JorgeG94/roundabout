@@ -63,7 +63,7 @@ contains
 
    elemental function safe_exp(x) result(y)
       !! `exp(x)`; see `rdb_sm_exp`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_exp(x)
@@ -71,7 +71,7 @@ contains
 
    elemental function safe_log(x) result(y)
       !! `log(x)`; see `rdb_sm_log`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_log(x)
@@ -79,7 +79,7 @@ contains
 
    elemental function safe_sin(x) result(y)
       !! `sin(x)`, |x| <= 1.6e6; see `rdb_sm_sin`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_sin(x)
@@ -87,7 +87,7 @@ contains
 
    elemental function safe_cos(x) result(y)
       !! `cos(x)`, |x| <= 1.6e6; see `rdb_sm_cos`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_cos(x)
@@ -95,7 +95,7 @@ contains
 
    elemental function safe_tan(x) result(y)
       !! `tan(x)`, |x| <= 1.6e6; see `rdb_sm_tan`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_tan(x)
@@ -103,7 +103,7 @@ contains
 
    elemental function safe_atan(x) result(y)
       !! `atan(x)`; see `rdb_sm_atan`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_atan(x)
@@ -111,7 +111,7 @@ contains
 
    elemental function safe_atan2(y, x) result(r)
       !! `atan2(y, x)`; see `rdb_sm_atan2`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: y, x
       real(wp) :: r
       r = rdb_sm_atan2(y, x)
@@ -119,7 +119,7 @@ contains
 
    elemental function safe_tanh(x) result(y)
       !! `tanh(x)`; see `rdb_sm_tanh`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_tanh(x)
@@ -127,7 +127,7 @@ contains
 
    elemental function safe_cosh(x) result(y)
       !! `cosh(x)`; see `rdb_sm_cosh`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_cosh(x)
@@ -135,7 +135,7 @@ contains
 
    elemental function safe_acosh(x) result(y)
       !! `acosh(x)`, x >= 1; see `rdb_sm_acosh`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_acosh(x)
@@ -143,7 +143,7 @@ contains
 
    elemental function safe_pow(base, expo) result(y)
       !! `base**expo` for real arguments; see `rdb_sm_pow`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: base, expo
       real(wp) :: y
       y = rdb_sm_pow(base, expo)
@@ -151,7 +151,7 @@ contains
 
    elemental function safe_cbrt(x) result(y)
       !! Real cube root; see `rdb_sm_cbrt`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_cbrt(x)
@@ -159,7 +159,7 @@ contains
 
    elemental function safe_erfc(x) result(y)
       !! `erfc(x)`; see `rdb_sm_erfc`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = rdb_sm_erfc(x)
@@ -168,7 +168,7 @@ contains
    elemental function safe_sqrt(x) result(y)
       !! `sqrt(x)`: IEEE-754 requires a correctly rounded result, so the intrinsic
       !! is already reproducible on every conforming target.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: y
       y = sqrt(x)

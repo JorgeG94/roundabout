@@ -334,8 +334,8 @@ contains
       c%re = c%plan%recv_e
       c%rcls = c%plan%recv_cls
       allocate (c%reqs(2*max(c%npeer, 1)), c%stats(2*max(c%npeer, 1)))
-      !$acc enter data copyin(c%sn, c%rn, c%scol, c%speer, c%se, &
-      !$acc&                  c%rcol, c%rpeer, c%re, c%rcls)
+      !$omp target enter data map(to: c%sn, c%rn, c%scol, c%speer, c%se, &
+      !$omp&                  c%rcol, c%rpeer, c%re, c%rcls)
 
       ! Base capacity: one field of the widest stagger, one layer.
       call grow_buffers(c, c%ng + 1)
@@ -354,10 +354,10 @@ contains
       type(fx_ctx_t), intent(inout), target :: c
       if (.not. c%initialised) return
       if (c%active) then
-         !$acc exit data delete(c%sn, c%rn, c%scol, c%speer, c%se, &
-         !$acc&                 c%rcol, c%rpeer, c%re, c%rcls)
+         !$omp target exit data map(delete: c%sn, c%rn, c%scol, c%speer, c%se, &
+         !$omp&                 c%rcol, c%rpeer, c%re, c%rcls)
          if (allocated(c%sbuf)) then
-            !$acc exit data delete(c%sbuf, c%rbuf)
+            !$omp target exit data map(delete: c%sbuf, c%rbuf)
             deallocate (c%sbuf, c%rbuf)
          end if
          deallocate (c%peer_rank, c%sn, c%rn, c%scol, c%speer, c%se, &
@@ -472,13 +472,13 @@ contains
 
       if (c%open) error stop "rdb_ocean_fold_exchange: buffer growth inside an open group"
       if (allocated(c%sbuf)) then
-         !$acc exit data delete(c%sbuf, c%rbuf)
+         !$omp target exit data map(delete: c%sbuf, c%rbuf)
          deallocate (c%sbuf, c%rbuf)
       end if
       c%slab_cap = nslab
       c%cap = nslab*c%nmax
       allocate (c%sbuf(c%cap*max(c%npeer, 1)), c%rbuf(c%cap*max(c%npeer, 1)))
-      !$acc enter data create(c%sbuf, c%rbuf)
+      !$omp target enter data map(alloc: c%sbuf, c%rbuf)
    end subroutine grow_buffers
 
    ! ==================================================================
@@ -727,7 +727,7 @@ contains
       type(request_t), intent(inout) :: reqs(nreqmax)
       integer, intent(inout) :: nreq
 
-      !$acc host_data use_device(sbuf, rbuf)
+      !$omp target data use_device_addr(sbuf, rbuf)
       if (n_r > 0) then
          nreq = nreq + 1
          call FOLD_IRECV_N(comm, rbuf(o + 1:o + n_r), n_r, peer, TAG_OC_FOLD, reqs(nreq))
@@ -736,7 +736,7 @@ contains
          nreq = nreq + 1
          call FOLD_ISEND_N(comm, sbuf(o + 1:o + n_s), n_s, peer, TAG_OC_FOLD, reqs(nreq))
       end if
-      !$acc end host_data
+      !$omp end target data
    end subroutine post_dev
 
    subroutine ocean_fold_unpack_2d(fld, nxa, nya, stagger, negate, device_resident, ctx)

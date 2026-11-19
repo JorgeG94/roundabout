@@ -131,7 +131,7 @@ contains
       call ocean_vcoord_closed_face_masks(metrics%open_u, metrics%open_v, &
                                           tgt, ni, nj, NZ, H_VANISHED)
       metrics%use_closed_faces = .true.
-      !$acc update self(metrics%open_u, metrics%open_v)
+      !$omp target update from(metrics%open_u, metrics%open_v)
 
       ms%nz_ml = NZ
       call ms%init(grid)
@@ -206,12 +206,12 @@ contains
       type(ocean_epbl_t), intent(inout) :: epbl
       type(ocean_mle_t), intent(inout) :: mle
       type(continuity_t), intent(inout), optional :: ct
-      !$acc enter data copyin(ms, epbl, mle)
+      !$omp target enter data map(to: ms, epbl, mle)
       call ms%enter_data()
       call epbl%enter_data()
       call mle%enter_data()
       if (present(ct)) then
-         !$acc enter data copyin(ct)
+         !$omp target enter data map(to: ct)
          call ct%enter_data()
       end if
    end subroutine map_in
@@ -223,12 +223,12 @@ contains
       type(continuity_t), intent(inout), optional :: ct
       if (present(ct)) then
          call ct%exit_data()
-         !$acc exit data delete(ct)
+         !$omp target exit data map(delete: ct)
       end if
       call mle%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, mle)
+      !$omp target exit data map(delete: ms, epbl, mle)
    end subroutine map_out
 
    subroutine teardown(metrics, ms, epbl, mle)
@@ -407,7 +407,7 @@ contains
 
          call map_in(ms, epbl, mle)
          call mle_compute_transports(grid, metrics, mle, ms, epbl, dt_limit=DT)
-         !$acc update self(mle%uhml, mle%vhml, mle%b_ml, mle%htot_ml)
+         !$omp target update from(mle%uhml, mle%vhml, mle%b_ml, mle%htot_ml)
          call map_out(ms, epbl, mle)
 
          call census(metrics, ms, mle, ni, nj, n_closed, worst_closed, &
@@ -465,7 +465,7 @@ contains
          if (allocated(error)) exit checks
          call map_in(ms, epbl, mle)
          call mle_compute_transports(grid, metrics, mle, ms, epbl, dt_limit=DT)
-         !$acc update self(mle%uhml, mle%vhml)
+         !$omp target update from(mle%uhml, mle%vhml)
          call map_out(ms, epbl, mle)
 
          call census(metrics, ms, mle, ni, nj, n_closed, worst_closed, &
@@ -532,8 +532,8 @@ contains
          do it = 1, NSTEP
             call mle_compute_transports(grid, metrics, mle, ms, epbl, dt_limit=DT)
             call continuity_tracer_step_split(grid, metrics, ct, ms, DT, mle=mle)
-            !$acc update self(mle%uhml, mle%vhml, ms%h_layer)
-            !$acc update self(ms%tracers(ms%idx_temperature)%c)
+            !$omp target update from(mle%uhml, mle%vhml, ms%h_layer)
+            !$omp target update from(ms%tracers(ms%idx_temperature)%c)
             call census(metrics, ms, mle, ni, nj, n_closed, worst_closed, &
                         worst_colsum, max_flux)
             wc_max = max(wc_max, worst_closed)
@@ -553,7 +553,7 @@ contains
             tmax_run = max(tmax_run, tmax)
             ! The density follows T for the next step's b_bar.
             call set_rho_host(ms)
-            !$acc update device(ms%rho_layer)
+            !$omp target update to(ms%rho_layer)
          end do
          call map_out(ms, epbl, mle, ct)
 
@@ -620,12 +620,12 @@ contains
          if (allocated(error)) exit checks
          call map_in(ms, epbl, mle)
          call mle_compute_transports(grid, metrics, mle, ms, epbl, dt_limit=DT)
-         !$acc update self(mle%uhml, mle%vhml)
+         !$omp target update from(mle%uhml, mle%vhml)
          allocate (u_on, source=mle%uhml)
          allocate (v_on, source=mle%vhml)
          metrics%use_closed_faces = .false.
          call mle_compute_transports(grid, metrics, mle, ms, epbl, dt_limit=DT)
-         !$acc update self(mle%uhml, mle%vhml)
+         !$omp target update from(mle%uhml, mle%vhml)
          metrics%use_closed_faces = .true.
          call map_out(ms, epbl, mle)
 

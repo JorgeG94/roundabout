@@ -81,9 +81,9 @@ contains
       hv%nu_h = 0.0_wp
       hv%bound_coef = BOUND_COEF
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(hv)
+      !$omp target enter data map(to: hv)
       call hv%enter_data()
    end subroutine setup
 
@@ -93,9 +93,9 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       call hv%exit_data()
-      !$acc exit data delete(hv)
+      !$omp target exit data map(delete: hv)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
       call hv%destroy()
       call ms%destroy()
@@ -113,7 +113,7 @@ contains
       call setup(grid, ms, metrics, hv)
       hv%nu_4 = nu_4
       call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, dt=DT)
-      !$acc update self(hv%du_visc%data)
+      !$omp target update from(hv%du_visc%data)
       du_out = hv%du_visc%data
       call teardown(grid, ms, metrics, hv)
    end subroutine run_scalar_biharmonic

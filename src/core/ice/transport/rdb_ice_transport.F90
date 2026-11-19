@@ -1377,7 +1377,7 @@ contains
 
    pure subroutine ice_compress_cell_inline(part_size, m_ice, m_snow, enth_ice, enth_snow, &
                                             sal_ice, mh_lim, i, j, ncat, nk, nx, ny, ok)
-      !$acc routine seq
+      !$omp declare target
       !! KEEP IN SYNC with `ice_transport_compress_cell` (the HOST tested
       !! seam twin, directly below). Same excess/ratio/compaction algorithm;
       !! this twin exists only for a different argument shape — full

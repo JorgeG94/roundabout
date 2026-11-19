@@ -123,7 +123,7 @@ contains
 
       if (.not. ke_probe_active(probe, step)) return
 
-      !$acc wait
+      ! [acc->omp] dropped CUDA-graph wrapper: wait
       call ke_regions_efp_local(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
                                 grid%nx_total, grid%ny_total, ms%nz_ml, &
                                 grid%nghost, grid%nx_phys, grid%ny_phys, &
@@ -193,7 +193,7 @@ contains
 
       if (.not. ke_probe_active(probe, step)) return
 
-      !$acc wait
+      ! [acc->omp] dropped CUDA-graph wrapper: wait
       call coradv_split_efp_local(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
                                   cor%pv_flux_x%data, cor%pv_flux_y%data, &
                                   cor%ke_centre%data, metrics%idxCu, metrics%idyCv, &
@@ -242,7 +242,7 @@ contains
    pure function in_region(region, ic, jc, nx_g, ny_g, rim_w, east_w) result(r)
       !! Is GLOBAL cell (ic, jc) in the region (1 full, 2 rim, 3 east)?
       !! Cells outside the domain are in no region.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: region, ic, jc, nx_g, ny_g, rim_w, east_w
       logical :: r
       r = (ic >= 1 .and. ic <= nx_g .and. jc >= 1 .and. jc <= ny_g)
@@ -313,9 +313,8 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, hfc, ig, jg, nw, icw, jcs, d1, d2, d3, d4, d5, d6, dpoison) &
-         !$acc&         present(h, u, v)
+         !$omp target teams distribute parallel do collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$omp&         private(val, hfc, ig, jg, nw, icw, jcs, d1, d2, d3, d4, d5, d6, dpoison)
          do j = nghost + 1, nghost + ny_phys + 1
             do i = nghost + 1, nghost + nx_phys + 1
                ig = i - nghost + i_off
@@ -451,9 +450,8 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, h_face, f_tot, f_ke, f_pv, u_mid, w, ig, jg, icw, jcs, in_reg, d1, d2, d3, d4, d5, d6, dpoison) &
-         !$acc&         present(h, u, v, fx, fy, kec, idxCu, idyCv)
+         !$omp target teams distribute parallel do collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$omp&         private(val, h_face, f_tot, f_ke, f_pv, u_mid, w, ig, jg, icw, jcs, in_reg, d1, d2, d3, d4, d5, d6, dpoison)
          do j = nghost + 1, nghost + ny_phys
             do i = nghost + 1, nghost + nx_phys
                ig = i - nghost + i_off
