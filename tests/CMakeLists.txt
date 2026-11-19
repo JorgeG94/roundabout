@@ -157,6 +157,7 @@ set(RDB_TESTS
     "test_ocean_cavity_engine|test_ocean_cavity_engine|collect_ocean_cavity_engine_tests|ocean_cavity_engine|ocean"
     "test_ocean_cavity_freshwater|test_ocean_cavity_freshwater|collect_ocean_cavity_freshwater_tests|ocean_cavity_freshwater|ocean"
     "test_ocean_surface_fw_mass|test_ocean_surface_fw_mass|collect_ocean_surface_fw_mass_tests|ocean_surface_fw_mass|ocean"
+    "test_ocean_surface_flux_interval_mean|test_ocean_surface_flux_interval_mean|collect_ocean_surface_flux_interval_mean_tests|ocean_surface_flux_interval_mean|ocean"
     "test_ocean_runoff|test_ocean_runoff|collect_ocean_runoff_tests|ocean_runoff|ocean"
     "test_ocean_pgf_wright|test_ocean_pgf_wright|collect_ocean_pgf_wright_tests|ocean_pgf_wright|ocean"
     "test_ocean_pgf_gprime|test_ocean_pgf_gprime|collect_ocean_pgf_gprime_tests|ocean_pgf_gprime|ocean"

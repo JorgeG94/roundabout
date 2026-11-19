@@ -198,6 +198,9 @@ module rdb_ocean_surface_flux
    public :: bound_salinity_top_impl
    public :: ocean_surface_flux_apply_sw_penetration
    public :: ocean_surface_flux_refresh_sw_net
+   public :: ocean_surface_flux_accumulate, ocean_surface_flux_apply_interval_mean
+   public :: ocean_surface_flux_clear_accum
+   public :: SF_NACC
    public :: ocean_surface_restore_apply_tracers
    public :: ocean_surface_flux_assemble
    public :: ocean_surface_flux_apply_cover_const
@@ -215,6 +218,11 @@ module rdb_ocean_surface_flux
 
    ! Visible share of the total shortwave when only the total is carried
    ! (Manizza et al. 2005): SW_vis = 0.42*SW, SW_nir = SW - SW_vis.
+   integer, parameter :: SF_NACC = 15
+      !! Number of per-step atmospheric / data-forcing components carried by the interval-mean
+      !! accumulator (`sf%accum`), in this slot order: `q_sw, q_lw, q_lat, q_sens, q_fus, q_fus_rof,
+      !! heat_added, evap, lprec, fprec, lrunoff, frunoff, salt_flux, heat_content_lprec,
+      !! heat_content_fprec`.
    real(wp), parameter, public :: SW_VIS_FRAC = 0.42_wp
 
    ! Seconds per day — converts the MOM6 `FLUXCONST` piston velocity
@@ -664,6 +672,25 @@ module rdb_ocean_surface_flux
          !! bound).  Read by the `eta_forcing` seam and by the ice dynamics' tilt; valid in
          !! the ghosts on every path.
 
+      logical :: accum_on = .false.
+         !! Interval-mean treatment of the per-step atmospheric components
+         !! (`set_interval_mean`): true only with components on, thermodynamics on and
+         !! `dt_therm_ratio > 1`.  Host latch.  Off (the default and every ratio-1 run) the
+         !! accumulator is not allocated and no code path below runs: bit-identical.
+      real(wp) :: accum_n = 0.0_wp
+         !! Host scalar: number of dynamic steps summed into `accum` since the last assembly.
+         !! Restart state (`sf_accum_n`, with `sf_accum`): a checkpoint can fall mid-interval.
+      real(wp), allocatable :: accum(:, :, :)
+         !! `(nx, ny, SF_NACC)` running SUMS of the per-step atmospheric / data-forcing components
+         !! (slot order at `SF_NACC`).  The thermodynamic step spends its surface flux over `N*dt`, so
+         !! it must apply the TIME MEAN of the fluxes received during that interval, not one step's
+         !! sample.  Added to after the fillers of every dynamic step
+         !! (`ocean_surface_flux_accumulate`), turned into means at the assembling finalize
+         !! (`ocean_surface_flux_apply_interval_mean`), zeroed after it
+         !! (`ocean_surface_flux_clear_accum`).  Ice-side and cavity components are NOT here: they are
+         !! already thermo-window quantities written by their own steps; wind stress is per-step.
+         !! Allocated only when `accum_on`.
+
       real(wp), allocatable :: p_ice_load(:, :)
          !! **Input component of the ice loading** (Pa, >= 0): the weight of the ice and snow
          !! the OCEAN has been told about, `g*(rho_i*vice + rho_s*vsno)` of the ice state the water
@@ -691,6 +718,7 @@ module rdb_ocean_surface_flux
       procedure, non_overridable :: set_restore => ocean_surfflux_set_restore
       procedure, non_overridable :: set_restore_file => ocean_surfflux_set_restore_file
       procedure, non_overridable :: set_components => ocean_surfflux_set_components
+      procedure, non_overridable :: set_interval_mean => ocean_surfflux_set_interval_mean
       procedure, non_overridable :: set_p_surf_const => ocean_surfflux_set_p_surf_const
       procedure, non_overridable :: set_freshwater => ocean_surfflux_set_freshwater
       procedure, non_overridable :: bytes => ocean_surface_flux_bytes
@@ -773,6 +801,9 @@ contains
       if (allocated(this%p_surf_atm)) deallocate (this%p_surf_atm)
       if (allocated(this%p_surf)) deallocate (this%p_surf)
       if (allocated(this%p_ice_load)) deallocate (this%p_ice_load)
+      if (allocated(this%accum)) deallocate (this%accum)
+      this%accum_on = .false.
+      this%accum_n = 0.0_wp
    end subroutine ocean_surfflux_dealloc_components
 
    subroutine ocean_surfflux_enter_data(this)
@@ -826,6 +857,10 @@ contains
          !$acc enter data copyin(this%p_ice_load)
          !$acc update device(this%p_ice_load)
       end if
+      if (allocated(this%accum)) then
+         !$acc enter data copyin(this%accum)
+         !$acc update device(this%accum)
+      end if
    end subroutine ocean_surfflux_enter_data_impl
 
    subroutine ocean_surfflux_exit_data(this)
@@ -854,6 +889,9 @@ contains
       end if
       if (allocated(this%p_ice_load)) then
          !$acc exit data delete(this%p_ice_load)
+      end if
+      if (allocated(this%accum)) then
+         !$acc exit data delete(this%accum)
       end if
       if (allocated(this%sss_target)) then
          !$acc exit data delete(this%sss_target)
@@ -1424,7 +1462,7 @@ contains
       end do
    end subroutine apply_surface_src_2d_dyn_nobudget_impl
 
-   subroutine ocean_surface_flux_refresh_sw_net(sf)
+   subroutine ocean_surface_flux_refresh_sw_net(sf, at_assembly)
       !! Form `sw_net = q_sw + sw_ice` for the `sw_source="q_sw"` consumers
       !! (penetration, KPP shortwave coupling, EPBL shortwave TKE): the
       !! open-water share the bulk consumer rewrites every step plus the
@@ -1434,10 +1472,20 @@ contains
       !! configuration is untouched.  In an ice-only run `q_sw == 0`, so
       !! `sw_net == sw_ice` exactly -- what `q_sw` itself held before the
       !! ice moved to its own component.
+      !!
+      !! Under the interval-mean treatment (`sf%accum_on`, `dt_therm_ratio > 1`) `sw_net` must be
+      !! the shortwave INSIDE `Q_heat`, i.e. built from the interval-mean `q_sw`: the per-step call
+      !! is then a no-op and the assembling finalize calls this with `at_assembly = .true.`, after
+      !! `ocean_surface_flux_apply_interval_mean` and before the assembler.
       type(ocean_surface_flux_t), intent(inout) :: sf
+      logical, intent(in), optional :: at_assembly
 
       if (.not. sf%use_components) return
       if (.not. sf%sw_from_qsw) return
+      if (sf%accum_on) then
+         if (.not. present(at_assembly)) return
+         if (.not. at_assembly) return
+      end if
       call ocean_surfflux_sw_net_impl(sf%sw_net, sf%q_sw, sf%sw_ice, &
                                       size(sf%sw_net, 1), size(sf%sw_net, 2))
    end subroutine ocean_surface_flux_refresh_sw_net
@@ -2121,6 +2169,137 @@ contains
       end do
    end subroutine apply_surface_restore_2d_cover_impl
 
+   subroutine ocean_surfflux_set_interval_mean(this, grid, enable)
+      !! Configure-time gate for the interval-mean treatment of the atmospheric components
+      !! (`dt_therm_ratio > 1`; see `accum`).  `enable = .false.` (the default) allocates nothing and
+      !! leaves `accum_on` false, so a ratio-1 run is untouched.  Needs the component set
+      !! (`set_components` first, which also resets this); must precede `enter_data` and the restart
+      !! registry walk so the accumulator is mapped and registered.
+      class(ocean_surface_flux_t), intent(inout) :: this
+      type(hgrid_t), intent(in) :: grid
+      logical, intent(in) :: enable
+
+      if (allocated(this%accum)) deallocate (this%accum)
+      this%accum_on = .false.
+      this%accum_n = 0.0_wp
+      if (.not. enable .or. .not. this%use_components) return
+      allocate (this%accum(grid%nx_total, grid%ny_total, SF_NACC), source=0.0_wp)
+      this%accum_on = .true.
+   end subroutine ocean_surfflux_set_interval_mean
+
+   subroutine ocean_surface_flux_accumulate(sf)
+      !! Add this dynamic step's atmospheric / data-forcing components into the interval sums and
+      !! count the step.  Call once per outer step, AFTER every filler of `engine_step`.  No-op
+      !! unless `sf%accum_on`.  Outer-shim + flat-impl.
+      type(ocean_surface_flux_t), intent(inout) :: sf
+
+      if (.not. sf%accum_on) return
+      call ocean_surfflux_accum_add_impl(sf%accum, &
+                                         sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%q_fus, sf%q_fus_rof, &
+                                         sf%heat_added, sf%evap, sf%lprec, sf%fprec, sf%lrunoff, sf%frunoff, &
+                                         sf%salt_flux, sf%heat_content_lprec, sf%heat_content_fprec, &
+                                         size(sf%accum, 1), size(sf%accum, 2))
+      sf%accum_n = sf%accum_n + 1.0_wp
+   end subroutine ocean_surface_flux_accumulate
+
+   subroutine ocean_surface_flux_apply_interval_mean(sf)
+      !! Replace the accumulated components by their means over the dynamic steps summed since the
+      !! last assembly (`sum / accum_n`).  Call at the assembling finalize, before
+      !! `ocean_surface_flux_fw_virtual_step` and the assembler.  No-op unless `sf%accum_on` and
+      !! at least one step was summed (an empty window leaves the last sample in place).
+      type(ocean_surface_flux_t), intent(inout) :: sf
+
+      if (.not. sf%accum_on) return
+      if (sf%accum_n < 0.5_wp) return
+      call ocean_surfflux_accum_mean_impl(sf%accum, &
+                                          sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%q_fus, sf%q_fus_rof, &
+                                          sf%heat_added, sf%evap, sf%lprec, sf%fprec, sf%lrunoff, sf%frunoff, &
+                                          sf%salt_flux, sf%heat_content_lprec, sf%heat_content_fprec, &
+                                          sf%accum_n, size(sf%accum, 1), size(sf%accum, 2))
+   end subroutine ocean_surface_flux_apply_interval_mean
+
+   subroutine ocean_surface_flux_clear_accum(sf)
+      !! Zero the interval sums and the step count (after the assembly).  No-op unless `accum_on`.
+      type(ocean_surface_flux_t), intent(inout) :: sf
+
+      if (.not. sf%accum_on) return
+      call ocean_surfflux_accum_zero_impl(sf%accum, size(sf%accum, 1), size(sf%accum, 2))
+      sf%accum_n = 0.0_wp
+   end subroutine ocean_surface_flux_clear_accum
+
+   pure subroutine ocean_surfflux_accum_add_impl(acc, q_sw, q_lw, q_lat, q_sens, q_fus, q_fus_rof, &
+                                                 heat_added, evap, lprec, fprec, lrunoff, frunoff, &
+                                                 salt_flux, hc_lprec, hc_fprec, nx, ny)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(inout) :: acc(nx, ny, SF_NACC)
+      real(wp), intent(in) :: q_sw(nx, ny), q_lw(nx, ny), q_lat(nx, ny), q_sens(nx, ny)
+      real(wp), intent(in) :: q_fus(nx, ny), q_fus_rof(nx, ny), heat_added(nx, ny)
+      real(wp), intent(in) :: evap(nx, ny), lprec(nx, ny), fprec(nx, ny)
+      real(wp), intent(in) :: lrunoff(nx, ny), frunoff(nx, ny), salt_flux(nx, ny)
+      real(wp), intent(in) :: hc_lprec(nx, ny), hc_fprec(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         acc(i, j, 1) = acc(i, j, 1) + q_sw(i, j)
+         acc(i, j, 2) = acc(i, j, 2) + q_lw(i, j)
+         acc(i, j, 3) = acc(i, j, 3) + q_lat(i, j)
+         acc(i, j, 4) = acc(i, j, 4) + q_sens(i, j)
+         acc(i, j, 5) = acc(i, j, 5) + q_fus(i, j)
+         acc(i, j, 6) = acc(i, j, 6) + q_fus_rof(i, j)
+         acc(i, j, 7) = acc(i, j, 7) + heat_added(i, j)
+         acc(i, j, 8) = acc(i, j, 8) + evap(i, j)
+         acc(i, j, 9) = acc(i, j, 9) + lprec(i, j)
+         acc(i, j, 10) = acc(i, j, 10) + fprec(i, j)
+         acc(i, j, 11) = acc(i, j, 11) + lrunoff(i, j)
+         acc(i, j, 12) = acc(i, j, 12) + frunoff(i, j)
+         acc(i, j, 13) = acc(i, j, 13) + salt_flux(i, j)
+         acc(i, j, 14) = acc(i, j, 14) + hc_lprec(i, j)
+         acc(i, j, 15) = acc(i, j, 15) + hc_fprec(i, j)
+      end do
+   end subroutine ocean_surfflux_accum_add_impl
+
+   pure subroutine ocean_surfflux_accum_mean_impl(acc, q_sw, q_lw, q_lat, q_sens, q_fus, q_fus_rof, &
+                                                  heat_added, evap, lprec, fprec, lrunoff, frunoff, &
+                                                  salt_flux, hc_lprec, hc_fprec, n, nx, ny)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: acc(nx, ny, SF_NACC)
+      real(wp), intent(inout) :: q_sw(nx, ny), q_lw(nx, ny), q_lat(nx, ny), q_sens(nx, ny)
+      real(wp), intent(inout) :: q_fus(nx, ny), q_fus_rof(nx, ny), heat_added(nx, ny)
+      real(wp), intent(inout) :: evap(nx, ny), lprec(nx, ny), fprec(nx, ny)
+      real(wp), intent(inout) :: lrunoff(nx, ny), frunoff(nx, ny), salt_flux(nx, ny)
+      real(wp), intent(inout) :: hc_lprec(nx, ny), hc_fprec(nx, ny)
+      real(wp), intent(in), value :: n
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         q_sw(i, j) = acc(i, j, 1)/n
+         q_lw(i, j) = acc(i, j, 2)/n
+         q_lat(i, j) = acc(i, j, 3)/n
+         q_sens(i, j) = acc(i, j, 4)/n
+         q_fus(i, j) = acc(i, j, 5)/n
+         q_fus_rof(i, j) = acc(i, j, 6)/n
+         heat_added(i, j) = acc(i, j, 7)/n
+         evap(i, j) = acc(i, j, 8)/n
+         lprec(i, j) = acc(i, j, 9)/n
+         fprec(i, j) = acc(i, j, 10)/n
+         lrunoff(i, j) = acc(i, j, 11)/n
+         frunoff(i, j) = acc(i, j, 12)/n
+         salt_flux(i, j) = acc(i, j, 13)/n
+         hc_lprec(i, j) = acc(i, j, 14)/n
+         hc_fprec(i, j) = acc(i, j, 15)/n
+      end do
+   end subroutine ocean_surfflux_accum_mean_impl
+
+   pure subroutine ocean_surfflux_accum_zero_impl(acc, nx, ny)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(inout) :: acc(nx, ny, SF_NACC)
+      integer :: i, j, k
+
+      do concurrent(k=1:SF_NACC, j=1:ny, i=1:nx)
+         acc(i, j, k) = 0.0_wp
+      end do
+   end subroutine ocean_surfflux_accum_zero_impl
+
    pure function ocean_surface_flux_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the surface flux slot
       !! (0 when unallocated). One arr_bytes term per array — add a
@@ -2156,7 +2335,7 @@ contains
                + arr_bytes(this%fw_net) + arr_bytes(this%Q_salt_tracer) &
                + arr_bytes(this%runoff) &
                + arr_bytes(this%p_surf_atm) + arr_bytes(this%p_surf) &
-               + arr_bytes(this%p_ice_load)
+               + arr_bytes(this%p_ice_load) + arr_bytes(this%accum)
    end function ocean_surface_flux_bytes
 
    pure subroutine ocean_surface_flux_apply_cover_const(sf, cover_frac)
@@ -2378,8 +2557,8 @@ contains
       !! Limits: there is no limiter in the deposit, so a very thin first live
       !! layer under a large `F` can reach negative salinity (the same exposure as
       !! the ice path; `&ocean_ice_nml bound_salinity` floors it); and under
-      !! `dt_therm_ratio > 1` the term is the thermo step's instantaneous P - E,
-      !! while the ice share it adds to is a window mean.
+      !! `dt_therm_ratio > 1` the term is built from the interval-mean P - E (the
+      !! components are replaced by their means just before this call).
       !!
       !!   F         = lprec + fprec + evap + lrunoff + frunoff
       !!   salt_fw   = -wet * S_surf * F

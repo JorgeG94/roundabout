@@ -18,10 +18,11 @@
 !
 !   dt_therm_ratio = 4 with diabatic_first = .false.: the OM3 interval order
 !       (the thermodynamic step and the ALE remap close each interval) at
-!       OM3's interval, 7200 s (DT_THERM).  A 7200 s window does not divide the
-!       3-hourly rsds interval; the cosine-zenith shortwave (sw_interp =
-!       "coszen") splits the window at the interval edge, so every third window
-!       takes part of its flux from the next record.
+!       OM3's interval, 7200 s (DT_THERM).  The ocean's surface flux is the mean
+!       of the four per-step fluxes of the interval (below); the cosine-zenith
+!       shortwave (sw_interp = "coszen") is evaluated per 1800 s step, so a step
+!       that straddles the 3-hourly rsds interval edge takes its flux from both
+!       records.
 !
 ! NOT yet OM3's: the shortwave (the
 ! parent's two-band scheme; OM3: three bands, chlorophyll dependent), and
@@ -32,16 +33,16 @@
 ! ocean-area-mean ice concentration 0.035; ~8 minutes of wall time.  Ratio 1
 ! and ratio 6 give the same printed global-mean temperature and salinity.
 !
-! KNOWN DEFECT at dt_therm_ratio > 1 (measured 2026-11-19, not fixed here): the
-! ocean's thermodynamic step spends the net heat flux assembled one outer step
-! earlier, from that step's single-step bulk fluxes, for the whole interval --
-! one step's shortwave (and one sample of every other bulk flux) times N*dt,
-! not the interval mean.  The penetrating-shortwave profile, by contrast, uses
-! the interval mean.  On a small clear-sky test at this cadence (dt 1800,
-! ratio 4, this interval order) the daily-mean ocean shortwave was within
-! 0.05 % of the forcing and within 0.8 % per cell, but single intervals were
-! off by 6-18 % in the afternoon and 100 % at dusk.  The sea ice is not
-! affected.  Use ratio 1 where the surface energy must be exact.
+! SURFACE FLUX AT dt_therm_ratio > 1: the thermodynamic step spends the flux
+! over N*dt, so the atmosphere-driven components (shortwave, longwave, latent
+! and sensible heat, snow fusion, precipitation, evaporation, runoff and the
+! enthalpy of the rain and snow) are averaged over the N dynamic steps of the
+! interval and the net heat, salt and fresh-water mass fluxes are built from
+! those means; the penetrating shortwave is the same mean.  (Until 2026-11-19
+! one dynamic step's sample was spent over the whole interval: single
+! intervals were off by 6-18 % in the afternoon and 100 % at dusk, the daily
+! mean within 0.05 %.)  Wind stress and the sea ice are per step, as before.
+! The averaging lags one dynamic step, as the ratio-1 flux does.
 !
 ! INPUTS: as global_1deg_ice_fwmass.nml (grid, bathymetry, IC, JRA55-do
 ! filelists, model-grid runoff files).

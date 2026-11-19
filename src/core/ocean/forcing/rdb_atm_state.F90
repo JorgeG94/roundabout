@@ -55,14 +55,14 @@ module rdb_atm_state
    !! the record there is ~1e-6 W/m2 and the 0/0 would otherwise
    !! be noise).
    !!
-   !! **The window is the interval the flux is APPLIED over.**  With
-   !! `dt_therm_ratio = N > 1` the surface flux sampled on a thermo step is
-   !! applied over `N*dt`, not `dt`: `diabatic_first` samples at the interval
-   !! start and applies over `[t, t + N dt)`; `diabatic_first = .false.`
-   !! samples on the interval's last step and applies over `[t - (N-1) dt,
-   !! t + dt)`.  `atm_sw_window` is the ONE place that says so (the engine
-   !! and the tests both call it) and `atm_state_update` integrates over
-   !! exactly that window.  A window needs neither to divide the bucket nor to
+   !! **The window is the interval the sample is averaged over.**  The ocean engine passes the
+   !! plain dynamic step `[t, t + dt)` at every `dt_therm_ratio`: the N per-step
+   !! values are averaged by the surface-flux interval accumulator
+   !! (`ocean_surface_flux_accumulate`), which IS the mean over the thermo interval the flux is
+   !! applied to, so `rsds` and `rsds_step` coincide in the engine.  `atm_state_update` can still
+   !! integrate over an arbitrary window (`win_shift`/`win_len`; `atm_sw_window` builds the
+   !! thermo-interval one a consumer that applies a SINGLE sample over `N*dt` would need:
+   !! `[t, t + N dt)` under `diabatic_first`, `[t - (N-1) dt, t + dt)` otherwise).  A window needs neither to divide the bucket nor to
    !! start on any grid of the UTC clock (`start_date` time of day included).
    !! One that lies inside a single bucket uses the formula above unchanged.
    !! One that STRADDLES a bucket edge (7200 s windows against 10800 s buckets:
@@ -789,7 +789,9 @@ contains
 
    pure subroutine atm_sw_window(dt, therm_ratio, diabatic_first, thermo_step, shift, length)
       !! The interval `[t + shift, t + shift + length)` over which the
-      !! shortwave sampled at model time `t` is APPLIED.  A step that is not
+      !! shortwave sampled at model time `t` is APPLIED when ONE sample is spent over the thermo
+      !! interval.  (The ocean engine no longer uses it: it averages the per-step samples in the
+      !! surface-flux interval accumulator instead.)  A step that is not
       !! a thermo step (or `therm_ratio <= 1`): `[t, t + dt)`.  Thermo step
       !! at `therm_ratio = N > 1`: the surface flux is applied over
       !! `N*dt` -- `[t, t + N dt)` under `diabatic_first` (sampled at the

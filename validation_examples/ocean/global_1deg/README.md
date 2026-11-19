@@ -1058,10 +1058,11 @@ and the OM3 interval order (`diabatic_first = .false.`) at `dt_therm_ratio = 4`
 (7200 s, OM3's `DT_THERM`).
 
 What is not OM3's yet is listed in the namelist header: the shortwave bands and tidal
-mixing. A 7200 s thermodynamic window does not divide the 3-hourly radiation interval, so
-the cosine-zenith shortwave splits it at the interval edge (the "Prescribed atmospheric state" row of
-`docs/CAPABILITIES_AND_LIMITATIONS.md`); the energy of every interval is still delivered
-exactly.
+mixing. At `dt_therm_ratio > 1` the ocean spends, over each thermodynamic interval, the MEAN of
+the atmosphere-driven fluxes of its dynamic steps (the "Surface flux at `dt_therm_ratio > 1`" row of
+`docs/CAPABILITIES_AND_LIMITATIONS.md`), not one step's sample; the cosine-zenith shortwave is
+evaluated per 1800 s step, and a step that straddles the 3-hourly radiation interval edge takes
+its flux from both records, so the energy of every radiation interval is still delivered exactly.
 
 Measured so far: a 30-day run on one V100 with the SYNTHETIC runoff files of Sec. 8 --
 finite, budgets at round-off, about 8 minutes (taken at `dt_therm_ratio = 2`, before the

@@ -121,6 +121,9 @@ module rdb_ocean_engine
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble, &
                                      ocean_surface_flux_refresh_sw_net, &
+                                     ocean_surface_flux_accumulate, &
+                                     ocean_surface_flux_apply_interval_mean, &
+                                     ocean_surface_flux_clear_accum, &
                                      ocean_surface_flux_fw_virtual_step, parse_surface_freshwater, &
                                      SURF_FW_MASS, SURF_FW_INVALID, SURF_FW_VIRTUAL, &
                                      ocean_surface_flux_apply_ice_load, ocean_surface_flux_assemble_p_surf
@@ -160,7 +163,7 @@ module rdb_ocean_engine
    use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply, &
                                      ocean_data_forcing_register_sss
    use rdb_ocean_sw_chl, only: sw_chl_configure, sw_chl_apply
-   use rdb_atm_state, only: atm_state_configure, atm_state_update, atm_sw_window
+   use rdb_atm_state, only: atm_state_configure, atm_state_update
    use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply, bulk_forcing_wants_cice_wind
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
 #endif
@@ -788,6 +791,11 @@ contains
       end select
       call engine%state%surface_flux%set_components(engine%grid, &
                                                     cfg%ocean%forcing%enable_components)
+      ! `dt_therm_ratio > 1`: the thermodynamic step spends its surface flux over N*dt, so the
+      ! per-step atmospheric components are averaged over the interval (allocated here, before the
+      ! restart read, so the registry walk sees the accumulator).  Inert at ratio 1.
+      call engine%state%surface_flux%set_interval_mean( &
+         engine%grid, cfg%ocean%thermo%enable_thermodynamics .and. cfg%ocean%vmix%dt_therm_ratio > 1)
       ! Ice mass loading: allocates the carried `p_ice_load` BEFORE the restart read, so the
       ! registry walk sees it (inert, nothing allocated, unless `&ocean_psurf_nml ice_load`).
       call engine%state%surface_flux%set_ice_load(cfg%ocean%psurf%ice_load)
@@ -2150,7 +2158,6 @@ contains
       real(wp), intent(in) :: t
       integer, intent(out), optional :: ierr
 
-      real(wp) :: sw_shift, sw_len
       logical :: delivered
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
@@ -2166,12 +2173,11 @@ contains
       ! Order vs `ocean_data_forcing_apply` above does not matter -- both
       ! read the SAME reader brackets `ocean_data_input_update_all` just
       ! refreshed, and neither writes a slot the other reads.
-      ! The shortwave is applied over the THERMO interval (N*dt at
-      ! dt_therm_ratio = N), so the coszen window must be that interval.
-      call atm_sw_window(dt, engine%state%dyn%dt_therm_ratio, engine%state%dyn%diabatic_first, &
-                         engine%state%dyn%is_thermo_step(), sw_shift, sw_len)
+      ! The shortwave is the mean over THIS dynamic step (`[t, t + dt)`); at dt_therm_ratio = N the
+      ! N per-step values are averaged by the interval accumulator below, which is the mean over
+      ! the thermo interval the flux is applied to.
       call atm_state_update(engine%state%atm, engine%state%data_input, &
-                            engine%state%metrics, t, dt, sw_shift, sw_len)
+                            engine%state%metrics, t, dt)
       ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
       call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
                         engine%state%multilayer%wet_mask, engine%state%surface_flux, &
@@ -2186,15 +2192,24 @@ contains
                               engine%state%surface_flux, cgrid=engine%state%ice_cgrid)
 #endif
 
+      ! Interval-mean treatment (`dt_therm_ratio > 1`): add this step's atmospheric components into
+      ! the sums the assembling `engine_step_finalize` turns into means.  No-op otherwise.
+      call ocean_surface_flux_accumulate(engine%state%surface_flux)
+
       ! `sw_source="q_sw"` consumers (penetration, KPP, EPBL) read the TOTAL
       ! shortwave: this step's open-water `q_sw` plus the ice-transmitted
-      ! `sw_ice` (carried from the last thermo window).  No-op otherwise.
-      call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
-      ! `q_sw` is a physical-span-only write, `sw_net` was just formed over
-      ! the full array, and the boundary-layer schemes read it in the ghost
-      ! columns: exchange its seam ghosts (no-op unless `use_components` and `sw_from_qsw`).
-      call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, &
-                                     engine%state%bc)
+      ! `sw_ice` (carried from the last thermo window).  No-op otherwise, and
+      ! under the interval mean (`accum_on`) `sw_net` is formed at the assembling
+      ! finalize from the mean `q_sw` -- the shortwave inside `Q_heat` -- so the
+      ! per-step form (and its seam exchange) is skipped.
+      if (.not. engine%state%surface_flux%accum_on) then
+         call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
+         ! `q_sw` is a physical-span-only write, `sw_net` was just formed over
+         ! the full array, and the boundary-layer schemes read it in the ghost
+         ! columns: exchange its seam ghosts (no-op unless `use_components` and `sw_from_qsw`).
+         call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, &
+                                        engine%state%bc)
+      end if
 
       call engine%bc_source%update(t, engine%state%bc)
 
@@ -2666,6 +2681,7 @@ contains
          !! `t + dt` is what reaches the diag manager, matching
          !! `driver_run_ocean`'s post-advance `t_current`.
       integer, intent(out), optional :: ierr
+      logical :: assembling
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
@@ -2737,6 +2753,18 @@ contains
             size(engine%state%surface_stress%stress_shelf, 2))
       end if
 
+      ! Interval mean (`dt_therm_ratio > 1`): the surface flux assembled here is spent over N*dt,
+      ! so it is built from the time mean of the per-step atmospheric components of the interval
+      ! (the samples of the `engine_step` calls since the last assembly), not from the last step's
+      ! sample; `sw_net` follows from the mean `q_sw`, so it is the shortwave inside `Q_heat`.  Wind
+      ! stress stays per-step.  `accum_on` is false at ratio 1: none of this runs.
+      assembling = engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()
+      if (engine%state%surface_flux%accum_on .and. assembling) then
+         call ocean_surface_flux_apply_interval_mean(engine%state%surface_flux)
+         call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux, at_assembly=.true.)
+         call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, engine%state%bc)
+      end if
+
       ! Virtual fresh-water salt flux: its ONE writer, right before the
       ! assembler sums it (same thermo cadence).  Owned cells only: nothing
       ! reads the ghosts of `Q_salt`, so no seam exchange (`salt_ice`'s own
@@ -2774,6 +2802,10 @@ contains
       if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
          call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
                                               engine%state%bc)
+      end if
+      ! The interval's samples are spent: start the next interval empty.
+      if (engine%state%surface_flux%accum_on .and. assembling) then
+         call ocean_surface_flux_clear_accum(engine%state%surface_flux)
       end if
 
       if (engine%diag_enabled) then

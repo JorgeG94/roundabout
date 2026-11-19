@@ -507,6 +507,22 @@ contains
                               size(state%surface_flux%Q_salt, 2), optional=.true.)
          call reg%register_scalar("sf_q_assembled", state%surface_flux%q_assembled, &
                                   optional=.true.)
+         ! Interval-mean treatment (`dt_therm_ratio > 1`): a checkpoint can fall inside a thermo
+         ! interval, where the running sums of the per-step atmospheric components, their step
+         ! count and the interval-mean `sw_net` (formed only at the assembling step) are live
+         ! state the straight run carries, so a resume needs all three.  Registered only when the
+         ! treatment is on, so every ratio-1 restart file is unchanged.
+         if (state%surface_flux%accum_on .and. allocated(state%surface_flux%accum)) then
+            call reg%register_3d("sf_accum", state%surface_flux%accum, 0, &
+                                 size(state%surface_flux%accum, 1), &
+                                 size(state%surface_flux%accum, 2), optional=.true.)
+            call reg%register_scalar("sf_accum_n", state%surface_flux%accum_n, optional=.true.)
+            ! Not gated on `sw_from_qsw`: the read registry is built before `set_sw_penetration`
+            ! latches it, and `sw_net` is allocated with the component set.
+            call reg%register_2d("sf_sw_net", state%surface_flux%sw_net, 0, &
+                                 size(state%surface_flux%sw_net, 1), &
+                                 size(state%surface_flux%sw_net, 2), optional=.true.)
+         end if
          ! Real fresh-water mass (`freshwater="mass"`): the assembled snapshot the mass step
          ! spends and the tracer salt flux the deposit reads are carried between thermo steps
          ! exactly like `Q_heat`/`Q_salt` (the deferred path spends the one assembled after

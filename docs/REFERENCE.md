@@ -139,6 +139,19 @@ are gated on the thermo cadence (`&ocean_vmix_nml dt_therm_ratio`, MOM6
 `DT_THERM`); horizontal tracer advection has its own window
 (`dt_tracer_advect_ratio`).
 
+At `dt_therm_ratio = N > 1` the thermodynamic step applies its surface flux over `N*dt`, so the
+fluxes that arrive every dynamic step from the prescribed atmosphere and the data-forcing files
+(shortwave, longwave, latent, sensible and fusion heat, `heat_added`, `salt_flux`, precipitation,
+evaporation, runoff, and the enthalpy of rain and snow) are summed per step and replaced by their
+time mean when the net `Q_heat`, `Q_salt` and (under `freshwater = "mass"`) `fw_net` are assembled,
+so the heat applied over the interval is `dt` times the sum of the per-step fluxes (the standard
+coupled-model treatment). The shortwave that penetrates (`sw_net`, with
+`sw_source = "q_sw"`) is formed from the same mean. Wind stress is per step, and so are the
+sea-ice and ice-shelf components, which are already interval quantities. The samples are those of
+the `N` dynamic steps that precede the assembly (one step of lag, as at ratio 1). The sums and the
+count are restart state, so a checkpoint inside an interval resumes bit-identically. At
+`dt_therm_ratio = 1` none of this runs.
+
 Because the gravity-wave mode is sub-cycled rather than resolved by the
 outer step, the outer `Δt` is bounded by advective/baroclinic CFL, not by
 `dx/√(gH)` — O(minutes) in practice (`dt_fixed = 1200 s` in the
