@@ -97,6 +97,8 @@ contains
                   new_unittest("one_cell_channel", test_channel), &
                   new_unittest("zero_velocity_clears_everything", test_zero), &
                   new_unittest("degenerate_corners_device_vs_host", test_degenerate), &
+                  new_unittest("flat_shifted_midpoint_crossing", test_flat_crossing), &
+                  new_unittest("pinned_crossing_past_the_corner", test_pinned_past_corner), &
                   new_unittest("cfl_bits_both_signs_and_crossing", test_cfl), &
                   new_unittest("nan_in_raises_bit", test_nan), &
                   new_unittest("zero_area_face_is_inactive", test_zero_area_face), &
@@ -1881,6 +1883,421 @@ contains
          call test_failed(error, "degenerate: a source-cell area differs from the host table")
       end if
    end subroutine test_degenerate
+
+   function centre_vertices_ok(iedge, sc, px, py) result(ok)
+      !! The centre triangles (slots 4..6) of one edge's output, back in the edge frame: every vertex ON the axis
+      !! (an edge corner or an axis crossing: the table stores those with an exact zero ordinate) lies in the column
+      !! `[-1/2, 1/2]`, and every triangle lies on the side of the axis of the cell it is attributed to (`TC`: no
+      !! vertex below, `BC`: none above), i.e. each crossing used as a vertex is on the axis between the two cells
+      !! and inside the column.  Written from the documented frames, not from the kernel.
+      integer, intent(in) :: iedge
+      integer(int8), intent(in) :: sc(REMAP_NSLOT)
+      real(wp), intent(in) :: px(3, REMAP_NSLOT), py(3, REMAP_NSLOT)
+      logical :: ok
+      integer :: g, k, di, dj, l
+      real(wp) :: ex, ey
+
+      ok = .true.
+      do g = 4, REMAP_NSLOT
+         if (sc(g) == 0_int8) cycle
+         di = remap_src_di(sc(g))
+         dj = remap_src_dj(sc(g))
+         l = label_of(iedge, di, dj)
+         if (l /= 5 .and. l /= 6) ok = .false.
+         do k = 1, 3
+            if (iedge == REMAP_EDGE_NORTH) then
+               ex = px(k, g) + real(di, wp)
+               ey = py(k, g) - 0.5_wp + real(dj, wp)
+            else
+               ex = -(py(k, g) + real(dj, wp))
+               ey = px(k, g) - 0.5_wp + real(di, wp)
+            end if
+            if (ey == 0.0_wp .and. abs(ex) > 0.5_wp) ok = .false.
+            if (l == 5 .and. ey < 0.0_wp) ok = .false.
+            if (l == 6 .and. ey > 0.0_wp) ok = .false.
+         end do
+      end do
+   end function centre_vertices_ok
+
+   subroutine test_flat_crossing(error)
+      !! The edge flux adjustment on a NEARLY STAGNANT edge: the shifted midpoint lands on the far side of the axis
+      !! and the segments to it are flatter than `puny`, so their axis crossings (vertices of the centre triangles)
+      !! are not the reference's 0.  (a) The edge that stopped a global 1-degree run on day 2, replayed from its bit
+      !! patterns (a north edge; left corner at rest, right corner displaced by `3.7e-9` cells along the edge and
+      !! `-8.5e-12` across it, prescribed area 0): no error bit, the same branch (`BR`, centre 4, adjustment 1),
+      !! the areas summing to the prescribed one, and the left crossing AT the corner the left departure point sits
+      !! on.  Before the fix the crossing was 0, the `TC` triangle a quarter of its size and the sum off by
+      !! `1.06e-12` cell areas (`ICE_ERR_TRANSPORT_CONSERV`).  (b) The family around it on the scalar table: one
+      !! corner at rest, the other displaced along the edge by six values of either sign and across it by
+      !! `1e-15 .. 6e-11` of either sign, either corner, both edge directions, prescribed areas 0 and `+-0.3` of
+      !! the displacement (one in six failed before): no error bit, the sum closed, every crossing used as a vertex
+      !! on the axis inside the column with its triangle on its own cell's side (`centre_vertices_ok`), and, with a
+      !! uniform area factor, the area of EVERY source cell equal to the independent oracle's (a wrong crossing
+      !! that still closed the sum would move area between `TC` and `BC`).  (c) Such corners through the device kernels on a grid
+      !! (isolated moved corners, so each is the left point of one north and one east edge and the right point of
+      !! another pair), uniform and non-uniform metric: no error bit and every edge closes.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NB = 20, NA = 6
+      real(wp), parameter :: AX(NA) = [0.0_wp, 3.7e-9_wp, 1.0e-4_wp, 0.2_wp, -1.0e-6_wp, -0.2_wp]
+      real(wp), parameter :: EAF(3) = [0.0_wp, 0.3_wp, -0.3_wp]
+      integer(int64), parameter :: CAP(6) = [int(z'3E300255EB11C72C', int64), int(z'3DA2AC3C0A6DFE69', int64), &
+                                             int(z'41EAC24CA4FE4D97', int64), int(z'41EA5E22631F3E89', int64), &
+                                             int(z'41EB27A4D73ABFD4', int64), 0_int64]
+         !! Captured bit patterns: `drx`, `-dry`, `fc = f_l = f_r`, `f_tl = f_tr`, `f_bl = f_br`, and the zero of
+         !! `dlx = dly = edgearea`.
+      type(geo_t) :: g
+      real(wp) :: c(6), d(4), fc, ea, asum, b, worst, w, worst_cell
+      real(wp) :: osum(NLAB), omx(NLAB), omy(NLAB), ksum(NLAB)
+      logical :: ok
+      real(wp) :: px(3, REMAP_NSLOT), py(3, REMAP_NSLOT), ar(REMAP_NSLOT)
+      integer(int8) :: sc(REMAP_NSLOT)
+      integer(int32) :: ic, bits
+      integer :: m, ia, isb, side, ie, iedge, i, j, k, variant, nrun, nact
+      character(len=200) :: msg
+
+      ! ---- (a) the captured edge ----
+      c = transfer(CAP, c)
+      call remap_locate_edge(REMAP_EDGE_NORTH, 1, PUNY, c(6), c(6), c(1), -c(2), c(3), c(4), c(5), c(4), c(5), c(3), c(3), &
+                             c(6), px, py, ar, sc, ic, asum, bits)
+      if (bits /= 0_int32) then
+         write (msg, "(a,z8.8,a,es10.3)") "captured edge: error word ", bits, ", |sum - edgearea|/areafac ", abs(asum)/c(3)
+         call test_failed(error, trim(msg))
+         return
+      end if
+      call check(error, ic == int(2*5 + 4*25 + 325, int32), "captured edge: branch (BR, centre 4, adjustment 1)")
+      if (allocated(error)) return
+      call check(error, abs(asum) <= 1.0e-13_wp*c(3), "captured edge: the areas sum to the prescribed (zero) area")
+      if (allocated(error)) return
+      ! slot 6 is the TC triangle ICL-ICR-DM; in the source frame of TC the left corner of the edge is (-1/2, -1/2)
+      call check(error, sc(6) /= 0_int8 .and. abs(px(1, 6) + 0.5_wp) <= 1.0e-12_wp .and. abs(py(1, 6) + 0.5_wp) <= 1.0e-12_wp, &
+                 "captured edge: the left crossing is the corner the left departure point sits on")
+      if (allocated(error)) return
+      call check(error, abs(ar(6) + ar(5)) <= 1.0e-13_wp*c(3) .and. abs(ar(5)) > 1.0e-12_wp*c(3), &
+                 "captured edge: the TC triangle cancels the BC one")
+      if (allocated(error)) return
+
+      ! ---- (b) the family, scalar table ----
+      worst = 0.0_wp
+      worst_cell = 0.0_wp
+      nrun = 0
+      fc = c(3)
+      do m = 0, NB - 1
+         b = 10.0_wp**(-15.0_wp + 0.25_wp*real(m, wp))
+         do ia = 1, NA
+            do isb = -1, 1, 2
+               do side = 0, 1
+                  do ie = 1, 3
+                     do iedge = REMAP_EDGE_NORTH, REMAP_EDGE_EAST
+                        d = 0.0_wp
+                        d(1 + 2*side) = AX(ia)
+                        d(2 + 2*side) = real(isb, wp)*b
+                        ea = EAF(ie)*b*fc
+                        call remap_locate_edge(iedge, 1, PUNY, d(1), d(2), d(3), d(4), fc, c(4), c(5), c(4), c(5), fc, fc, &
+                                               ea, px, py, ar, sc, ic, asum, bits)
+                        nrun = nrun + 1
+                        w = abs(asum - ea)/fc
+                        if (bits /= 0_int32 .or. .not. (w <= 1.0e-13_wp)) then
+                           write (msg, "(a,z8.8,a,es10.3,a,4es11.3,a,es10.3)") "flat family: error word ", bits, &
+                              ", |sum - edgearea|/areafac ", w, ", displacements ", d, ", edgearea/areafac ", ea/fc
+                           call test_failed(error, trim(msg))
+                           return
+                        end if
+                        worst = max(worst, w)
+                        if (.not. centre_vertices_ok(iedge, sc, px, py)) then
+                           write (msg, "(a,4es11.3,a,es10.3)") "flat family: a centre vertex off its place, displacements ", &
+                              d, ", edgearea/areafac ", ea/fc
+                           call test_failed(error, trim(msg))
+                           return
+                        end if
+                        ! uniform factor: the area of every source cell against the independent oracle
+                        call remap_locate_edge(iedge, 1, PUNY, d(1), d(2), d(3), d(4), fc, fc, fc, fc, fc, fc, fc, ea, px, py, &
+                                               ar, sc, ic, asum, bits)
+                        call efa_oracle(d(1), d(2), d(3), d(4), ea, fc, osum, omx, omy, ok)
+                        call kernel_cell_sums(iedge, sc, ar, ksum)
+                        w = maxval(abs(ksum - osum))/fc
+                        if (bits /= 0_int32 .or. .not. ok .or. .not. (w <= 1.0e-13_wp)) then
+                           write (msg, "(a,z8.8,a,l1,a,es10.3,a,4es11.3,a,es10.3)") "flat family vs oracle: error word ", bits, &
+                              ", oracle ok ", ok, ", worst source-cell area difference/areafac ", w, ", displacements ", d, &
+                              ", edgearea/areafac ", ea/fc
+                           call test_failed(error, trim(msg))
+                           return
+                        end if
+                        worst_cell = max(worst_cell, w)
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      ! ---- (c) the device kernels ----
+      ! The corners of this part were chosen on the scalar table WITHOUT FMA contraction.  On the offload build the
+      ! kernels may contract, and an edge need not land on the same ulp; there this part checks that the kernels
+      ! ACCEPT the family and close every edge, not that it reproduces the failure the table showed before the fix.
+      nact = 0
+      do variant = 0, 1
+         call geo_init(g, 12, 10, variant == 1)
+         g%dt = 1.0_wp
+         g%ws%dpx = 0.0_wp
+         g%ws%dpy = 0.0_wp
+         g%ws%edgearea_e = 0.0_wp
+         g%ws%edgearea_n = 0.0_wp
+         k = 0
+         do j = g%js + 1, g%je - 1, 2
+            do i = g%is + 1, g%ie - 1, 2
+               ! isolated corners: along x and across y (flat north edges), then along y and across x (flat east edges)
+               b = 10.0_wp**(-13.0_wp + 0.125_wp*real(mod(k, 16), wp))
+               if (k == 0) b = c(2)
+               if (mod(k, 2) == 0) then
+                  g%ws%dpx(i, j) = merge(c(1), AX(1 + mod(k/2, NA)), k == 0)*g%dxU(i, j)
+                  g%ws%dpy(i, j) = merge(-b, b, mod(k/4, 2) == 0)*g%dyU(i, j)
+               else
+                  g%ws%dpy(i, j) = AX(1 + mod(k/2, NA))*g%dyU(i, j)
+                  g%ws%dpx(i, j) = merge(-b, b, mod(k/4, 2) == 0)*g%dxU(i, j)
+               end if
+               k = k + 1
+            end do
+         end do
+         g%ierr = 0_int32
+         call geo_locate(g, 1)
+         if (any(g%ierr /= 0_int32)) then
+            write (msg, "(a,i0,a,i0,a,z8.8)") "flat crossing (kernels), variant ", variant, ": ", count(g%ierr /= 0_int32), &
+               " cells with an error word, the largest ", maxval(g%ierr)
+            call test_failed(error, trim(msg))
+            call geo_destroy(g)
+            return
+         end if
+         do j = g%js, g%je
+            do i = g%is, g%ie
+               if (g%ws%icase_n(i, j) /= 0_int32) then
+                  nact = nact + 1
+                  worst = max(worst, abs(sum(g%ws%area_n(i, j, :)))/g%narea(i, j))
+               end if
+               if (g%ws%icase_e(i, j) /= 0_int32) then
+                  nact = nact + 1
+                  worst = max(worst, abs(sum(g%ws%area_e(i, j, :)))/g%earea(i, j))
+               end if
+            end do
+         end do
+         call geo_destroy(g)
+      end do
+      write (error_unit, "(a,i0,a,i0,a,es9.2,a,es9.2)") "  [remap_geom] flat shifted-midpoint crossing: ", nrun, &
+         " scalar edges, ", nact, " kernel edges, worst |sum - edgearea|/areafac ", worst, &
+         ", worst source-cell area vs oracle ", worst_cell
+      if (nact < 100) then
+         call test_failed(error, "flat crossing (kernels): too few active edges")
+      else if (.not. (worst <= 1.0e-13_wp)) then
+         call test_failed(error, "flat crossing (kernels): an edge does not close on its prescribed area")
+      end if
+   end subroutine test_flat_crossing
+
+   subroutine test_pinned_past_corner(error)
+      !! The edge flux adjustment when the axis crossing of `DL-DR` is computed one or two ulp PAST a corner of the
+      !! edge: a departure point that far outside the column (or just outside it with the other point a round-off
+      !! away from its corner) is moved to the side line, the moved points are on opposite sides of the axis, and the
+      !! crossing, held only to the bracket of the points before the move, satisfied neither pinned-crossing test, so
+      !! the edge kept the UNADJUSTED area.  (a) The edge a random scan of the table found (left point `4.8e-7` cells
+      !! outside the column and half a cell below the edge, right point `(2.3e-16, 1.6e-16)` from its corner), with a
+      !! prescribed area `0.1 %` off the swept one: before the fix adjustment branch 4, a miss of `2.5e-4` cell areas
+      !! and `ICE_ERR_TRANSPORT_CONSERV`; now a pinned branch, no error bit, the sum closed.  (b) The family: one
+      !! point `(+-n1, b)`, the other `(+-n2, +-n3)`, `n` over seven magnitudes `5.6e-17 .. 1e-12` (one ulp of the
+      !! corner abscissa and up), `b = +-0.2, +-0.45`, either point, both edge directions, the prescribed area the
+      !! swept one and `+-0.1 %` of it: no error bit, never the unadjusted branch, the sum closed, every crossing
+      !! used as a vertex on the axis inside the column with its triangle on its own cell's side
+      !! (`centre_vertices_ok`; the oracle of the sweeps declines a crossing AT a corner) (36 of the 65856
+      !! per direction took the unadjusted branch before, 24 of them missing the area).  (c) Six of those pairs as
+      !! neighbouring corners through the device kernels, along x (north edges) and along y (east edges), uniform
+      !! and non-uniform metric, the prescribed areas `0.1 %` off the unadjusted ones: no error bit, no edge on the
+      !! unadjusted branch, every edge closed.  (`degenerate_corners_device_vs_host` does not reach this: its corner
+      !! layout never puts a corner a few ulp outside the column next to one with a large ordinate, and its noise
+      !! magnitudes stop at `1e-17`, below one ulp of the corner abscissa.)
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NN = 7, NBB = 4
+      real(wp), parameter :: FC = 1.0e8_wp
+      real(wp), parameter :: NZ(NN) = [5.6e-17_wp, 1.2e-16_wp, 2.3e-16_wp, 4.5e-16_wp, 1.0e-15_wp, 1.0e-14_wp, 1.0e-12_wp]
+      real(wp), parameter :: BB(NBB) = [0.2_wp, -0.2_wp, 0.45_wp, -0.45_wp]
+      real(wp), parameter :: HS(3) = [1.0_wp, 1.001_wp, 0.999_wp]
+      real(wp), parameter :: CAP(4) = [-4.824056262452744e-07_wp, -0.49195635205982213_wp, 2.3123637247220774e-16_wp, &
+                                       1.5581512009151482e-16_wp]
+      real(wp) :: d(4), ea, asum, swept, w, worst, s1, s2, s3
+      real(wp) :: px(3, REMAP_NSLOT), py(3, REMAP_NSLOT), ar(REMAP_NSLOT)
+      integer(int8) :: sc(REMAP_NSLOT)
+      integer(int32) :: ic, bits
+      type(geo_t) :: g
+      real(wp), allocatable :: hdpx(:, :), hdpy(:, :), qe(:, :), qn(:, :)
+      integer, parameter :: NPAIR = 6
+      real(wp), parameter :: PAIR(4, NPAIR) = reshape([ &
+                                       -5.6e-17_wp, 0.2_wp, 2.3e-16_wp, -5.6e-17_wp, -5.6e-17_wp, -0.2_wp, 2.3e-16_wp, 5.6e-17_wp, &
+                                       1.2e-16_wp, 0.45_wp, 4.5e-16_wp, -2.3e-16_wp, -1.0e-15_wp, -0.2_wp, 2.3e-16_wp, 5.6e-17_wp, &
+                                     -1.0e-12_wp, 0.2_wp, 4.5e-16_wp, -1.2e-16_wp, -1.0e-12_wp, -0.45_wp, 4.5e-16_wp, 2.3e-16_wp], &
+                                                      [4, NPAIR])
+         !! Members of the family that took the unadjusted branch on the scalar table: `dlx, dly, drx, dry`.
+      real(wp) :: fcell, tot, eain
+      integer :: i1, i2, i3, ib, is, side, ih, iedge, nrun, variant, dirn, i, j, k, nact, nbr4
+      character(len=240) :: msg
+
+      ! ---- (a) the edge of the scan ----
+      call remap_locate_edge(REMAP_EDGE_NORTH, 0, PUNY, CAP(1), CAP(2), CAP(3), CAP(4), FC, FC, FC, FC, FC, FC, FC, 0.0_wp, &
+                             px, py, ar, sc, ic, swept, bits)
+      call check(error, bits == 0_int32, "scan edge: the unadjusted region is accepted")
+      if (allocated(error)) return
+      ea = 1.001_wp*swept
+      call remap_locate_edge(REMAP_EDGE_NORTH, 1, PUNY, CAP(1), CAP(2), CAP(3), CAP(4), FC, FC, FC, FC, FC, FC, FC, ea, &
+                             px, py, ar, sc, ic, asum, bits)
+      if (bits /= 0_int32 .or. ic/325 == 4 .or. .not. (abs(asum - ea) <= 1.0e-13_wp*FC)) then
+         write (msg, "(a,z8.8,a,i0,a,es10.3)") "scan edge: error word ", bits, ", adjustment branch ", ic/325, &
+            ", |sum - edgearea|/areafac ", abs(asum - ea)/FC
+         call test_failed(error, trim(msg))
+         return
+      end if
+
+      ! ---- (b) the family ----
+      worst = 0.0_wp
+      nrun = 0
+      do iedge = REMAP_EDGE_NORTH, REMAP_EDGE_EAST
+         do i1 = 1, NN
+            do i2 = 1, NN
+               do i3 = 1, NN
+                  do ib = 1, NBB
+                     do is = 0, 7
+                        s1 = merge(1.0_wp, -1.0_wp, iand(is, 1) /= 0)
+                        s2 = merge(1.0_wp, -1.0_wp, iand(is, 2) /= 0)
+                        s3 = merge(1.0_wp, -1.0_wp, iand(is, 4) /= 0)
+                        do side = 0, 1
+                           if (side == 0) then
+                              d = [s1*NZ(i1), BB(ib), s2*NZ(i2), s3*NZ(i3)]
+                           else
+                              d = [s1*NZ(i1), s3*NZ(i3), s2*NZ(i2), BB(ib)]
+                           end if
+                           call remap_locate_edge(iedge, 0, PUNY, d(1), d(2), d(3), d(4), FC, FC, FC, FC, FC, FC, FC, 0.0_wp, &
+                                                  px, py, ar, sc, ic, swept, bits)
+                           if (bits /= 0_int32) then
+                              call test_failed(error, "pinned family: the unadjusted region was refused")
+                              return
+                           end if
+                           do ih = 1, 3
+                              ea = HS(ih)*swept
+                              call remap_locate_edge(iedge, 1, PUNY, d(1), d(2), d(3), d(4), FC, FC, FC, FC, FC, FC, FC, ea, &
+                                                     px, py, ar, sc, ic, asum, bits)
+                              nrun = nrun + 1
+                              w = abs(asum - ea)/FC
+                              if (bits /= 0_int32 .or. ic/325 == 4 .or. .not. (w <= 1.0e-13_wp)) then
+                                 write (msg, "(a,z8.8,a,i0,a,es10.3,a,4es24.16,a,f6.3)") "pinned family: error word ", bits, &
+                                    ", adjustment branch ", ic/325, ", |sum - edgearea|/areafac ", w, ", displacements ", d, &
+                                    ", edgearea/swept ", HS(ih)
+                                 call test_failed(error, trim(msg))
+                                 return
+                              end if
+                              worst = max(worst, w)
+                              if (.not. centre_vertices_ok(iedge, sc, px, py)) then
+                                 write (msg, "(a,4es24.16,a,f6.3)") "pinned family: centre vertex off its place, displacements ", &
+                                    d, ", edgearea/swept ", HS(ih)
+                                 call test_failed(error, trim(msg))
+                                 return
+                              end if
+                           end do
+                        end do
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      ! ---- (c) the device kernels ----
+      ! The pairs of this part took the unadjusted branch on the scalar table WITHOUT FMA contraction.  On the offload
+      ! build the kernels may contract, and a crossing need not land on the same ulp; there this part checks that the
+      ! kernels ACCEPT the family and close every edge, not that it reproduces the failure seen before the fix.
+      nact = 0
+      nbr4 = 0
+      do variant = 0, 1
+         do dirn = 1, 2
+            call geo_init(g, 12, 10, variant == 1)
+            g%dt = 1.0_wp
+            allocate (hdpx(g%nx, g%ny), hdpy(g%nx, g%ny), qe(g%nx, g%ny), qn(g%nx, g%ny))
+            hdpx = 0.0_wp
+            hdpy = 0.0_wp
+            k = 0
+            do j = g%js + 1, g%je - 2, 3
+               do i = g%is + 1, g%ie - 2, 3
+                  ! a pair of neighbouring corners from the table: the left and right points of one edge
+                  d = PAIR(:, 1 + mod(k, NPAIR))
+                  if (dirn == 1) then
+                     ! along x: edge frame (x, y) = (dp_x/dxU, dp_y/dyU); left U(i,j), right U(i+1,j)
+                     call set_corner(i, j, d(1), d(2))
+                     call set_corner(i + 1, j, d(3), d(4))
+                  else
+                     ! along y: edge frame (x, y) = (-dp_y/dyU, dp_x/dxU); left U(i,j+1), right U(i,j)
+                     call set_corner(i, j + 1, d(2), -d(1))
+                     call set_corner(i, j, d(4), -d(3))
+                  end if
+                  k = k + 1
+               end do
+            end do
+            ! the unadjusted swept areas, then the prescribed ones 0.1 % off them
+            g%ws%dpx = hdpx
+            g%ws%dpy = hdpy
+            g%ierr = 0_int32
+            call geo_locate(g, 0)
+            qe = 1.001_wp*g%ws%edgearea_e
+            qn = 1.001_wp*g%ws%edgearea_n
+            g%ws%dpx = hdpx
+            g%ws%dpy = hdpy
+            g%ws%edgearea_e = qe
+            g%ws%edgearea_n = qn
+            g%ierr = 0_int32
+            call geo_locate(g, 1)
+            if (any(g%ierr /= 0_int32)) then
+               write (msg, "(a,i0,a,i0,a,i0,a,z8.8)") "pinned crossing (kernels), variant ", variant, " direction ", dirn, &
+                  ": ", count(g%ierr /= 0_int32), " cells with an error word, the largest ", maxval(g%ierr)
+               call test_failed(error, trim(msg))
+               call geo_destroy(g)
+               return
+            end if
+            do j = g%js, g%je
+               do i = g%is, g%ie
+                  do iedge = REMAP_EDGE_NORTH, REMAP_EDGE_EAST
+                     if (iedge == REMAP_EDGE_NORTH) then
+                        ic = g%ws%icase_n(i, j)
+                        tot = sum(g%ws%area_n(i, j, :))
+                        eain = qn(i, j)
+                        fcell = g%narea(i, j)
+                     else
+                        ic = g%ws%icase_e(i, j)
+                        tot = sum(g%ws%area_e(i, j, :))
+                        eain = qe(i, j)
+                        fcell = g%earea(i, j)
+                     end if
+                     if (ic == 0_int32) cycle
+                     nact = nact + 1
+                     if (ic/325 == 4) nbr4 = nbr4 + 1
+                     worst = max(worst, abs(tot - eain)/fcell)
+                  end do
+               end do
+            end do
+            deallocate (hdpx, hdpy, qe, qn)
+            call geo_destroy(g)
+         end do
+      end do
+      write (error_unit, "(a,i0,a,i0,a,es9.2)") "  [remap_geom] pinned crossing past the corner: ", nrun, &
+         " scalar edges, ", nact, " kernel edges, worst |sum - edgearea|/areafac ", worst
+      if (nact < 200) then
+         call test_failed(error, "pinned crossing (kernels): too few active edges")
+      else if (nbr4 /= 0) then
+         write (msg, "(a,i0,a)") "pinned crossing (kernels): ", nbr4, " edges took the unadjusted branch"
+         call test_failed(error, trim(msg))
+      else if (.not. (worst <= 1.0e-13_wp)) then
+         call test_failed(error, "pinned crossing (kernels): an edge does not close on its prescribed area")
+      end if
+   contains
+      subroutine set_corner(ic_, jc_, sx, sy)
+         !! Corner `U(ic_, jc_)` displaced by `(sx, sy)` cells.
+         integer, intent(in) :: ic_, jc_
+         real(wp), intent(in) :: sx, sy
+         hdpx(ic_, jc_) = sx*g%dxU(ic_, jc_)
+         hdpy(ic_, jc_) = sy*g%dyU(ic_, jc_)
+      end subroutine set_corner
+   end subroutine test_pinned_past_corner
 
    subroutine corner_kind(kind, noise, st, dx, dy, dpx, dpy)
       !! The displacement (m) of one corner of the degenerate field.
