@@ -105,7 +105,8 @@ module rdb_ocean_engine
                                    ocean_halo_exchange_ice_fluxes, &
                                    ocean_seam_refresh_surface_flux, ocean_seam_refresh_sw_net
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
-                                      ocean_fold_exchange_destroy, ocean_fold_north_corner
+                                      ocean_fold_exchange_destroy, ocean_fold_north_corner, &
+                                      FOLD_CTX_WIDE
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
@@ -630,20 +631,42 @@ contains
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
+      ! Across the tripolar fold the wide band folds W + nghost rows of the
+      ! north tile (Murray 1996 bipolar cap): the fold reads that many rows
+      ! below the fold line, so the north tile must be taller than the band,
+      ! and under an east-west split (`px > 1`, owner-routed fold) every tile
+      ! must be wider than it.  The smallest tile is nx/px by ny/py (the
+      ! remainder goes to the first tiles), so the check is rank-invariant.
+      if (bt_halo_res > 0 .and. &
+          ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+         if (cfg%nghost + bt_halo_res - mod(bt_halo_res, 2) + 1 > cfg%ny/cfg%py .or. &
+             (cfg%px > 1 .and. &
+              cfg%nghost + bt_halo_res - mod(bt_halo_res, 2) + 1 > cfg%nx/cfg%px)) then
+            call fail("&ocean_bt_nml bt_halo = "//to_string(bt_halo_res)//" across the tripolar "// &
+                      "north fold needs tiles of at least nghost + bt_halo + 1 = "// &
+                      to_string(cfg%nghost + bt_halo_res - mod(bt_halo_res, 2) + 1)// &
+                      " rows (and, with px > 1, columns); the smallest tile is "// &
+                      to_string(cfg%nx/cfg%px)//" x "//to_string(cfg%ny/cfg%py)// &
+                      ".  Reduce bt_halo or use fewer ranks.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
       if (rank == 0 .and. bt_halo_req == BT_HALO_AUTO_SENTINEL .and. csize > 1) then
          if (bt_excluded) then
             call logger%info("BT march-in: bt_halo auto -> 0 ("// &
                              trim(bt_excl_reason)//" active)")
          else
             call logger%info("BT march-in: bt_halo auto -> 0 (opt-in: set "// &
-                             "&ocean_bt_nml bt_halo = 8 explicitly; it is not "// &
-                             "bit-reproducible across decompositions)")
+                             "&ocean_bt_nml bt_halo = 8 explicitly; verified bitwise equal "// &
+                             "to the one-rank run on the configurations listed in "// &
+                             "docs/CAPABILITIES_AND_LIMITATIONS.md)")
          end if
       end if
       if (rank == 0 .and. bt_halo_res > 0 .and. csize > 1) then
-         call logger%warning("BT march-in ON (bt_halo = "//to_string(bt_halo_res)// &
-                             "): answers are NOT bit-identical to the serial run over "// &
-                             "variable bathymetry or with open boundaries.")
+         call logger%info("BT march-in ON (bt_halo = "//to_string(bt_halo_res)// &
+                          "): verified bitwise equal to the one-rank bt_halo = 0 run on the "// &
+                          "configurations tested (docs/CAPABILITIES_AND_LIMITATIONS.md, "// &
+                          "bth*/bthx* cases); other accepted combinations are untested.")
       end if
 
       call engine%grid%init(engine%decomp%nx_local, engine%decomp%ny_local, &
@@ -1208,7 +1231,9 @@ contains
       ! the widest ice group (one category field of `ncat*nk_ice` /
       ! `ncat+1` levels, `ng` rows; the EVP stress group is `3*ng+1`).
       call ocean_fold_exchange_init(engine%decomp, engine%grid%nghost, &
-                                    engine%state%bc%north_fold, ierr=ierr)
+                                    engine%state%bc%north_fold, ierr=ierr, &
+                                    nghost_wide=engine%grid%nghost + cfg%ocean%bt%bt_halo - &
+                                    mod(cfg%ocean%bt%bt_halo, 2))
       if (setup_failed(ierr)) return
       block
          integer :: ntr, nslab
@@ -1222,6 +1247,12 @@ contains
                         3*engine%grid%nghost + 1)
          end if
          call ocean_fold_exchange_reserve(nslab)
+         ! The wide-halo march-in folds eta + ubt (T and u, `ngw` rows each)
+         ! and then vbt (`ngw + 1` rows) on the wide plan, one group each.
+         if (cfg%ocean%bt%bt_halo > 0) then
+            call ocean_fold_exchange_reserve(2*(engine%grid%nghost + cfg%ocean%bt%bt_halo + 1), &
+                                             FOLD_CTX_WIDE)
+         end if
       end block
 
       ! Host-side seam ghost fill (D0 init-halo, O2): single-rank
@@ -1858,7 +1889,9 @@ contains
       !! "Content-safety argument" comment, carried over unchanged).
       type(ocean_engine_t), intent(inout) :: engine
       type(config_t), intent(in) :: cfg
+      integer :: ring_poison_env
 
+      ring_poison_env = 0
       call ocean_state_enter_data(engine%state)
       engine%state%dyn%bt_halo = cfg%ocean%bt%bt_halo
       engine%state%dyn%bt_work%inhalo_stride = 0
@@ -1878,17 +1911,23 @@ contains
          call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
       end if
       if (cfg%ocean%bt%bt_halo > 0) then
+         ! Same hook for the wide-halo march-in (see `inhalo_poison`).
+         call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
+      end if
+      if (cfg%ocean%bt%bt_halo > 0) then
+         ! The wide static fields (metrics, f_corner) are taken from their
+         ! owners' HOST arrays, final by now (every setup-time host editor --
+         ! land mask, closed faces, porous seed, file metrics -- ran before the
+         ! map), then copied to the device by the wide enter_data.
+         call env_int_or_zero("RDB_BT_RING_POISON", ring_poison_env)
          call ocean_dyn_enable_bt_wide(engine%state%dyn, engine%grid, &
-                                       cfg%dx, cfg%dy, &
-                                       cfg%ocean%grid%lon_west, &
-                                       cfg%ocean%grid%lat_south, &
-                                       cfg%ocean%grid%rad_earth, &
-                                       cfg%ocean%grid%grid_config, &
-                                       cfg%coriolis_f, &
-                                       cfg%ocean%topo%coriolis_beta, &
-                                       cfg%ocean%topo%coriolis_y_ref, &
-                                       cfg%ocean%grid%coriolis_scheme, &
-                                       omega=cfg%ocean%grid%omega)
+                                       engine%state%metrics, &
+                                       engine%state%coriolis_adv%f_corner, &
+                                       refresh_widths=engine%state%metrics%use_porous .or. &
+                                       engine%state%metrics%use_closed_faces, &
+                                       ring_poison=ring_poison_env, &
+                                       eta_forcing_on=cfg%ocean%tides%enable .or. &
+                                       cfg%ocean%psurf%enable)
       end if
 
       ! The prognostic exchange is a WARM-UP (it opens the device-path

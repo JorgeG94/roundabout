@@ -827,6 +827,159 @@ if(RDB_ENABLE_MPI)
         TIMEOUT
         14400)
   endforeach()
+  # Wide-halo barotropic march-in (`&ocean_bt_nml bt_halo > 0`): the `bth*`
+  # cases (the plain legs run them too) once more with NaN poisoning of every
+  # wide ghost layer the march has already invalidated, between exchanges
+  # (`RDB_BT_INHALO_POISON=2`): owned cells must still equal the 1-rank `bt_halo
+  # = 0` run bitwise.  `RDB_BT_RING_POISON=2` also puts NaN in the whole outer
+  # `bt_halo` ring of every wide array (static metrics, `f_corner` and the
+  # per-solve inputs): at a physical edge no exchange ever refills it, so owned
+  # cells staying bitwise proves the insets never read it.  The 1-rank leg makes
+  # all four edges physical (`bt_halo = W` against `bt_halo = 0`).
+  foreach(np 1 2 4)
+    add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_poison
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_poison
+      PROPERTIES
+        LABELS
+        "ocean"
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2;RDB_BT_RING_POISON=2;RDB_BITID_CASES=bth"
+        TIMEOUT
+        14400)
+  endforeach()
+  # Where the wide march-in's cadence really breaks.  The poison hook's
+  # thousands digit stretches the exchange cadence by that many substeps (and
+  # still poisons every layer invalidated so far): `bt_wide_cycle_len` is
+  # `ng_wide - 1 - WIDE_CYCLE_MARGIN`, the proven reach `ng_wide - 1`, so +1
+  # must stay bitwise and +2 (one substep past the reach) must fail (WILL_FAIL:
+  # the poisoned ghost values reach the owned cells and the run aborts or
+  # differs).
+  foreach(np 2 4)
+    add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_cycle_limit
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_cycle_limit
+      PROPERTIES
+        LABELS "ocean" ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=1002;RDB_BITID_CASES=bth"
+        TIMEOUT 14400)
+  endforeach()
+  add_test(NAME rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_cycle_break
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+                   $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_cycle_break
+    PROPERTIES
+      LABELS
+      "ocean"
+      WILL_FAIL
+      TRUE
+      ENVIRONMENT
+      "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2002;RDB_BITID_CASES=bth_seamount_w4"
+      TIMEOUT
+      14400)
+  # The same break on every static-stage class: the cadence reach must be tight
+  # for tidal / Flather edges, a body tide, psurf, porous widths, closed faces,
+  # supergrid metrics and each periodic-edge mix too, not only the seamount.
+  foreach(
+    bcase
+    flather
+    island
+    coast
+    ffull
+    tidal
+    tides
+    psurf
+    super
+    porous
+    zfixed
+    perxo
+    perxc
+    peryo
+    perxy
+    tripsea
+    trip_tides
+    trip_porous
+    trip_zfixed)
+    add_test(
+      NAME rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_cycle_break_${bcase}
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+              $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_cycle_break_${bcase}
+      PROPERTIES
+        LABELS
+        "ocean"
+        WILL_FAIL
+        TRUE
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2002;RDB_BITID_CASES=bthx_${bcase}_w4"
+        TIMEOUT
+        14400)
+  endforeach()
+  # The same cadence break across the tripolar north fold at np = 4 too (the px
+  # > 1 layouts 4x1 / 2x2 run the owner-routed fold, every value from the tile
+  # that owns the mirror point), and the `bth_trip_*` family at both rank
+  # counts: the fold applied every substep consumes no reach of its own, so the
+  # limit (+1) holds bitwise (`btwide_cycle_limit` above) and +2 breaks.
+  foreach(np 2 4)
+    add_test(
+      NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_cycle_break_trip
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+              $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_cycle_break_trip
+      PROPERTIES
+        LABELS
+        "ocean"
+        WILL_FAIL
+        TRUE
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2002;RDB_BITID_CASES=bth_trip_w4"
+        TIMEOUT
+        14400)
+  endforeach()
+  # North-fold ring poison (hundreds digit 1 = the NORTH rows of the wide ring
+  # only, the tripolar-fold edge).  NaN in the outer `bt_halo` rows and in the
+  # first two model ghost rows beyond them (122) leaves the owned cells bitwise:
+  # the clamped copies are never read.  One row deeper (132: all `nghost` model
+  # rows) the run breaks -- the model's own folded ghost row next to the fold
+  # line IS read, as at `bt_halo = 0` (static and dynamic fields are poisoned
+  # together, so this shows the ROW is read): the liveness control, WILL_FAIL.
+  # The unrelated fence checks are skipped under RING_POISON (and cycle-break
+  # POISON >= 2000), so the leg can only fail through its case's mismatch.
+  foreach(np 1 2 4)
+    add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_fold_ring
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_fold_ring
+      PROPERTIES
+        LABELS
+        "ocean"
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2;RDB_BT_RING_POISON=122;RDB_BITID_CASES=bth_trip,bthx_trip"
+        TIMEOUT
+        14400)
+  endforeach()
+  add_test(NAME rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_fold_ring_live
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+                   $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_fold_ring_live
+    PROPERTIES
+      LABELS
+      "ocean"
+      WILL_FAIL
+      TRUE
+      ENVIRONMENT
+      "OMP_NUM_THREADS=1;RDB_BT_RING_POISON=132;RDB_BITID_CASES=bth_trip_w4"
+      TIMEOUT
+      14400)
   # TIMEOUT: the project uses enable_testing() without include(CTest), so there
   # is NO default timeout.  This test deliberately runs a must-be-refused probe
   # (check_cavity_grounded_refusal) in which every rank has to reach the same

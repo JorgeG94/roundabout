@@ -61,6 +61,7 @@ module rdb_barotropic_substep
                                        OBC_TIDAL, OBC_CHAPMAN, OBC_PERIODIC, OBC_TRIPOLAR_FOLD
    use rdb_ocean_halo, only: ocean_halo_bt_group_2d, ocean_halo_face_x, ocean_halo_face_y, &
                              ocean_halo_bt_group_2d_wide, &
+                             ocean_halo_packed_wide, &
                              ocean_halo_is_decomposed, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
                              ocean_halo_global_extent
@@ -72,11 +73,15 @@ module rdb_barotropic_substep
    use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed, ocean_fold_begin, &
                                       ocean_fold_pack, ocean_fold_exchange, &
                                       ocean_fold_unpack, ocean_fold_end, &
-                                      ocean_fold_north_v_face, FOLD_STAG_T, FOLD_STAG_U
+                                      ocean_fold_north_v_face, FOLD_STAG_T, FOLD_STAG_U, &
+                                      FOLD_CTX_NORMAL, FOLD_CTX_WIDE, &
+                                      ocean_fold_ctx_is_distributed
    implicit none
    private
 
    public :: barotropic_substep_linear
+   public :: bt_wide_cycle_len
+   public :: WIDE_CYCLE_MARGIN
    public :: barotropic_substep_nonlinear
    public :: barotropic_substep_nonlinear_interior
    public :: chapman_setup_corner
@@ -87,7 +92,32 @@ module rdb_barotropic_substep
    real(wp), allocatable :: ch_gbuf(:)
       !! Chapman edge line after the cross-rank sum (host only).
 
+   integer, parameter :: WIDE_CYCLE_MARGIN = 1
+      !! Substeps of safety left below the proven reach of the wide march-in.
+      !! One substep invalidates one more outer ghost layer (the first valid
+      !! u face after `k` substeps is `k + 2` cells from the outer array edge,
+      !! see `bt_wide_cycle_len`), so `k <= nghost_wide - 1` leaves the owned
+      !! cells exact: the proven LIMIT is `nghost_wide - 1` substeps per
+      !! exchange (the `*_btwide_cycle_limit` ctest legs hold bitwise at exactly
+      !! the limit and break one substep past it).  One substep of margin is
+      !! kept for what a 48 x 32 closed / periodic / spherical test cannot show
+      !! (an extra reader of a ghost value in a closure not yet exercised, or
+      !! a differently rounded vector-remainder cell, which acts like one more
+      !! invalid cell).  The cost is 1 / (nghost_wide - 1) more exchanges.
+
 contains
+
+   pure function bt_wide_cycle_len(ng_wide) result(n)
+      !! Substeps between in-loop wide exchanges: `ng_wide - 1 - WIDE_CYCLE_MARGIN`
+      !! (never below 1).  Reach: the first valid eta cell after `k` substeps is
+      !! `k + 1`, the first valid u / v face `k + 2`, counted from the outer
+      !! array edge (`eta_new(i)` reads eta(i-1..i+1) and the previous u / v;
+      !! `u_new(i)` reads `eta_new(i-1..i)`; `v_new` reads `u_new(i..i+1)`).  The
+      !! first owned face is `ng_wide + 1`, hence `k <= ng_wide - 1`.
+      integer, intent(in) :: ng_wide
+      integer :: n
+      n = max(1, ng_wide - 1 - WIDE_CYCLE_MARGIN)
+   end function bt_wide_cycle_len
 
    pure function tidal_cos(phase) result(c)
       !! `cos(phase)` for the tidal OBC target.  `phase = omega*t + ...` grows
@@ -608,6 +638,10 @@ contains
       logical :: do_fold
          !! Tripolar north-fold flag cached from bc%north_fold.  Gates the
          !! inline fold DC loops in the fast loop; .false. ⇒ bit-identical.
+      integer :: fold_ctx
+         !! Context of the owner-routed fold plan this call uses: the plan
+         !! built for `grid%nghost`, which is `nghost + bt_halo` on the wide
+         !! clone (`FOLD_CTX_WIDE`) and `nghost` otherwise.
       logical :: dist_fold
          !! `do_fold` on an east-west split north row (`px > 1`): the inline
          !! fold loops are skipped and the owner-routed exchange
@@ -618,7 +652,6 @@ contains
          !! Cached fold index constants (centre/v-face/u-face maps).
       integer :: i_w_face, i_e_face, j_s_face, j_n_face
       integer :: i_w_int, i_e_int, j_s_int, j_n_int
-      integer :: eta_gx_lo, eta_gx_hi
       real(wp) :: clamped_u_w, clamped_u_e, clamped_v_s, clamped_v_n
       real(wp) :: eta_target_w, eta_target_e, eta_target_s, eta_target_n
       real(wp) :: t_now
@@ -704,7 +737,12 @@ contains
       marchin = .false.
       if (present(bt_halo)) marchin = bt_halo > 0
       num_cycles = 0
-      if (marchin) num_cycles = bt_halo/2
+      if (marchin) then
+         num_cycles = bt_wide_cycle_len(grid%nghost)
+         ! Test hook only (`RDB_BT_INHALO_POISON` thousands digit): stretch the
+         ! cadence by that many substeps to prove where the real limit is.
+         if (bt_work%inhalo_poison > 0) num_cycles = num_cycles + bt_work%inhalo_poison/1000
+      end if
       inhalo_k = bt_work%inhalo_stride
       if (marchin) inhalo_k = 0
 
@@ -755,6 +793,8 @@ contains
       per_y_tag = .false.
       do_fold = .false.
       dist_fold = .false.
+      fold_ctx = FOLD_CTX_NORMAL
+      if (marchin) fold_ctx = FOLD_CTX_WIDE
       ! Fold index constants (storage maps, Appendix A).
       nf_isum = 2*grid%nghost + grid%nx_phys + 1      ! centre/v i-map sum
       nf_jsum_c = 2*grid%nghost + 2*grid%ny_phys + 1   ! T/u j-halo sum
@@ -789,6 +829,16 @@ contains
          per_y = bc%periodic_y .and. .not. ocean_halo_is_decomposed_y()
          do_fold = bc%north_fold
          dist_fold = do_fold .and. ocean_fold_is_distributed()
+         if (marchin .and. dist_fold) then
+            ! The march-in folds the wide band every substep on the wide
+            ! routing plan; without it the fold would silently be skipped
+            ! (the inline loops are off under `dist_fold`).
+            if (.not. ocean_fold_ctx_is_distributed(FOLD_CTX_WIDE)) then
+               error stop "barotropic_substep_nonlinear: bt_halo > 0 on a distributed "// &
+                  "tripolar fold needs the wide fold plan (FOLD_CTX_WIDE), which "// &
+                  "ocean_fold_exchange_init builds from nghost_wide = nghost + bt_halo"
+            end if
+         end if
          ! Physical-edge flags: .false. at an MPI seam (halo fills it);
          ! .true. at a physical domain edge (wall/BC closure applies).
          has_w = bc%has_west
@@ -1326,12 +1376,9 @@ contains
          ! note before the periodic wrap).  Left unfilled, the η CORNER ghost
          ! feeds the downstream barotropic correction (target_h = H_ref +
          ! bt_eta_end) at the corner column, which blows up h_layer there.
-         ! x-pass runs over the FULL j extent (covers corner rows); y-pass over
-         ! the cross-extent CLIPPED to the physical span unless the adjacent
-         ! x-edge is also open — so an open×open corner is filled by the y-pass
-         ! reading the x-filled column, while a periodic/wall x-edge ghost is
-         ! never clobbered (keeps periodic+open mixed configs, e.g. the Eady
-         ! channel, bit-identical).  Must run before Pass 2b reads bt_eta(nghost).
+         ! x-pass runs over the FULL j extent (covers corner rows); the y-pass
+         ! below runs over the full i extent too, so every corner is the
+         ! y-fill of its own column.  Must run before Pass 2b reads bt_eta(nghost).
          ! WALL/PERIODIC tags are not open-ish ⇒ no DC launched ⇒ no-op.
          ! An MPI seam is not an open edge (`has_*` false): its η ghosts are
          ! the neighbour's interior, filled by the halo exchange — a
@@ -1349,23 +1396,26 @@ contains
                bt_eta(i, j) = bt_eta(i_e_int, j)
             end do
          end if
-         ! y-pass: south / north ghost rows over the corner-safe i extent
-         ! Extend into any NON-PERIODIC x-edge ghost (wall or open) so an open
-         ! south/north edge fills its η ghost CORNER even against a wall side;
-         ! only PERIODIC is excluded (owns its ghost via the wrap).
-         eta_gx_lo = i_w_int
-         eta_gx_hi = i_e_int
-         if (bc_w /= OBC_PERIODIC) eta_gx_lo = 1
-         if (bc_e /= OBC_PERIODIC) eta_gx_hi = nx
+         ! y-pass: south / north ghost rows over the FULL i extent (x-ghost
+         ! columns included), at every x tag.  The y-pass runs AFTER the
+         ! periodic-x wrap above, so a periodic x-ghost column's corner cell
+         ! is overwritten here from its own first interior row -- the value
+         ! every layout must agree on.  Excluding periodic x-ghost columns
+         ! ("the wrap owns them") left the corner at the wrap of the Pass-1
+         ! garbage in the ghost row: on one rank that is the east interior's
+         ! ghost-row value, on a decomposed periodic axis the exchange's, and
+         ! the two differ (the corner then feeds Pass 2b/2c and the owned
+         ! cells after a few substeps: u 7e-8 at 2x1, 7e-6 with a clamped
+         ! edge).  A wall x-edge ghost is still overwritten, as before.
          if (has_s .and. (bc_s == OBC_OPEN .or. bc_s == OBC_TIDAL .or. &
                           bc_s == OBC_CHAPMAN .or. bc_s == OBC_CLAMPED)) then
-            do concurrent(j=1:grid%nghost, i=eta_gx_lo:eta_gx_hi)
+            do concurrent(j=1:grid%nghost, i=1:nx)
                bt_eta(i, j) = bt_eta(i, j_s_int)
             end do
          end if
          if (has_n .and. (bc_n == OBC_OPEN .or. bc_n == OBC_TIDAL .or. &
                           bc_n == OBC_CHAPMAN .or. bc_n == OBC_CLAMPED)) then
-            do concurrent(j=j_n_int + 1:ny, i=eta_gx_lo:eta_gx_hi)
+            do concurrent(j=j_n_int + 1:ny, i=1:nx)
                bt_eta(i, j) = bt_eta(i, j_n_int)
             end do
          end if
@@ -1654,13 +1704,13 @@ contains
          if (dist_fold) then
             call profiler_start("ocean_comms_bt")
             !$acc wait(1)
-            call ocean_fold_begin(2*grid%nghost)
-            call ocean_fold_pack(bt_eta, nx, ny, FOLD_STAG_T)
-            call ocean_fold_pack(bt_ubt, nx + 1, ny, FOLD_STAG_U)
-            call ocean_fold_exchange()
-            call ocean_fold_unpack(bt_eta, nx, ny, FOLD_STAG_T, .false.)
-            call ocean_fold_unpack(bt_ubt, nx + 1, ny, FOLD_STAG_U, .true.)
-            call ocean_fold_end()
+            call ocean_fold_begin(2*grid%nghost, fold_ctx)
+            call ocean_fold_pack(bt_eta, nx, ny, FOLD_STAG_T, ctx=fold_ctx)
+            call ocean_fold_pack(bt_ubt, nx + 1, ny, FOLD_STAG_U, ctx=fold_ctx)
+            call ocean_fold_exchange(ctx=fold_ctx)
+            call ocean_fold_unpack(bt_eta, nx, ny, FOLD_STAG_T, .false., ctx=fold_ctx)
+            call ocean_fold_unpack(bt_ubt, nx + 1, ny, FOLD_STAG_U, .true., ctx=fold_ctx)
+            call ocean_fold_end(fold_ctx)
             call profiler_stop("ocean_comms_bt")
          end if
          !$acc kernels async(1) &
@@ -1884,7 +1934,7 @@ contains
             call profiler_start("ocean_comms_bt")
             !$acc wait(1)
             call ocean_fold_north_v_face(bt_vbt, nx, ny + 1, grid%nx_phys, grid%ny_phys, &
-                                         grid%nghost)
+                                         grid%nghost, ctx=fold_ctx)
             call profiler_stop("ocean_comms_bt")
          end if
          !$acc kernels async(1) &
@@ -1913,10 +1963,14 @@ contains
          ! End-of-substep ghost refresh.
          ! v1 path (marchin=.false.): drain async(1) then one normal grouped
          ! exchange per substep (bit-identical; D0).
-         ! March-in path (marchin=.true.): fire a WIDE grouped exchange every
-         ! num_cycles substeps (bt_halo/2); skip the last substep (n==n_steps)
-         ! since copy_out immediately follows.  The wide band absorbs the
-         ! mid-substep u exchange.
+         ! March-in path (marchin=.true.): fire ONE packed wide exchange every
+         ! num_cycles substeps (`bt_wide_cycle_len`); skip the last substep
+         ! (n==n_steps) since copy_out immediately follows.  The wide band
+         ! absorbs the mid-substep u exchange.  Across the tripolar fold the
+         ! exchange order is unchanged: this exchange (seams) -> next substep's
+         ! periodic wrap -> fold, and the fold itself runs EVERY substep, so the
+         ! rows beyond it are exact each substep and the fold edge consumes no
+         ! reach.
          if (inhalo_k > 0) then
             ! In-halo march: exchange every inhalo_k substeps and always on
             ! the last one (the stage reads exact end-state ghosts).  The
@@ -1953,8 +2007,42 @@ contains
             if (mod(n, num_cycles) == 0 .and. n < n_steps) then
                call profiler_start("ocean_comms_bt")
                !$acc wait(1)
-               call ocean_halo_bt_group_2d_wide(bt_eta, bt_ubt, bt_vbt, grid%nghost)
+               if (bebt > 0.0_wp) then
+                  ! Pass 1's BEBT projection reads `ubt_prev`/`vbt_prev` in the
+                  ! ghost band; they are stashed from the locally marched u
+                  ! (above), so without this refresh the invalid front restarts
+                  ! `num_cycles - 1` cells deeper every cycle and reaches the
+                  ! owned cells after a few cycles.  Exchanged WITH the group,
+                  ! at the same point: the stash is the pre-update u of this
+                  ! substep, the group the post-update one.
+                  call ocean_halo_packed_wide(grid%nghost, bt_eta, bt_ubt, bt_vbt, &
+                                              xa=bt_ubt_prev, ya=bt_vbt_prev)
+               else
+                  call ocean_halo_packed_wide(grid%nghost, bt_eta, bt_ubt, bt_vbt)
+               end if
                call profiler_stop("ocean_comms_bt")
+            else if (bt_work%inhalo_poison > 0) then
+               ! Test hook (`RDB_BT_INHALO_POISON`, read once at setup): prove the
+               ! march-in's reach by overwriting, between exchanges, every wide
+               ! ghost layer that one cell per substep has already invalidated
+               ! (`mod(n, num_cycles)` layers from the outer array edge) with
+               ! rank-dependent garbage.  Owned results must not change.
+               pz_w = ocean_halo_is_decomposed_x() .and. (.not. has_w .or. per_x_tag)
+               pz_e = ocean_halo_is_decomposed_x() .and. (.not. has_e .or. per_x_tag)
+               pz_s = ocean_halo_is_decomposed_y() .and. (.not. has_s .or. per_y_tag)
+               pz_n = ocean_halo_is_decomposed_y() .and. (.not. has_n .or. per_y_tag)
+               call inhalo_poison_ghosts(nx, ny, bt_eta, bt_ubt, bt_vbt, &
+                                         mod(mod(bt_work%inhalo_poison, 1000), 10), &
+                                         mod(n, num_cycles) + mod(bt_work%inhalo_poison/10, 100), &
+                                         pz_w, pz_e, pz_s, pz_n, &
+                                         grid%i_offset_global, grid%j_offset_global)
+               if (bebt > 0.0_wp) then
+                  call wide_poison_prev(nx, ny, bt_ubt_prev, bt_vbt_prev, &
+                                        mod(mod(bt_work%inhalo_poison, 1000), 10), &
+                                        mod(n, num_cycles) + mod(bt_work%inhalo_poison/10, 100), &
+                                        pz_w, pz_e, pz_s, pz_n, &
+                                        grid%i_offset_global, grid%j_offset_global)
+               end if
             end if
          else
             call profiler_start("ocean_comms_bt")
@@ -2155,6 +2243,35 @@ contains
       call ocean_halo_face_x(bt_work%bt_ubt_prev)
       call ocean_halo_face_y(bt_work%bt_vbt_prev)
    end subroutine inhalo_exchange_prev
+
+   subroutine wide_poison_prev(nx, ny, bt_ubt_prev, bt_vbt_prev, pmode, pz, &
+                               pz_w, pz_e, pz_s, pz_n, ioff, joff)
+      !! Wide march-in poison hook, previous-substep velocities: after `k` substeps
+      !! without an exchange `ubt_prev`/`vbt_prev` are valid from face `k + 1`
+      !! (the stash is the previous substep's u), so the outer `pz = k` layers
+      !! are overwritten with rank-dependent garbage.
+      integer, intent(in) :: nx, ny, pmode, pz, ioff, joff
+      logical, intent(in) :: pz_w, pz_e, pz_s, pz_n
+      real(wp), intent(inout) :: bt_ubt_prev(nx + 1, ny)
+      real(wp), intent(inout) :: bt_vbt_prev(nx, ny + 1)
+      integer :: i, j
+      !$acc wait(1)
+      !$acc kernels async(1) present(bt_ubt_prev, bt_vbt_prev)
+      do concurrent(j=1:ny, i=1:nx + 1)
+         if ((pz_w .and. i <= pz) .or. (pz_e .and. i > nx + 1 - pz) .or. &
+             (pz_s .and. j <= pz) .or. (pz_n .and. j > ny - pz)) then
+            bt_ubt_prev(i, j) = poison_value(pmode, i + ioff + 3000, j + joff)
+         end if
+      end do
+      do concurrent(j=1:ny + 1, i=1:nx)
+         if ((pz_w .and. i <= pz) .or. (pz_e .and. i > nx - pz) .or. &
+             (pz_s .and. j <= pz) .or. (pz_n .and. j > ny + 1 - pz)) then
+            bt_vbt_prev(i, j) = poison_value(pmode, i + ioff, j + joff + 4000)
+         end if
+      end do
+      !$acc end kernels
+      !$acc wait(1)
+   end subroutine wide_poison_prev
 
    subroutine inhalo_poison_ghosts(nx, ny, bt_eta, bt_ubt, bt_vbt, pmode, pz, &
                                    pz_w, pz_e, pz_s, pz_n, ioff, joff)
