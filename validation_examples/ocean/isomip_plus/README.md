@@ -420,6 +420,23 @@ convention. Melt stays net positive everywhere after day 1 except brief,
 small (≥ −0.43 m yr⁻¹) local refreezing patches from day ~13 on near the
 grounding line, where the far-field sample runs coldest.
 
+**The shipped namelist now starts balanced** (`trim_ic_for_p_surf = .true.`, 2026-11-18), so the
+table above is the run WITHOUT that option. The reference-density ice load does not balance the
+stratified column under the shelf, and the barotropic mode adjusts to the imbalance in the first
+days (`En` 2.628E-06 at day 1). With the balanced start, same binary (beta 73eccdded, one V100):
+
+| day | En (m²/s²) | MaxCFL | melt mean / max / min (m yr⁻¹) | Mass Err | Salt Err | Heat Err |
+|---|---|---|---|---|---|---|
+| 1 | 8.258E-08 | 0.0016 | 3.78 / 8.63 / +1.01 | -1.9E-14 | 2.0E-14 | -8.2E-14 |
+| 5 | 8.109E-06 | 0.0245 | 5.74 / 39.16 / +0.84 | -9.6E-14 | 2.1E-14 | -4.1E-13 |
+| 10 | 8.326E-05 | 0.0483 | 6.68 / 41.23 / +0.69 | -1.9E-13 | 1.5E-14 | -8.0E-13 |
+| 20 | 3.417E-04 | 0.0590 | 7.06 / 39.62 / +0.43 | -3.9E-13 | -1.8E-15 | -1.5E-12 |
+| 30 | 4.066E-04 | 0.0589 | 7.17 / 40.71 / +0.39 | -5.8E-13 | -2.1E-14 | -2.0E-12 |
+
+The unbalanced control re-run alongside it gave `En` 4.040E-04 and a melt mean of 7.19 m yr⁻¹ at
+day 30: the option removes the day-1 transient (32x in `En`) and changes the melt-driven state by
+under 1 % from day 20.
+
 **This does not match the numbers already printed in
 `ocean0_idealised_zfixed.nml`'s own header** (`En` 2.304E-04 at day 30,
 peaking the melt mean at 5.6-5.7 m yr⁻¹). That table is **stale**: it
