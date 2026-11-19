@@ -406,7 +406,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(119) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(123) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -455,7 +455,8 @@ program test_ocean_decomp_bitid_mpi
                                                  "runoff_mass", "runoff_mass_fold", &
                                                  "runoff_river", "runoff_river_fold", &
                                                  "cice_ice_fw_mass", "cice_ice_fw_mass_fold", "cice_ice_fw_mass_led", &
-                                                 "cice_ice_fw_mass_bfold"]
+                                                 "cice_ice_fw_mass_bfold", &
+                                                 "perx_open_south", "perx_clamped_south", "pery_open_west", "perxy_fplane"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -648,6 +649,11 @@ contains
       if (label == "dtbt_reset") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 0.0, "
       if (label == "dtbt_reset_period") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 3600.0, "
       if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
+      ! The periodic-edge cases need more than two substeps per solve: the
+      ! corner they pin reaches the owned cells from the third substep on.
+      if (label == "perx_open_south" .or. label == "perx_clamped_south" .or. &
+          label == "pery_open_west" .or. label == "perxy_fplane") &
+         bt_head = "auto_n_inner = .false., n_inner = 20, "
       if (label == "visc_rem_chain") then
          bt_extra = ", visc_rem_chain = .true., frhat_scheme = 'hybrid'"
       end if
@@ -913,6 +919,34 @@ contains
                "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
                "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 0.0 /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("perx_open_south", "perx_clamped_south", "pery_open_west", "perxy_fplane")
+         ! A periodic axis meeting a non-wall edge on the other axis (f-plane
+         ! Cartesian seamount, 6 h of fast loop at n_inner = 20).  Decomposed
+         ! along the periodic axis these used to differ from one rank: the
+         ! open/clamped edge's eta ghost fill skipped the periodic x-ghost
+         ! columns, leaving the corner at the wrap of Pass-1 ghost-row garbage
+         ! (one rank) vs the exchange's (decomposed).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+         select case (label)
+         case ("perx_open_south")
+            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'open', "// &
+                  "north = 'wall' /"//NL
+         case ("perx_clamped_south")
+            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'clamped', "// &
+                  "south_clamped_v = 0.01, north = 'wall' /"//NL
+         case ("pery_open_west")
+            nml = nml//"&ocean_bc_nml west = 'open', east = 'wall', south = 'periodic', "// &
+                  "north = 'periodic' /"//NL
+         case default
+            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', "// &
+                  "north = 'periodic' /"//NL
+         end select
       case ("periodic_sponge")
          ! Re-entrant channel, periodic west/east, with a relaxing sponge
          ! band on the closed north edge -- the shape of the real Southern

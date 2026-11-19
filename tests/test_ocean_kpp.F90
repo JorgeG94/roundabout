@@ -50,7 +50,9 @@ contains
                   new_unittest("kpp_vt2_monotonic_in_coefficient", &
                                test_vt2_monotonic_in_coefficient), &
                   new_unittest("kpp_half_domain_cooling_bl_depth_differs", &
-                               test_half_domain_cooling) &
+                               test_half_domain_cooling), &
+                  new_unittest("kpp_collapsed_top_layer_equals_column_without_it", &
+                               test_collapsed_top_layer) &
                   ]
    end subroutine collect_ocean_kpp_tests
 
@@ -605,4 +607,115 @@ contains
 
       call sf%destroy(); call ss%destroy(); call vmix%destroy(); call ms%destroy()
    end subroutine test_half_domain_cooling
+   ! -----------------------------------------------------------------
+   ! Collapsed top layer: the surface is the first LIVE layer.
+   ! -----------------------------------------------------------------
+
+   subroutine fill_mixed_over_thermocline(ms, nlive, ntop_dead)
+      !! `nlive` live layers (k = 1..nlive): the top three a well-mixed,
+      !! moving layer (u = 0.5, rho = 1027), the rest at rest and stratified.
+      !! `ntop_dead` extra layers above them are collapsed to 1e-5 m (below
+      !! `H_VANISHED`) and carry the traps a dead surface layer carries in
+      !! production: zero velocity and a filler density far from the
+      !! mixed layer's.
+      type(multilayer_state_t), intent(inout) :: ms
+      integer, intent(in) :: nlive, ntop_dead
+      integer :: k
+      ms%h_layer = 25.0_wp
+      ms%v_face_y_layer = 0.0_wp
+      do k = 1, nlive
+         if (k > nlive - 3) then
+            ms%u_face_x_layer(:, :, k) = 0.5_wp
+            ms%rho_layer(:, :, k) = 1027.0_wp
+         else
+            ms%u_face_x_layer(:, :, k) = 0.0_wp
+            ms%rho_layer(:, :, k) = 1030.0_wp - 0.5_wp*real(k - 1, wp)
+         end if
+      end do
+      do k = nlive + 1, nlive + ntop_dead
+         ms%h_layer(:, :, k) = 1.0e-5_wp
+         ms%u_face_x_layer(:, :, k) = 0.0_wp
+         ms%rho_layer(:, :, k) = 1010.0_wp
+      end do
+   end subroutine fill_mixed_over_thermocline
+
+   subroutine run_kpp_gamma(grid, ms, vmix, ss, sf)
+      !! `run_kpp_with_flux` that also brings the non-local `gamma_t` home.
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_vmix_t), intent(inout) :: vmix
+      type(ocean_surface_stress_t), intent(inout) :: ss
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      !$acc enter data copyin(ms, vmix, ss, sf)
+      call ms%enter_data()
+      call vmix%enter_data()
+      call sf%enter_data()
+      call vmix_compute_pp81(grid, vmix, ms)
+      call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
+      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth, vmix%gamma_t)
+      call sf%exit_data()
+      call vmix%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, vmix, ss, sf)
+   end subroutine run_kpp_gamma
+
+   subroutine test_collapsed_top_layer(error)
+      !! Analytical: a top layer collapsed below `H_VANISHED` holds no
+      !! water, so the KPP column with it on top must equal the same
+      !! column WITHOUT it -- boundary-layer depth, the diffusivity of
+      !! every interface under the live surface layer, and the non-local
+      !! gamma.  Reading the dead layer as the surface (zero velocity,
+      !! the filler density) instead makes the whole mixed layer look
+      !! like a shear / buoyancy jump below the "surface", so the BL
+      !! collapses to the first layer.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms_ref, ms_dead
+      type(ocean_vmix_t) :: vmix_ref, vmix_dead
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      integer, parameter :: NLIVE = 8
+      real(wp) :: h_ref, h_dead, dkv, dgam
+      integer :: ip, jp
+
+      call make_grid(grid, 14, 12, 1.0_wp, 1.0_wp)
+      call ss%init(grid)
+      call ss%set_wind_stress_const(0.1_wp, 0.0_wp)
+      call sf%init(grid)
+      call sf%set_surface_flux_const(-100.0_wp, 0.0_wp)   ! cooling: B_0 < 0, non-local on
+
+      ms_ref%nz_ml = NLIVE
+      call ms_ref%init(grid)
+      call vmix_ref%init(grid, nz_ml=NLIVE)
+      call fill_mixed_over_thermocline(ms_ref, NLIVE, 0)
+      call run_kpp_gamma(grid, ms_ref, vmix_ref, ss, sf)
+
+      ms_dead%nz_ml = NLIVE + 1
+      call ms_dead%init(grid)
+      call vmix_dead%init(grid, nz_ml=NLIVE + 1)
+      call fill_mixed_over_thermocline(ms_dead, NLIVE, 1)
+      call run_kpp_gamma(grid, ms_dead, vmix_dead, ss, sf)
+
+      ip = grid%nx_total/2
+      jp = grid%ny_total/2
+      h_ref = vmix_ref%bl_depth(ip, jp)
+      h_dead = vmix_dead%bl_depth(ip, jp)
+      dkv = maxval(abs(vmix_dead%kv(ip, jp, 2:NLIVE) - vmix_ref%kv(ip, jp, 2:NLIVE)))
+      dgam = maxval(abs(vmix_dead%gamma_t(ip, jp, 2:NLIVE) - vmix_ref%gamma_t(ip, jp, 2:NLIVE)))
+
+      call check(error, h_ref > 25.0_wp, "reference BL must be deeper than the top layer")
+      if (.not. allocated(error)) call check(error, abs(h_dead - h_ref) < 1.0e-9_wp, &
+                                             "BL depth under a collapsed top layer differs from the column without it")
+      if (.not. allocated(error)) call check(error, dkv < 1.0e-12_wp, &
+                                             "kv under a collapsed top layer differs from the column without it")
+      if (.not. allocated(error)) call check(error, maxval(abs(vmix_ref%gamma_t(ip, jp, 2:NLIVE))) > 0.0_wp, &
+                                             "reference non-local gamma must be non-zero (test is vacuous otherwise)")
+      if (.not. allocated(error)) call check(error, dgam < 1.0e-18_wp, &
+                                             "non-local gamma under a collapsed top layer differs from the column without it")
+
+      call sf%destroy(); call ss%destroy()
+      call vmix_dead%destroy(); call vmix_ref%destroy()
+      call ms_dead%destroy(); call ms_ref%destroy()
+   end subroutine test_collapsed_top_layer
+
 end module test_ocean_kpp
