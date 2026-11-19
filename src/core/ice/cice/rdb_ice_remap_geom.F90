@@ -99,6 +99,19 @@ module rdb_ice_remap_geom
    !! quarter of its size and the sum missed the prescribed area by `1.06e-12` cell areas (ten times the check) on
    !! day 2 of a global 1-degree run.  `shifted_crossing` returns the crossing of a flat segment that does cross;
    !! `test_cice_remap_geom` `flat_shifted_midpoint_crossing`.)
+   !! (Regression: a departure point one or two ulp OUTSIDE the column.  It is moved to the side line, the other
+   !! point has an ordinate of round-off size and the opposite sign, and the axis crossing of `DL-DR`, held to the
+   !! bracket of the points before the move, stays that ulp past the corner: neither pinned-crossing test is true
+   !! and the edge kept the unadjusted area (a miss of up to `2e-4` cell areas with a prescribed area `0.1 %` off the
+   !! swept one).  Once the moved points are on opposite sides the crossing is held to the column, so the
+   !! unadjusted branch is not reached; found by a random scan of the table, not from a model run;
+   !! `test_cice_remap_geom` `pinned_crossing_past_the_corner` and the noise set of `degenerate_corners_device_vs_host`.)
+   !! (Known limit, not changed: when the pinned crossing all but coincides with a departure point (`1e-14 .. 1e-12`
+   !! cells apart) and the prescribed area differs from the swept one by percent, the shifted midpoint is thrown
+   !! `1e7 .. 1e11` cells away; the edge is refused (the vertex bound raises `ICE_ERR_TRANSPORT_CFL`) and its sum is
+   !! off by the round-off of those coordinates, up to `2.4e-10` cell areas.  It was produced only by scaling the
+   !! prescribed area of random edges by `+-2 %` in a stdlib transcript of the table, and has not been seen from the
+   !! model, whose prescribed area is the continuity flux of the same velocities.)
    !!
    !! **The case table.**  The side cells are decided by where the lines
    !! `DL-DM`, `DM-DR` cut the sides `x = -+1/2` and the line `DL-DR` cuts the
@@ -777,7 +790,14 @@ contains
          area1 = tri_area(px, py, af, 1)
          area2 = tri_area(px, py, af, 2)
          area3 = tri_area(px, py, af, 3)
-         if (.not. ((ydl > 0.0_wp .and. ydr < 0.0_wp) .or. (ydl < 0.0_wp .and. ydr > 0.0_wp))) then
+         ! The points now ON OR INSIDE the column, strictly on opposite sides of the axis: the line between them crosses
+         ! it inside the column, so the crossing (computed above from the points BEFORE the move, and held to THEIR
+         ! bracket) is held to [xcl, xcr].  A point one or two ulp outside the column with an ordinate of round-off size
+         ! leaves it that far past the corner, where neither pinned-crossing test below is true and the edge kept the
+         ! unadjusted area.  Bit-identical wherever the crossing was already inside the column.
+         opposite = (ydl > 0.0_wp .and. ydr < 0.0_wp) .or. (ydl < 0.0_wp .and. ydr > 0.0_wp)
+         if (opposite) xic = min(max(xic, xcl), xcr)
+         if (.not. opposite) then
             ! both departure points on one side of the axis (or one on it); a sign test, not a product: a product
             ! of two tiny ordinates underflows to zero and would send an opposite-sides edge here
             ic_e = 1
@@ -828,6 +848,7 @@ contains
             xicl = shifted_crossing(xdl, ydl, xdm, ydm, mdl, puny)
             yicl = 0.0_wp
          else
+            ! not reached with a finite crossing (the two tests above cover [xcl, xcr]); kept as the unadjusted fall-through
             ic_e = 4
          end if
       end if
