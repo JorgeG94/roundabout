@@ -126,6 +126,7 @@ set(RDB_TESTS
     "test_nml_schema|test_nml_schema|collect_nml_schema_tests|nml_schema|core"
     "test_toml_config|test_toml_config|collect_toml_config_tests|toml_config|core"
     "test_config_schema|test_config_schema|collect_config_schema_tests|config_schema|core"
+    "test_config_schema_toml|test_config_schema_toml|collect_config_schema_toml_tests|config_schema_toml|core"
     "test_ocean_knob_retirement|test_ocean_knob_retirement|collect_ocean_knob_retirement_tests|ocean_knob_retirement|ocean"
     "test_state_roundtrip|test_state_roundtrip|collect_state_roundtrip_tests|state_roundtrip|ocean"
     "test_continuity_barotropic|test_continuity_barotropic|collect_continuity_barotropic_tests|continuity_barotropic|ocean"

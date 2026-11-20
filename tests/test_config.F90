@@ -1,9 +1,9 @@
-!! Unit tests for namelist configuration reading
+!! Unit tests for configuration reading (TOML) and the validation gates behind it
 module test_config
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, DEG2RAD, NZ_STACK_MAX, &
                             nz_stack_required, nz_stack_is_sufficient
-   use rdb_config, only: config_t, read_config, read_config_from_string, &
+   use rdb_config, only: config_t, read_config, read_config_from_toml_string, &
                          resolve_bt_halo, bt_halo_auto_exclusion, &
                          BT_HALO_AUTO_SENTINEL, BT_HALO_AUTO_WIDTH, &
                          diag_density_levels_ok, MAX_OCEAN_DIAG_Z_LEVELS, &
@@ -19,6 +19,13 @@ module test_config
    private
 
    public :: collect_config_tests
+
+   character(len=*), parameter :: NL = new_line('a')
+   character(len=*), parameter :: SIM_GRID = &
+                                  "[sim]"//NL//"sim_type = 'ocean'"//NL// &
+                                  "[grid]"//NL//"nx = 24"//NL//"ny = 16"//NL//"nghost = 3"//NL// &
+                                  "dx = 20000.0"//NL//"dy = 20000.0"//NL
+      !! The minimal 24x16 Cartesian ocean header most validation tests start from.
 
 contains
 
@@ -54,8 +61,8 @@ contains
 
       testsuite = [ &
                   new_unittest("defaults", test_defaults), &
-                  new_unittest("read_grid_nml", test_read_grid), &
-                  new_unittest("read_all_namelists", test_read_all), &
+                  new_unittest("read_grid_table", test_read_grid), &
+                  new_unittest("read_all_tables", test_read_all), &
                   new_unittest("missing_file_keeps_defaults", test_missing_file), &
                   new_unittest("read_ocean_subnmls", test_read_ocean_subnmls), &
                   new_unittest("ocean_diag_dt_out_time_unit", test_ocean_diag_time_unit), &
@@ -174,15 +181,15 @@ contains
       type(error_type), allocatable, intent(out) :: error
       integer :: ierr
 
-      ierr = validate_glue("form = 'quadratic', cd = 3.0e-3, hbbl = 10.0")
+      ierr = validate_glue("form = 'quadratic'"//NL//"cd = 3.0e-3"//NL//"hbbl = 10.0")
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "implicit_drag + hbbl > 0 + effective glue (quadratic cd > 0) must be accepted")
       if (allocated(error)) return
-      ierr = validate_glue("form = 'linear', r = 3.0e-4, bg_vel = 0.0, hbbl = 10.0")
+      ierr = validate_glue("form = 'linear'"//NL//"r = 3.0e-4"//NL//"bg_vel = 0.0"//NL//"hbbl = 10.0")
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                  "glue with linear bg_vel = 0 is turned off by setup: hbbl > 0 must be refused")
       if (allocated(error)) return
-      ierr = validate_glue("form = 'quadratic', cd = 0.0, hbbl = 10.0")
+      ierr = validate_glue("form = 'quadratic'"//NL//"cd = 0.0"//NL//"hbbl = 10.0")
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                  "glue with cd = 0 is turned off by setup: hbbl > 0 must be refused")
    end subroutine test_glue_hbbl_gate
@@ -208,15 +215,15 @@ contains
       type(error_type), allocatable, intent(out) :: error
       integer :: ierr
 
-      ierr = validate_angstrom(2, ".false.")
+      ierr = validate_angstrom(2, "false")
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                  "injecting angstrom_h + dt_tracer_advect_ratio = 2 must be refused")
       if (allocated(error)) return
-      ierr = validate_angstrom(1, ".false.")
+      ierr = validate_angstrom(1, "false")
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "injecting angstrom_h + dt_tracer_advect_ratio = 1 must be accepted")
       if (allocated(error)) return
-      ierr = validate_angstrom(2, ".true.")
+      ierr = validate_angstrom(2, "true")
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "conservative_floor + dt_tracer_advect_ratio = 2 must be accepted")
    end subroutine test_angstrom_window_gate
@@ -232,14 +239,12 @@ contains
 
       write (sr, '(i0)') ratio
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&vcoord_nml vcoord_type = 'lagrangian' /"//new_line('a')// &
-         "&ocean_isopycnal_nml angstrom_h = 1.0e-3, conservative_floor = "//cons//" /"// &
-         new_line('a')// &
-         "&ocean_vmix_nml dt_tracer_advect_ratio = "//trim(sr)//" /"//new_line('a'), &
+      call read_config_from_toml_string( &
+         SIM_GRID// &
+         "[vcoord]"//NL//"vcoord_type = 'lagrangian'"//NL// &
+         "[ocean.isopycnal]"//NL//"angstrom_h = 1.0e-3"//NL// &
+         "conservative_floor = "//cons//NL// &
+         "[ocean.vmix]"//NL//"dt_tracer_advect_ratio = "//trim(sr)//NL, &
          cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr=ierr)
@@ -255,11 +260,9 @@ contains
 
       write (sp, '(i0)') p
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&ocean_varmix kh_res_fn_power = "//trim(sp)//" /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         SIM_GRID// &
+         "[ocean.varmix]"//NL//"kh_res_fn_power = "//trim(sp)//NL, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr=ierr)
    end function validate_resfn_power
@@ -272,13 +275,11 @@ contains
       type(config_t) :: cfg
 
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&ocean_vdiff_nml implicit_drag = .true., hvel_mom6 = .true., "// &
-         "bbl_glue = .true. /"//new_line('a')// &
-         "&ocean_bdrag_nml "//bdrag//" /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         SIM_GRID// &
+         "[ocean.vdiff]"//NL//"implicit_drag = true"//NL//"hvel_mom6 = true"//NL// &
+         "bbl_glue = true"//NL// &
+         "[ocean.bdrag]"//NL//bdrag//NL, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr=ierr)
    end function validate_glue
@@ -294,12 +295,12 @@ contains
 
       write (sng, '(i0)') nghost
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = "//trim(sng)// &
-         ", dx = 20000.0, dy = 20000.0 /"//new_line('a')// &
-         "&ocean_coriolis_nml form = 'sadourny', pv_adv_scheme = '"//scheme//"' /"// &
-         new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         "[sim]"//NL//"sim_type = 'ocean'"//NL// &
+         "[grid]"//NL//"nx = 24"//NL//"ny = 16"//NL//"nghost = "//trim(sng)//NL// &
+         "dx = 20000.0"//NL//"dy = 20000.0"//NL// &
+         "[ocean.coriolis]"//NL//"form = 'sadourny'"//NL// &
+         "pv_adv_scheme = '"//scheme//"'"//NL, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr=ierr)
    end function validate_pv
@@ -313,20 +314,17 @@ contains
       type(config_t) :: cfg
       real(wp) :: dx_exp, dy_exp
 
-      call read_config_from_string( &
-         "&sim_nml"//new_line('a')// &
-         '   sim_type = "ocean"'//new_line('a')// &
-         "/"//new_line('a')// &
-         "&grid_nml"//new_line('a')// &
-         "   nx = 300"//new_line('a')// &
-         "   ny = 300"//new_line('a')// &
-         "/"//new_line('a')// &
-         "&ocean_grid_nml"//new_line('a')// &
-         '   grid_config = "cartesian"'//new_line('a')// &
-         '   axis_units = "degrees"'//new_line('a')// &
-         "   len_lon = 22.0"//new_line('a')// &
-         "   len_lat = 20.0"//new_line('a')// &
-         "/"//new_line('a'), cfg)
+      call read_config_from_toml_string( &
+         "[sim]"//NL// &
+         '   sim_type = "ocean"'//NL// &
+         "[grid]"//NL// &
+         "   nx = 300"//NL// &
+         "   ny = 300"//NL// &
+         "[ocean.grid]"//NL// &
+         '   grid_config = "cartesian"'//NL// &
+         '   axis_units = "degrees"'//NL// &
+         "   len_lon = 22.0"//NL// &
+         "   len_lat = 20.0"//NL, cfg)
 
       ! rad_earth defaults to 6.378e6 (MOM6); dx = rad_earth·len·DEG2RAD/n.
       dx_exp = 6.378e6_wp*22.0_wp*DEG2RAD/300.0_wp
@@ -344,24 +342,21 @@ contains
    end subroutine test_cartesian_degrees
 
    subroutine test_cartesian_meters_default(error)
-      !! Default axis_units="meters" with len_lon unset leaves &grid_nml
+      !! Default axis_units="meters" with len_lon unset leaves [grid]
       !! dx/dy untouched — bit-identical to the pre-feature path.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call read_config_from_string( &
-         "&sim_nml"//new_line('a')// &
-         '   sim_type = "ocean"'//new_line('a')// &
-         "/"//new_line('a')// &
-         "&grid_nml"//new_line('a')// &
-         "   nx = 300"//new_line('a')// &
-         "   ny = 300"//new_line('a')// &
-         "   dx = 8163.3"//new_line('a')// &
-         "   dy = 7421.1"//new_line('a')// &
-         "/"//new_line('a')// &
-         "&ocean_grid_nml"//new_line('a')// &
-         '   grid_config = "cartesian"'//new_line('a')// &
-         "/"//new_line('a'), cfg)
+      call read_config_from_toml_string( &
+         "[sim]"//NL// &
+         '   sim_type = "ocean"'//NL// &
+         "[grid]"//NL// &
+         "   nx = 300"//NL// &
+         "   ny = 300"//NL// &
+         "   dx = 8163.3"//NL// &
+         "   dy = 7421.1"//NL// &
+         "[ocean.grid]"//NL// &
+         '   grid_config = "cartesian"'//NL, cfg)
 
       call check(error, abs(cfg%dx - 8163.3_wp) < 1.0e-9_wp, &
                  "meters default: dx untouched")
@@ -427,36 +422,37 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
-      character(len=*), parameter :: GR = &
-                                     "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-                                     "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//new_line('a')
+      character(len=*), parameter :: GR = SIM_GRID
 
-      call read_config_from_string(GR// &
-                                   "&ocean_topo_nml coriolis_beta = 2.0e-11 /"//new_line('a')// &
-                                   "&ocean_bc_nml south = 'periodic', north = 'periodic' /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string(GR// &
+                                        "[ocean.topo]"//NL//"coriolis_beta = 2.0e-11"//NL// &
+                                        "[ocean.bc]"//NL//"south = 'periodic'"//NL//"north = 'periodic'"//NL, &
+                                        cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, "beta plane + periodic y must be refused")
       if (allocated(error)) return
 
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 0.2, dy = 0.2 /"//new_line('a')// &
-         "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0 /"// &
-         new_line('a')// &
-         "&ocean_bc_nml south = 'periodic', north = 'periodic' /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         "[sim]"//NL//"sim_type = 'ocean'"//NL// &
+         "[grid]"//NL//"nx = 24"//NL//"ny = 16"//NL//"nghost = 3"//NL//"dx = 0.2"//NL//"dy = 0.2"//NL// &
+         "[ocean.grid]"//NL//"grid_config = 'spherical'"//NL//"lon_west = 0.0"//NL// &
+         "lat_south = 20.0"//NL// &
+         "[ocean.bc]"//NL//"south = 'periodic'"//NL//"north = 'periodic'"//NL, cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, "lon-lat sector + periodic y must be refused")
       if (allocated(error)) return
 
-      call read_config_from_string(GR// &
-                                   "&ocean_bc_nml south = 'periodic', north = 'periodic' /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string(GR// &
+                                        "[ocean.bc]"//NL//"south = 'periodic'"//NL//"north = 'periodic'"//NL, &
+                                        cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "f-plane Cartesian periodic y must be accepted")
       if (allocated(error)) return
 
-      call read_config_from_string(GR// &
-                                   "&ocean_topo_nml coriolis_beta = 2.0e-11 /"//new_line('a')// &
-                                   "&ocean_bc_nml west = 'periodic', east = 'periodic' /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string(GR// &
+                                        "[ocean.topo]"//NL//"coriolis_beta = 2.0e-11"//NL// &
+                                        "[ocean.bc]"//NL//"west = 'periodic'"//NL//"east = 'periodic'"//NL, &
+                                        cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "beta plane periodic in x only must be accepted")
    end subroutine test_periodic_y_needs_uniform_grid
@@ -475,38 +471,32 @@ contains
       call check(error, excluded, "chapman edge not detected as bt_halo exclusion")
       if (allocated(error)) return
 
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&ocean_bc_nml east = 'chapman' /"//new_line('a')// &
-         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "chapman + bt_halo namelist must parse")
+      call read_config_from_toml_string( &
+         SIM_GRID// &
+         "[ocean.bc]"//NL//"east = 'chapman'"//NL// &
+         "[ocean.bt]"//NL//"bt_halo = 4"//NL//"visc_rem_chain = false"//NL, cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "chapman + bt_halo input must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
                  "chapman edge with explicit bt_halo > 0 must be refused")
       if (allocated(error)) return
 
-      ! CONTROL: the same namelist WITHOUT the chapman edge must be accepted,
+      ! CONTROL: the same input WITHOUT the chapman edge must be accepted,
       ! so the refusal above is the Chapman rule and nothing else (the
       ! `visc_rem_chain` default alone refuses any bt_halo > 0).
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         SIM_GRID// &
+         "[ocean.bt]"//NL//"bt_halo = 4"//NL//"visc_rem_chain = false"//NL, cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "control (no chapman edge) with bt_halo = 4 must be accepted")
       if (allocated(error)) return
 
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&ocean_bc_nml east = 'chapman' /"//new_line('a')// &
-         "&ocean_bt_nml bt_halo = 0 /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         SIM_GRID// &
+         "[ocean.bc]"//NL//"east = 'chapman'"//NL// &
+         "[ocean.bt]"//NL//"bt_halo = 0"//NL, cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "chapman edge with bt_halo = 0 must be accepted")
@@ -839,34 +829,31 @@ contains
    end subroutine test_read_ocean_subnmls
 
    subroutine test_ocean_diag_time_unit(error)
-      !! `ocean%diag%dt_out` must pick up the `&time_nml time_unit`
+      !! `ocean%diag%dt_out` must pick up the `[time] time_unit`
       !! multiplier (regression: PR-B2 initially left the cascade
       !! operating on a dead local instead of cfg%ocean%diag%dt_out).
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: io_unit
 
-      open (newunit=io_unit, file="test_diag_tu.nml", status="replace", action="write")
-      write (io_unit, '(a)') "&sim_nml"
+      open (newunit=io_unit, file="test_diag_tu.toml", status="replace", action="write")
+      write (io_unit, '(a)') "[sim]"
       write (io_unit, '(a)') '   sim_type = "ocean"'
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&time_nml"
+      write (io_unit, '(a)') "[time]"
       write (io_unit, '(a)') "   t_end     = 1.0"
       write (io_unit, '(a)') '   time_unit = "day"'
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_diag_nml"
+      write (io_unit, '(a)') "[ocean.diag]"
       write (io_unit, '(a)') "   dt_out = 0.25"   ! quarter-day → 21600 s
-      write (io_unit, '(a)') "/"
       close (io_unit)
 
-      call wait_for_file("test_diag_tu.nml")
-      call read_config("test_diag_tu.nml", cfg)
+      call wait_for_file("test_diag_tu.toml")
+      call read_config("test_diag_tu.toml", cfg)
 
       ! 0.25 day × 86400 s/day = 21600 s.
       call check(error, abs(cfg%ocean%diag%dt_out - 21600.0_wp) < 1.0e-6_wp, &
                  "ocean%diag%dt_out (0.25 day) should convert to 21600 s")
 
-      open (newunit=io_unit, file="test_diag_tu.nml", status="old")
+      open (newunit=io_unit, file="test_diag_tu.toml", status="old")
       close (io_unit, status="delete")
    end subroutine test_ocean_diag_time_unit
 
@@ -887,23 +874,22 @@ contains
    end subroutine test_defaults
 
    subroutine test_read_grid(error)
-      !! Reading a namelist file should override grid defaults
+      !! Reading a TOML file should override grid defaults
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: io_unit
 
-      ! Write a temporary namelist file
-      open (newunit=io_unit, file="test_grid.nml", status="replace", action="write")
-      write (io_unit, '(a)') "&grid_nml"
+      ! Write a temporary TOML file
+      open (newunit=io_unit, file="test_grid.toml", status="replace", action="write")
+      write (io_unit, '(a)') "[grid]"
       write (io_unit, '(a)') "  nx = 500"
       write (io_unit, '(a)') "  ny = 100"
       write (io_unit, '(a)') "  dx = 50.0"
       write (io_unit, '(a)') "  dy = 25.0"
-      write (io_unit, '(a)') "/"
       close (io_unit)
-      call wait_for_file("test_grid.nml")
+      call wait_for_file("test_grid.toml")
 
-      call read_config("test_grid.nml", cfg)
+      call read_config("test_grid.toml", cfg)
 
       call check(error, cfg%nx == 500, "nx should be 500")
       if (allocated(error)) return
@@ -918,40 +904,36 @@ contains
                  "cfl should keep default 0.45")
 
       ! Clean up
-      open (newunit=io_unit, file="test_grid.nml", status="old")
+      open (newunit=io_unit, file="test_grid.toml", status="old")
       close (io_unit, status="delete")
    end subroutine test_read_grid
 
    subroutine test_read_all(error)
-      !! Reading all namelist groups should populate all fields
+      !! Reading all groups should populate all fields
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: io_unit
 
-      open (newunit=io_unit, file="test_all.nml", status="replace", action="write")
-      write (io_unit, '(a)') "&grid_nml"
+      open (newunit=io_unit, file="test_all.toml", status="replace", action="write")
+      write (io_unit, '(a)') "[grid]"
       write (io_unit, '(a)') "  nx = 300"
       write (io_unit, '(a)') "  ny = 200"
       write (io_unit, '(a)') "  dx = 10.0"
       write (io_unit, '(a)') "  dy = 10.0"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&time_nml"
+      write (io_unit, '(a)') "[time]"
       write (io_unit, '(a)') "  t_end = 86400.0"
       write (io_unit, '(a)') "  cfl = 0.3"
       write (io_unit, '(a)') "  dt_max = 5.0"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&physics_nml"
+      write (io_unit, '(a)') "[physics]"
       write (io_unit, '(a)') "  manning_n = 0.025"
       write (io_unit, '(a)') "  wind_stress_x = 0.1"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&boundary_nml"
+      write (io_unit, '(a)') "[boundary]"
       write (io_unit, '(a)') "  bc_west = 'tidal'"
       write (io_unit, '(a)') "  bc_east = 'open'"
-      write (io_unit, '(a)') "/"
       close (io_unit)
-      call wait_for_file("test_all.nml")
+      call wait_for_file("test_all.toml")
 
-      call read_config("test_all.nml", cfg)
+      call read_config("test_all.toml", cfg)
 
       call check(error, cfg%nx == 300, "nx should be 300")
       if (allocated(error)) return
@@ -972,12 +954,12 @@ contains
       if (allocated(error)) return
       call check(error, trim(cfg%bc_east) == "open", "bc_east should be open")
 
-      open (newunit=io_unit, file="test_all.nml", status="old")
+      open (newunit=io_unit, file="test_all.toml", status="old")
       close (io_unit, status="delete")
    end subroutine test_read_all
 
    subroutine test_calendar_names(error)
-      !! `&time_nml calendar`: the longest accepted name
+      !! `[time] calendar`: the longest accepted name
       !! ("proleptic_gregorian", 19 characters) survives both the config
       !! field and the enum without truncation and validates; a calendar
       !! that is not implemented ("noleap") is refused.
@@ -986,12 +968,10 @@ contains
       integer :: ierr
 
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&time_nml calendar = 'proleptic_gregorian', start_date = '1958-01-01' /"// &
-         new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         SIM_GRID// &
+         "[time]"//NL//"calendar = 'proleptic_gregorian'"//NL//"start_date = '1958-01-01'"//NL, &
+         cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "calendar=proleptic_gregorian must parse")
       if (allocated(error)) return
       call check(error, trim(cfg%calendar) == "proleptic_gregorian", &
@@ -1002,17 +982,15 @@ contains
       if (allocated(error)) return
 
       ierr = OCEAN_STATUS_OK
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&time_nml calendar = 'noleap' /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         SIM_GRID// &
+         "[time]"//NL//"calendar = 'noleap'"//NL, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, "calendar=noleap must be refused")
    end subroutine test_calendar_names
 
    subroutine test_inhalo_march_refusals(error)
-      !! `&ocean_bt_nml inhalo_march` (EXPERIMENTAL) is accepted on a clean
+      !! `[ocean.bt] inhalo_march` (EXPERIMENTAL) is accepted on a clean
       !! nghost = 3 ocean namelist and refused, one fence at a time, with
       !! `bt_halo > 0`, wet/dry, `use_cont_type`, `upstream_h_face`, tides,
       !! psurf, a chapman edge, and a stride above `nghost - 1`.
@@ -1022,12 +1000,10 @@ contains
 
       do k = 0, 8
          ierr = -999
-         call read_config_from_string( &
-            "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-            "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-            new_line('a')// &
-            "&ocean_bt_nml inhalo_march = .true. /"//new_line('a'), cfg, ierr=ierr)
-         call check(error, ierr == OCEAN_STATUS_OK, "inhalo_march namelist must parse")
+         call read_config_from_toml_string( &
+            SIM_GRID// &
+            "[ocean.bt]"//NL//"inhalo_march = true"//NL, cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "inhalo_march input must parse")
          if (allocated(error)) return
          select case (k)
          case (1); cfg%ocean%bt%bt_halo = 4
@@ -1054,30 +1030,30 @@ contains
    end subroutine test_inhalo_march_refusals
 
    function fw_mass_ierr(vcoord, scheme, vmix_keys, forcing_keys, thermo_on, extra, bt_keys) result(ierr)
-      !! `validate_config` verdict of an otherwise-valid `freshwater = 'mass'` namelist; every group
-      !! appears ONCE (the schema parser refuses a duplicate), the knobs under test are arguments.
+      !! `validate_config` verdict of an otherwise-valid `freshwater = 'mass'` input; every table
+      !! appears ONCE (the schema parser refuses a duplicate), the knobs under test are arguments:
+      !! each `*_keys` argument is newline-separated `key = value` lines, `extra` whole tables.
       character(len=*), intent(in) :: vcoord, scheme, vmix_keys, forcing_keys, extra
       logical, intent(in) :: thermo_on
       character(len=*), intent(in), optional :: bt_keys
-         !! Replaces the default `auto_n_inner = .true.` of the `&ocean_bt_nml` group.
+         !! Replaces the default `auto_n_inner = true` of the `[ocean.bt]` table.
       integer :: ierr
       type(config_t) :: cfg
       integer :: ierr_read
       character(len=:), allocatable :: bt_s
-      character(len=*), parameter :: NL = new_line('a')
 
-      bt_s = "auto_n_inner = .true."
+      bt_s = "auto_n_inner = true"
       if (present(bt_keys)) bt_s = bt_keys
-      call read_config_from_string("&sim_nml sim_type = 'ocean' /"//NL// &
-                                   "&ocean_thermo_nml enable_thermodynamics = "// &
-                                   merge(".true. ", ".false.", thermo_on)//" /"//NL// &
-                                   "&vcoord_nml vcoord_type = '"//vcoord//"' /"//NL// &
-                                   "&ocean_bt_nml split_scheme = '"//scheme//"', "//bt_s//" /"//NL// &
-                                   "&ocean_vmix_nml "//vmix_keys//" /"//NL// &
-                                   "&ocean_forcing_nml "//forcing_keys//" /"//NL// &
-                                   extra//NL// &
-                                   "&ocean_diag_nml enabled = .false. /"//NL// &
-                                   "&output_nml output_to_file = .false. /"//NL, cfg, ierr=ierr_read)
+      call read_config_from_toml_string("[sim]"//NL//"sim_type = 'ocean'"//NL// &
+                                        "[ocean.thermo]"//NL//"enable_thermodynamics = "// &
+                                        merge("true ", "false", thermo_on)//NL// &
+                                        "[vcoord]"//NL//"vcoord_type = '"//vcoord//"'"//NL// &
+                                        "[ocean.bt]"//NL//"split_scheme = '"//scheme//"'"//NL//bt_s//NL// &
+                                        "[ocean.vmix]"//NL//vmix_keys//NL// &
+                                        "[ocean.forcing]"//NL//forcing_keys//NL// &
+                                        extra//NL// &
+                                        "[ocean.diag]"//NL//"enabled = false"//NL// &
+                                        "[output]"//NL//"output_to_file = false"//NL, cfg, ierr=ierr_read)
       if (ierr_read /= OCEAN_STATUS_OK) then
          ierr = -ierr_read - 1000
          return
@@ -1091,19 +1067,20 @@ contains
       !! refused by `validate_config` itself (a parse failure would not count).
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: REFUSED = OCEAN_STATUS_ERR_CONFIG_VALIDATE
-      character(len=*), parameter :: FW = "enable_components = .true., freshwater = 'mass'"
-      character(len=*), parameter :: NL = new_line('a')
-      character(len=*), parameter :: ICE_OK = "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
-                                     "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-                                     "&ocean_psurf_nml enable = .true., ice_load = .true. /"
+      character(len=*), parameter :: FW = "enable_components = true"//NL//"freshwater = 'mass'"
+      character(len=*), parameter :: ICE = "[ocean.ice]"//NL//"enable = true"//NL//"scheme = 'cice'"//NL// &
+                                     "hfreeze = 10.0"//NL//"dynamics = true"//NL//"transport = true"//NL
+      character(len=*), parameter :: THERMO_UPD = "[ocean.ice_thermo]"//NL//"update_ocn_f = true"//NL
+      character(len=*), parameter :: ICE_OK = ICE//THERMO_UPD// &
+                                     "[ocean.psurf]"//NL//"enable = true"//NL//"ice_load = true"//NL
 
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., "") == OCEAN_STATUS_OK, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., "") == OCEAN_STATUS_OK, &
                  "baseline (zstar, pred_corr, components) accepted")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = .true.", FW, .true., "") == OCEAN_STATUS_OK, &
+      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = true", FW, .true., "") == OCEAN_STATUS_OK, &
                  "ssp_rk2 + sigma accepted")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_therm_ratio = 2, diabatic_first = .false., "// &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_therm_ratio = 2"//NL//"diabatic_first = false"//NL// &
                                      "dt_tracer_advect_ratio = 2", FW, .true., "") == OCEAN_STATUS_OK, &
                  "the deferred thermo order (with windowed tracer advection) accepted")
       if (allocated(error)) return
@@ -1113,135 +1090,134 @@ contains
       call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_tracer_advect_ratio = 2", FW, .true., "") == REFUSED, &
                  "refused: windowed tracer advection without the deferred order")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_therm_ratio = 2, dt_tracer_advect_ratio = 2", FW, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_therm_ratio = 2"//NL//"dt_tracer_advect_ratio = 2", FW, &
                                      .true., "") == REFUSED, "refused: windowed advection with diabatic_first = .true.")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = .true.", FW, .true., &
-                                     "&ocean_wetdry_nml enable = .true. /") == REFUSED, "refused: dynamic wet/dry")
+      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = true", FW, .true., &
+                                     "[ocean.wetdry]"//NL//"enable = true"//NL) == REFUSED, "refused: dynamic wet/dry")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                                     "&ocean_ice_nml enable = .true. /") == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     "[ocean.ice]"//NL//"enable = true"//NL) == REFUSED, &
                  "refused: the SIS2-derived ice (its brine coupler has no mass slot)")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-           "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /") == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     ICE) == REFUSED, &
                  "refused: CICE-port sea ice without update_ocn_f, the psurf seam and the ice load")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
                                      ICE_OK) == OCEAN_STATUS_OK, &
                  "accepted: CICE-port sea ice with update_ocn_f, the psurf seam and ice_load")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = .true.", FW, .true., ICE_OK) == OCEAN_STATUS_OK, &
+      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = true", FW, .true., ICE_OK) == OCEAN_STATUS_OK, &
                  "accepted: the same with ssp_rk2")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                  "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
-                                     "&ocean_psurf_nml enable = .true., ice_load = .true. /") == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     ICE// &
+                                     "[ocean.psurf]"//NL//"enable = true"//NL//"ice_load = true"//NL) == REFUSED, &
                  "refused: sea ice under real mass without update_ocn_f (the ledger could not close)")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                  "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
-                                     "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-                                     "&ocean_psurf_nml enable = .true. /") == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     ICE// &
+                                     THERMO_UPD// &
+                                     "[ocean.psurf]"//NL//"enable = true"//NL) == REFUSED, &
                  "refused: sea ice under real mass without ice_load (a spurious flow at the ice edge)")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                  "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
-                                     "&ocean_ice_thermo_nml update_ocn_f = .true. /") == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     ICE// &
+                                     THERMO_UPD) == REFUSED, &
                  "refused: sea ice under real mass without the psurf seam")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", "enable_components = .true.", .true., &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", "enable_components = true", .true., &
                                      ICE_OK) == REFUSED, "refused: ice_load without real mass (freshwater = 'none')")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", &
-                                     "enable_components = .true., freshwater = 'virtual'", .true., ICE_OK) == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", &
+                                     "enable_components = true"//NL//"freshwater = 'virtual'", .true., ICE_OK) == REFUSED, &
                  "refused: ice_load with freshwater = 'virtual'")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                                     "&ocean_psurf_nml enable = .true., ice_load = .true. /") == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     "[ocean.psurf]"//NL//"enable = true"//NL//"ice_load = true"//NL) == REFUSED, &
                  "refused: ice_load with no sea ice")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                  "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
-                                     "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-                                     "&ocean_psurf_nml ice_load = .true. /") == REFUSED, &
-                 "refused: ice_load without &ocean_psurf_nml enable")
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     ICE// &
+                                     THERMO_UPD// &
+                                     "[ocean.psurf]"//NL//"ice_load = true"//NL) == REFUSED, &
+                 "refused: ice_load without [ocean.psurf] enable")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                                     "&ocean_psurf_nml enable = .true., atm_load = .true. /") == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     "[ocean.psurf]"//NL//"enable = true"//NL//"atm_load = true"//NL) == REFUSED, &
                  "refused: atm_load without the bulk forcing (its only writer)")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                                     "&ocean_psurf_nml atm_load = .true. /") == REFUSED, &
-                 "refused: atm_load without &ocean_psurf_nml enable")
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     "[ocean.psurf]"//NL//"atm_load = true"//NL) == REFUSED, &
+                 "refused: atm_load without [ocean.psurf] enable")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 0.0", &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW//NL//"fw_evap_cfl_limit = 0.0", &
                                      .true., "") == REFUSED, "refused: fw_evap_cfl_limit = 0")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 1.01", &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW//NL//"fw_evap_cfl_limit = 1.01", &
                                      .true., "") == REFUSED, "refused: fw_evap_cfl_limit > 1")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 1.0", &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW//NL//"fw_evap_cfl_limit = 1.0", &
                                      .true., "") == REFUSED, "refused: fw_evap_cfl_limit = 1 (it could empty a layer)")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 0.99", &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW//NL//"fw_evap_cfl_limit = 0.99", &
                                      .true., "") == OCEAN_STATUS_OK, "fw_evap_cfl_limit = 0.99 accepted")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., "", &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., "", &
                                      bt_keys="n_inner = 0") == REFUSED, &
                  "refused: the unsplit solver (no remap, no bt_eta re-derive)")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., "", &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., "", &
                                      bt_keys="n_inner = 4") == OCEAN_STATUS_OK, "accepted: an explicit n_inner >= 1")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("eulerian_z", "ssp_rk2", "use_kpp = .true.", FW, .true., "") == REFUSED, &
+      call check(error, fw_mass_ierr("eulerian_z", "ssp_rk2", "use_kpp = true", FW, .true., "") == REFUSED, &
                  "refused: eulerian_z (the remap cannot return the volume)")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("lagrangian", "ssp_rk2", "use_kpp = .true.", FW, .true., "") == REFUSED, &
+      call check(error, fw_mass_ierr("lagrangian", "ssp_rk2", "use_kpp = true", FW, .true., "") == REFUSED, &
                  "refused: lagrangian (no remap, the top layer would grow without bound)")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .false., "") == REFUSED, &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .false., "") == REFUSED, &
                  "refused: thermodynamics off")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", "freshwater = 'mass'", .true., "") &
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", "freshwater = 'mass'", .true., "") &
                  == REFUSED, "refused: without the component set")
       if (allocated(error)) return
-      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                                     "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-                                     "draft_depth = 100.0, draft_slope = -1.0e-3, draft_x0 = 0.0, "// &
-                                     "h_min_cavity = 50.0 /") == REFUSED, "refused: the ice-shelf cavity")
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = true", FW, .true., &
+                                     "[ocean.cavity_dyn]"//NL//"enable = true"//NL//"draft_config = 'linear'"//NL// &
+                                     "draft_depth = 100.0"//NL//"draft_slope = -1.0e-3"//NL// &
+                                     "draft_x0 = 0.0"//NL//"h_min_cavity = 50.0"//NL) == REFUSED, "refused: the ice-shelf cavity")
    end subroutine test_freshwater_mass_envelope
 
-   function atm_forcing_baseline_nml(grid_config, dataovr_block, bulk_enable) result(nml)
-      !! A minimal otherwise-valid `&ocean_atm_forcing_nml` namelist
+   function atm_forcing_baseline(grid_config, dataovr_block, bulk_enable) result(doc)
+      !! A minimal otherwise-valid `[ocean.atm_forcing]` TOML document
       !! (enable_components, start_date, all nine filelists set) with
-      !! `grid_config`, an optional single `&ocean_dataovr_nml` block,
-      !! and the `&ocean_bulk_flux_nml enable` value all parameterised --
+      !! `grid_config`, an optional single `[ocean.dataovr]` table text,
+      !! and the `[ocean.bulk_flux] enable` value all parameterised --
       !! the C2c-1 tests mutate the parsed `config_t` one field at a time
-      !! rather than writing a second copy of a group (the schema parser
-      !! refuses a duplicate group).
+      !! rather than writing a second copy of a table (the schema parser
+      !! refuses a duplicate).
       character(len=*), intent(in) :: grid_config, dataovr_block
       logical, intent(in) :: bulk_enable
-      character(len=:), allocatable :: nml
+      character(len=:), allocatable :: doc
 
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-            "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 1.0, dy = 1.0 /"//new_line('a')// &
-            "&time_nml start_date = '1958-01-01' /"//new_line('a')// &
-            "&ocean_grid_nml grid_config = '"//trim(grid_config)//"', lon_west = 0.0, "// &
-            "lat_south = 0.0 /"//new_line('a')// &
-            "&ocean_forcing_nml enable_components = .true. /"//new_line('a')// &
-            "&ocean_atm_forcing_nml enable = .true., "// &
-            "filelist_tas = 'a.txt', filelist_huss = 'a.txt', filelist_uas = 'a.txt', "// &
-            "filelist_vas = 'a.txt', filelist_psl = 'a.txt', filelist_rlds = 'a.txt', "// &
-            "filelist_rsds = 'a.txt', filelist_prra = 'a.txt', filelist_prsn = 'a.txt' /"// &
-            new_line('a')
+      doc = "[sim]"//NL//"sim_type = 'ocean'"//NL// &
+            "[grid]"//NL//"nx = 24"//NL//"ny = 16"//NL//"nghost = 3"//NL//"dx = 1.0"//NL//"dy = 1.0"//NL// &
+            "[time]"//NL//"start_date = '1958-01-01'"//NL// &
+            "[ocean.grid]"//NL//"grid_config = '"//trim(grid_config)//"'"//NL//"lon_west = 0.0"//NL// &
+            "lat_south = 0.0"//NL// &
+            "[ocean.forcing]"//NL//"enable_components = true"//NL// &
+            "[ocean.atm_forcing]"//NL//"enable = true"//NL// &
+            "filelist_tas = 'a.txt'"//NL//"filelist_huss = 'a.txt'"//NL//"filelist_uas = 'a.txt'"//NL// &
+            "filelist_vas = 'a.txt'"//NL//"filelist_psl = 'a.txt'"//NL//"filelist_rlds = 'a.txt'"//NL// &
+            "filelist_rsds = 'a.txt'"//NL//"filelist_prra = 'a.txt'"//NL//"filelist_prsn = 'a.txt'"//NL
       if (bulk_enable) then
-         nml = nml//"&ocean_bulk_flux_nml enable = .true. /"//new_line('a')
+         doc = doc//"[ocean.bulk_flux]"//NL//"enable = true"//NL
       else
-         nml = nml//"&ocean_bulk_flux_nml enable = .false. /"//new_line('a')
+         doc = doc//"[ocean.bulk_flux]"//NL//"enable = false"//NL
       end if
-      if (len_trim(dataovr_block) > 0) nml = nml//trim(dataovr_block)//new_line('a')
-   end function atm_forcing_baseline_nml
+      if (len_trim(dataovr_block) > 0) doc = doc//trim(dataovr_block)//NL
+   end function atm_forcing_baseline
 
    subroutine test_roquet_rho_insitu_pgf_accepted(error)
       !! `eos='roquet_rho'` with the FV-MOM6 in-situ density PGF (the
@@ -1253,27 +1229,27 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
-      character(len=*), parameter :: HEAD = "&sim_nml sim_type = 'ocean' /"//new_line('a')
+      character(len=*), parameter :: HEAD = "[sim]"//NL//"sim_type = 'ocean'"//NL
 
-      call read_config_from_string(HEAD//"&ocean_eos_nml eos = 'roquet_rho' /"//new_line('a')// &
-                                   "&ocean_pgf_nml form = 'fv_mom6' /"//new_line('a'), cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "roquet_rho + fv_mom6 namelist must parse")
+      call read_config_from_toml_string(HEAD//"[ocean.eos]"//NL//"eos = 'roquet_rho'"//NL// &
+                                        "[ocean.pgf]"//NL//"form = 'fv_mom6'"//NL, cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "roquet_rho + fv_mom6 input must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "roquet_rho + fv_mom6 in-situ PGF (default insitu_density) must validate")
       if (allocated(error)) return
 
-      call read_config_from_string(HEAD//"&ocean_eos_nml eos = 'roquet_rho' /"//new_line('a')// &
-                                   "&ocean_pgf_nml form = 'fv_mom6', insitu_density = .false. /"// &
-                                   new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string(HEAD//"[ocean.eos]"//NL//"eos = 'roquet_rho'"//NL// &
+                                        "[ocean.pgf]"//NL//"form = 'fv_mom6'"//NL//"insitu_density = false"//NL, &
+                                        cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "roquet_rho + fv_mom6 with insitu_density=.false. must validate")
       if (allocated(error)) return
 
-      call read_config_from_string(HEAD//"&ocean_eos_nml eos = 'roquet_spv' /"//new_line('a')// &
-                                   "&ocean_pgf_nml form = 'fv_mom6' /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string(HEAD//"[ocean.eos]"//NL//"eos = 'roquet_spv'"//NL// &
+                                        "[ocean.pgf]"//NL//"form = 'fv_mom6'"//NL, cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "roquet_spv + fv_mom6 in-situ PGF must validate")
    end subroutine test_roquet_rho_insitu_pgf_accepted
@@ -1289,7 +1265,7 @@ contains
       integer :: ierr
 
       ierr = -999
-      call read_config_from_string(atm_forcing_baseline_nml("spherical", "", .true.), base, ierr=ierr)
+      call read_config_from_toml_string(atm_forcing_baseline("spherical", "", .true.), base, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_forcing baseline must parse")
       if (allocated(error)) return
       call check(error, atm_forcing_prereq_code(base) == ATM_PREREQ_OK, &
@@ -1355,7 +1331,7 @@ contains
       integer :: ierr
 
       ierr = -999
-      call read_config_from_string(atm_forcing_baseline_nml("spherical", "", .true.), cfg, ierr=ierr)
+      call read_config_from_toml_string(atm_forcing_baseline("spherical", "", .true.), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_forcing baseline must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
@@ -1369,10 +1345,10 @@ contains
       if (allocated(error)) return
 
       ierr = -999
-      call read_config_from_string("&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-                                   "&ocean_bulk_flux_nml enable = .true. /"//new_line('a'), &
-                                   cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "bulk_flux-only namelist must parse")
+      call read_config_from_toml_string("[sim]"//NL//"sim_type = 'ocean'"//NL// &
+                                        "[ocean.bulk_flux]"//NL//"enable = true"//NL, &
+                                        cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "bulk_flux-only input must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
@@ -1384,7 +1360,7 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call read_config("nonexistent_file_12345.nml", cfg)
+      call read_config("nonexistent_file_12345.toml", cfg)
 
       call check(error, cfg%nx == 200, "nx should keep default on missing file")
       if (allocated(error)) return

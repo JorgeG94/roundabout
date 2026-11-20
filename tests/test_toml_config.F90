@@ -601,11 +601,25 @@ contains
 
    ! ---- review round ----------------------------------------------------
 
+   subroutine check_real_value(error, token, expected)
+      !! `[physics] coriolis_f = <token>` reads as exactly `expected`.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: token
+      real(real64), intent(in) :: expected
+      type(config_t), target :: cfg
+      integer :: ierr
+
+      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = "//token//NL, cfg, ierr=ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, "coriolis_f = "//token//" accepted")
+      if (allocated(error)) return
+      call check(error, real(cfg%coriolis_f, real64) == expected, "coriolis_f = "//token//" reads exactly")
+   end subroutine check_real_value
+
    subroutine test_int_overflow(error)
       !! toml-f wraps an overflowing integer silently; the reader hands the
       !! schema the source digits instead, so the schema sees (and refuses) the
       !! real magnitude for an integer key and reads the real value for a real
-      !! key, exactly as the namelist path does.
+      !! key, identically on every compiler.
       type(error_type), allocatable, intent(out) :: error
       call check_refused(error, "[grid]"//NL//"nx = 18446744073709551660"//NL, &
                          [character(len=24) :: ":2:", "key 'nx'", "cannot parse integer"])
@@ -613,17 +627,19 @@ contains
       call check_refused(error, "[grid]"//NL//"nx = 99999999999"//NL, &
                          [character(len=24) :: ":2:", "key 'nx'"])
       if (allocated(error)) return
-      ! An integer-looking literal beyond int64 for a real key: whatever the
-      ! compiler's `read` makes of those digits (1.0e20 on gfortran; nvfortran
-      ! refuses it), the two front ends must agree -- never toml-f's wrapped value.
-      call check_agree(error, "&ocean_hvisc_nml nu_h = 100000000000000000000 /"//NL, &
-                       "[ocean.hvisc]"//NL//"nu_h = 100000000000000000000"//NL)
+      ! An integer literal for a REAL key is read as a real on every compiler
+      ! (nvfortran's `read` refuses a bare integer beyond int64 for a real, gfortran
+      ! reads it as 1e20; the reader hands over `<digits>.0`) -- never toml-f's
+      ! wrapped value.
+      call check_real_value(error, "100000000000000000000", 1.0e20_real64)
       if (allocated(error)) return
-      call check_agree(error, "&ocean_hvisc_nml nu_h = -9223372036854775809 /"//NL, &
-                       "[ocean.hvisc]"//NL//"nu_h = -9223372036854775809"//NL)
+      call check_real_value(error, "-9223372036854775809", -9.223372036854775808e18_real64)
       if (allocated(error)) return
-      call check_agree(error, "&ocean_hvisc_nml nu_h = 9223372036854775807 /"//NL, &
-                       "[ocean.hvisc]"//NL//"nu_h = 9223372036854775807"//NL)
+      call check_real_value(error, "9223372036854775807", 9.223372036854775808e18_real64)
+      if (allocated(error)) return
+      call check_real_value(error, "1_000_000", 1.0e6_real64)
+      if (allocated(error)) return
+      call check_real_value(error, "-7", -7.0_real64)
    end subroutine test_int_overflow
 
    subroutine test_number_spellings(error)

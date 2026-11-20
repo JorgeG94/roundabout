@@ -493,6 +493,13 @@ contains
       case (WANT_NUMBER, WANT_INTEGER)
          if (t == toml_type%int .or. (t == toml_type%float .and. want == WANT_NUMBER)) then
             call raw_number(ctx, kv%origin_value, t == toml_type%int, text, why)
+            ! An integer literal given for a REAL key reaches the real parser as a
+            ! real literal (`.0` appended): list-directed `read` of a bare integer
+            ! longer than int64 into a real is refused by some compilers (nvfortran)
+            ! and read as 1e20 by others (gfortran); the real spelling reads the same
+            ! value everywhere, and is bit-identical to the bare spelling wherever
+            ! both read.
+            if (want == WANT_NUMBER .and. t == toml_type%int .and. allocated(text)) text = text//".0"
             return
          end if
       case (WANT_BOOLEAN)
