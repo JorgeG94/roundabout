@@ -2,7 +2,7 @@
 
 Hand-written and stable; ``python/rdb/_config_generated.py`` (generated
 by ``tools/gen_python_config.py`` from the live ``nml_schema_t``, which
-now covers every namelist group including ``&ocean_bc_nml`` since its
+now covers every config group including ``[ocean.bc]`` since its
 P4.5 schema migration) imports from here.
 
 Two rules make this non-drifting, straight from
@@ -10,10 +10,10 @@ Two rules make this non-drifting, straight from
 and D5.3:
 
 1. **Absence is the default, not the Fortran value.** Every knob starts
-   unset; only an explicit assignment marks it "set". ``Group._namelist_lines()``
+   unset; only an explicit assignment marks it "set". ``Group._toml_lines()``
    emits ONLY set knobs -- a freshly constructed :class:`Config` therefore
    serialises to nothing, which is what gives bit-identity to existing
-   namelists (``read_config_from_string`` on an empty buffer keeps the
+   configs (``read_config_from_toml_string`` on an empty buffer keeps the
    pristine ``config_t`` defaults).
 2. **Validation on assignment mirrors ``parse_tokens`` arm-for-arm**
    (``rdb_nml_schema.F90``): range checks for real/int, case-insensitive
@@ -21,7 +21,7 @@ and D5.3:
    It does NOT re-implement ``validate_config``'s cross-knob rules or the
    per-group ``cross_check`` callbacks -- those stay in Fortran and surface
    as :class:`~rdb._errors.ConfigValidationError` through the error ring
-   when the composed namelist reaches ``read_config_from_string``.
+   when the composed config reaches ``read_config_from_toml_string``.
 
 Stdlib only -- no numpy (P3/P4 rule; see ``_ffi.py``'s module docstring).
 """
@@ -35,7 +35,7 @@ from ._errors import ConfigParseError
 
 class RdbDeadKnobWarning(UserWarning):
     """A knob was assigned that is registered on the schema (accepted,
-    type/range-validated, round-trips through ``to_namelist()``) but does
+    type/range-validated, round-trips through ``to_toml()``) but does
     NOT reach any ocean-path behaviour -- see each knob's
     ``dead_on_ocean_path`` docstring note for the specific reason. Found by
     the P4 generator sweep (2026-09-10); see
@@ -44,7 +44,7 @@ class RdbDeadKnobWarning(UserWarning):
 
 
 class _KnobDescriptor:
-    """Base data descriptor for one namelist key.
+    """Base data descriptor for one config key.
 
     Per-instance state lives in the OWNING INSTANCE's ``__dict__`` under a
     private key (``self._attr``), never under the public knob name --
@@ -93,6 +93,12 @@ class _KnobDescriptor:
 
     def _format(self, value) -> str:  # pragma: no cover - overridden
         raise NotImplementedError
+
+
+def _toml_str(value) -> str:
+    """TOML basic-string text of `value`."""
+    esc = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{esc}"'
 
 
 class _Missing:
@@ -190,7 +196,7 @@ class Bool(_KnobDescriptor):
         return value
 
     def _format(self, value) -> str:
-        return ".true." if value else ".false."
+        return "true" if value else "false"
 
 
 class Str(_KnobDescriptor):
@@ -216,14 +222,14 @@ class Str(_KnobDescriptor):
             raise ConfigParseError(
                 f"key '{self.name}': value {value!r} ({len(value)} chars) "
                 f"exceeds target length {self.max_len}")
-        if '"' in value:
+        if "\n" in value or "\r" in value:
             raise ConfigParseError(
-                f"key '{self.name}': value {value!r} contains a double "
-                f"quote, which the namelist tokenizer cannot escape")
+                f"key '{self.name}': value {value!r} contains a line "
+                f"break, which a config string cannot carry")
         return value
 
     def _format(self, value) -> str:
-        return f'"{value}"'
+        return _toml_str(value)
 
 
 class Enum(_KnobDescriptor):
@@ -254,7 +260,7 @@ class Enum(_KnobDescriptor):
             f"{{{allowed_list}}}")
 
     def _format(self, value) -> str:
-        return f'"{value}"'
+        return _toml_str(value)
 
 
 class RealArray(_KnobDescriptor):
@@ -292,30 +298,32 @@ class RealArray(_KnobDescriptor):
         return tuple(out)
 
     def _format(self, value) -> str:
-        return ", ".join(repr(float(v)) for v in value)
+        return "[" + ", ".join(repr(float(v)) for v in value) + "]"
 
 
 class Group:
-    """Base class for one namelist group (generated or hand-written).
+    """Base class for one config group (generated or hand-written).
 
-    Subclasses set ``_nml_name`` (the bare group name, no leading ``&``,
-    no ``_nml`` suffix -- the same spelling `nml_schema_t` uses) and
-    declare one descriptor attribute per knob.
+    Subclasses set ``_group`` (the bare schema group name, e.g.
+    ``ocean_hvisc``) and ``_table`` (its TOML table path, ``ocean.hvisc``;
+    emitted by `tools/gen_python_config.py`, the one place that knows the
+    mapping) and declare one descriptor attribute per knob.
     """
 
-    _nml_name: str = ""
+    _group: str = ""
+    _table: str = ""
 
     def _explicit_names(self):
         """Knob names assigned on THIS instance, in assignment order."""
         return list(self.__dict__.get("_explicit", ()))
 
-    def _namelist_lines(self):
-        """One `  key = value` line per explicitly-set knob."""
+    def _toml_lines(self):
+        """One `key = value` line per explicitly-set knob."""
         lines = []
         for name in self._explicit_names():
             desc = getattr(type(self), name)
             value = self.__dict__[desc._attr]
-            lines.append(f"  {name} = {desc._format(value)}")
+            lines.append(f"{name} = {desc._format(value)}")
         return lines
 
     def __repr__(self):

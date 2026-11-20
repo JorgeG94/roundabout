@@ -1,7 +1,7 @@
 """P5 D2.4 -- rotation (the PARAMETER) and momentum/PV discretisation (the
-SCHEME): two objects on purpose, because the namelist splits one concept
-across `&physics_nml` / `&ocean_topo_nml` / `&ocean_grid_nml` (the
-parameter) and `&ocean_coriolis_nml` (the scheme) in a way that reads
+SCHEME): two objects on purpose, because the config splits one concept
+across `[physics]` / `[ocean.topo]` / `[ocean.grid]` (the
+parameter) and `[ocean.coriolis]` (the scheme) in a way that reads
 backwards. See 06_python_surface_design.md D2.4.
 """
 
@@ -11,7 +11,7 @@ from ._errors import RdbUnsupportedError
 
 
 class FPlane:
-    """``FPlane(f)`` -> `&physics_nml coriolis_f`, `&ocean_topo_nml
+    """``FPlane(f)`` -> `[physics] coriolis_f`, `[ocean.topo]
     coriolis_beta=0`."""
 
     def __init__(self, f):
@@ -25,8 +25,8 @@ class FPlane:
 class BetaPlane:
     """``BetaPlane(f0, beta, y_ref=0.0)``
 
-    -> `&physics_nml coriolis_f=f0`, `&ocean_topo_nml
-    coriolis_beta=beta, coriolis_y_ref=y_ref`, `&ocean_grid_nml
+    -> `[physics] coriolis_f=f0`, `[ocean.topo]
+    coriolis_beta=beta, coriolis_y_ref=y_ref`, `[ocean.grid]
     coriolis_scheme="beta_plane"`.
     """
 
@@ -43,7 +43,7 @@ class BetaPlane:
 class SphericalCoriolis:
     """``SphericalCoriolis(rotation_rate=7.2921e-5)``
 
-    -> `&ocean_grid_nml coriolis_scheme="planetary", omega=rotation_rate`.
+    -> `[ocean.grid] coriolis_scheme="planetary", omega=rotation_rate`.
     f is filled from `geolat` by the metrics; there is no f knob to set.
     Requires a non-cartesian grid (checked by the composer, which is the
     only place that has both this object and the grid object in view).
@@ -77,7 +77,7 @@ class WENO:
 
 
 class Sadourny:
-    """The PV/Coriolis-advection discretisation. -> `&ocean_coriolis_nml`.
+    """The PV/Coriolis-advection discretisation. -> `[ocean.coriolis]`.
 
     ``Sadourny(form="enstrophy", pv_advection="centered",
     use_state_fluxes=False, bound_coriolis=False, corner_h="cell_mean")``
@@ -111,7 +111,7 @@ class Sadourny:
                                   or corner_h != "cell_mean"):
             raise RdbUnsupportedError(
                 "bound_coriolis / corner_h are energy-form-only "
-                "(&ocean_coriolis_nml form='sadourny_energy'); passing a "
+                "([ocean.coriolis] form='sadourny_energy'); passing a "
                 "non-default value with form='enstrophy' or form='hk' "
                 "would be silently inert in the Fortran, so this raises "
                 "instead of accepting it.")

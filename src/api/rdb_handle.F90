@@ -50,7 +50,7 @@ module rdb_handle
       !! (safe because grid metadata is read-only after setup — no
       !! kernel ever mutates `nx_phys`/`dx`/... mid-run). The standalone
       !! `sf` slot from P1 is gone: `engine_setup` now fully configures
-      !! `engine%state%surface_flux` from the namelist (P2.4 closes the
+      !! `engine%state%surface_flux` from the config (P2.4 closes the
       !! "API surface flux is a separate, minimally-seeded object" gap),
       !! so `rdb_ocean_get/set_*_flux` read/write `h%state%surface_flux`
       !! directly, same as the driver.

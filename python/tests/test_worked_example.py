@@ -15,12 +15,12 @@ inline comments at the point of deviation, and the phase report for the
 full account):
 
   1. ``boundaries=`` is dropped from the live model. Composing a
-     `Boundaries(...)` object into `to_namelist()` text works correctly
+     `Boundaries(...)` object into `to_toml()` text works correctly
      (asserted separately, `test_boundaries_composes_correct_text`
-     below) but ACTUALLY CREATING a model with any `&ocean_bc_nml`
+     below) but ACTUALLY CREATING a model with any `[ocean.bc]`
      content fails on the NVHPC/GPU build specifically -- a pre-existing
      Fortran bug in `read_ocean_bc_nml`'s in-memory (``lines(:)``)
-     namelist read, independent of this phase (confirmed: the identical
+     config read, independent of this phase (confirmed: the identical
      content creates successfully through the FILE path on gfortran).
   2. ``ImplicitVerticalFriction(drag=True)`` is dropped to
      ``drag=False``: combined with ``QuadraticDrag(hbbl=10.0,
@@ -35,7 +35,7 @@ full account):
      (`auto_n_inner` needs `barotropic=BarotropicSolver(auto=True)`,
      which this test also demonstrates; `t_end` has no curated argument
      at all), and both default to values that make `create()` refuse a
-     namelist-driven run outright.
+     config-driven run outright.
 
 The dropped `PassiveTracer("dye", ...)` call is exercised separately
 in `test_passive_tracer_unsupported` -- see its docstring.
@@ -158,8 +158,8 @@ def test_worked_example_runs():
     model.config.ocean_diag.enabled = False
     model.config.output.output_to_file = False
 
-    text = model.config.to_namelist()
-    assert "&ocean_hvisc_nml" in text
+    text = model.config.to_toml()
+    assert "[ocean.hvisc]" in text
     assert "mstar = 1.2" in text
     assert "split_scheme = \"pred_corr\"" in text
 
@@ -220,7 +220,7 @@ def test_bathymetry_wrong_convention_raises_sign_error():
 
 def test_boundaries_composes_correct_text():
     """`Boundaries(...)` with the SAME shape as the sketch composes the
-    correct namelist text (D2.0 rule 1) even though actually CREATING a
+    correct config text (D2.0 rule 1) even though actually CREATING a
     model with it is blocked by the NVHPC-build ocean_bc bug (module
     docstring). Verifies the writer half of the contract independently
     of that Fortran gap."""
@@ -234,8 +234,8 @@ def test_boundaries_composes_correct_text():
     )
     cfg = Config()
     boundaries.apply(cfg, periodic_x=False, periodic_y=False)
-    text = cfg.to_namelist()
-    assert '&ocean_bc_nml' in text
+    text = cfg.to_toml()
+    assert '[ocean.bc]' in text
     assert 'west = "wall"' in text
     assert 'east = "open"' in text
     assert 'south = "open"' in text

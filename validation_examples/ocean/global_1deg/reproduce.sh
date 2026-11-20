@@ -6,14 +6,14 @@
 #
 # Steps: fetch the OM_1deg + WOA13 inputs (idempotent) -> prepare the model-grid
 # bathymetry and initial condition (skipped when up to date) -> set up the run
-# directory (INPUT symlink + namelist copy with t_end = --days) -> run ->
+# directory (INPUT symlink + config copy with t_end = --days) -> run ->
 # movie -> check_against_reference.py.  Standard-library Python only; nothing
 # is installed.  Run with --help for the options.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
-NML=global_1deg_unforced.toml
+CFG=global_1deg_unforced.toml
 QUICK_DAYS=10
 
 usage() {
@@ -39,7 +39,7 @@ Usage: $(basename "$0") --build-dir DIR [options]
   --no-check       do not compare against the reference
   -h, --help       this text
 
-By default the rdb executable runs the namelist and the movie is rendered
+By default the rdb executable runs the config and the movie is rendered
 afterwards from its diagnostic file (global_movie.py; needs nccopy from
 NetCDF-C and ffmpeg — without them the movie is skipped with a note).
 EOF
@@ -141,11 +141,11 @@ elif [ -e "$run_dir/INPUT" ]; then
 fi
 ln -s "$data" "$run_dir/INPUT"
 sed "s/^\([[:space:]]*t_end[[:space:]]*=[[:space:]]*\)[0-9.]*/\1${days}.0/" \
-    "$HERE/$NML" >"$run_dir/$NML"
-grep -q "t_end *= *${days}\.0" "$run_dir/$NML" || die "could not set t_end in $run_dir/$NML"
+    "$HERE/$CFG" >"$run_dir/$CFG"
+grep -q "t_end *= *${days}\.0" "$run_dir/$CFG" || die "could not set t_end in $run_dir/$CFG"
 rm -f "$run_dir"/output/global_1deg_rank_*.nc
 log="$run_dir/run.log"
-echo "run directory $run_dir: INPUT -> $data, $NML (t_end = $days days)"
+echo "run directory $run_dir: INPUT -> $data, $CFG (t_end = $days days)"
 
 # --- 4. run -----------------------------------------------------------------
 echo "== 4/5 run ($days days, $([ "$use_python" -eq 1 ] && echo "Python interface" || echo "rdb executable"), CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset})"
@@ -155,7 +155,7 @@ if [ "$use_python" -eq 1 ]; then
     [ "$movie" = no ] && pyargs+=(--no-movie)
     (cd "$run_dir" && RDB_LIB="$lib" "$PY" "$HERE/run_global_1deg.py" "${pyargs[@]}") 2>&1 | tee "$log"
 else
-    (cd "$run_dir" && "$exe" "$NML") 2>&1 | tee "$log"
+    (cd "$run_dir" && "$exe" "$CFG") 2>&1 | tee "$log"
 fi
 echo "run: $(($(date +%s) - t0)) s wall"
 

@@ -1,7 +1,7 @@
 """D4 — the exception hierarchy and the error-ring reader.
 
 The problem this exists to solve: every ocean C ABI entry point returns a
-coarse STAGE code (``rdb_ocean_status``). The SPECIFIC reason a namelist was
+coarse STAGE code (``rdb_ocean_status``). The SPECIFIC reason a config was
 rejected, a tracer name wasn't found, or a bathymetry array normalised to
 zero wet cells lives in the Fortran error ring
 (``rdb_ocean_last_error``), not in the integer. A bare

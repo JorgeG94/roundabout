@@ -1,20 +1,20 @@
-"""P5 D2.11 -- boundaries. `&ocean_bc_nml` (`rdb._config_generated.OceanBc`,
-schema-generated since P4.5) plus `&ocean_sponge_nml` (`SpongeMap`).
+"""P5 D2.11 -- boundaries. `[ocean.bc]` (`rdb._config_generated.OceanBc`,
+schema-generated since P4.5) plus `[ocean.sponge]` (`SpongeMap`).
 
 `Periodic()` is NOT here -- it is a grid topology (`rdb.grids.Topology`).
 `Boundaries.apply` raises if an edge the grid's topology has made periodic
 (or, for `TripolarGrid`, structurally fold-owned) is also given a condition
 here, mirroring Oceananigans' "Cannot set $side $bc in a Periodic
-direction!". There are no `bottom=`/`top=` slots: `&ocean_bc_nml` has no z
-edges (the vertical boundaries are forcing, not `&ocean_bc_nml`).
+direction!". There are no `bottom=`/`top=` slots: `[ocean.bc]` has no z
+edges (the vertical boundaries are forcing, not `[ocean.bc]`).
 
-Several `&ocean_bc_nml` knobs are SHARED across whichever edges use them
+Several `[ocean.bc]` knobs are SHARED across whichever edges use them
 (`radiation_scheme`/`orlanski_rx_max`/`orlanski_gamma`, `nudge_tau_in/out`,
 `sponge_width`/`sponge_strength`, `flather_form`, `obc_tidal_nodal`) rather
 than per-edge -- a Fortran design already in place, not something this
 layer invents. `Boundaries.apply` raises `ConfigConflictError` if two edges
 ask for different values of the same shared knob (a real silent
-last-writer-wins bug the raw namelist has no way to catch).
+last-writer-wins bug the raw config has no way to catch).
 """
 
 from __future__ import annotations
@@ -260,7 +260,7 @@ class Boundaries:
 
 
 class SpongeMap:
-    """Map-driven sponge. -> `&ocean_sponge_nml enable=.true.`
+    """Map-driven sponge. -> `[ocean.sponge] enable=true`
 
     ``SpongeMap(damp_source="band", target_source="ic", relax_uv=True,
     relax_tracers=True, widths=None)``

@@ -24,7 +24,7 @@
 !!      catches a silently wrong `p` as well as a faulting one.
 !!   3. rho_wright_engine_steps / 4. hycom_wright_engine_steps — a tiny
 !!      flat-bed, salinity-stratified rest-state engine (the vcoord
-!!      stability-matrix cell, shrunk) created from an in-memory namelist
+!!      stability-matrix cell, shrunk) created from an in-memory config
 !!      and stepped through several ALE regrids: layers stay finite and
 !!      positive and mass is conserved.
 !!
@@ -167,29 +167,55 @@ contains
       !! The vcoord stability-matrix rest-state cell (flat bed, salinity
       !! stratified 33.8 -> 34.55 PSU surface -> bed, Wright EOS, fv_mom6
       !! PGF) shrunk to 6 x 4 x 4 so it runs in a second on any toolchain.
-      !! The stratification comes from the `&tracer_nml` linear-in-layer IC,
-      !! not `&ocean_zinit_nml` (which needs a NetCDF build), so the suite
+      !! The stratification comes from the `[tracer]` linear-in-layer IC,
+      !! not `[ocean.zinit]` (which needs a NetCDF build), so the suite
       !! also runs on the NetCDF-off legs.
       character(len=*), intent(in) :: vcoord
       character(len=:), allocatable :: txt
       character(len=*), parameter :: nl = new_line("a")
-      txt = '&sim_nml sim_type = "ocean" /'//nl// &
-            "&grid_nml nx = 6, ny = 4, dx = 2000.0, dy = 2000.0, nghost = 2 /"//nl// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//nl// &
-            "&physics_nml coriolis_f = -1.409e-4 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//nl// &
-            '&vcoord_nml vcoord_type = "'//vcoord//'", zstar_h_min = 1.0e-4, '// &
-            "rho_target_light = 1027.20, rho_target_dense = 1027.90, "// &
-            "rho_ref_pressure = 0.0 /"//nl// &
-            '&ocean_topo_nml topo_config = "flat", max_depth = 1000.0 /'//nl// &
-            '&ocean_pgf_nml form = "fv_mom6", reconstruct_for_pressure = .true. /'//nl// &
-            '&ocean_eos_nml eos = "wright" /'//nl// &
-            "&tracer_nml initial_temperature = -1.9, initial_salinity = 33.8, "// &
-            "S_init_surface = 33.8, S_init_bottom = 34.55 /"//nl// &
-            "&ocean_vmix_nml use_closure = .false., use_kpp = .false. /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      txt = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 6"//nl// &
+            "ny = 4"//nl// &
+            "dx = 2000.0"//nl// &
+            "dy = 2000.0"//nl// &
+            "nghost = 2"//nl// &
+            "[time]"//nl// &
+            "t_end = 86400.0"//nl// &
+            "dt_fixed = 600.0"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = -1.409e-4"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 4"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "'//vcoord//'"'//nl// &
+            "zstar_h_min = 1.0e-4"//nl// &
+            "rho_target_light = 1027.20"//nl// &
+            "rho_target_dense = 1027.90"//nl// &
+            "rho_ref_pressure = 0.0"//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "flat"'//nl// &
+            "max_depth = 1000.0"//nl// &
+            "[ocean.pgf]"//nl// &
+            'form = "fv_mom6"'//nl// &
+            "reconstruct_for_pressure = true"//nl// &
+            "[ocean.eos]"//nl// &
+            'eos = "wright"'//nl// &
+            "[tracer]"//nl// &
+            "initial_temperature = -1.9"//nl// &
+            "initial_salinity = 33.8"//nl// &
+            "S_init_surface = 33.8"//nl// &
+            "S_init_bottom = 34.55"//nl// &
+            "[ocean.vmix]"//nl// &
+            "use_closure = false"//nl// &
+            "use_kpp = false"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function engine_nml
 
    subroutine run_engine_case(error, vcoord)

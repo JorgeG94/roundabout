@@ -1,7 +1,7 @@
-"""P5/P7 D2.14 -- output & diagnostics. `&ocean_diag_nml` + `&output_nml`.
+"""P5/P7 D2.14 -- output & diagnostics. `[ocean.diag]` + `[output]`.
 
 Follows the P5 pattern exactly (D2.0 rule 1): a writer over the generated
-config, setting namelist knobs and nothing else. Exists because P5 deferred
+config, setting config knobs and nothing else. Exists because P5 deferred
 this object, which left NO way to turn diagnostics off from the curated
 layer except the raw escape hatch (``model.config.ocean_diag.enabled =
 False``) -- and a user who does not know that escape hatch exists gets the
@@ -26,7 +26,7 @@ _TIME_UNITS = ("s", "sec", "second", "seconds", "min", "minute", "minutes",
                "hr", "hour", "hours", "h", "day", "days", "d",
                "year", "years", "yr")
 
-#: vgrid -> (array knob, count knob) on `&ocean_diag_nml`, for `levels=`.
+#: vgrid -> (array knob, count knob) on `[ocean.diag]`, for `levels=`.
 _LEVEL_FIELDS = {
     "z_fixed": ("z_levels", "n_z_levels"),
     "sigma": ("sigma_levels", "n_sigma_levels"),
@@ -49,7 +49,7 @@ def _is_cadence(attr: str) -> bool:
 
 def _validate_token(token: str) -> str:
     """Mirror `parse_one_spec_token`'s grammar (`rdb_ocean_diag.F90`) so a
-    malformed `&ocean_diag_nml diags` token is a Python ``ValueError`` at
+    malformed `[ocean.diag] diags` token is a Python ``ValueError`` at
     ``Diagnostics(...)`` construction, not a Fortran ``error stop`` inside
     ``create()`` -- `parse_one_spec_token`'s unknown-attribute branch is
     one of the `configure_ocean_diag` paths P0.1 explicitly did NOT
@@ -87,7 +87,7 @@ class Diagnostics:
     """``Diagnostics(names=, every=, vgrid=, levels=, filename=,
     precision=, mask_vanished=, reproducing_sums=, deflate=,
     output_dir=, status_interval=, log_level=, enabled=True)`` ->
-    ``&ocean_diag_nml`` (+ ``&output_nml`` / ``&logging_nml`` for
+    ``[ocean.diag]`` (+ ``[output]`` / ``[logging]`` for
     ``deflate``/``output_dir``/``status_interval``/``log_level``).
 
     ``output_dir=``, ``status_interval=`` and ``log_level=`` are
@@ -101,14 +101,14 @@ class Diagnostics:
     and is skipped when ``enabled=False``.
 
     - ``enabled=False`` is the explicit OFF switch this object exists to
-      provide: sets ``&ocean_diag_nml enabled = .false.`` (the actual
-      gate `engine_configure_diag` checks -- ``&output_nml
+      provide: sets ``[ocean.diag] enabled = false`` (the actual
+      gate `engine_configure_diag` checks -- ``[output]
       output_to_file`` is ALSO set for documentation parity with the
       escape hatch, but is a no-op on the ocean path per the P4
       dead-knob sweep: it is validated but read nowhere in ``src/``).
       When ``enabled=False``, every other keyword is ignored (nothing
       to configure) rather than silently building unreachable knobs.
-    - ``names=`` -- the unified ``&ocean_diag_nml diags`` token-list
+    - ``names=`` -- the unified ``[ocean.diag] diags`` token-list
       selection: a single pre-built token string, OR an iterable of
       tokens (``"temperature"``, ``"KE:off"``,
       ``"vorticity_z:z:1d"``, ``"temperature:6h:mean"``, ...). Each
@@ -121,7 +121,7 @@ class Diagnostics:
       ``"zstar"``/``"density"``.
     - ``levels=`` -- output levels for whichever ``vgrid=`` needs them
       (z-levels/sigma fractions/zstar reference depths/density bin
-      edges); routed to the matching ``&ocean_diag_nml *_levels`` array
+      edges); routed to the matching ``[ocean.diag] *_levels`` array
       (+ its companion count knob) by ``vgrid``. Requires ``vgrid=`` to
       be one of the four leveled families (not ``"layer"``, which has
       no vertical remap).
@@ -134,17 +134,17 @@ class Diagnostics:
       ``fill_tracer_impl`` docstring for the SEPARATE, unconditional
       NaN-at-LAYER-vgrid fix this does not affect).
     - ``reproducing_sums=`` -- order-invariant EFP console totals.
-    - ``deflate=`` -- an int 0-9 (0 = off); ``&output_nml
+    - ``deflate=`` -- an int 0-9 (0 = off); ``[output]
       compress_output``/``compress_level``.
-    - ``output_dir=`` -- ``&output_nml output_dir``, the directory
+    - ``output_dir=`` -- ``[output] output_dir``, the directory
       every file this run writes (diag NetCDF, restart) lands in.
       Applied even when ``enabled=False``.
-    - ``status_interval=`` -- ``&logging_nml status_interval``, the
+    - ``status_interval=`` -- ``[logging] status_interval``, the
       console ``[stats]`` print cadence, in ``time_unit`` (see
       :class:`Duration`) -- NOT the same cadence as ``every=``
-      (``&ocean_diag_nml dt_out``, always seconds). Applied even when
+      (``[ocean.diag] dt_out``, always seconds). Applied even when
       ``enabled=False``.
-    - ``log_level=`` -- ``&logging_nml log_level``, one of ``"debug"``/
+    - ``log_level=`` -- ``[logging] log_level``, one of ``"debug"``/
       ``"verbose"``/``"info"``/``"performance"``/``"warning"``/
       ``"error"``. Applied even when ``enabled=False``.
     """
@@ -216,7 +216,7 @@ class Diagnostics:
 
 
 class Duration:
-    """``Duration(t_end, time_unit="s")`` -> ``&time_nml t_end`` +
+    """``Duration(t_end, time_unit="s")`` -> ``[time] t_end`` +
     ``time_unit``. Pass as ``Model(..., duration=Duration(...))``.
 
     `t_end`/`time_unit` were previously reachable ONLY through the
@@ -225,7 +225,7 @@ class Duration:
     ``until=``/``steps=`` and never reads either knob -- but `t_end`
     still gates ``create()``: the Fortran's own cross-check
     (`rdb_config_validate.F90 :: validate_config`) refuses a ``Diagnostics(every=...)``
-    cadence (``&ocean_diag_nml dt_out``) that exceeds `t_end` once BOTH
+    cadence (``[ocean.diag] dt_out``) that exceeds `t_end` once BOTH
     are scaled through `time_unit`, and `t_end` DEFAULTS to 1.0
     **second** -- almost any real diagnostic cadence exceeds that, so
     "turn diagnostics on, get no curated route to raise t_end" was a
@@ -253,13 +253,13 @@ class Duration:
 
 
 class Restart:
-    """``Restart(every=, file=)`` -> ``&output_nml restart_interval`` /
+    """``Restart(every=, file=)`` -> ``[output] restart_interval`` /
     ``restart_file``.
 
     Writing a restart from a live handle has no C-ABI entry point yet
     (:meth:`~rdb._model.Model.write_restart` raises, naming the
     same gap) -- this object still lets a curated ``Model`` schedule
-    periodic NAMELIST-DRIVEN restart writes without dropping to the
+    periodic CONFIG-DRIVEN restart writes without dropping to the
     escape hatch (``model.config.output.restart_interval = ...``).
     """
 

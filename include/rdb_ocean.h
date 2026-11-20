@@ -63,7 +63,7 @@ typedef void *rdb_ocean_handle;
  *
  * 0           success.
  * 1-5         config/setup path (rdb_ocean_status::OCEAN_STATUS_ERR_*,
- *             shared with the Fortran-only namelist-file create path —
+ *             shared with the Fortran-only config-file create path —
  *             P0 of the API plan).
  * 10-19       handle-lifecycle + P2-accessor path (this API only); 15/16
  *             are P2.5 geometry injection (bathymetry sign, pending-state).
@@ -95,8 +95,8 @@ typedef void *rdb_ocean_handle;
 
 /* ---- Lifecycle ---------------------------------------------------- */
 
-/* Build a config from an in-memory namelist string (newline-separated
- * records, no filesystem touch), set up the ocean dyn-core, map it onto the
+/* Build a config from an in-memory TOML document (a whole config file as text;
+ * no filesystem touch), set up the ocean dyn-core, map it onto the
  * device, and hand back a handle in *handle_out.
  *
  * Fails with RDB_OCEAN_ERR_ALREADY_EXISTS if an ocean handle is already
@@ -104,8 +104,8 @@ typedef void *rdb_ocean_handle;
  * live ocean handle" note in src/api/rdb_ocean_api.F90). On any failure,
  * *handle_out is set to NULL.
  *
- * nml_text need not be NUL-terminated; nml_len is authoritative. */
-int rdb_ocean_create_from_string(const char *nml_text, int nml_len,
+ * config_text need not be NUL-terminated; config_len is authoritative. */
+int rdb_ocean_create_from_string(const char *config_text, int config_len,
                                     rdb_ocean_handle *handle_out);
 
 /* Advance n_steps fixed-dt outer steps. n_steps <= 0 is a successful no-op. */
@@ -146,7 +146,7 @@ int rdb_ocean_destroy(rdb_ocean_handle *handle);
  * condition as rdb_ocean_create_from_string(). On any failure,
  * *handle_out is set to NULL (the same "destroy the whole handle" F9
  * contract). */
-int rdb_ocean_create_pending(const char *nml_text, int nml_len,
+int rdb_ocean_create_pending(const char *config_text, int config_len,
                                 rdb_ocean_handle *handle_out);
 
 /* Stage an interior-sized (nx_p, ny_p) bathymetry array on a PENDING
@@ -155,7 +155,7 @@ int rdb_ocean_create_pending(const char *nml_text, int nml_len,
  * per `convention`, wet-fraction validated (RDB_OCEAN_ERR_BATHYMETRY_SIGN
  * on zero wet cells — see the convention macros above), written into the
  * interior, and ghost-filled by constant extrapolation — this OVERRIDES
- * whatever `topo_config` the namelist specifies. Shape is validated
+ * whatever `topo_config` the config specifies. Shape is validated
  * against the grid inside create_finalize() (the grid does not exist yet
  * at this call), so a mismatch surfaces there as
  * RDB_OCEAN_ERR_BAD_SHAPE, not here.
@@ -170,7 +170,7 @@ int rdb_ocean_stage_bathymetry(rdb_ocean_handle handle,
  * consumes: x/y (degrees, shape (nxp,nyp)), dx (m, shape (nx,nyp)), dy (m,
  * shape (nxp,ny)), area (m^2, shape (nx,ny)), where nxp=2*nx_phys+1,
  * nyp=2*ny_phys+1, nx=2*nx_phys, ny=2*ny_phys. Consumed inside
- * create_finalize(), bypassing `&ocean_grid_nml grid_config` entirely —
+ * create_finalize(), bypassing `[ocean.grid] grid_config` entirely —
  * this is the SAME assembler the NetCDF supergrid reader and the analytic
  * tripolar generator use, so a mosaic file and these arrays (built from
  * the same node/segment data) produce identical metrics. Shape is
@@ -182,14 +182,14 @@ int rdb_ocean_stage_metrics(rdb_ocean_handle handle, const double *x,
                                int nyp, int nx, int ny);
 
 /* Stage Oceananigans-style grid topology (per-dimension periodicity —
- * "the grid owns periodicity", not the per-edge &ocean_bc_nml tags) on a
+ * "the grid owns periodicity", not the per-edge [ocean.bc] tags) on a
  * PENDING handle. Nonzero = periodic on that axis. Consumed inside
- * create_finalize() AFTER the namelist edge tags are parsed, OVERRIDING
+ * create_finalize() AFTER the config edge tags are parsed, OVERRIDING
  * whatever they derived for periodic_x/periodic_y and back-filling the
  * edge tags on every axis marked periodic (both edges together — a
  * west/east or south/north mismatch is not representable through this
  * call). An axis NOT marked periodic here keeps whatever physical BC the
- * namelist gave it (WALL/OPEN/...).
+ * config gave it (WALL/OPEN/...).
  * Requires a PENDING handle: RDB_OCEAN_ERR_NOT_PENDING otherwise. */
 int rdb_ocean_stage_topology(rdb_ocean_handle handle, int periodic_x,
                                 int periodic_y);
@@ -490,20 +490,20 @@ int rdb_ocean_get_kinetic_energy(rdb_ocean_handle handle,
  */
 
 /* Number of names in the DERIVED diagnostic catalog (vorticity_z, ke_total,
- * mld_density, ... -- opt-in via &ocean_diag_nml diags). */
+ * mld_density, ... -- opt-in via [ocean.diag] diags). */
 int rdb_ocean_derived_catalog_size(void);
 /* Name of derived-catalog entry idx (0-based). */
 int rdb_ocean_derived_catalog_name(int idx, char *buf, int cap);
 
 /* Number of names in the CANONICAL diagnostic catalog (SSH, temperature,
- * salinity, u, v, KE, ... -- some entries are gated by another namelist
+ * salinity, u, v, KE, ... -- some entries are gated by another config table
  * group; this is what register_default_diags MAY register). */
 int rdb_ocean_canonical_catalog_size(void);
 /* Name of canonical-catalog entry idx (0-based). */
 int rdb_ocean_canonical_catalog_name(int idx, char *buf, int cap);
 
 /* Number of diagnostics REGISTERED on this live instance right now
- * (canonical + derived + anything &ocean_diag_nml diags added). */
+ * (canonical + derived + anything [ocean.diag] diags added). */
 int rdb_ocean_get_diag_count(rdb_ocean_handle handle, int *count_out);
 /* Name of the registered diagnostic at index idx (0-based). */
 int rdb_ocean_list_diags(rdb_ocean_handle handle, int idx, char *buf,

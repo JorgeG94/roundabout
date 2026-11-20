@@ -66,7 +66,7 @@ def _compose_closures(closures, config, grid):
     if kpp and epbl:
         raise ConfigConflictError(
             "KPP and EPBL are mutually exclusive boundary-layer closures "
-            "(&ocean_vmix_nml use_kpp vs &ocean_epbl_nml enable) -- "
+            "([ocean.vmix] use_kpp vs [ocean.epbl] enable) -- "
             "remove one of KPP(...) / EPBL(...) from closures=[...]")
     if kpp_objs and not kpp and not epbl:
         # KPP(enabled=False) given explicitly, and no EPBL(...) either --
@@ -89,7 +89,7 @@ def _compose_closures(closures, config, grid):
         raise ConfigConflictError(
             "BryanLewisBackground and HenyeyBackground are mutually "
             "exclusive background-diffusivity profiles (MOM6's "
-            "one-background-scheme rule, &ocean_vmix_nml bkgnd_profile "
+            "one-background-scheme rule, [ocean.vmix] bkgnd_profile "
             "vs bkgnd_henyey) -- remove one from closures=[...]")
     if hy and grid is not None and _is_cartesian(grid):
         raise RdbUnsupportedError(
@@ -105,7 +105,7 @@ def _compose_closures(closures, config, grid):
             raise ConfigConflictError(
                 "MEKE requires GentMcWilliams(...) in the same "
                 "closures=[...] list (the Fortran requires "
-                "&ocean_gm_nml enable=.true.)")
+                "[ocean.gm] enable=true)")
         if any(m.backscatter for m in meke):
             lateral = [c for c in closures if hasattr(c, "biharmonic_coeff")]
             coeff = max((c.biharmonic_coeff() for c in lateral), default=0.0)
@@ -183,7 +183,7 @@ def compose(*, grid=None, bathymetry=None, timestep=None, coriolis=None,
         boundaries.apply(cfg, periodic_x=periodic_x, periodic_y=periodic_y,
                           forced_edges=forced_edges)
     else:
-        # A grid's topology MUST reach &ocean_bc_nml even when the user
+        # A grid's topology MUST reach [ocean.bc] even when the user
         # supplies no Boundaries() object.  Without this, a grid built with
         # topology=(PERIODIC, BOUNDED) derives nghost correctly, sets
         # .periodic_x -- and then silently leaves west/east at their "wall"

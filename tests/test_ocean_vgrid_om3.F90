@@ -3,7 +3,7 @@
 !!
 !! `tools/vgrid_to_dz.py` converts OM3's `ocean_vgrid.nc` (75 levels, only
 !! available on Gadi -- see its own self-test for synthetic coverage) into
-!! a `&vcoord_nml z_fixed_profile = "list", z_fixed_dz = ...` block. This
+!! a `[vcoord] z_fixed_profile = "list", z_fixed_dz = ...` block. This
 !! suite checks the TWO things that block needs from the engine once
 !! pasted in:
 !!
@@ -77,23 +77,22 @@ contains
       end do
    end function dz75_surface_first
 
-   pure function dz_list_nml(dz) result(txt)
-      !! Comma-separated namelist literal for a real array, e.g.
-      !! "10.000, 12.000, ...".
+   pure function dz_list_toml(dz) result(txt)
+      !! TOML array literal for a real array, e.g. "[10.0000, 12.0000, ...]".
       real(wp), intent(in) :: dz(:)
       character(len=:), allocatable :: txt
       character(len=24) :: tmp
       integer :: k
-      txt = ""
+      txt = "["
       do k = 1, size(dz)
          write (tmp, "(f12.4)") dz(k)
          if (k < size(dz)) then
             txt = txt//trim(adjustl(tmp))//", "
          else
-            txt = txt//trim(adjustl(tmp))
+            txt = txt//trim(adjustl(tmp))//"]"
          end if
       end do
-   end function dz_list_nml
+   end function dz_list_toml
 
    subroutine test_om3_75_zstar(error)
       type(error_type), allocatable, intent(out) :: error
@@ -105,19 +104,38 @@ contains
       real(wp) :: col_total, err_total
       character(len=160) :: msg
 
-      dzlist = dz_list_nml(dz75_surface_first())
-      nml = '&sim_nml sim_type = "ocean" /'//nl// &
-            "&grid_nml nx = 4, ny = 4, dx = 2000.0, dy = 2000.0, nghost = 2 /"//nl// &
-            "&time_nml t_end = 900.0, dt_fixed = 300.0 /"//nl// &
-            "&physics_nml coriolis_f = -1.0e-4 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 75 /"//nl// &
-            '&vcoord_nml vcoord_type = "zstar", z_fixed_profile = "list", '// &
-            "z_fixed_dz = "//dzlist//" /"//nl// &
-            '&ocean_topo_nml topo_config = "flat", max_depth = 6300.0 /'//nl// &
-            "&ocean_vmix_nml use_closure = .false., use_kpp = .false. /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      dzlist = dz_list_toml(dz75_surface_first())
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 4"//nl// &
+            "ny = 4"//nl// &
+            "dx = 2000.0"//nl// &
+            "dy = 2000.0"//nl// &
+            "nghost = 2"//nl// &
+            "[time]"//nl// &
+            "t_end = 900.0"//nl// &
+            "dt_fixed = 300.0"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = -1.0e-4"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 75"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "zstar"'//nl// &
+            'z_fixed_profile = "list"'//nl// &
+            "z_fixed_dz = "//dzlist//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "flat"'//nl// &
+            "max_depth = 6300.0"//nl// &
+            "[ocean.vmix]"//nl// &
+            "use_closure = false"//nl// &
+            "use_kpp = false"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
 
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)

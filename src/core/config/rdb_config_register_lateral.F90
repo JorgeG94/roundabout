@@ -473,7 +473,7 @@ contains
                           "eulerian_z and wet/dry — but it "// &
                           "spuriously grows internal gravity waves out of a stratified "// &
                           "REST state, En 2.992E-05 vs 1.739E-09 at day 25 on "// &
-                          "resting_stratified_channel.nml; a (omega*dt)^4 noise floor, "// &
+                          "resting_stratified_channel.toml; a (omega*dt)^4 noise floor, "// &
                           "so forced viscous runs sit decades above it and quiescent or "// &
                           "long spin-up runs do not)", &
                           allowed=[character(len=9) :: "pred_corr", "ssp_rk2"], &

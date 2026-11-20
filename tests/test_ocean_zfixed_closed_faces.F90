@@ -436,18 +436,34 @@ contains
       logical, intent(in) :: closed
       character(len=:), allocatable :: nml
       character(len=1), parameter :: nl = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
-            "&grid_nml nx = 16, ny = 12, nghost = 2, dx = 2000.0, dy = 2000.0 /"//nl// &
-            "&time_nml t_end = 3600.0, dt_fixed = 120.0 /"//nl// &
-            "&physics_nml coriolis_f = 1.0e-4 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//nl// &
-            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = "// &
-            merge(".true. ", ".false.", closed)//" /"//nl// &
-            "&ocean_topo_nml "//topo//" /"//nl// &
-            "&ocean_hvisc_nml nu_h = 20.0 /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 16"//nl// &
+            "ny = 12"//nl// &
+            "nghost = 2"//nl// &
+            "dx = 2000.0"//nl// &
+            "dy = 2000.0"//nl// &
+            "[time]"//nl// &
+            "t_end = 3600.0"//nl// &
+            "dt_fixed = 120.0"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = 1.0e-4"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 6"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "z_fixed"'//nl// &
+            "zfixed_closed_faces = "//merge("true ", "false", closed)//nl// &
+            "[ocean.topo]"//nl// &
+            topo//nl// &
+            "[ocean.hvisc]"//nl// &
+            "nu_h = 20.0"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function api_nml
 
    subroutine api_create(nml, status)
@@ -469,8 +485,9 @@ contains
       integer(c_int) :: status
       character(len=:), allocatable :: msg
       call error_ring_clear()
-      call api_create(api_nml("topo_config = 'seamount', max_depth = 600.0, "// &
-                              "edge_depth = 250.0, slope_scale = 8000.0", .false.), status)
+      call api_create(api_nml('topo_config = "seamount"'//new_line("a")//"max_depth = 600.0"// &
+                              new_line("a")//"edge_depth = 250.0"//new_line("a")// &
+                              "slope_scale = 8000.0", .false.), status)
       call check(error, status == OCEAN_STATUS_ERR_SETUP, &
                  "z_fixed + open faces over a stepped bed must be refused at configure")
       if (allocated(error)) return
@@ -486,7 +503,8 @@ contains
       !! the knob off stays a legal (and untouched) configuration.
       type(error_type), allocatable, intent(out) :: error
       integer(c_int) :: status
-      call api_create(api_nml("topo_config = 'flat', max_depth = 600.0", .false.), status)
+      call api_create(api_nml('topo_config = "flat"'//new_line("a")//"max_depth = 600.0", &
+                              .false.), status)
       call check(error, status == OCEAN_STATUS_OK, &
                  "z_fixed + open faces over a FLAT bed must configure")
    end subroutine test_open_flat_accepted
@@ -495,8 +513,9 @@ contains
       !! The same stepped bed with the staircase faces CLOSED configures.
       type(error_type), allocatable, intent(out) :: error
       integer(c_int) :: status
-      call api_create(api_nml("topo_config = 'seamount', max_depth = 600.0, "// &
-                              "edge_depth = 250.0, slope_scale = 8000.0", .true.), status)
+      call api_create(api_nml('topo_config = "seamount"'//new_line("a")//"max_depth = 600.0"// &
+                              new_line("a")//"edge_depth = 250.0"//new_line("a")// &
+                              "slope_scale = 8000.0", .true.), status)
       call check(error, status == OCEAN_STATUS_OK, &
                  "z_fixed + CLOSED faces over a stepped bed must configure")
    end subroutine test_closed_stepped_accepted

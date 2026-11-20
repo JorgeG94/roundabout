@@ -31,12 +31,12 @@ module test_ocean_status_returns
    public :: collect_ocean_status_returns_tests
 
    interface
-      function rdb_ocean_create_from_string(nml_text, nml_len, handle_out) &
+      function rdb_ocean_create_from_string(config_text, config_len, handle_out) &
          result(status) bind(c, name="rdb_ocean_create_from_string")
          import :: c_char, c_int, c_ptr
          implicit none
-         integer(c_int), intent(in), value :: nml_len
-         character(kind=c_char), intent(in) :: nml_text(nml_len)
+         integer(c_int), intent(in), value :: config_len
+         character(kind=c_char), intent(in) :: config_text(config_len)
          type(c_ptr), intent(out) :: handle_out
          integer(c_int) :: status
       end function rdb_ocean_create_from_string
@@ -229,17 +229,32 @@ contains
       character(len=256) :: msg
       integer :: i
 
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 86400.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 200.0 /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, initial_temperature = 12.0 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")// &
-            '&ocean_grid_nml grid_config = "supergrid", '// &
-            'supergrid_file = "tests/does_not_exist_p0_1_f1_gate.nc" /'//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 86400.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 200.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = true"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "initial_temperature = 12.0"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")// &
+            "[ocean.grid]"//new_line("a")// &
+            'grid_config = "supergrid"'//new_line("a")// &
+            'supergrid_file = "tests/does_not_exist_p0_1_f1_gate.nc"'//new_line("a")
 
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)

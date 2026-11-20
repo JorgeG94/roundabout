@@ -2,7 +2,7 @@
 !! plan, P1: `src/api/rdb_handle.F90` + `src/api/rdb_ocean_api.F90`).
 !!
 !! Drives the SAME `bind(c)` entry points a Python/C caller uses: in-memory
-!! namelist create, fixed-dt stepping, the scalar introspection getters, and
+!! config create, fixed-dt stepping, the scalar introspection getters, and
 !! destroy — plus the single-live-handle guard and the "no `error stop` on a
 !! bad config" contract. Modelled on the pre-carve-out precedent
 !! (`tmp_local_artifacts/python_ffi_scope/recovered/tests/test_rdb_api_ocean.F90`),
@@ -24,12 +24,12 @@ module test_rdb_ocean_api
    public :: collect_rdb_ocean_api_tests
 
    interface
-      function rdb_ocean_create_from_string(nml_text, nml_len, handle_out) &
+      function rdb_ocean_create_from_string(config_text, config_len, handle_out) &
          result(status) bind(c, name="rdb_ocean_create_from_string")
          import :: c_char, c_int, c_ptr
          implicit none
-         integer(c_int), intent(in), value :: nml_len
-         character(kind=c_char), intent(in) :: nml_text(nml_len)
+         integer(c_int), intent(in), value :: config_len
+         character(kind=c_char), intent(in) :: config_text(config_len)
          type(c_ptr), intent(out) :: handle_out
          integer(c_int) :: status
       end function rdb_ocean_create_from_string
@@ -154,20 +154,34 @@ contains
    end subroutine collect_rdb_ocean_api_tests
 
    function ocean_nml() result(txt)
-      !! In-memory namelist for the quiescent ocean column. auto_n_inner is
+      !! In-memory config for the quiescent ocean column. auto_n_inner is
       !! mandatory: the default n_inner=0 / auto_n_inner=.false. leaves the
       !! barotropic substep count unresolved, which create() rejects
       !! (OCEAN_STATUS_ERR_SETUP) rather than silently running unsplit.
       character(len=:), allocatable :: txt
-      txt = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 86400.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 200.0 /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, initial_temperature = 12.0 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      txt = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 86400.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 200.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = true"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "initial_temperature = 12.0"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function ocean_nml
 
    subroutine test_create_step_destroy(error)
@@ -197,7 +211,7 @@ contains
          call check(error, status == OK, "get_grid_info succeeds")
          if (allocated(error)) exit checks
          call check(error, nx == int(ONX, c_int) .and. ny == int(ONY, c_int) &
-                    .and. nz == int(ONZ, c_int), "grid shape matches the namelist")
+                    .and. nz == int(ONZ, c_int), "grid shape matches the config")
          if (allocated(error)) exit checks
 
          status = rdb_ocean_get_time(handle, t_out)
@@ -331,7 +345,7 @@ contains
    end subroutine test_second_create_rejected
 
    subroutine test_create_bad_config(error)
-      !! A malformed namelist (unknown key -> strict schema parse failure)
+      !! A malformed config (unknown key -> strict schema parse failure)
       !! or a semantically-invalid one (dt_fixed <= 0, which create() checks
       !! itself, matching `bench_ocean`'s own guard) must return a non-zero
       !! status — NOT abort the process. This is the whole point of the P0
@@ -344,10 +358,11 @@ contains
 
       ! Unknown key -> strict schema parse failure.
       handle = c_null_ptr
-      nml = "&grid_nml nx = 8, ny = 6, totally_bogus_key = 1 /"//new_line("a")
+      nml = "[grid]"//new_line("a")//"nx = 8"//new_line("a")//"ny = 6"//new_line("a")// &
+            "totally_bogus_key = 1"//new_line("a")
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status == ERR_CONFIG_PARSE, &
-                 "unknown namelist key returns ERR_CONFIG_PARSE, not an abort")
+                 "unknown config key returns ERR_CONFIG_PARSE, not an abort")
       if (allocated(error)) return
       call check(error,.not. c_associated(handle), "bad-config create leaves handle_out null")
       if (allocated(error)) return
@@ -355,7 +370,11 @@ contains
       ! Semantically invalid: dt_fixed defaults to 0.0 and is never set here
       ! -> create()'s own guard (mirrors bench_ocean's `dt_fixed <= 0` check).
       handle = c_null_ptr
-      nml = "&grid_nml nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /"//new_line("a")
+      nml = "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status == ERR_CONFIG_VALIDATE, &
                  "dt_fixed <= 0 returns ERR_CONFIG_VALIDATE, not an abort")
@@ -390,17 +409,32 @@ contains
       integer(c_int) :: status
 
       handle = c_null_ptr
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 86400.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 200.0 /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, initial_temperature = 12.0 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")// &
-            '&ocean_grid_nml grid_config = "supergrid", '// &
-            'supergrid_file = "tests/does_not_exist_p0_1_f1_gate.nc" /'//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 86400.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 200.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = true"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "initial_temperature = 12.0"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")// &
+            "[ocean.grid]"//new_line("a")// &
+            'grid_config = "supergrid"'//new_line("a")// &
+            'supergrid_file = "tests/does_not_exist_p0_1_f1_gate.nc"'//new_line("a")
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status == ERR_IO, &
                  "create() with a nonexistent supergrid_file returns ERR_IO, not an abort")
@@ -442,9 +476,9 @@ contains
       !!
       !! Q_heat/Q_salt (not ice conc/thickness directly — those have no
       !! C-ABI accessor yet) are the ABI-visible witness: with ice enabled
-      !! and `&ocean_forcing_nml enable_components` at its default off,
+      !! and `[ocean.forcing] enable_components` at its default off,
       !! NOTHING else in the step path ever touches these two fields after
-      !! `engine_setup` seeds them from the constant `&ocean_thermo_nml`
+      !! `engine_setup` seeds them from the constant `[ocean.thermo]`
       !! knobs — `ocean_surface_flux_assemble` is a no-op without
       !! components. So pre-fix, Q_heat/Q_salt are bit-identical to their
       !! setup value after any number of `rdb_ocean_step` calls;
@@ -464,18 +498,33 @@ contains
       real(wp) :: q_heat_0, q_salt_0, q_heat_1, q_salt_1
 
       handle = c_null_ptr
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 86400.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 200.0 /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//new_line("a")// &
-            ! S=34 psu -> T_f ~ -1.9 degC; -3.0 is comfortably below it so
-            ! frazil banks on step 1 regardless of the exact EOS used.
-            "&tracer_nml initial_salinity = 34.0, initial_temperature = -3.0 /"//new_line("a")// &
-            "&ocean_ice_nml enable = .true. /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      ! S=34 psu -> T_f ~ -1.9 degC; -3.0 is comfortably below it so
+      ! frazil banks on step 1 regardless of the exact EOS used.
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 86400.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 200.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = true"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 34.0"//new_line("a")// &
+            "initial_temperature = -3.0"//new_line("a")// &
+            "[ocean.ice]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       checks: block
          call check(error, status == OK, "ice-enabled create succeeds")

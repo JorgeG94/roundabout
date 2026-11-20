@@ -1,13 +1,13 @@
 """The Model: lifecycle, single-handle guard, field table.
 
-Config is a raw namelist string OR a :class:`rdb._config.Config` (P4,
+Config is a raw TOML string OR a :class:`rdb._config.Config` (P4,
 the generated typed layer -- ``model.config.ocean_epbl.mstar = 1.2``).
 Both go through the SAME path: a ``Config`` is serialised by
-``to_namelist()`` into exactly the namelist text a hand-written string
+``to_toml()`` into exactly the config text a hand-written string
 would have been, then handed to ``rdb_ocean_create_from_string`` --
 there is no second, mirrored entry point. Two-phase create (P2.5) is
-exposed directly: ``Model(nml_text_or_config)`` is the one-shot path
-(``rdb_ocean_create_from_string``); ``Model.pending(nml_text_or_config)``
+exposed directly: ``Model(config_text_or_config)`` is the one-shot path
+(``rdb_ocean_create_from_string``); ``Model.pending(config_text_or_config)``
 returns a handle in the PENDING window so ``stage_bathymetry`` /
 ``stage_metrics`` / ``stage_topology`` can inject geometry before
 ``finalize()`` runs ``rdb_ocean_create_finalize``.
@@ -24,24 +24,24 @@ from ._config import Config
 from ._errors import (AlreadyExistsError, NotInitialisedError,
                        RdbReadOnlyError, RdbUnsupportedError, check)
 from ._field import DiagnosticField, Field, Loc
-from ._nml_parse import (config_from_namelist_text, merge_explicit,
+from ._toml_load import (config_from_toml_text, merge_explicit,
                           resolve_relative_file_paths)
 
 C, F = Loc.CENTER, Loc.FACE
 
 
-def _resolve_namelist_text(namelist_text_or_config):
-    """Accept a raw namelist string OR a `Config` (P4); return the exact
+def _resolve_config_text(config_text_or_config):
+    """Accept a raw TOML string OR a `Config` (P4); return the exact
     text that crosses the ABI, and the `Config` object to remember as
     `model.config` (a fresh, empty one when a raw string was given -- see
     `Model.config`'s docstring for why)."""
-    if isinstance(namelist_text_or_config, Config):
-        return namelist_text_or_config.to_namelist(), namelist_text_or_config
-    if isinstance(namelist_text_or_config, str):
-        return namelist_text_or_config, None
+    if isinstance(config_text_or_config, Config):
+        return config_text_or_config.to_toml(), config_text_or_config
+    if isinstance(config_text_or_config, str):
+        return config_text_or_config, None
     raise TypeError(
-        "Model(...) / Model.pending(...) accept a namelist string or a "
-        f"rdb.Config, got {type(namelist_text_or_config).__name__}")
+        "Model(...) / Model.pending(...) accept a TOML string or a "
+        f"rdb.Config, got {type(config_text_or_config).__name__}")
 
 _live_model_ref = None  # module-global single-live-handle guard (mirrors
 # the Fortran g_handle_live invariant, but checked client-side so the
@@ -138,7 +138,7 @@ class _DiagnosticsView:
     reachable without a live model at all). ``.selected`` is the live,
     actually-registered set on THIS instance — canonical names that
     were gated off (e.g. ``temperature`` with thermodynamics disabled)
-    or never mentioned in ``&ocean_diag_nml diags`` do not appear here
+    or never mentioned in ``[ocean.diag] diags`` do not appear here
     even though they are in ``.available``.
     """
 
@@ -190,7 +190,7 @@ class Model:
 
     Two construction paths:
 
-    - ``Model(namelist_text)`` / ``Model(config=a_Config)`` -- the P3/P4
+    - ``Model(config_text)`` / ``Model(config=a_Config)`` -- the P3/P4
       one-shot path: creates immediately, matching the original contract.
       For pre-create geometry injection on THIS path use :meth:`pending`
       -> :meth:`stage_bathymetry` / :meth:`stage_metrics` /
@@ -201,16 +201,16 @@ class Model:
       so the escape hatch (``model.config.<group>.<knob> = ...``) can
       still edit the composed config -- see the worked example
       (`sketch/01_regional_run.py`): it mutates ``model.config`` and
-      prints ``to_namelist()`` between ``Model(...)`` and ``with
+      prints ``to_toml()`` between ``Model(...)`` and ``with
       model:``. Pass ``defer=True`` to require an EXPLICIT
       :meth:`create` call even inside ``with`` (mirrors
-      `Model.from_namelist`'s same knob).
+      `Model.from_toml`'s same knob).
 
     **P7 update:** a curated ``Diagnostics``/``Restart`` object now
     exists (``rdb.diagnostics``) -- pass ``diagnostics=Diagnostics(...)``
     (or ``diagnostics=Diagnostics(enabled=False)`` to turn output off
     entirely) as a curated keyword. With NO ``diagnostics=`` given at
-    all, ``&ocean_diag_nml``/``&output_nml`` stay at the Fortran's OWN
+    all, ``[ocean.diag]``/``[output]`` stay at the Fortran's OWN
     defaults, which write a relative-path NetCDF file
     (``./output/ocean_diag_rank_000000.nc``) -- a missing ``./output/``
     directory on a first run no longer ABORTS the interpreter (P7 F1:
@@ -221,7 +221,7 @@ class Model:
     what ``Diagnostics(enabled=False).apply()`` does under the hood.
 
     **P8 update:** pass ``duration=Duration(t_end=..., time_unit=...)``
-    (``rdb.diagnostics``) to reach ``&time_nml t_end``/``time_unit``
+    (``rdb.diagnostics``) to reach ``[time] t_end``/``time_unit``
     -- previously escape-hatch only. ``t_end`` does not bound
     :meth:`run`'s own loop (``until=``/``steps=`` do that directly),
     but it DOES gate ``create()``: the Fortran cross-check refuses a
@@ -231,7 +231,7 @@ class Model:
     diagnostics + no ``duration=`` was a first-run trap.
     """
 
-    def __init__(self, namelist_text: str | Config | None = None, *,
+    def __init__(self, config_text: str | Config | None = None, *,
                  grid=None, bathymetry=None, timestep=None, coriolis=None,
                  momentum_advection=None, buoyancy=None, pressure=None,
                  vcoord=None, closures=(), boundaries=None, forcing=(),
@@ -250,9 +250,9 @@ class Model:
         curated_given = any(
             _frame_locals[k] not in (None, (), []) for k in _CURATED_KWARGS)
         if curated_given:
-            if namelist_text is not None or config is not None:
+            if config_text is not None or config is not None:
                 raise TypeError(
-                    "Model(...) accepts EITHER a namelist string / "
+                    "Model(...) accepts EITHER a TOML string / "
                     "Config (the positional argument / config=) OR "
                     "curated keyword arguments (grid=, bathymetry=, "
                     "closures=, ...), not both -- build a Config with "
@@ -271,13 +271,13 @@ class Model:
             self._adopt_composed(composed, defer=defer)
             return
 
-        src = config if config is not None else namelist_text
+        src = config if config is not None else config_text
         if src is not None:
             self._create_from_string(src)
 
     def _bootstrap(self):
         """Shared base state for every construction path (`__init__`,
-        `pending`, `from_namelist`)."""
+        `pending`, `from_toml`)."""
         self._lib = _ffi.get_lib()
         self._wp_bytes = self._lib.wp_bytes
         self._wp_ctype = self._lib.wp_ctype
@@ -308,13 +308,13 @@ class Model:
         """Perform the deferred `create()` for a curated
         (``Model(grid=...)``) or ``defer=True`` construction. Idempotent
         error if this handle is not in the uncreated/deferred state
-        (already created, or built from a raw namelist/Config, which
+        (already created, or built from a raw config/Config, which
         creates eagerly in `__init__`)."""
         if not self._uncreated:
             raise NotInitialisedError(
                 "create() called on a Model that is not in the deferred "
                 "(uncreated) state -- either it is already created, or "
-                "it was built from a raw namelist string / Config, which "
+                "it was built from a raw TOML string / Config, which "
                 "creates eagerly in __init__ and has no separate "
                 "create() step")
         self._create_from_composed(self._composed)
@@ -322,7 +322,7 @@ class Model:
 
     def _create_from_composed(self, composed):
         if composed.needs_pending:
-            text = composed.config.to_namelist()
+            text = composed.config.to_toml()
             _check_no_live_model()
             buf = text.encode("utf-8")
             status = self._lib.rdb_ocean_create_pending(
@@ -346,8 +346,8 @@ class Model:
             self._create_from_string(composed.config)
 
     @classmethod
-    def from_namelist(cls, path, *, defer=False, **overrides):
-        """Load a namelist FILE -- read in Python, with relative paths
+    def from_toml(cls, path, *, defer=False, **overrides):
+        """Load a config FILE -- read in Python, with relative paths
         inside it resolved against ITS OWN directory before anything is
         sent (retires the recovered wrapper's ``os.chdir()``). Same C
         entry point, same validation as ``Model(text)``: the resulting
@@ -363,7 +363,7 @@ class Model:
         """
         p = Path(path)
         text = p.read_text()
-        file_cfg = config_from_namelist_text(text)
+        file_cfg = config_from_toml_text(text)
         resolve_relative_file_paths(file_cfg, p.parent)
 
         if overrides:
@@ -388,8 +388,8 @@ class Model:
         return self
 
     # ---- construction -------------------------------------------------
-    def _create_from_string(self, namelist_text_or_config):
-        text, config = _resolve_namelist_text(namelist_text_or_config)
+    def _create_from_string(self, config_text_or_config):
+        text, config = _resolve_config_text(config_text_or_config)
         _check_no_live_model()
         buf = text.encode("utf-8")
         status = self._lib.rdb_ocean_create_from_string(
@@ -402,14 +402,14 @@ class Model:
         self._refresh_grid_info()
 
     @classmethod
-    def pending(cls, namelist_text: str | Config) -> "Model":
+    def pending(cls, config_text: str | Config) -> "Model":
         """Phase 1 of 2 (P2.5): build + validate a config and allocate a
         handle without running setup or mapping the device. Call
         :meth:`stage_bathymetry` / :meth:`stage_metrics` /
         :meth:`stage_topology` / :meth:`stage_h` / :meth:`stage_u` /
         :meth:`stage_v` / :meth:`stage_tracer` (any subset, any order),
         then :meth:`finalize`."""
-        text, config = _resolve_namelist_text(namelist_text)
+        text, config = _resolve_config_text(config_text)
         self = cls.__new__(cls)
         self._bootstrap()
         self._config = config
@@ -538,7 +538,7 @@ class Model:
         deep flow; columns are stretched uniformly, concentrations kept);
         ``"keep_h"`` trusts the thickness you supplied.
 
-        With ``enable_thermodynamics = .false.`` the density is the
+        With ``enable_thermodynamics = false`` the density is the
         prescribed ``layer_rho_init`` and staged/set temperature or
         salinity cannot change it, so the balance of such a write would be
         silently zero: it raises :class:`~rdb.RdbInitialConditionError`
@@ -641,8 +641,8 @@ class Model:
         RECORD, not a live handle: mutating it further does not reach a
         running solver (there is no reconfigure-in-place entry point).
 
-        When the model was constructed from a raw namelist string (or
-        `Model.from_namelist` in a later phase) rather than a `Config`,
+        When the model was constructed from a raw TOML string (or
+        `Model.from_toml` in a later phase) rather than a `Config`,
         this lazily returns a fresh, ALL-UNSET `Config` -- it does not
         parse the string back into typed knobs, so it will not reflect
         what was actually set. Read `model.grid_info` / the field
@@ -749,7 +749,7 @@ class Model:
 
         NOT REACHABLE on the current C ABI: ``rdb_ocean_step`` already
         drives the diag manager's cadence dispatch internally (device-
-        side fill, H<-D on the cadence fire, per ``&ocean_diag_nml
+        side fill, H<-D on the cadence fire, per ``[ocean.diag]
         dt_out``), but ``include/rdb_ocean.h`` exposes no call to
         force an OUT-of-cadence write. This is a P2/P2.5 Fortran-ABI
         gap, not something P6 (pure Python, no Fortran changes) can add
@@ -759,7 +759,7 @@ class Model:
         raise RdbUnsupportedError(
             "write_diagnostics() has no reachable entry point: the diag "
             "manager's cadence dispatch already runs inside "
-            "rdb_ocean_step (driven by &ocean_diag_nml dt_out), but "
+            "rdb_ocean_step (driven by [ocean.diag] dt_out), but "
             "include/rdb_ocean.h exposes no call to force an out-of-"
             "cadence write today. Set dt_out small enough that the "
             "cadence itself covers what you need, or extend the C ABI "
@@ -770,7 +770,7 @@ class Model:
         says so explicitly in its own comment: 'no restart on the C ABI
         yet (a future phase's concern, not silently dropped --
         engine_setup's restart_file is simply [unused by the handle
-        path])'. Restart is namelist-driven only today (`&output_nml
+        path])'. Restart is config-driven only today (`[output]
         restart_file` / `restart_interval`) -- set those on
         `model.config.output` before `create()`.
         """
@@ -779,7 +779,7 @@ class Model:
             "write_restart() has no reachable entry point: the C ABI "
             "has no restart call yet (rdb_ocean_api.F90's own comment: "
             "'no restart on the C ABI yet -- a future phase's concern, "
-            "not silently dropped'). Restart is namelist-driven only "
+            "not silently dropped'). Restart is config-driven only "
             "today -- set model.config.output.restart_file / "
             "restart_interval before create().")
 
@@ -923,7 +923,7 @@ class Model:
         deep flow; columns are stretched uniformly, concentrations kept);
         ``"keep_h"`` trusts the thickness you supplied.
 
-        With ``enable_thermodynamics = .false.`` the density is the
+        With ``enable_thermodynamics = false`` the density is the
         prescribed ``layer_rho_init`` and staged/set temperature or
         salinity cannot change it, so the balance of such a write would be
         silently zero: it raises :class:`~rdb.RdbInitialConditionError`

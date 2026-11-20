@@ -12,8 +12,8 @@ def test_library_loads_and_precision_resolves():
     assert wp in (4, 8)
 
 
-def test_create_step_destroy(ocean_nml):
-    m = rdb.Model(ocean_nml)
+def test_create_step_destroy(ocean_toml):
+    m = rdb.Model(ocean_toml)
     try:
         assert m.time == 0.0
         assert m.step_count == 0
@@ -26,25 +26,25 @@ def test_create_step_destroy(ocean_nml):
         m.close()
 
 
-def test_context_manager_closes_deterministically(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_context_manager_closes_deterministically(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         m.step(1)
         assert m.step_count == 1
     assert m._closed
 
 
-def test_destroy_twice_is_clean_noop(ocean_nml):
-    m = rdb.Model(ocean_nml)
+def test_destroy_twice_is_clean_noop(ocean_toml):
+    m = rdb.Model(ocean_toml)
     m.close()
     m.close()  # must not raise, must not touch freed memory
     m.close()  # a third time, for good measure
 
 
-def test_second_live_model_raises_already_exists(ocean_nml):
-    m1 = rdb.Model(ocean_nml)
+def test_second_live_model_raises_already_exists(ocean_toml):
+    m1 = rdb.Model(ocean_toml)
     try:
         try:
-            rdb.Model(ocean_nml)
+            rdb.Model(ocean_toml)
             assert False, "expected AlreadyExistsError"
         except rdb.AlreadyExistsError as exc:
             assert exc.code == 11
@@ -53,13 +53,13 @@ def test_second_live_model_raises_already_exists(ocean_nml):
         m1.close()
 
     # Guard lifts after close(): a fresh model can now be created.
-    m2 = rdb.Model(ocean_nml)
+    m2 = rdb.Model(ocean_toml)
     m2.close()
 
 
-def test_bad_config_raises_typed_exception_with_fortran_message(bad_nml):
+def test_bad_config_raises_typed_exception_with_fortran_message(bad_toml):
     try:
-        rdb.Model(bad_nml)
+        rdb.Model(bad_toml)
         assert False, "expected ConfigParseError"
     except rdb.ConfigParseError as exc:
         assert exc.code == 1
@@ -70,8 +70,8 @@ def test_bad_config_raises_typed_exception_with_fortran_message(bad_nml):
         assert msg != "error 1"
 
 
-def test_step_on_closed_model_raises(ocean_nml):
-    m = rdb.Model(ocean_nml)
+def test_step_on_closed_model_raises(ocean_toml):
+    m = rdb.Model(ocean_toml)
     m.close()
     try:
         m.step(1)

@@ -1,6 +1,6 @@
 """P5 D2.9 -- barotropic solver, continuity, porous barriers, wet/dry.
 
-The `&ocean_bt_nml` MOM6-parity chain (`use_cont_type`,
+The `[ocean.bt]` MOM6-parity chain (`use_cont_type`,
 `cont_corr_bounds`, `upstream_h_face`, `correction_visc_rem`,
 `renorm_visc_rem`, `forcing_visc_rem`, `correction_bc_pgf`,
 `substep_zeta_ke`) is DELIBERATELY generated-layer only: it has
@@ -14,8 +14,8 @@ from __future__ import annotations
 
 
 class WaveDrag:
-    """``WaveDrag(form="uniform", r=0.0, scale=1.0)`` -> `&ocean_bt_nml
-    wave_drag=.true.` + `wave_drag_form`/`r_uniform`/`scale`.
+    """``WaveDrag(form="uniform", r=0.0, scale=1.0)`` -> `[ocean.bt]
+    wave_drag=true` + `wave_drag_form`/`r_uniform`/`scale`.
     `form="file"` raises (reserved for PR-14, unused today)."""
 
     def __init__(self, form="uniform", r=0.0, scale=1.0):
@@ -43,8 +43,8 @@ class BarotropicSolver:
     -> `n_inner`, `auto_n_inner`, `cfl_bt_safety`, `split_scheme`,
     `pc_be`, `bebt`, `bt_halo`, `substep_drag`.
 
-    `auto=False` is the DEFAULT, matching `&ocean_bt_nml auto_n_inner =
-    .false.` (rdb_config_register_lateral.F90 :: register_ocean_bt). An earlier version defaulted to
+    `auto=False` is the DEFAULT, matching `[ocean.bt] auto_n_inner =
+    false` (rdb_config_register_lateral.F90 :: register_ocean_bt). An earlier version defaulted to
     `auto=True`, so `BarotropicSolver(n_inner=60)` silently ignored the
     `n_inner` it was handed and derived one from the gravity-wave CFL
     instead.
@@ -74,7 +74,7 @@ class BarotropicSolver:
 
 class Continuity:
     """``Continuity(h_min=1e-6, positive_definite=False, vol_cfl=False,
-    ppm_limit_pos=False)`` -> `&ocean_continuity_nml`."""
+    ppm_limit_pos=False)`` -> `[ocean.continuity]`."""
 
     def __init__(self, h_min=1e-6, positive_definite=False, vol_cfl=False,
                  ppm_limit_pos=False):
@@ -91,7 +91,7 @@ class Continuity:
 
 class PorousBarriers:
     """``PorousBarriers(source="resolved", eta_interp="max",
-    masking_depth=0.0)`` -> `&ocean_porous_nml enable=.true.`
+    masking_depth=0.0)`` -> `[ocean.porous] enable=true`
 
     `source="file"` raises (deferred in the Fortran). Incompatible with
     `BarotropicSolver(halo>0)` and with `WetDry` -- checked at compose
@@ -116,7 +116,7 @@ class PorousBarriers:
 
 class WetDry:
     """``WetDry(dry_depth=0.05, rewet_depth=0.1, land_margin=5.0)`` ->
-    `&ocean_wetdry_nml enable=.true.` Single-rank."""
+    `[ocean.wetdry] enable=true` Single-rank."""
 
     def __init__(self, dry_depth=0.05, rewet_depth=0.1, land_margin=5.0):
         self.dry_depth, self.rewet_depth = dry_depth, rewet_depth

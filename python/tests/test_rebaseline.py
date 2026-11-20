@@ -16,30 +16,50 @@ DEPTH = 300.0
 LAND = (3, 2)           # 0-based island cell
 
 
-def _nml(sponge=True, closed=False):
-    bc = ("&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "
-          "north = 'wall' /\n" if closed else
-          "&ocean_bc_nml west = 'periodic', east = 'periodic', "
-          "south = 'wall', north = 'sponge', sponge_width = 3, "
-          "sponge_strength = 2.0e-3, sponge_relax_tracers = .true. /\n")
-    sp = ("&ocean_sponge_nml enable = .true., damp_source = 'band', "
-          "target_source = 'ic', relax_uv = .true., relax_tracers = .true. /\n"
+def _toml(sponge=True, closed=False):
+    bc = ("[ocean.bc]\nwest = \"wall\"\neast = \"wall\"\nsouth = \"wall\"\n"
+          "north = \"wall\"\n" if closed else
+          "[ocean.bc]\nwest = \"periodic\"\neast = \"periodic\"\n"
+          "south = \"wall\"\nnorth = \"sponge\"\nsponge_width = 3\n"
+          "sponge_strength = 2.0e-3\nsponge_relax_tracers = true\n")
+    sp = ("[ocean.sponge]\nenable = true\ndamp_source = \"band\"\n"
+          "target_source = \"ic\"\nrelax_uv = true\nrelax_tracers = true\n"
           if sponge and not closed else "")
     return (
-        '&sim_nml sim_type = "ocean" /\n'
-        "&time_nml t_end = 3600.0, dt_fixed = 300.0 /\n"
-        f"&nonhydrostatic_nml nz_layers = {NZ} /\n"
-        "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0 /\n"
-        "&ocean_bt_nml auto_n_inner = .true. /\n"
-        "&ocean_diag_nml enabled = .false. /\n"
-        f"&grid_nml nx = {NX}, ny = {NY}, nghost = 3, dx = 20000.0, "
-        "dy = 20000.0 /\n"
-        "&physics_nml coriolis_f = 1.0e-4 /\n"
-        "&vcoord_nml vcoord_type = 'sigma' /\n"
-        f"&ocean_topo_nml topo_config = 'flat', max_depth = {DEPTH} /\n"
+        f"""[sim]
+sim_type = "ocean"
+[time]
+t_end = 3600.0
+dt_fixed = 300.0
+[nonhydrostatic]
+nz_layers = {NZ}
+[tracer]
+initial_temperature = 12.0
+initial_salinity = 35.0
+[ocean.bt]
+auto_n_inner = true
+[ocean.diag]
+enabled = false
+[grid]
+nx = {NX}
+ny = {NY}
+nghost = 3
+dx = 20000.0
+dy = 20000.0
+[physics]
+coriolis_f = 1.0e-4
+[vcoord]
+vcoord_type = "sigma"
+[ocean.topo]
+topo_config = "flat"
+max_depth = {DEPTH}
+"""
         + bc + sp +
-        "&ocean_tracers_nml enable_pseudo_salt = .true. /\n"
-        "&output_nml output_to_file = .false. /\n"
+        """[ocean.tracers]
+enable_pseudo_salt = true
+[output]
+output_to_file = false
+"""
     )
 
 
@@ -66,8 +86,8 @@ def _ic():
     )
 
 
-def _staged(nml, ic):
-    m = rdb.Model.pending(nml)
+def _staged(cfg_text, ic):
+    m = rdb.Model.pending(cfg_text)
     m.stage_bathymetry(_depth(), rdb.BATHY_DEPTH_POSITIVE_DOWN)
     m.stage_h(ic["h"])
     m.stage_tracer("temperature", ic["T"])
@@ -78,8 +98,8 @@ def _staged(nml, ic):
     return m
 
 
-def _post_create(nml, ic):
-    m = rdb.Model.pending(nml)
+def _post_create(cfg_text, ic):
+    m = rdb.Model.pending(cfg_text)
     m.stage_bathymetry(_depth(), rdb.BATHY_DEPTH_POSITIVE_DOWN)
     m.finalize()
     m.h[...] = ic["h"]                 # h first: the tracer setters read it
@@ -103,16 +123,16 @@ def _read(m):
 
 
 def test_post_create_plus_rebaseline_matches_staged_for_ten_steps():
-    nml = _nml()
+    cfg_text = _toml()
     ic = _ic()
-    a = _staged(nml, ic)
+    a = _staged(cfg_text, ic)
     try:
         a0 = _read(a)
         a.step(10)
         a10 = _read(a)
     finally:
         a.close()
-    b = _post_create(nml, ic)
+    b = _post_create(cfg_text, ic)
     try:
         b.rebaseline()
         b0 = _read(b)
@@ -138,15 +158,15 @@ def test_post_create_plus_rebaseline_matches_staged_for_ten_steps():
 def test_without_rebaseline_the_sponge_target_is_stale():
     """Anti-vacuity: the 10-step comparison above must NOT hold without the
     rebaseline (the sponge still relaxes toward the built-in uniform IC)."""
-    nml = _nml()
+    cfg_text = _toml()
     ic = _ic()
-    a = _staged(nml, ic)
+    a = _staged(cfg_text, ic)
     try:
         a.step(10)
         a10 = _read(a)
     finally:
         a.close()
-    b = _post_create(nml, ic)
+    b = _post_create(cfg_text, ic)
     try:
         b.step(10)
         b10 = _read(b)
@@ -156,16 +176,16 @@ def test_without_rebaseline_the_sponge_target_is_stale():
 
 
 def test_rebaseline_after_step_raises_setup_error():
-    with rdb.Model(_nml()) as m:
+    with rdb.Model(_toml()) as m:
         m.step(1)
         with pytest.raises(rdb.RdbSetupError):
             m.rebaseline()
 
 
 def test_rebaseline_keeps_user_set_pseudo_salt():
-    nml = _nml()
+    cfg_text = _toml()
     ic = _ic()
-    m = _post_create(nml, ic)
+    m = _post_create(cfg_text, ic)
     try:
         m.tracer("pseudo_salt")[...] = _field(
             NX, NY, NZ, lambda i, j, k: 20.0 + k)
@@ -187,9 +207,9 @@ def test_rebaseline_keeps_user_set_pseudo_salt():
 def test_salt_and_heat_totals_close_after_rebaseline_in_a_closed_basin():
     """A9: after the rebaseline (land mask, ghosts, EOS) one step of a closed,
     unforced basin conserves sum(h*S) and sum(h*T) to roundoff."""
-    nml = _nml(closed=True)
+    cfg_text = _toml(closed=True)
     ic = _ic()
-    m = _post_create(nml, ic)
+    m = _post_create(cfg_text, ic)
     try:
         m.rebaseline()
 

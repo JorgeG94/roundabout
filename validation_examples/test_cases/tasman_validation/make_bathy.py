@@ -19,7 +19,7 @@ Workflow:
      (web form: pick the lat/lon box, get NetCDF back).  Default box
      below is the EAC corner — adjust if you want a bigger domain.
   2. Run this script: `python make_bathy.py --gebco gebco.nc --dx 5e3`
-  3. Resulting `tasman_bathy_5km.nc` is what `tasman_5km.nml` references.
+  3. Resulting `tasman_bathy_5km.nc` is what `tasman_5km.toml` references.
 
 Land handling:
   * Cells with GEBCO elevation > 0 (subaerial) get `b = LAND_DEPTH` (0 m),

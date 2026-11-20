@@ -28,7 +28,7 @@ module test_ocean_cavity_equivalence
    !! Under the lid `eta_geo = -500`, so the whole `pa` stack is offset by
    !! the constant `C = rho_ref*g*500 ~ 5e6 Pa` relative to the shallow
    !! run.  A CONSTANT offset produces exactly zero pressure-gradient
-   !! force in exact arithmetic (that is the theorem `&ocean_pgf_nml
+   !! force in exact arithmetic (that is the theorem `[ocean.pgf]
    !! p_top_in_bc` rests on) — but in floating point the two stacks round
    !! differently, because one accumulates `O(1e4)` anomalies on top of
    !! `-5e6` and the other on top of `0`.  The surviving difference is a
@@ -42,14 +42,14 @@ module test_ocean_cavity_equivalence
    !! `bound_accel_loaded`) instead of tuning a number until the test
    !! goes green.  BOTH variants ship: the unloaded one documents the
    !! offset (a UNIFORM draft is the one cavity configuration that does
-   !! not require `&ocean_pgf_nml p_top_in_bc`, because a load with no
+   !! not require `[ocean.pgf] p_top_in_bc`, because a load with no
    !! gradient is provably inert in the top BC), the loaded one is the
    !! P5.2 gate.
    !!
    !! Everything else is shift-invariant by construction: the EOS
-   !! reference pressure is the scalar `&ocean_eos_nml p_ref` (never a
+   !! reference pressure is the scalar `[ocean.eos] p_ref` (never a
    !! function of z), `in_eos` is off, the z-level T/S overlay is refused
-   !! under a cavity, and `&ocean_topo_nml` forcing, the Coriolis
+   !! under a cavity, and `[ocean.topo]` forcing, the Coriolis
    !! parameter and every metric depend on (x, y) alone.
    !!
    !! ### Why it is not trivially at rest
@@ -145,6 +145,10 @@ module test_ocean_cavity_equivalence
 
    public :: collect_ocean_cavity_equivalence_tests
 
+   character(len=*), parameter :: LID_CAVITY = &
+                                  "enable = true"//new_line("a")//'draft_config = "flat"'//new_line("a")// &
+                                  "draft_depth = 500.0"
+      !! The cavity group body of the full-domain flat lid, one key per line.
    real(wp), parameter :: BED = 1000.0_wp
       !! Bed depth of the CAVITY run (m).
    real(wp), parameter :: DRAFT = 500.0_wp
@@ -153,8 +157,8 @@ module test_ocean_cavity_equivalence
    integer, parameter :: N_STEPS = 6
    real(wp), parameter :: DT = 300.0_wp
    real(wp), parameter :: ALPHA_T = 1.7e-4_wp
-      !! `&ocean_ic_nml alpha_T` at its default (kg/m^3 per degC) — the
-      !! namelist below does not set it.
+      !! `[ocean.ic] alpha_T` at its default (kg/m^3 per degC) — the
+      !! config below does not set it.
    real(wp), parameter :: T_HALF_RANGE = 6.0_wp
       !! Largest `|T - T_ref|` in the IC: T runs 4..12 degC about the
       !! default `T_ref = 10`.  S is uniform at `S_ref`, so the density
@@ -186,7 +190,7 @@ module test_ocean_cavity_equivalence
       !! 5.08e6 Pa ice load would stand out by 2500x in `eta_ib` if it
       !! ever leaked onto the seam.
 
-   ! Reference density of record for this namelist (`&ocean_ic_nml rho_0`
+   ! Reference density of record for this config (`[ocean.ic] rho_0`
    ! default), i.e. the `rho_ref` the FV_MOM6 stack is an anomaly about.
    real(wp), parameter :: RHO_REF = 1035.0_wp
 
@@ -226,14 +230,14 @@ contains
       real(wp), intent(in) :: max_depth
       character(len=*), intent(in) :: cavity
       logical, intent(in), optional :: loaded
-         !! `&ocean_pgf_nml p_top_in_bc` — the P5.2 load in the FV_MOM6
+         !! `[ocean.pgf] p_top_in_bc` — the P5.2 load in the FV_MOM6
          !! `pa(nz+1)` surface BC.  Default `.false.` = the P5.1
          !! datum-only run this suite was written for.  A UNIFORM draft
          !! is the one cavity configuration that does not REQUIRE it (a
          !! load with no gradient is provably inert in the top BC), which
          !! is exactly why both variants are expressible here.
       real(wp), intent(in), optional :: psurf
-         !! When present: `&ocean_psurf_nml enable` + the PR-12 component
+         !! When present: `[ocean.psurf] enable` + the PR-12 component
          !! set, with `p_surf_const` set to this value (Pa), so the
          !! `eta_ib = -p_surf/(rho0 g_bt)` seam is LIVE.  Absent ⇒ no
          !! psurf group at all and no seam.
@@ -242,50 +246,69 @@ contains
       character(len=:), allocatable :: pgf_l
       logical :: want_psurf
 
-      pgf_l = "&ocean_pgf_nml form = 'fv_mom6' /"
+      pgf_l = "[ocean.pgf]"//new_line("a")//'form = "fv_mom6"'//new_line("a")
       if (present(loaded)) then
-         if (loaded) pgf_l = "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"
+         if (loaded) pgf_l = pgf_l//"p_top_in_bc = true"//new_line("a")
       end if
       want_psurf = present(psurf)
       psurf_s = "0.0"
       if (want_psurf) write (psurf_s, '(ES16.8)') psurf
 
       write (depth_s, '(F12.2)') max_depth
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 12, ny = 10, nghost = 2, dx = 4000.0, dy = 4000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//new_line("a")// &
-            "&time_nml t_end = 100000.0, dt_fixed = 300.0 /"//new_line("a")// &
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 12"//new_line("a")// &
+            "ny = 10"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 4000.0"//new_line("a")// &
+            "dy = 4000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 6"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 100000.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
             ! No wind: under a full-domain lid the P2c cover mask zeroes
             ! it in the cavity run and not in the twin, which would make
             ! the two runs different experiments.  The stirrer is the
             ! `U_SEED` initial jet `run_case` writes into both — see
             ! that parameter's docstring.
-            "&ocean_topo_nml max_depth = "//trim(adjustl(depth_s))//" /"//new_line("a")// &
-            "&physics_nml coriolis_f = 1.0e-4 /"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = "//trim(adjustl(depth_s))//new_line("a")// &
+            "[physics]"//new_line("a")// &
+            "coriolis_f = 1.0e-4"//new_line("a")// &
             ! Stratified: T from 4 degC at the bed to 12 degC at the
             ! surface, so every layer carries a different density and the
             ! baroclinic pressure gradient is live.
-            "&tracer_nml initial_salinity = 35.0, T_init_bottom = 4.0, "// &
-            "T_init_surface = 12.0 /"//new_line("a")// &
-            pgf_l//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .false., "// &
-            "n_inner = 12 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "T_init_bottom = 4.0"//new_line("a")// &
+            "T_init_surface = 12.0"//new_line("a")// &
+            pgf_l// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            'split_scheme = "pred_corr"'//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 12"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
       if (want_psurf) then
-         nml = nml//"&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
-               "&ocean_psurf_nml enable = .true., p_surf_const = "// &
-               trim(adjustl(psurf_s))//" /"//new_line("a")
+         nml = nml//"[ocean.forcing]"//new_line("a")// &
+               "enable_components = true"//new_line("a")// &
+               "[ocean.psurf]"//new_line("a")// &
+               "enable = true"//new_line("a")// &
+               "p_surf_const = "//trim(adjustl(psurf_s))//new_line("a")
       end if
       if (len_trim(cavity) > 0) then
-         nml = nml//"&ocean_cavity_dyn_nml "//cavity//" /"//new_line("a")
+         nml = nml//"[ocean.cavity_dyn]"//new_line("a")//cavity//new_line("a")
       end if
    end function case_nml
 
    subroutine run_case(max_depth, cavity, n_steps, h, u, v, eta, ok, loaded, psurf)
-      !! Create an ocean from the namelist, step it, and snapshot the
+      !! Create an ocean from the config, step it, and snapshot the
       !! prognostics into caller-owned arrays.  The handle is destroyed
       !! before returning: the API holds ONE live ocean at a time, so the
       !! two runs are sequential and each reads its own snapshot back.
@@ -446,8 +469,8 @@ contains
       !!     |pa| <= |rho_layer - rho_ref| * g * (water column)
       !!           = (ALPHA_T * T_HALF_RANGE) * GRAVITY * (BED - DRAFT)
       !!
-      !! with `ALPHA_T` the `&ocean_ic_nml` linear-EOS coefficient this
-      !! namelist leaves at its default and `T_HALF_RANGE` the largest
+      !! with `ALPHA_T` the `[ocean.ic]` linear-EOS coefficient this
+      !! config leaves at its default and `T_HALF_RANGE` the largest
       !! `|T - T_ref|` its 4..12 degC profile reaches about `T_ref = 10`.
       !! Salinity is uniform at `S_ref`, so it contributes nothing.
       !!
@@ -510,8 +533,7 @@ contains
       real(wp), allocatable :: h_b(:, :, :), u_b(:, :, :), v_b(:, :, :), eta_b(:, :)
       logical :: ok_a, ok_b
 
-      call run_case(BED, "enable = .true., draft_config = 'flat', draft_depth = "// &
-                    "500.0", 0, h_a, u_a, v_a, eta_a, ok_a)
+      call run_case(BED, LID_CAVITY, 0, h_a, u_a, v_a, eta_a, ok_a)
       call check(error, ok_a, "the cavity run must create")
       if (allocated(error)) return
       call run_case(BED - DRAFT, "", 0, h_b, u_b, v_b, eta_b, ok_b)
@@ -544,8 +566,7 @@ contains
       logical :: ok_a, ok_b
       real(wp) :: du, dv, dh, deta, tol_u, tol_h, tol_eta, signal
 
-      call run_case(BED, "enable = .true., draft_config = 'flat', draft_depth = "// &
-                    "500.0", N_STEPS, h_a, u_a, v_a, eta_a, ok_a)
+      call run_case(BED, LID_CAVITY, N_STEPS, h_a, u_a, v_a, eta_a, ok_a)
       call check(error, ok_a, "the cavity run must step")
       if (allocated(error)) return
       call run_case(BED - DRAFT, "", N_STEPS, h_b, u_b, v_b, eta_b, ok_b)
@@ -590,7 +611,7 @@ contains
 
    subroutine test_flat_lid_equivalence_loaded(error)
       !! P5.2: the SAME pair with the load wired through
-      !! `&ocean_pgf_nml p_top_in_bc`, so `pa(nz+1) = rho_ref*g*eta_geo +
+      !! `[ocean.pgf] p_top_in_bc`, so `pa(nz+1) = rho_ref*g*eta_geo +
       !! p_ice_ref` cancels the `C = rho_ref*g*DRAFT ~ 5.08e6 Pa` offset
       !! at the top of the stack instead of carrying it through every
       !! entry.  The `dp_scale` the bound is built from loses that term
@@ -602,8 +623,7 @@ contains
       logical :: ok_a, ok_b
       real(wp) :: du, dv, dh, deta, tol_u, tol_h, tol_eta, signal
 
-      call run_case(BED, "enable = .true., draft_config = 'flat', draft_depth = "// &
-                    "500.0", N_STEPS, h_a, u_a, v_a, eta_a, ok_a, loaded=.true.)
+      call run_case(BED, LID_CAVITY, N_STEPS, h_a, u_a, v_a, eta_a, ok_a, loaded=.true.)
       call check(error, ok_a, "the LOADED cavity run must step")
       if (allocated(error)) return
       call run_case(BED - DRAFT, "", N_STEPS, h_b, u_b, v_b, eta_b, ok_b, loaded=.true.)
@@ -626,7 +646,7 @@ contains
       ! The COLUMN-thickness and eta bounds keep one term of the unloaded
       ! size.  `pa(nz+1) = rho_ref*g*eta_geo + p_top` cancels `C` between
       ! two products that each round at `eps*C`, and that residue is the
-      ! SAME in every layer.  The MOM6 split (`&ocean_bt_nml
+      ! SAME in every layer.  The MOM6 split (`[ocean.bt]
       ! bc_pgf_forcing`, default) forces the barotropic substep with the
       ! depth mean of the full layer PGF, so a depth-uniform residue now
       ! reaches `eta` — the legacy split discarded it with the rest of the
@@ -670,7 +690,7 @@ contains
       !! SEAM PROOF, part 1 — a cavity with `p_surf = 0` sends the
       !! `eta_forcing` seam NOTHING.
       !!
-      !! Run the same loaded cavity twice: once with no `&ocean_psurf_nml`
+      !! Run the same loaded cavity twice: once with no `[ocean.psurf]`
       !! group at all (no seam array, `eta_forcing` absent from the
       !! barotropic substep's argument list) and once with the seam LIVE
       !! at `p_surf_const = 0`.  If the static ice load had been assembled
@@ -685,8 +705,7 @@ contains
       real(wp), allocatable :: h_a(:, :, :), u_a(:, :, :), v_a(:, :, :), eta_a(:, :)
       real(wp), allocatable :: h_b(:, :, :), u_b(:, :, :), v_b(:, :, :), eta_b(:, :)
       logical :: ok_a, ok_b
-      character(len=*), parameter :: LID = &
-                                     "enable = .true., draft_config = 'flat', draft_depth = 500.0"
+      character(len=*), parameter :: LID = LID_CAVITY
 
       call run_case(BED, LID, N_STEPS, h_a, u_a, v_a, eta_a, ok_a, loaded=.true.)
       call check(error, ok_a, "the seam-free cavity run must step")
@@ -730,8 +749,7 @@ contains
       logical :: ok_a, ok_b
       real(wp) :: du, tol_u
 
-      call run_case(BED, "enable = .true., draft_config = 'flat', draft_depth = "// &
-                    "500.0", N_STEPS, h_a, u_a, v_a, eta_a, ok_a, &
+      call run_case(BED, LID_CAVITY, N_STEPS, h_a, u_a, v_a, eta_a, ok_a, &
                     loaded=.true., psurf=P_SURF_SEAM)
       call check(error, ok_a, "the loaded cavity run with a live seam must step")
       if (allocated(error)) return
@@ -768,7 +786,7 @@ contains
 
       b_new = 900.0_c_double
 
-      nml = case_nml(BED, "enable = .true., draft_config = 'flat', draft_depth = 500.0")
+      nml = case_nml(BED, LID_CAVITY)
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status == OCEAN_STATUS_OK, "the cavity run must create")

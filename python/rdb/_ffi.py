@@ -171,7 +171,7 @@ def _read_catalog(size_fn, name_fn, cap=64):
 
 
 def available_diagnostics():
-    """Every diagnostic name reachable via `&ocean_diag_nml diags` — the
+    """Every diagnostic name reachable via `[ocean.diag] diags` — the
     CANONICAL catalog (``SSH``, ``temperature``, ``u``, ...) plus the
     DERIVED catalog (``vorticity_z``, ``ke_total``, ``mld_density``,
     ...). Static: no live :class:`~rdb.Model` is required, so this
@@ -181,8 +181,8 @@ def available_diagnostics():
     reading source).
 
     Some canonical names are conditionally registered by another
-    namelist group (e.g. ``temperature``/``salinity`` need
-    ``&ocean_thermo_nml enable_thermodynamics``) — this is "what CAN be
+    config group (e.g. ``temperature``/``salinity`` need
+    ``[ocean.thermo] enable_thermodynamics``) — this is "what CAN be
     requested" on SOME configuration, not "what THIS run has
     registered". For the live, actually-registered set on an open
     model use ``model.diagnostics.selected``.

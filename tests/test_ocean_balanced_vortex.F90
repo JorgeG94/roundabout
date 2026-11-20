@@ -412,26 +412,57 @@ contains
       write (s_dt, '(es14.6)') dT
       write (s_beta, '(es14.6)') beta
       write (s_yref, '(es14.6)') 0.5_wp*real(DNX, wp)*DDX
-      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
-            "&grid_nml nx = 32, ny = 32, dx = 10000.0, dy = 10000.0, nghost = 4 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//nl// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 1200.0 /"//nl// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//nl// &
-            "&tracer_nml initial_salinity = 35.0 /"//nl// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 2000.0, "// &
-            "wind_config = 'constant', coriolis_beta = "//trim(adjustl(s_beta))// &
-            ", coriolis_y_ref = "//trim(adjustl(s_yref))//" /"//nl// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//nl// &
-            "&ocean_eos_nml eos = 'linear' /"//nl// &
-            "&ocean_ic_nml ic_config = 'balanced_vortex', alpha_T = 0.17, rho_0 = 1035.0, "// &
-     "vortex_radius = 40000.0, vortex_hv = 500.0, vortex_dT_dz = "//trim(adjustl(s_dtdz))//", vortex_dT = "//trim(adjustl(s_dt))// &
-            ", vortex_balance = '"//balance//"' /"//nl// &
-            "&ocean_hvisc_nml nu_h = 350.0 /"//nl// &
-            "&ocean_vmix_nml use_closure = .false. /"//nl// &
-            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .true. /"//nl// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 32"//nl// &
+            "ny = 32"//nl// &
+            "dx = 10000.0"//nl// &
+            "dy = 10000.0"//nl// &
+            "nghost = 4"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 6"//nl// &
+            "[time]"//nl// &
+            "t_end = 1.0e9"//nl// &
+            "dt_fixed = 1200.0"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = 1.0e-4"//nl// &
+            "wind_stress_x = 0.0"//nl// &
+            "wind_stress_y = 0.0"//nl// &
+            "[tracer]"//nl// &
+            "initial_salinity = 35.0"//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "flat"'//nl// &
+            "max_depth = 2000.0"//nl// &
+            'wind_config = "constant"'//nl// &
+            "coriolis_beta = "//trim(adjustl(s_beta))//nl// &
+            "coriolis_y_ref = "//trim(adjustl(s_yref))//nl// &
+            "[ocean.thermo]"//nl// &
+            "enable_thermodynamics = true"//nl// &
+            "[ocean.eos]"//nl// &
+            'eos = "linear"'//nl// &
+            "[ocean.ic]"//nl// &
+            'ic_config = "balanced_vortex"'//nl// &
+            "alpha_T = 0.17"//nl// &
+            "rho_0 = 1035.0"//nl// &
+            "vortex_radius = 40000.0"//nl// &
+            "vortex_hv = 500.0"//nl// &
+            "vortex_dT_dz = "//trim(adjustl(s_dtdz))//nl// &
+            "vortex_dT = "//trim(adjustl(s_dt))//nl// &
+            'vortex_balance = "'//balance//'"'//nl// &
+            "[ocean.hvisc]"//nl// &
+            "nu_h = 350.0"//nl// &
+            "[ocean.vmix]"//nl// &
+            "use_closure = false"//nl// &
+            "[ocean.bt]"//nl// &
+            'split_scheme = "pred_corr"'//nl// &
+            "auto_n_inner = true"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "sigma"'//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function vortex_nml
 
    subroutine surface_diag(handle, sgn, xbar, ybar, aniso, ke, finite)

@@ -1,4 +1,4 @@
-"""P5 D2.12 -- tracers. `&ocean_tracers_nml` + the registry.
+"""P5 D2.12 -- tracers. `[ocean.tracers]` + the registry.
 
 Ordering (D6.7): tracer registration must precede `enter_data`, which
 closes `registry_locked` (`rdb_multilayer_state.F90:533`). So tracers are
@@ -12,7 +12,7 @@ from ._errors import RdbUnsupportedError
 
 class IdealAge:
     """``IdealAge(young_value=0.0, surface_growth_rate=0.0)``
-    -> `&ocean_tracers_nml enable_ideal_age` + the two knobs."""
+    -> `[ocean.tracers] enable_ideal_age` + the two knobs."""
 
     def __init__(self, young_value=0.0, surface_growth_rate=0.0):
         self.young_value = young_value
@@ -37,7 +37,7 @@ class PseudoSalt:
 
 class TracerBounds:
     """``TracerBounds(salinity=(0.0, 40.0), temperature=(-2.0, 40.0))``
-    -> `&tracer_nml S_min/S_max/T_min/T_max` (coastal-legacy group name,
+    -> `[tracer] S_min/S_max/T_min/T_max` (coastal-legacy group name,
     but these two clamps are read on the ocean path too)."""
 
     def __init__(self, salinity=None, temperature=None):
@@ -63,7 +63,7 @@ class PassiveTracer:
     `registry_locked`), and no such entry point is exposed on
     `include/rdb_ocean.h` today -- the current C ABI (P2/P2.5) only
     reaches tracers that are ALREADY registered (`enable_ideal_age` /
-    `enable_pseudo_salt`, both namelist-driven booleans; use
+    `enable_pseudo_salt`, both config-driven booleans; use
     :class:`IdealAge` / :class:`PseudoSalt` for those). This is a real
     Fortran-side gap, not something P5 (pure Python, no Fortran changes)
     can paper over, so this raises rather than silently doing nothing.
@@ -78,7 +78,7 @@ class PassiveTracer:
             f"(rdb_multilayer_state.F90:533's registry_locked closes at "
             f"enter_data) and include/rdb_ocean.h exposes no such "
             f"entry point yet (P2/P2.5 gap). Use IdealAge() or "
-            f"PseudoSalt() -- both are namelist-driven and work today -- "
+            f"PseudoSalt() -- both are config-driven and work today -- "
             f"or extend the C ABI with a pre-create tracer-registration "
             f"call.")
 

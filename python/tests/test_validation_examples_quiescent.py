@@ -13,7 +13,7 @@ thresholds documented there (5 days / 30 days, max|u|,|v| ~1e-10 to
 via ``model.run(steps=...)`` rather than the scripts' own
 ``until=``) so the suite stays fast, while exercising the exact same
 ``build_model()`` construction + assertion logic end-to-end (create,
-step, inspect fields, close). The scripts' own byte-identity-vs-.nml
+step, inspect fields, close). The scripts' own byte-identity-vs-.toml
 config check is a separate, non-pytest gate (see the port report /
 ``tmp_local_artifacts/compare_config.py``) -- this file only checks
 behaviour: does the Python-built model actually create and stay quiet.
@@ -93,50 +93,45 @@ def test_seamount_stays_at_rest(seamount_module):
         f"should cancel exactly in the BPG)")
 
 
-def test_acc_channel_quiescent_matches_nml_config(acc_channel_quiescent_module):
+def test_acc_channel_quiescent_matches_toml_config(acc_channel_quiescent_module):
     """The config-identity gate, as a pytest (in addition to the
     stand-alone tmp_local_artifacts/compare_config.py harness used
-    during porting): every knob acc_channel_quiescent.nml sets
+    during porting): every knob acc_channel_quiescent.toml sets
     explicitly must be reproduced (explicitly, or via an equal Fortran
     default) by the curated build_model()."""
     from rdb._config import ALL_GROUPS
-    from rdb._nml_parse import config_from_namelist_text, _strip_comments
+    from rdb._toml_load import config_from_toml_text
 
     model = acc_channel_quiescent_module.build_model()
     py_explicit = dict(
         ((g, k), v) for g, k, v in model.config.explicit_knobs())
 
-    nml_path = _ACC_DIR / "acc_channel_quiescent.nml"
-    # See compare_config.py's docstring: _strip_comments works around a
-    # real bug in parse_namelist_text's group-boundary scanner tripped
-    # by an English contraction apostrophe inside a comment.
-    nml_text = _strip_comments(nml_path.read_text())
-    nml_cfg = config_from_namelist_text(nml_text)
-    name_to_attr = {cls._nml_name: attr for attr, cls in ALL_GROUPS.items()}
+    toml_path = _ACC_DIR / "acc_channel_quiescent.toml"
+    toml_cfg = config_from_toml_text(toml_path.read_text())
+    name_to_attr = {cls._group: attr for attr, cls in ALL_GROUPS.items()}
 
-    for g, k, want in nml_cfg.explicit_knobs():
+    for g, k, want in toml_cfg.explicit_knobs():
         attr = name_to_attr[g]
         if (g, k) in py_explicit:
             got = py_explicit[(g, k)]
         else:
             got = getattr(ALL_GROUPS[attr], k).default
-        assert got == want, f"&{g}_nml {k}: nml={want!r} python={got!r}"
+        assert got == want, f"[{ALL_GROUPS[attr]._table}] {k}: toml={want!r} python={got!r}"
 
 
-def test_seamount_matches_nml_config(seamount_module):
+def test_seamount_matches_toml_config(seamount_module):
     from rdb._config import ALL_GROUPS
-    from rdb._nml_parse import config_from_namelist_text, _strip_comments
+    from rdb._toml_load import config_from_toml_text
 
     model = seamount_module.build_model()
     py_explicit = dict(
         ((g, k), v) for g, k, v in model.config.explicit_knobs())
 
-    nml_path = _SEAMOUNT_DIR / "seamount.nml"
-    nml_text = _strip_comments(nml_path.read_text())
-    nml_cfg = config_from_namelist_text(nml_text)
-    name_to_attr = {cls._nml_name: attr for attr, cls in ALL_GROUPS.items()}
+    toml_path = _SEAMOUNT_DIR / "seamount.toml"
+    toml_cfg = config_from_toml_text(toml_path.read_text())
+    name_to_attr = {cls._group: attr for attr, cls in ALL_GROUPS.items()}
 
-    for g, k, want in nml_cfg.explicit_knobs():
+    for g, k, want in toml_cfg.explicit_knobs():
         attr = name_to_attr[g]
         if (g, k) in py_explicit:
             got = py_explicit[(g, k)]
@@ -144,11 +139,11 @@ def test_seamount_matches_nml_config(seamount_module):
             got = getattr(ALL_GROUPS[attr], k).default
         # Documented, verified-equivalent divergence (see the port
         # report): RectilinearGrid always routes through
-        # &ocean_grid_nml len_lon/len_lat (letting the Fortran derive
-        # dx/dy), never through &grid_nml dx/dy directly -- both this
-        # .nml's dx=2000.0/dy=2000.0 and the curated grid's
+        # [ocean.grid] len_lon/len_lat (letting the Fortran derive
+        # dx/dy), never through [grid] dx/dy directly -- both this
+        # .toml's dx=2000.0/dy=2000.0 and the curated grid's
         # len_lon=len_lat=100000.0 describe the SAME 50-cell/100 km
         # grid (100000.0 / 50 == 2000.0).
         if (g, k) in (("grid", "dx"), ("grid", "dy")):
             continue
-        assert got == want, f"&{g}_nml {k}: nml={want!r} python={got!r}"
+        assert got == want, f"[{ALL_GROUPS[attr]._table}] {k}: toml={want!r} python={got!r}"

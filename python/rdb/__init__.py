@@ -2,11 +2,11 @@
 
 Stdlib only (no numpy; see ``_ffi.py``'s module docstring). A handle-based
 driver over the ocean C ABI (``include/rdb_ocean.h``): build a config
-(namelist string, for now), create a solver, step it, read and write state
+(TOML text, for now), create a solver, step it, read and write state
 arrays, destroy it.
 
     import rdb
-    with rdb.Model(namelist_text) as model:
+    with rdb.Model(config_text) as model:
         model.step(10)
         print(model.time, model.total_mass)
         sst = model.temperature[:, :, -1]   # surface layer, degC

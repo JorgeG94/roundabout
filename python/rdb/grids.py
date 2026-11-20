@@ -41,7 +41,7 @@ def _reject_z(z):
 class Topology(enum.Enum):
     """Per-dimension domain topology (mirrors Oceananigans Periodic/Bounded).
 
-    PERIODIC wraps BOTH edges by construction (the namelist's per-edge
+    PERIODIC wraps BOTH edges by construction (the config's per-edge
     'periodic' spelling collapses to this single per-dimension flag,
     D2.1). BOUNDED has two physical ends; what happens there is a
     `boundaries=` condition, set separately on `Model(...)`.
@@ -97,7 +97,7 @@ class _GridBase:
     """Shared grid-object contract the composer (`rdb._compose`) reads:
     `.periodic_x` / `.periodic_y` (bool), `.requested_halo` (user's `halo=`
     or None), `.tripolar_fold` (bool), `.forced_edges` (dict of edge name
-    -> `&ocean_bc_nml` value the grid itself owns, e.g. tripolar's fold),
+    -> `[ocean.bc]` value the grid itself owns, e.g. tripolar's fold),
     `.nx` / `.ny` / `.nz`.
     """
     tripolar_fold = False
@@ -108,19 +108,19 @@ class _GridBase:
 
 
 class RectilinearGrid(_GridBase):
-    """Uniform Cartesian grid. -> `&ocean_grid_nml grid_config="cartesian"`.
+    """Uniform Cartesian grid. -> `[ocean.grid] grid_config="cartesian"`.
 
     ``RectilinearGrid(*, size, extent=None, x=None, y=None, halo=None,
     topology=(Topology.BOUNDED, Topology.BOUNDED), z=None,
     axis_units="meters", radius=None)``
 
-    ``size=(nx, ny, nz)`` -- nz is a LAYER COUNT (-> `&nonhydrostatic_nml
+    ``size=(nx, ny, nz)`` -- nz is a LAYER COUNT (-> `[nonhydrostatic]
     nz_layers`), not an interface list (D6.4). Give exactly one of
     ``extent=(Lx, Ly[, Lz])`` or ``x=(lo, hi), y=(lo, hi)`` -- in
     METRES under the default ``axis_units="meters"``, in DEGREES under
     ``axis_units="degrees"`` (see below; a non-zero ``x=``/``y=`` origin
     is recorded for `repr()` only -- Roundabout's cartesian metric has no
-    origin). Both route to ``&ocean_grid_nml len_lon=Lx, len_lat=Ly``,
+    origin). Both route to ``[ocean.grid] len_lon=Lx, len_lat=Ly``,
     from which the Fortran itself derives ``dx``/``dy`` -- this object
     never computes them, so there is one source of truth for the
     derivation. ``Lz`` (from a 3-element ``extent``), if given, is
@@ -132,7 +132,7 @@ class RectilinearGrid(_GridBase):
     degrees and ``dx = rad_earth * len_lon * pi/180 / nx`` (arc length, no
     cos(lat)) -- this is the MOM6-parity mode the double_gyre reference
     uses. ``radius=`` (Earth radius, metres) is the matching
-    ``&ocean_grid_nml rad_earth`` -- meaningless under ``"meters"``/
+    ``[ocean.grid] rad_earth`` -- meaningless under ``"meters"``/
     ``"km"`` (nothing reads it) so it is left unset (Fortran default)
     unless given explicitly -- give it under ``"degrees"`` rather than
     relying on the Fortran's own default, which silently changes the
@@ -201,8 +201,8 @@ class LatitudeLongitudeGrid(_GridBase):
     ``longitude``/``latitude`` are ``(lo, hi)`` DEGREES, increasing.
     Roundabout stores an SW corner + uniform spacing, so ``dx``/``dy`` are
     computed here in DEGREES (`rdb_ocean_setup.F90:144` -- the single most
-    confusing thing in the raw namelist) and written directly to
-    ``&grid_nml``.
+    confusing thing in the raw config) and written directly to
+    ``[grid]``.
 
     ``topology=None`` derives Oceananigans-style: x is PERIODIC iff the
     longitude extent is exactly 360 degrees, else BOUNDED; y is always
@@ -519,11 +519,11 @@ class Neverworld2:
 
 class BathymetryFile:
     """``BathymetryFile(path)`` -> `topo_config="file"` +
-    `&output_nml bathymetry_file`.
+    `[output] bathymetry_file`.
 
-    The knob lives in `&output_nml`, not `&ocean_topo_nml`, despite
+    The knob lives in `[output]`, not `[ocean.topo]`, despite
     `topo_config="file"` being its only consumer -- cosmetic in a
-    namelist, confusing in a typed surface; this object hides the
+    config, confusing in a typed surface; this object hides the
     seam. Pre-flights the file's existence (the Fortran reader still
     `error stop`s on a missing/malformed file).
     """

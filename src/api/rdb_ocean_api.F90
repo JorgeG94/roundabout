@@ -9,7 +9,7 @@
 !! Every entry point returns `integer(c_int)` status — never `error stop`
 !! (a library cannot abort its host process). Status codes reuse
 !! `rdb_ocean_status` (config/setup/IC-seed failures reported by
-!! `read_config_from_string` / `validate_config` / the `configure_ocean_*`
+!! `read_config_from_toml_string` / `validate_config` / the `configure_ocean_*`
 !! chain / `ocean_state_seed_from_cfg` via their optional `ierr`, P0) plus
 !! three handle-specific codes added here.
 !!
@@ -51,7 +51,7 @@ module rdb_ocean_api
    use rdb_constants, only: wp
    use rdb_handle, only: ocean_handle_t, handle_create, handle_destroy, handle_check, &
                          HANDLE_OK
-   use rdb_config, only: read_config_from_string, validate_config
+   use rdb_config, only: read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: engine_setup, engine_enter_data, engine_step, &
                                engine_step_ice, engine_step_finalize, engine_exit_data, &
                                engine_teardown
@@ -180,16 +180,16 @@ contains
    ! Lifecycle
    ! ================================================================
 
-   function rdb_ocean_create_from_string(nml_text, nml_len, handle_out) &
+   function rdb_ocean_create_from_string(config_text, config_len, handle_out) &
       result(status) bind(c, name="rdb_ocean_create_from_string")
-      !! Build a config from an in-memory namelist string (no filesystem
+      !! Build a config from an in-memory TOML document (no filesystem
       !! touch), set up the ocean dyn-core exactly as `bench_ocean` /
       !! `driver_run_ocean` do, map it onto the device, and hand back an
       !! opaque handle. On ANY failure, `handle_out` is `c_null_ptr` and the
       !! partially-built handle (if one was allocated) is freed — never a
       !! half-initialised handle escaping to the caller.
-      integer(c_int), intent(in), value :: nml_len
-      character(kind=c_char), intent(in) :: nml_text(nml_len)
+      integer(c_int), intent(in), value :: config_len
+      character(kind=c_char), intent(in) :: config_text(config_len)
       type(c_ptr), intent(out) :: handle_out
       integer(c_int) :: status
 
@@ -208,7 +208,7 @@ contains
          return
       end if
 
-      call c_to_f_string(nml_text, nml_len, text)
+      call c_to_f_string(config_text, config_len, text)
 
       call build_pending_handle(text, c_handle, h, status)
       if (status /= int(OCEAN_STATUS_OK, c_int)) return   ! already destroyed
@@ -225,7 +225,7 @@ contains
       ! wave_drag/wetdry/dataovr/halo_init) is now reachable through here
       ! too. No geometry staged on this single-call path (P2.5's
       ! rdb_ocean_create_pending + rdb_ocean_stage_* do that) — so
-      ! engine_setup falls through to its ordinary namelist-driven path,
+      ! engine_setup falls through to its ordinary config-driven path,
       ! byte-identical to before P2.5. ----
       call complete_ocean_create(c_handle, h, status)
       handle_out = c_handle   ! c_null_ptr iff complete_ocean_create failed
@@ -284,7 +284,7 @@ contains
          return
       end if
 
-      call read_config_from_string(text, h%cfg, ierr=ierr)
+      call read_config_from_toml_string(text, h%cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          status = int(ierr, c_int)
          call handle_destroy(c_handle)
@@ -348,7 +348,7 @@ contains
 
       if (h%engine%n_inner < 1) then
          call error_ring_push("rdb_ocean_create: barotropic substep count "// &
-                              "n_inner is unresolved (< 1) — set &ocean_bt_nml auto_n_inner "// &
+                              "n_inner is unresolved (< 1) — set [ocean.bt] auto_n_inner "// &
                               "= .true. or n_inner explicitly")
          status = int(OCEAN_STATUS_ERR_SETUP, c_int)
          call handle_destroy(c_handle)
@@ -547,7 +547,7 @@ contains
       h%host_is_current = .true.
    end function rdb_ocean_balance_live
 
-   function rdb_ocean_create_pending(nml_text, nml_len, handle_out) &
+   function rdb_ocean_create_pending(config_text, config_len, handle_out) &
       result(status) bind(c, name="rdb_ocean_create_pending")
       !! P2.5 phase 1 of 2: build + validate a config and allocate a
       !! handle EXACTLY like `rdb_ocean_create_from_string`, but stop
@@ -566,8 +566,8 @@ contains
       !! A caller with no geometry to inject has no reason to use this
       !! entry point — `rdb_ocean_create_from_string` remains the
       !! normal one-call path and is completely unaffected by this phase.
-      integer(c_int), intent(in), value :: nml_len
-      character(kind=c_char), intent(in) :: nml_text(nml_len)
+      integer(c_int), intent(in), value :: config_len
+      character(kind=c_char), intent(in) :: config_text(config_len)
       type(c_ptr), intent(out) :: handle_out
       integer(c_int) :: status
 
@@ -586,7 +586,7 @@ contains
          return
       end if
 
-      call c_to_f_string(nml_text, nml_len, text)
+      call c_to_f_string(config_text, config_len, text)
 
       call build_pending_handle(text, c_handle, h, status)
       if (status /= int(OCEAN_STATUS_OK, c_int)) return   ! already destroyed
@@ -707,12 +707,12 @@ contains
       result(status) bind(c, name="rdb_ocean_stage_topology")
       !! P2.5: stage Oceananigans-style grid topology (per-dimension
       !! periodicity — "the grid owns periodicity", not the per-edge
-      !! `&ocean_bc_nml` tags) on the PENDING handle `c_handle`. Consumed
+      !! `[ocean.bc]` tags) on the PENDING handle `c_handle`. Consumed
       !! inside `rdb_ocean_create_finalize` via
-      !! `ocean_bc_state_set_topology`, run AFTER the namelist edge tags
+      !! `ocean_bc_state_set_topology`, run AFTER the config edge tags
       !! are parsed and OVERRIDING whatever they derived for
       !! `periodic_x`/`periodic_y` (an axis NOT marked periodic here keeps
-      !! whatever physical BC the namelist gave it).
+      !! whatever physical BC the config gave it).
       type(c_ptr), intent(in), value :: c_handle
       integer(c_int), intent(in), value :: periodic_x, periodic_y
          !! Nonzero = periodic on that axis.
@@ -875,7 +875,7 @@ contains
       !! shared `engine_step` / `engine_step_ice` / `engine_step_finalize`
       !! sequence (P2.4 + P2.4b) — the SAME calls `driver_run_ocean`'s time
       !! loop makes: the dyn-core advance, then sea-ice per-step physics
-      !! (`engine_step_ice` — a no-op when `&ocean_ice_nml enable = .false.`,
+      !! (`engine_step_ice` — a no-op when `[ocean.ice] enable = .false.`,
       !! so this is bit-identical to before P2.4b for every non-ice config),
       !! then surface-flux-component assembly / the diag step. `n_steps <=
       !! 0` is a successful no-op (mirrors an empty range, not an error).
@@ -1534,7 +1534,7 @@ contains
       bind(c, name="rdb_ocean_get_ks_ptr")
       !! Vertical salt (+ every passive tracer) diffusivity (m^2/s):
       !! `vmix%ks`, shape `(nx_total, ny_total, nz_ml+1)` (layer
-      !! INTERFACES). `ks ≡ kt` unless `&ocean_ddiff_nml` double diffusion
+      !! INTERFACES). `ks ≡ kt` unless `[ocean.ddiff]` double diffusion
       !! is enabled.
       type(c_ptr), intent(in), value :: c_handle
       type(c_ptr), intent(out) :: ptr
@@ -1805,16 +1805,16 @@ contains
       !!
       !! CAVEAT (mid-run, not a re-seed): does NOT re-derive the ALE
       !! `z_ref` table (ZSTAR_FULL) or the static land mask + C-grid face
-      !! metrics — for those, drive the case from a namelist/restart
+      !! metrics — for those, drive the case from a config/restart
       !! instead (matches the recovered precedent's documented limit).
       !!
-      !! REFUSED under an ice-shelf cavity (`&ocean_cavity_dyn_nml
+      !! REFUSED under an ice-shelf cavity (`[ocean.cavity_dyn]
       !! enable`). There the mode-split contract is `bt_H_ref = b −
       !! z_draft`, so the `bt_H_ref = b` re-derivation below would silently
       !! delete the ice load from the datum — and even re-deriving it
       !! correctly would not be enough: a new bed changes which columns
       !! GROUND, and this entry point deliberately does not rebuild the wet
-      !! mask or the land-masked metrics. Re-seed from a namelist instead.
+      !! mask or the land-masked metrics. Re-seed from the config instead.
       type(c_ptr), intent(in), value :: c_handle
       integer(c_int), intent(in), value :: nx_p, ny_p
       real(c_double), intent(in) :: b_data(nx_p, ny_p)
@@ -1834,11 +1834,11 @@ contains
       end if
 
       if (h%state%metrics%use_cavity) then
-         call fail("rdb_ocean_set_bathymetry: refused with &ocean_cavity_dyn_nml "// &
+         call fail("rdb_ocean_set_bathymetry: refused with [ocean.cavity_dyn] "// &
                    "enable — the datum is bt_H_ref = b - z_draft, and a mid-run bed "// &
                    "swap would both drop the ice load from it and change which "// &
                    "columns ground (this entry point does not rebuild the wet mask). "// &
-                   "Re-seed from a namelist instead.", &
+                   "Re-seed from the config instead.", &
                    ierr_local, OCEAN_STATUS_ERR_SETUP)
          status = int(ierr_local, c_int)
          return
@@ -2210,7 +2210,7 @@ contains
       bind(c, name="rdb_ocean_derived_catalog_size")
       !! Number of names in the DERIVED diagnostic catalog (vorticity_z,
       !! ke_total, mld_density, ... — `rdb_ocean_diag_derived`'s static
-      !! table, opt-in via `&ocean_diag_nml diags`). No handle required:
+      !! table, opt-in via `[ocean.diag] diags`). No handle required:
       !! this is build-time information, reachable before `create()`.
       integer(c_int) :: n
       n = int(derived_catalog_size(), c_int)
@@ -2246,8 +2246,8 @@ contains
       !! Number of names in the CANONICAL diagnostic catalog (SSH,
       !! temperature, salinity, u, v, KE, ... — the set
       !! `register_default_diags` MAY register at setup; some entries
-      !! are gated by another namelist group, e.g. `temperature` needs
-      !! `&ocean_thermo_nml enable_thermodynamics`). No handle required.
+      !! are gated by another config table, e.g. `temperature` needs
+      !! `[ocean.thermo] enable_thermodynamics`). No handle required.
       !! Use `rdb_ocean_get_diag_count`/`rdb_ocean_list_diags` on a
       !! live handle to see what actually registered.
       integer(c_int) :: n
@@ -2282,7 +2282,7 @@ contains
    function rdb_ocean_get_diag_count(c_handle, count_out) result(status) &
       bind(c, name="rdb_ocean_get_diag_count")
       !! Number of diagnostics REGISTERED on this live instance right
-      !! now (canonical + derived + anything the `&ocean_diag_nml diags`
+      !! now (canonical + derived + anything the `[ocean.diag] diags`
       !! token list added) — bounds for `rdb_ocean_list_diags`'s
       !! index argument. This is the "selected" set, as opposed to the
       !! two static "available" catalogs above.

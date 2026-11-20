@@ -24,26 +24,26 @@ see ``README.md``'s caveats section; do not invent one here).
 
 GRID SIZE -- READ THIS FIRST.  ``acc_channel.toml``'s own header comment
 says "24 deg lon x 14 deg lat ... 0.5 deg resolution => 48 x 28 cells
-... nz=16 over H=3000 m", but the file's actual ``&grid_nml``/
-``&nonhydrostatic_nml`` values are ``nx=480, ny=280, nz_layers=75`` --
+... nz=16 over H=3000 m", but the file's actual ``[grid]``/
+``[nonhydrostatic]`` values are ``nx=480, ny=280, nz_layers=75`` --
 TEN TIMES the described lon/lat extent and ~4.7x the described layer
 count (longitude 0-240 deg, latitude -52 to +88 deg). This is a
-pre-existing mismatch in the checked-in ``.nml`` between its own prose
+pre-existing mismatch in the checked-in ``.toml`` between its own prose
 and its own numbers (not something introduced by this port -- the
-``.nml`` is treated read-only per the porting brief). ``README.md``
+``.toml`` is treated read-only per the porting brief). ``README.md``
 separately claims this size "OOMs on a single 32 GB V100 at the first
 kernel launch" (~14 GB mapped state + workspaces past 32 GB) -- that
 was NOT reproduced while porting this script: a 30-outer-step run at
 the literal 480x280x75 size peaked at ~22 GB / 32 GB device memory on
 a V100 (see the port report's byte-identity gate, which ran BOTH this
-script's emitted config and the stock .nml at this exact size to
+script's emitted config and the stock .toml at this exact size to
 completion). The OOM may be real for a much longer run (more lazy
 workspace growth over more steps) or a different build/GPU than the
 one used here; ``--full`` is still opt-in rather than default, both
 because 480x280x75 is an unusually large "example" to run by default
-and because the discrepancy with the .nml's own header prose (above)
+and because the discrepancy with the .toml's own header prose (above)
 makes 48x28x16 the more defensible default for a quick local smoke
-run. ``CANONICAL_GRID`` below reproduces the ``.nml``'s ACTUAL numbers
+run. ``CANONICAL_GRID`` below reproduces the ``.toml``'s ACTUAL numbers
 byte-for-byte for the configuration-identity gate regardless of which
 default ``main()`` picks.
 
@@ -95,11 +95,11 @@ from rdb.grids import LatitudeLongitudeGrid, Seamount, Topology
 from rdb.pressure import FiniteVolumeLite, VelocityTruncation
 from rdb.vcoord import ZStar
 
-#: The .nml's ACTUAL &grid_nml/&nonhydrostatic_nml numbers (not the
+#: The .toml's ACTUAL [grid]/[nonhydrostatic] numbers (not the
 #: header prose's 48x28x16 -- see module docstring).
 CANONICAL_GRID = dict(nx=480, ny=280, nz=75)
 #: A grid small enough to actually run on one GPU -- the size the
-#: .nml's OWN header text describes, not a value this port invented.
+#: .toml's OWN header text describes, not a value this port invented.
 SMOKE_GRID = dict(nx=48, ny=28, nz=16)
 
 
@@ -112,9 +112,9 @@ def build_model(*, nx, ny, nz):
     """
     grid = LatitudeLongitudeGrid(
         size=(nx, ny, nz),
-        longitude=(0.0, 0.0 + nx * 0.5),   # dx = 0.5 deg/cell (&grid_nml)
+        longitude=(0.0, 0.0 + nx * 0.5),   # dx = 0.5 deg/cell ([grid])
         latitude=(-52.0, -52.0 + ny * 0.5),  # dy = 0.5 deg/cell
-        radius=6371000.0,                  # &ocean_grid_nml rad_earth
+        radius=6371000.0,                  # [ocean.grid] rad_earth
         # Re-entrant channel: periodic in x (west/east), walls north/south.
         # NOTE this is a SECTOR re-entrant channel, not a full 360-degree
         # wrap -- Topology.PERIODIC is what forces the ghost-wrap seam
@@ -122,13 +122,13 @@ def build_model(*, nx, ny, nz):
         topology=(Topology.PERIODIC, Topology.BOUNDED),
         halo=None,   # derived via required_halo() -- must land on 3
                      # (periodic-x needs nghost>=3 for the PPM +
-                     # biharmonic seam stencil); matches &grid_nml
+                     # biharmonic seam stencil); matches [grid]
                      # nghost=3 explicitly.
     )
 
     model = rdb.Model(
         grid=grid,
-        timestep=300.0,                    # &time_nml dt_fixed
+        timestep=300.0,                    # [time] dt_fixed
 
         coriolis=SphericalCoriolis(rotation_rate=7.2921e-5),
         momentum_advection=Sadourny(form="enstrophy"),  # -> form="sadourny"
@@ -140,7 +140,7 @@ def build_model(*, nx, ny, nz):
 
         closures=[
             EPBL(mstar_scheme="om4", mld_use_prev_guess=True),
-            # EPBL() above ALREADY sets &ocean_vmix_nml use_kpp = .false.
+            # EPBL() above ALREADY sets [ocean.vmix] use_kpp = .false.
             # itself (KPP defaults ON in the schema; EPBL/KPP are
             # mutually exclusive) -- no separate off-switch needed.
             KappaShear(),                  # ri_crit/prandtl at their own
@@ -175,7 +175,7 @@ def build_model(*, nx, ny, nz):
             enabled=True, filename="acc_channel", every=1.0,
             output_dir="./out_acc_channel", status_interval=1.0),
 
-        # &time_nml t_end/time_unit: Model.run(until=...) drives the
+        # [time] t_end/time_unit: Model.run(until=...) drives the
         # outer loop directly in raw seconds and never reads either
         # knob, but t_end still gates create() (see Duration's own
         # docstring) -- pin it explicitly rather than relying on the
@@ -187,15 +187,15 @@ def build_model(*, nx, ny, nz):
     # ------------------------------------------------------------------
     # Escape hatch: knobs with no curated writer at all, or where a
     # curated object's own constructor default would silently pick a
-    # DIFFERENT value than the .nml sets.
+    # DIFFERENT value than the .toml sets.
     # ------------------------------------------------------------------
     cfg = model.config
 
-    # &physics_nml coriolis_f: unused by the metric f-fill under
+    # [physics] coriolis_f: unused by the metric f-fill under
     # coriolis_scheme="planetary" (SphericalCoriolis fills f from
-    # geolat), but the .nml keeps it non-zero "for any legacy guards".
+    # geolat), but the .toml keeps it non-zero "for any legacy guards".
     # DELIBERATELY left on the escape hatch, not given a curated route:
-    # FPlane/BetaPlane already write &physics_nml.coriolis_f correctly
+    # FPlane/BetaPlane already write [physics].coriolis_f correctly
     # (this is NOT the same gap) -- SphericalCoriolis genuinely has
     # nothing to do with this value, and inventing a
     # SphericalCoriolis(legacy_coriolis_f=...) parameter would encode a
@@ -205,7 +205,7 @@ def build_model(*, nx, ny, nz):
 
     # Seamount ridge: Seamount() IS a curated writer, but slope_scale is
     # documented as METRES converted to grid units by the Fortran
-    # (topo_length_to_grid_units) -- the .nml passes the raw number 3.0
+    # (topo_length_to_grid_units) -- the .toml passes the raw number 3.0
     # unchanged (see module docstring: this looks like it was intended
     # as "~3 deg" in prose but is actually 3.0 METRES at the Fortran
     # dispatch). Reproduced verbatim, not "fixed", per the porting brief.
@@ -216,9 +216,9 @@ def build_model(*, nx, ny, nz):
     # a PGF variant, D2.6):
     VelocityTruncation(maxvel=2.0).apply(cfg)
 
-    # &output_nml output_to_file: cosmetic-only, see
+    # [output] output_to_file: cosmetic-only, see
     # acc_channel_quiescent.py's matching comment -- a dead knob (P4
-    # dead-knob sweep) kept for namelist-text fidelity with the .nml.
+    # dead-knob sweep) kept for config-text fidelity with the .toml.
     cfg.output.output_to_file = False
 
     return model
@@ -240,9 +240,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--full", action="store_true",
-        help="use the .nml's literal grid size (480x280x75) -- matches "
-             "the .nml exactly; off by default uses the SMOKE_GRID size "
-             "the .nml's own header prose describes (48x28x16) so this "
+        help="use the .toml's literal grid size (480x280x75) -- matches "
+             "the .toml exactly; off by default uses the SMOKE_GRID size "
+             "the .toml's own header prose describes (48x28x16) so this "
              "runs fast even on a modest GPU")
     parser.add_argument("--days", type=float, default=1.0)
     args = parser.parse_args()
@@ -251,8 +251,8 @@ def main():
     model = build_model(**grid_size)
 
     print(f"acc_channel: grid={grid_size}, "
-          f"{'CANONICAL (matches .nml)' if args.full else 'SMOKE (reduced for local run)'}")
-    print(model.config.to_namelist()[:400], "...\n")
+          f"{'CANONICAL (matches .toml)' if args.full else 'SMOKE (reduced for local run)'}")
+    print(model.config.to_toml()[:400], "...\n")
 
     with model:
         u_series = []

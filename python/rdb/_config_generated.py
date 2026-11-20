@@ -3,13 +3,13 @@
 Emitted by `tools/gen_python_config.py` from the live `nml_schema_t`
 (`src/core/rdb_config.F90` -> `build_rdb_schema`, walked via
 `schema%render_json`, `src/core/rdb_nml_schema.F90`). One class per
-namelist group; one descriptor attribute per knob, carrying the schema's
+config group; one descriptor attribute per knob, carrying the schema's
 own doc/units/default/bounds/enum-set (see `python/rdb/_knob.py`).
 
 ABSENCE IS THE DEFAULT, NOT THE FORTRAN VALUE: every knob starts unset,
-and only explicitly-assigned knobs serialise via `to_namelist()`
+and only explicitly-assigned knobs serialise via `to_toml()`
 (`python/rdb/_config.py`). This is what gives bit-identity to existing
-namelists -- a config of all defaults serialises to nothing.
+configs -- a config of all defaults serialises to nothing.
 
 Regenerate with:
 
@@ -27,9 +27,10 @@ from __future__ import annotations
 from ._knob import Bool, Enum, Group, Int, Real, RealArray, Str
 
 class Sim(Group):
-    """`&sim_nml` -- Simulation-regime selector."""
+    """`[sim]` -- Simulation-regime selector."""
 
-    _nml_name = 'sim'
+    _group = 'sim'
+    _table = 'sim'
 
     sim_type = Enum(
         'sim_type',
@@ -42,9 +43,10 @@ class Sim(Group):
 
 
 class Grid(Group):
-    """`&grid_nml` -- Structured-grid geometry."""
+    """`[grid]` -- Structured-grid geometry."""
 
-    _nml_name = 'grid'
+    _group = 'grid'
+    _table = 'grid'
 
     nx = Int(
         'nx',
@@ -82,9 +84,10 @@ class Grid(Group):
 
 
 class Time(Group):
-    """`&time_nml` -- Time-integration controls."""
+    """`[time]` -- Time-integration controls."""
 
-    _nml_name = 'time'
+    _group = 'time'
+    _table = 'time'
 
     t_end = Real(
         't_end',
@@ -159,9 +162,10 @@ class Time(Group):
 
 
 class Mpi(Group):
-    """`&mpi_nml` -- MPI domain decomposition."""
+    """`[mpi]` -- MPI domain decomposition."""
 
-    _nml_name = 'mpi'
+    _group = 'mpi'
+    _table = 'mpi'
 
     px = Int(
         'px',
@@ -185,9 +189,10 @@ class Mpi(Group):
 
 
 class Logging(Group):
-    """`&logging_nml` -- Logger verbosity + status cadence."""
+    """`[logging]` -- Logger verbosity + status cadence."""
 
-    _nml_name = 'logging'
+    _group = 'logging'
+    _table = 'logging'
 
     log_level = Enum(
         'log_level',
@@ -208,9 +213,10 @@ class Logging(Group):
 
 
 class Vcoord(Group):
-    """`&vcoord_nml` -- Vertical-coordinate + ALE-remap controls."""
+    """`[vcoord]` -- Vertical-coordinate + ALE-remap controls."""
 
-    _nml_name = 'vcoord'
+    _group = 'vcoord'
+    _table = 'vcoord'
 
     vcoord_type = Enum(
         'vcoord_type',
@@ -425,9 +431,10 @@ class Vcoord(Group):
 
 
 class Physics(Group):
-    """`&physics_nml` -- Barotropic physics: bottom drag, wind stress, Coriolis."""
+    """`[physics]` -- Barotropic physics: bottom drag, wind stress, Coriolis."""
 
-    _nml_name = 'physics'
+    _group = 'physics'
+    _table = 'physics'
 
     manning_n = Real(
         'manning_n',
@@ -464,9 +471,10 @@ class Physics(Group):
 
 
 class Output(Group):
-    """`&output_nml` -- File output, I/O server, forcing/restart/gauge files."""
+    """`[output]` -- File output, I/O server, forcing/restart/gauge files."""
 
-    _nml_name = 'output'
+    _group = 'output'
+    _table = 'output'
 
     output_to_file = Bool(
         'output_to_file',
@@ -542,9 +550,10 @@ class Output(Group):
 
 
 class Boundary(Group):
-    """`&boundary_nml` -- Boundary conditions, tidal forcing, inflow/discharge/sponge/nesting."""
+    """`[boundary]` -- Boundary conditions, tidal forcing, inflow/discharge/sponge/nesting."""
 
-    _nml_name = 'boundary'
+    _group = 'boundary'
+    _table = 'boundary'
 
     bc_west = Enum(
         'bc_west',
@@ -661,9 +670,10 @@ class Boundary(Group):
 
 
 class Tracer(Group):
-    """`&tracer_nml` -- Salinity + temperature IC/EOS/bounds, sediment transport."""
+    """`[tracer]` -- Salinity + temperature IC/EOS/bounds, sediment transport."""
 
-    _nml_name = 'tracer'
+    _group = 'tracer'
+    _table = 'tracer'
 
     initial_salinity = Real(
         'initial_salinity',
@@ -809,9 +819,10 @@ class Tracer(Group):
 
 
 class InitialCondition(Group):
-    """`&initial_condition_nml` -- Coastal initial-condition selector + parameters."""
+    """`[initial_condition]` -- Coastal initial-condition selector + parameters."""
 
-    _nml_name = 'initial_condition'
+    _group = 'initial_condition'
+    _table = 'initial_condition'
 
     h0 = Real(
         'h0',
@@ -823,9 +834,10 @@ class InitialCondition(Group):
 
 
 class Nonhydrostatic(Group):
-    """`&nonhydrostatic_nml` -- Non-hydrostatic / multilayer: CG-Poisson, PP81/KPP/k-eps vmix, Smagorinsky, BPG, mode split."""
+    """`[nonhydrostatic]` -- Non-hydrostatic / multilayer: CG-Poisson, PP81/KPP/k-eps vmix, Smagorinsky, BPG, mode split."""
 
-    _nml_name = 'nonhydrostatic'
+    _group = 'nonhydrostatic'
+    _table = 'nonhydrostatic'
 
     nz_layers = Int(
         'nz_layers',
@@ -888,9 +900,10 @@ class Nonhydrostatic(Group):
 
 
 class OceanKappaShear(Group):
-    """`&ocean_kappa_shear_nml` -- JHL08 shear-driven interior turbulence (kappa-shear)."""
+    """`[ocean.kappa_shear]` -- JHL08 shear-driven interior turbulence (kappa-shear)."""
 
-    _nml_name = 'ocean_kappa_shear'
+    _group = 'ocean_kappa_shear'
+    _table = 'ocean.kappa_shear'
 
     enable = Bool(
         'enable',
@@ -1076,9 +1089,10 @@ class OceanKappaShear(Group):
 
 
 class OceanSlopes(Group):
-    """`&ocean_slopes_nml` -- Isopycnal (neutral) slope diagnostics (Griffies 1998)."""
+    """`[ocean.slopes]` -- Isopycnal (neutral) slope diagnostics (Griffies 1998)."""
 
-    _nml_name = 'ocean_slopes'
+    _group = 'ocean_slopes'
+    _table = 'ocean.slopes'
 
     enable = Bool(
         'enable',
@@ -1106,9 +1120,10 @@ class OceanSlopes(Group):
 
 
 class OceanGm(Group):
-    """`&ocean_gm_nml` -- Gent-McWilliams thickness diffusion (eddy bolus transport)."""
+    """`[ocean.gm]` -- Gent-McWilliams thickness diffusion (eddy bolus transport)."""
 
-    _nml_name = 'ocean_gm'
+    _group = 'ocean_gm'
+    _table = 'ocean.gm'
 
     enable = Bool(
         'enable',
@@ -1193,9 +1208,10 @@ class OceanGm(Group):
 
 
 class OceanRedi(Group):
-    """`&ocean_redi_nml` -- Redi continuous neutral (along-isopycnal) tracer diffusion."""
+    """`[ocean.redi]` -- Redi continuous neutral (along-isopycnal) tracer diffusion."""
 
-    _nml_name = 'ocean_redi'
+    _group = 'ocean_redi'
+    _table = 'ocean.redi'
 
     enable = Bool(
         'enable',
@@ -1239,9 +1255,10 @@ class OceanRedi(Group):
 
 
 class OceanVarmix(Group):
-    """`&ocean_varmix_nml` -- Spatially-varying GM/Redi lateral-diffusivity coefficients."""
+    """`[ocean.varmix]` -- Spatially-varying GM/Redi lateral-diffusivity coefficients."""
 
-    _nml_name = 'ocean_varmix'
+    _group = 'ocean_varmix'
+    _table = 'ocean.varmix'
 
     enable = Bool(
         'enable',
@@ -1389,9 +1406,10 @@ class OceanVarmix(Group):
 
 
 class OceanMeke(Group):
-    """`&ocean_meke_nml` -- Prognostic mesoscale eddy kinetic energy (GM<->eddy loop)."""
+    """`[ocean.meke]` -- Prognostic mesoscale eddy kinetic energy (GM<->eddy loop)."""
 
-    _nml_name = 'ocean_meke'
+    _group = 'ocean_meke'
+    _table = 'ocean.meke'
 
     enable = Bool(
         'enable',
@@ -1611,9 +1629,10 @@ class OceanMeke(Group):
 
 
 class OceanTidalMixing(Group):
-    """`&ocean_tidal_mixing_nml` -- St-Laurent/Simmons internal-tide interior diapycnal mixing."""
+    """`[ocean.tidal_mixing]` -- St-Laurent/Simmons internal-tide interior diapycnal mixing."""
 
-    _nml_name = 'ocean_tidal_mixing'
+    _group = 'ocean_tidal_mixing'
+    _table = 'ocean.tidal_mixing'
 
     enable = Bool(
         'enable',
@@ -1875,9 +1894,10 @@ class OceanTidalMixing(Group):
 
 
 class OceanBblMixing(Group):
-    """`&ocean_bbl_mixing_nml` -- Law-of-the-wall bottom-boundary-layer diapycnal mixing (tracer diffusivity)."""
+    """`[ocean.bbl_mixing]` -- Law-of-the-wall bottom-boundary-layer diapycnal mixing (tracer diffusivity)."""
 
-    _nml_name = 'ocean_bbl_mixing'
+    _group = 'ocean_bbl_mixing'
+    _table = 'ocean.bbl_mixing'
 
     enable = Bool(
         'enable',
@@ -1929,9 +1949,10 @@ class OceanBblMixing(Group):
 
 
 class OceanConv(Group):
-    """`&ocean_conv_nml` -- Brunt-Vaisala-triggered convective adjustment (interior closure contributor)."""
+    """`[ocean.conv]` -- Brunt-Vaisala-triggered convective adjustment (interior closure contributor)."""
 
-    _nml_name = 'ocean_conv'
+    _group = 'ocean_conv'
+    _table = 'ocean.conv'
 
     enable = Bool(
         'enable',
@@ -1967,9 +1988,10 @@ class OceanConv(Group):
 
 
 class OceanPorous(Group):
-    """`&ocean_porous_nml` -- Porous barriers: subgrid sill/strait blocking of the C-grid face widths."""
+    """`[ocean.porous]` -- Porous barriers: subgrid sill/strait blocking of the C-grid face widths."""
 
-    _nml_name = 'ocean_porous'
+    _group = 'ocean_porous'
+    _table = 'ocean.porous'
 
     enable = Bool(
         'enable',
@@ -2007,9 +2029,10 @@ class OceanPorous(Group):
 
 
 class OceanDdiff(Group):
-    """`&ocean_ddiff_nml` -- Double diffusion: salt fingering + diffusive convection (folded into the heat/salt split)."""
+    """`[ocean.ddiff]` -- Double diffusion: salt fingering + diffusive convection (folded into the heat/salt split)."""
 
-    _nml_name = 'ocean_ddiff'
+    _group = 'ocean_ddiff'
+    _table = 'ocean.ddiff'
 
     enable = Bool(
         'enable',
@@ -2093,9 +2116,10 @@ class OceanDdiff(Group):
 
 
 class OceanTides(Group):
-    """`&ocean_tides_nml` -- Equilibrium (astronomical) body-force tide (C1) + scalar SAL (C2)."""
+    """`[ocean.tides]` -- Equilibrium (astronomical) body-force tide (C1) + scalar SAL (C2)."""
 
-    _nml_name = 'ocean_tides'
+    _group = 'ocean_tides'
+    _table = 'ocean.tides'
 
     enable = Bool(
         'enable',
@@ -2158,9 +2182,10 @@ class OceanTides(Group):
 
 
 class OceanPsurf(Group):
-    """`&ocean_psurf_nml` -- Atmospheric surface-pressure loading / inverse barometer (PR-17)."""
+    """`[ocean.psurf]` -- Atmospheric surface-pressure loading / inverse barometer (PR-17)."""
 
-    _nml_name = 'ocean_psurf'
+    _group = 'ocean_psurf'
+    _table = 'ocean.psurf'
 
     enable = Bool(
         'enable',
@@ -2212,9 +2237,10 @@ class OceanPsurf(Group):
 
 
 class OceanCavityDyn(Group):
-    """`&ocean_cavity_dyn_nml` -- Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref = b - z_draft."""
+    """`[ocean.cavity_dyn]` -- Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref = b - z_draft."""
 
-    _nml_name = 'ocean_cavity_dyn'
+    _group = 'ocean_cavity_dyn'
+    _table = 'ocean.cavity_dyn'
 
     enable = Bool(
         'enable',
@@ -2351,9 +2377,10 @@ class OceanCavityDyn(Group):
 
 
 class OceanCavityMelt(Group):
-    """`&ocean_cavity_melt_nml` -- Ice-shelf basal-melt thermodynamics: the three-equation interface, its exchange law, and the far-field sampling depth."""
+    """`[ocean.cavity_melt]` -- Ice-shelf basal-melt thermodynamics: the three-equation interface, its exchange law, and the far-field sampling depth."""
 
-    _nml_name = 'ocean_cavity_melt'
+    _group = 'ocean_cavity_melt'
+    _table = 'ocean.cavity_melt'
 
     enable = Bool(
         'enable',
@@ -2477,9 +2504,10 @@ class OceanCavityMelt(Group):
 
 
 class OceanEpbl(Group):
-    """`&ocean_epbl_nml` -- RH18 energetics-based planetary boundary layer."""
+    """`[ocean.epbl]` -- RH18 energetics-based planetary boundary layer."""
 
-    _nml_name = 'ocean_epbl'
+    _group = 'ocean_epbl'
+    _table = 'ocean.epbl'
 
     enable = Bool(
         'enable',
@@ -2837,9 +2865,10 @@ class OceanEpbl(Group):
 
 
 class OceanWavespeed(Group):
-    """`&ocean_wavespeed_nml` -- First-baroclinic wave speed + Rossby deformation radius (diagnostic)."""
+    """`[ocean.wavespeed]` -- First-baroclinic wave speed + Rossby deformation radius (diagnostic)."""
 
-    _nml_name = 'ocean_wavespeed'
+    _group = 'ocean_wavespeed'
+    _table = 'ocean.wavespeed'
 
     enable = Bool(
         'enable',
@@ -2877,9 +2906,10 @@ class OceanWavespeed(Group):
 
 
 class OceanFoxkemper(Group):
-    """`&ocean_foxkemper_nml` -- Fox-Kemper mixed-layer-eddy restratification (B5)."""
+    """`[ocean.foxkemper]` -- Fox-Kemper mixed-layer-eddy restratification (B5)."""
 
-    _nml_name = 'ocean_foxkemper'
+    _group = 'ocean_foxkemper'
+    _table = 'ocean.foxkemper'
 
     enable = Bool(
         'enable',
@@ -2979,9 +3009,10 @@ class OceanFoxkemper(Group):
 
 
 class OceanGrid(Group):
-    """`&ocean_grid_nml` -- Horizontal-grid generator + geometry (ocean curvilinear stream)."""
+    """`[ocean.grid]` -- Horizontal-grid generator + geometry (ocean curvilinear stream)."""
 
-    _nml_name = 'ocean_grid'
+    _group = 'ocean_grid'
+    _table = 'ocean.grid'
 
     grid_config = Enum(
         'grid_config',
@@ -3095,9 +3126,10 @@ class OceanGrid(Group):
 
 
 class OceanCoriolis(Group):
-    """`&ocean_coriolis_nml` -- Coriolis-advection scheme selector."""
+    """`[ocean.coriolis]` -- Coriolis-advection scheme selector."""
 
-    _nml_name = 'ocean_coriolis'
+    _group = 'ocean_coriolis'
+    _table = 'ocean.coriolis'
 
     form = Enum(
         'form',
@@ -3144,9 +3176,10 @@ class OceanCoriolis(Group):
 
 
 class OceanThermo(Group):
-    """`&ocean_thermo_nml` -- Thermodynamics master switch + scalar surface fluxes."""
+    """`[ocean.thermo]` -- Thermodynamics master switch + scalar surface fluxes."""
 
-    _nml_name = 'ocean_thermo'
+    _group = 'ocean_thermo'
+    _table = 'ocean.thermo'
 
     sw_source = Enum(
         'sw_source',
@@ -3311,9 +3344,10 @@ class OceanThermo(Group):
 
 
 class OceanForcing(Group):
-    """`&ocean_forcing_nml` -- Surface-flux component-set gate (PR-12): allocate the q_sw/evap/heat_content_*/... set and derive Q_heat/Q_salt from it every thermo step."""
+    """`[ocean.forcing]` -- Surface-flux component-set gate (PR-12): allocate the q_sw/evap/heat_content_*/... set and derive Q_heat/Q_salt from it every thermo step."""
 
-    _nml_name = 'ocean_forcing'
+    _group = 'ocean_forcing'
+    _table = 'ocean.forcing'
 
     enable_components = Bool(
         'enable_components',
@@ -3342,9 +3376,10 @@ class OceanForcing(Group):
 
 
 class OceanIce(Group):
-    """`&ocean_ice_nml` -- Sea-ice model (SIS2 port) master switch + category/layer counts."""
+    """`[ocean.ice]` -- Sea-ice model (SIS2 port) master switch + category/layer counts."""
 
-    _nml_name = 'ocean_ice'
+    _group = 'ocean_ice'
+    _table = 'ocean.ice'
 
     enable = Bool(
         'enable',
@@ -3697,9 +3732,10 @@ class OceanIce(Group):
 
 
 class OceanIceThermo(Group):
-    """`&ocean_ice_thermo_nml` -- CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; upstream CICE defaults)."""
+    """`[ocean.ice_thermo]` -- CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; upstream CICE defaults)."""
 
-    _nml_name = 'ocean_ice_thermo'
+    _group = 'ocean_ice_thermo'
+    _table = 'ocean.ice_thermo'
 
     ktherm = Int(
         'ktherm',
@@ -3896,9 +3932,10 @@ class OceanIceThermo(Group):
 
 
 class OceanIceSw(Group):
-    """`&ocean_ice_sw_nml` -- CICE-port ice shortwave knobs of the CCSM3 scheme (Briegleb et al. 2004; scheme='cice'; upstream CICE defaults)."""
+    """`[ocean.ice_sw]` -- CICE-port ice shortwave knobs of the CCSM3 scheme (Briegleb et al. 2004; scheme='cice'; upstream CICE defaults)."""
 
-    _nml_name = 'ocean_ice_sw'
+    _group = 'ocean_ice_sw'
+    _table = 'ocean.ice_sw'
 
     shortwave = Enum(
         'shortwave',
@@ -4012,9 +4049,10 @@ class OceanIceSw(Group):
 
 
 class OceanIceRidge(Group):
-    """`&ocean_ice_ridge_nml` -- CICE-port ridging and ice-strength knobs (scheme='cice'; upstream CICE defaults, which OM3 also uses)."""
+    """`[ocean.ice_ridge]` -- CICE-port ridging and ice-strength knobs (scheme='cice'; upstream CICE defaults, which OM3 also uses)."""
 
-    _nml_name = 'ocean_ice_ridge'
+    _group = 'ocean_ice_ridge'
+    _table = 'ocean.ice_ridge'
 
     kstrength = Int(
         'kstrength',
@@ -4079,9 +4117,10 @@ class OceanIceRidge(Group):
 
 
 class OceanIceAtm(Group):
-    """`&ocean_ice_atm_nml` -- CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defaults)."""
+    """`[ocean.ice_atm]` -- CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defaults)."""
 
-    _nml_name = 'ocean_ice_atm'
+    _group = 'ocean_ice_atm'
+    _table = 'ocean.ice_atm'
 
     highfreq = Bool(
         'highfreq',
@@ -4211,9 +4250,10 @@ class OceanIceAtm(Group):
 
 
 class OceanIceDyn(Group):
-    """`&ocean_ice_dyn_nml` -- CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP keys act under dyn_scheme='cice_c' (the C-grid EVP core on the SIS2-derived ice state); illegal EVP values are collected by the configure-time check, not rejected by the parser)."""
+    """`[ocean.ice_dyn]` -- CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP keys act under dyn_scheme='cice_c' (the C-grid EVP core on the SIS2-derived ice state); illegal EVP values are collected by the configure-time check, not rejected by the parser)."""
 
-    _nml_name = 'ocean_ice_dyn'
+    _group = 'ocean_ice_dyn'
+    _table = 'ocean.ice_dyn'
 
     dyn_scheme = Enum(
         'dyn_scheme',
@@ -4401,9 +4441,10 @@ class OceanIceDyn(Group):
 
 
 class OceanIceIc(Group):
-    """`&ocean_ice_ic_nml` -- Sea-ice analytic initial-condition path (PR 24)."""
+    """`[ocean.ice_ic]` -- Sea-ice analytic initial-condition path (PR 24)."""
 
-    _nml_name = 'ocean_ice_ic'
+    _group = 'ocean_ice_ic'
+    _table = 'ocean.ice_ic'
 
     conc_config = Enum(
         'conc_config',
@@ -4490,9 +4531,10 @@ class OceanIceIc(Group):
 
 
 class OceanRestore(Group):
-    """`&ocean_restore_nml` -- Surface buoyancy restoring (MOM6 RESTOREBUOY): piston-velocity relaxation of top-layer T / S toward targets."""
+    """`[ocean.restore]` -- Surface buoyancy restoring (MOM6 RESTOREBUOY): piston-velocity relaxation of top-layer T / S toward targets."""
 
-    _nml_name = 'ocean_restore'
+    _group = 'ocean_restore'
+    _table = 'ocean.restore'
 
     enable_restore_temp = Bool(
         'enable_restore_temp',
@@ -4627,9 +4669,10 @@ class OceanRestore(Group):
 
 
 class OceanGeothermal(Group):
-    """`&ocean_geothermal_nml` -- Geothermal bottom heat flux (bed-side analogue of the surface heat flux)."""
+    """`[ocean.geothermal]` -- Geothermal bottom heat flux (bed-side analogue of the surface heat flux)."""
 
-    _nml_name = 'ocean_geothermal'
+    _group = 'ocean_geothermal'
+    _table = 'ocean.geothermal'
 
     enable = Bool(
         'enable',
@@ -4649,9 +4692,10 @@ class OceanGeothermal(Group):
 
 
 class OceanSponge(Group):
-    """`&ocean_sponge_nml` -- Map-driven sponge: per-cell Idamp + 3-D reference state (PR-23)."""
+    """`[ocean.sponge]` -- Map-driven sponge: per-cell Idamp + 3-D reference state (PR-23)."""
 
-    _nml_name = 'ocean_sponge'
+    _group = 'ocean_sponge'
+    _table = 'ocean.sponge'
 
     enable = Bool(
         'enable',
@@ -4792,9 +4836,10 @@ class OceanSponge(Group):
 
 
 class OceanTracers(Group):
-    """`&ocean_tracers_nml` -- Prognostic-tracer registry switches."""
+    """`[ocean.tracers]` -- Prognostic-tracer registry switches."""
 
-    _nml_name = 'ocean_tracers'
+    _group = 'ocean_tracers'
+    _table = 'ocean.tracers'
 
     enable_ideal_age = Bool(
         'enable_ideal_age',
@@ -4830,9 +4875,10 @@ class OceanTracers(Group):
 
 
 class OceanBt(Group):
-    """`&ocean_bt_nml` -- Split-explicit barotropic substep controls."""
+    """`[ocean.bt]` -- Split-explicit barotropic substep controls."""
 
-    _nml_name = 'ocean_bt'
+    _group = 'ocean_bt'
+    _table = 'ocean.bt'
 
     n_inner = Int(
         'n_inner',
@@ -4960,7 +5006,7 @@ class OceanBt(Group):
 
     split_scheme = Enum(
         'split_scheme',
-        doc='Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 predictor-corrector, slow tendencies on the u_av/h_av step time-means, forward-backward gravity-wave pairing; lifts the internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage SSP average, widest envelope — the only scheme wired through eulerian_z and wet/dry — but it spuriously grows internal gravity waves out of a stratified REST state, En 2.992E-05 vs 1.739E-09 at day 25 on resting_stratified_channel.nml; a (omega*dt)^4 noise floor, so forced viscous runs sit decades above it and quiescent or long spin-up runs do not)',
+        doc='Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 predictor-corrector, slow tendencies on the u_av/h_av step time-means, forward-backward gravity-wave pairing; lifts the internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage SSP average, widest envelope — the only scheme wired through eulerian_z and wet/dry — but it spuriously grows internal gravity waves out of a stratified REST state, En 2.992E-05 vs 1.739E-09 at day 25 on resting_stratified_channel.toml; a (omega*dt)^4 noise floor, so forced viscous runs sit decades above it and quiescent or long spin-up runs do not)',
         units='',
         required=False,
         default='pred_corr',
@@ -5141,9 +5187,10 @@ class OceanBt(Group):
 
 
 class OceanDebug(Group):
-    """`&ocean_debug_nml` -- Forensic probes for the ocean dyn-core (all heavy, all default off)."""
+    """`[ocean.debug]` -- Forensic probes for the ocean dyn-core (all heavy, all default off)."""
 
-    _nml_name = 'ocean_debug'
+    _group = 'ocean_debug'
+    _table = 'ocean.debug'
 
     budget = Bool(
         'budget',
@@ -5219,9 +5266,10 @@ class OceanDebug(Group):
 
 
 class OceanMpi(Group):
-    """`&ocean_mpi_nml` -- Multi-rank MPI debug/tuning controls."""
+    """`[ocean.mpi]` -- Multi-rank MPI debug/tuning controls."""
 
-    _nml_name = 'ocean_mpi'
+    _group = 'ocean_mpi'
+    _table = 'ocean.mpi'
 
     poison_ghosts = Bool(
         'poison_ghosts',
@@ -5233,9 +5281,10 @@ class OceanMpi(Group):
 
 
 class OceanWetdry(Group):
-    """`&ocean_wetdry_nml` -- Dynamic wetting/drying for the split-explicit barotropic substep."""
+    """`[ocean.wetdry]` -- Dynamic wetting/drying for the split-explicit barotropic substep."""
 
-    _nml_name = 'ocean_wetdry'
+    _group = 'ocean_wetdry'
+    _table = 'ocean.wetdry'
 
     enable = Bool(
         'enable',
@@ -5277,9 +5326,10 @@ class OceanWetdry(Group):
 
 
 class OceanPgf(Group):
-    """`&ocean_pgf_nml` -- Pressure-gradient-force kernel selector + knobs."""
+    """`[ocean.pgf]` -- Pressure-gradient-force kernel selector + knobs."""
 
-    _nml_name = 'ocean_pgf'
+    _group = 'ocean_pgf'
+    _table = 'ocean.pgf'
 
     form = Enum(
         'form',
@@ -5376,9 +5426,10 @@ class OceanPgf(Group):
 
 
 class OceanEos(Group):
-    """`&ocean_eos_nml` -- Equation-of-state variant selector, liquidus set + reference pressure."""
+    """`[ocean.eos]` -- Equation-of-state variant selector, liquidus set + reference pressure."""
 
-    _nml_name = 'ocean_eos'
+    _group = 'ocean_eos'
+    _table = 'ocean.eos'
 
     eos = Enum(
         'eos',
@@ -5452,9 +5503,10 @@ class OceanEos(Group):
 
 
 class OceanBdrag(Group):
-    """`&ocean_bdrag_nml` -- Bottom-drag selector + coefficients."""
+    """`[ocean.bdrag]` -- Bottom-drag selector + coefficients."""
 
-    _nml_name = 'ocean_bdrag'
+    _group = 'ocean_bdrag'
+    _table = 'ocean.bdrag'
 
     form = Enum(
         'form',
@@ -5539,9 +5591,10 @@ class OceanBdrag(Group):
 
 
 class OceanTdrag(Group):
-    """`&ocean_tdrag_nml` -- Ice-shelf top-drag selector + coefficients (mirror of &ocean_bdrag_nml)."""
+    """`[ocean.tdrag]` -- Ice-shelf top-drag selector + coefficients (mirror of &ocean_bdrag_nml)."""
 
-    _nml_name = 'ocean_tdrag'
+    _group = 'ocean_tdrag'
+    _table = 'ocean.tdrag'
 
     enable = Bool(
         'enable',
@@ -5620,9 +5673,10 @@ class OceanTdrag(Group):
 
 
 class OceanHdiff(Group):
-    """`&ocean_hdiff_nml` -- Along-coordinate (not neutral) constant-coefficient tracer diffusion."""
+    """`[ocean.hdiff]` -- Along-coordinate (not neutral) constant-coefficient tracer diffusion."""
 
-    _nml_name = 'ocean_hdiff'
+    _group = 'ocean_hdiff'
+    _table = 'ocean.hdiff'
 
     kappa_h = Real(
         'kappa_h',
@@ -5636,9 +5690,10 @@ class OceanHdiff(Group):
 
 
 class OceanHvisc(Group):
-    """`&ocean_hvisc_nml` -- Lateral-viscosity closure + coefficients."""
+    """`[ocean.hvisc]` -- Lateral-viscosity closure + coefficients."""
 
-    _nml_name = 'ocean_hvisc'
+    _group = 'ocean_hvisc'
+    _table = 'ocean.hvisc'
 
     lateral_closure = Enum(
         'lateral_closure',
@@ -5880,9 +5935,10 @@ class OceanHvisc(Group):
 
 
 class OceanVmix(Group):
-    """`&ocean_vmix_nml` -- Vertical-mixing module switches + knobs."""
+    """`[ocean.vmix]` -- Vertical-mixing module switches + knobs."""
 
-    _nml_name = 'ocean_vmix'
+    _group = 'ocean_vmix'
+    _table = 'ocean.vmix'
 
     use_closure = Bool(
         'use_closure',
@@ -6208,9 +6264,10 @@ class OceanVmix(Group):
 
 
 class OceanVdiff(Group):
-    """`&ocean_vdiff_nml` -- Backward-Euler vertical-friction solver knobs."""
+    """`[ocean.vdiff]` -- Backward-Euler vertical-friction solver knobs."""
 
-    _nml_name = 'ocean_vdiff'
+    _group = 'ocean_vdiff'
+    _table = 'ocean.vdiff'
 
     implicit_stress = Bool(
         'implicit_stress',
@@ -6297,9 +6354,10 @@ class OceanVdiff(Group):
 
 
 class OceanContinuity(Group):
-    """`&ocean_continuity_nml` -- Continuity-PPM positivity controls."""
+    """`[ocean.continuity]` -- Continuity-PPM positivity controls."""
 
-    _nml_name = 'ocean_continuity'
+    _group = 'ocean_continuity'
+    _table = 'ocean.continuity'
 
     h_min = Real(
         'h_min',
@@ -6343,9 +6401,10 @@ class OceanContinuity(Group):
 
 
 class OceanIsopycnal(Group):
-    """`&ocean_isopycnal_nml` -- Lagrangian grounding-stability controls."""
+    """`[ocean.isopycnal]` -- Lagrangian grounding-stability controls."""
 
-    _nml_name = 'ocean_isopycnal'
+    _group = 'ocean_isopycnal'
+    _table = 'ocean.isopycnal'
 
     angstrom_h = Real(
         'angstrom_h',
@@ -6397,9 +6456,10 @@ class OceanIsopycnal(Group):
 
 
 class OceanTopo(Group):
-    """`&ocean_topo_nml` -- Basin geometry + surface forcing + Coriolis tilt."""
+    """`[ocean.topo]` -- Basin geometry + surface forcing + Coriolis tilt."""
 
-    _nml_name = 'ocean_topo'
+    _group = 'ocean_topo'
+    _table = 'ocean.topo'
 
     topo_config = Enum(
         'topo_config',
@@ -6507,9 +6567,10 @@ class OceanTopo(Group):
 
 
 class OceanIc(Group):
-    """`&ocean_ic_nml` -- Initial-condition overlay + EOS reference state."""
+    """`[ocean.ic]` -- Initial-condition overlay + EOS reference state."""
 
-    _nml_name = 'ocean_ic'
+    _group = 'ocean_ic'
+    _table = 'ocean.ic'
 
     ic_config = Enum(
         'ic_config',
@@ -6770,9 +6831,10 @@ class OceanIc(Group):
 
 
 class OceanZinit(Group):
-    """`&ocean_zinit_nml` -- Z-level T/S initial-condition overlay (A2)."""
+    """`[ocean.zinit]` -- Z-level T/S initial-condition overlay (A2)."""
 
-    _nml_name = 'ocean_zinit'
+    _group = 'ocean_zinit'
+    _table = 'ocean.zinit'
 
     enable = Bool(
         'enable',
@@ -6886,9 +6948,10 @@ class OceanZinit(Group):
 
 
 class OceanData(Group):
-    """`&ocean_data_nml` -- Shared time-varying NetCDF input reader (PR-14): registry sizing only."""
+    """`[ocean.data]` -- Shared time-varying NetCDF input reader (PR-14): registry sizing only."""
 
-    _nml_name = 'ocean_data'
+    _group = 'ocean_data'
+    _table = 'ocean.data'
 
     max_fields = Int(
         'max_fields',
@@ -6910,9 +6973,10 @@ class OceanData(Group):
 
 
 class OceanDataovr(Group):
-    """`&ocean_dataovr_nml` -- File-backed surface forcing (PR-15): wind stress, heat, freshwater."""
+    """`[ocean.dataovr]` -- File-backed surface forcing (PR-15): wind stress, heat, freshwater."""
 
-    _nml_name = 'ocean_dataovr'
+    _group = 'ocean_dataovr'
+    _table = 'ocean.dataovr'
 
     enable = Bool(
         'enable',
@@ -7231,9 +7295,10 @@ class OceanDataovr(Group):
 
 
 class OceanAtmForcing(Group):
-    """`&ocean_atm_forcing_nml` -- JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface forcing (PR-C2c)."""
+    """`[ocean.atm_forcing]` -- JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface forcing (PR-C2c)."""
 
-    _nml_name = 'ocean_atm_forcing'
+    _group = 'ocean_atm_forcing'
+    _table = 'ocean.atm_forcing'
 
     enable = Bool('enable', doc='Master switch', units='', required=False, default=False)
 
@@ -7503,9 +7568,10 @@ class OceanAtmForcing(Group):
 
 
 class OceanBulkFlux(Group):
-    """`&ocean_bulk_flux_nml` -- Monin-Obukhov bulk-flux kernel (Large & Yeager 2004/2009)."""
+    """`[ocean.bulk_flux]` -- Monin-Obukhov bulk-flux kernel (Large & Yeager 2004/2009)."""
 
-    _nml_name = 'ocean_bulk_flux'
+    _group = 'ocean_bulk_flux'
+    _table = 'ocean.bulk_flux'
 
     enable = Bool(
         'enable',
@@ -7551,9 +7617,10 @@ class OceanBulkFlux(Group):
 
 
 class OceanDiag(Group):
-    """`&ocean_diag_nml` -- Ocean diag-manager output controls."""
+    """`[ocean.diag]` -- Ocean diag-manager output controls."""
 
-    _nml_name = 'ocean_diag'
+    _group = 'ocean_diag'
+    _table = 'ocean.diag'
 
     enabled = Bool(
         'enabled',
@@ -7710,9 +7777,10 @@ class OceanDiag(Group):
 
 
 class OceanBc(Group):
-    """`&ocean_bc_nml` -- Open-boundary condition config: per-edge BC type, clamped/inflow Dirichlet values, sponge band, Orlanski radiation, full Flather, per-edge tidal constituents, tidal-OBC nodal correction, wall-velocity masking."""
+    """`[ocean.bc]` -- Open-boundary condition config: per-edge BC type, clamped/inflow Dirichlet values, sponge band, Orlanski radiation, full Flather, per-edge tidal constituents, tidal-OBC nodal correction, wall-velocity masking."""
 
-    _nml_name = 'ocean_bc'
+    _group = 'ocean_bc'
+    _table = 'ocean.bc'
 
     west = Enum(
         'west',

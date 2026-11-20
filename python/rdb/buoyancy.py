@@ -1,4 +1,4 @@
-"""P5 D2.5 -- equation of state. `&ocean_eos_nml` + `&ocean_ic_nml`."""
+"""P5 D2.5 -- equation of state. `[ocean.eos]` + `[ocean.ic]`."""
 
 from __future__ import annotations
 
@@ -10,17 +10,17 @@ class LinearEquationOfState:
     reference_density=1035.0, haline_contraction=None,
     reference_temperature=None, reference_salinity=None)``
 
-    -> `&ocean_eos_nml eos="linear"`, `&ocean_ic_nml alpha_T, beta_S,
+    -> `[ocean.eos] eos="linear"`, `[ocean.ic] alpha_T, beta_S,
     T_ref, S_ref, rho_0` -- the whole linear reference state:
 
         rho = rho_0 + beta_S*(S - S_ref) - alpha_T*(T - T_ref)
 
     A REAL TRAP THIS OBJECT CLOSES: there used to be two `alpha_T` knobs
-    with the same documented units and different values -- `&tracer_nml
+    with the same documented units and different values -- `[tracer]
     alpha_T` (coastal-legacy, fed `tr_T%eos_coeff`, read by nothing on
-    the ocean path) and `&ocean_ic_nml alpha_T` (the ocean path, feeds
+    the ocean path) and `[ocean.ic] alpha_T` (the ocean path, feeds
     `eos%alpha_T`). This object writes the ocean one; the legacy quartet
-    (`alpha_T`, `beta_S`, `T_ref`, `S_ref` on `&tracer_nml`) is now
+    (`alpha_T`, `beta_S`, `T_ref`, `S_ref` on `[tracer]`) is now
     RETIRED and fails loud if you set it.
 
     A SECOND TRAP: `thermal_expansion`/`haline_contraction` are
@@ -43,7 +43,7 @@ class LinearEquationOfState:
 
     The three salinity/reference keywords default to ``None`` = "leave
     the Fortran's own default alone" rather than to a repeated literal,
-    so they are written to the namelist only when you actually ask for
+    so they are written to the config only when you actually ask for
     them -- an existing call site that names neither is serialised
     exactly as before.
     """

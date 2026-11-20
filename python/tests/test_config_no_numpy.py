@@ -71,7 +71,7 @@ def test_config_layer_imports_on_bare_system_python():
         [interp, "-c",
          "import sys; sys.path.insert(0, %r); import rdb; "
          "cfg = rdb.Config(); "
-         "assert cfg.to_namelist() == ''; "
+         "assert cfg.to_toml() == ''; "
          "print('OK', rdb.Config)" % str(ROOT / "python")],
         capture_output=True, text=True)
     assert result.returncode == 0, (

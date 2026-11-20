@@ -25,26 +25,53 @@ DT = 900.0
 T_BG = 10.0
 
 
-def _nml(dt=DT, t_end=None):
+def _toml(dt=DT, t_end=None):
     t_end = t_end if t_end is not None else 100 * dt
     return (
-        '&sim_nml sim_type = "ocean" /\n'
-        f"&time_nml t_end = {t_end}, dt_fixed = {dt} /\n"
-        f"&nonhydrostatic_nml nz_layers = {NZ} /\n"
-        f"&tracer_nml initial_temperature = {T_BG}, initial_salinity = 35.0 /\n"
-        "&ocean_bt_nml auto_n_inner = .true. /\n"
-        "&ocean_diag_nml enabled = .false. /\n"
-        f"&grid_nml nx = {NX}, ny = {NY}, nghost = 3, dx = {DX}, dy = {DX} /\n"
-        f"&physics_nml coriolis_f = {F0} /\n"
-        "&vcoord_nml vcoord_type = 'sigma' /\n"
-        f"&ocean_topo_nml topo_config = 'flat', max_depth = {DEPTH}, "
-        "coriolis_beta = 0.0, coriolis_y_ref = 0.0 /\n"
-        "&ocean_bc_nml west = 'periodic', east = 'periodic', "
-        "south = 'periodic', north = 'periodic' /\n"
-        "&ocean_eos_nml eos = 'linear' /\n"
-        "&ocean_thermo_nml enable_thermodynamics = .true. /\n"
-        "&ocean_ic_nml alpha_T = 0.17, rho_0 = 1035.0 /\n"
-        "&output_nml output_to_file = .false. /\n"
+        f"""[sim]
+sim_type = "ocean"
+[time]
+t_end = {t_end}
+dt_fixed = {dt}
+[nonhydrostatic]
+nz_layers = {NZ}
+[tracer]
+initial_temperature = {T_BG}
+initial_salinity = 35.0
+[ocean.bt]
+auto_n_inner = true
+[ocean.diag]
+enabled = false
+[grid]
+nx = {NX}
+ny = {NY}
+nghost = 3
+dx = {DX}
+dy = {DX}
+[physics]
+coriolis_f = {F0}
+[vcoord]
+vcoord_type = "sigma"
+[ocean.topo]
+topo_config = "flat"
+max_depth = {DEPTH}
+coriolis_beta = 0.0
+coriolis_y_ref = 0.0
+[ocean.bc]
+west = "periodic"
+east = "periodic"
+south = "periodic"
+north = "periodic"
+[ocean.eos]
+eos = "linear"
+[ocean.thermo]
+enable_thermodynamics = true
+[ocean.ic]
+alpha_T = 0.17
+rho_0 = 1035.0
+[output]
+output_to_file = false
+"""
     )
 
 
@@ -62,8 +89,8 @@ def _eddy(tilt=0.0, amp=1.0, ax=5.0, ay=3.0):
             for i in range(NX)]
 
 
-def _staged(temp, balance=None, nml=None, **bal_kw):
-    m = rdb.Model.pending(nml or _nml())
+def _staged(temp, balance=None, cfg_text=None, **bal_kw):
+    m = rdb.Model.pending(cfg_text or _toml())
     m.stage_tracer("temperature", temp)
     if balance:
         m.stage_balance(balance, **bal_kw)
@@ -133,7 +160,7 @@ def test_live_balance_equals_staged_balance_bit_for_bit():
         ua3 = _uvh(a)
     finally:
         a.close()
-    b = rdb.Model(_nml())
+    b = rdb.Model(_toml())
     try:
         b.temperature[...] = temp
         b.balance("geostrophic", "bottom_rest")
@@ -149,7 +176,7 @@ def test_live_balance_equals_staged_balance_bit_for_bit():
 
 def test_keep_h_leaves_the_column_thickness_alone():
     temp = _eddy()
-    m = rdb.Model(_nml())
+    m = rdb.Model(_toml())
     try:
         m.temperature[...] = temp
         h0 = m.h[...]
@@ -162,7 +189,7 @@ def test_keep_h_leaves_the_column_thickness_alone():
 
 
 def test_bottom_rest_relevels_the_sea_surface():
-    m = rdb.Model(_nml())
+    m = rdb.Model(_toml())
     try:
         m.temperature[...] = _eddy()
         m.balance()
@@ -172,13 +199,13 @@ def test_bottom_rest_relevels_the_sea_surface():
 
 
 def test_gradient_mode_is_not_implemented():
-    m = rdb.Model(_nml())
+    m = rdb.Model(_toml())
     try:
         with pytest.raises(rdb.RdbInitialConditionError):
             m.balance("gradient")
     finally:
         m.close()
-    p = rdb.Model.pending(_nml())
+    p = rdb.Model.pending(_toml())
     try:
         with pytest.raises(rdb.RdbInitialConditionError):
             p.stage_balance("gradient")
@@ -188,21 +215,21 @@ def test_gradient_mode_is_not_implemented():
 
 
 def test_balance_refused_after_the_first_step():
-    with rdb.Model(_nml()) as m:
+    with rdb.Model(_toml()) as m:
         m.step(1)
         with pytest.raises(rdb.RdbSetupError):
             m.balance()
 
 
 def test_bad_arguments_and_wrong_window():
-    with rdb.Model(_nml()) as m:
+    with rdb.Model(_toml()) as m:
         with pytest.raises(ValueError):
             m.balance("geostrophic", "nonsense")
         with pytest.raises(ValueError):
             m.balance("nonsense")
         with pytest.raises(rdb.NotInitialisedError):
             m.stage_balance()
-    p = rdb.Model.pending(_nml())
+    p = rdb.Model.pending(_toml())
     try:
         with pytest.raises(ValueError):
             p.stage_balance("geostrophic", "nonsense")
@@ -211,8 +238,8 @@ def test_bad_arguments_and_wrong_window():
 
 
 def test_equatorial_f_is_refused_and_velocity_untouched():
-    nml = _nml().replace(f"coriolis_f = {F0}", "coriolis_f = 0.0")
-    with rdb.Model(nml) as m:
+    cfg_text = _toml().replace(f"coriolis_f = {F0}", "coriolis_f = 0.0")
+    with rdb.Model(cfg_text) as m:
         m.temperature[...] = _eddy()
         u0 = m.u[...]
         with pytest.raises(rdb.RdbInitialConditionError):
@@ -221,7 +248,7 @@ def test_equatorial_f_is_refused_and_velocity_untouched():
 
 
 def test_balance_overrides_staged_velocity():
-    p = rdb.Model.pending(_nml())
+    p = rdb.Model.pending(_toml())
     p.stage_tracer("temperature", _eddy())
     p.stage_u([[[0.5] * NZ for _ in range(NY)] for _ in range(NX + 1)])
     p.stage_balance()
@@ -233,25 +260,25 @@ def test_balance_overrides_staged_velocity():
         p.close()
 
 
-def _nml_no_thermo(layer_rho=None):
-    nml = _nml().replace("enable_thermodynamics = .true.",
-                         "enable_thermodynamics = .false.")
+def _toml_no_thermo(layer_rho=None):
+    cfg_text = _toml().replace("enable_thermodynamics = true",
+                         "enable_thermodynamics = false")
     if layer_rho:
-        nml = nml.replace(
-            "&ocean_ic_nml alpha_T = 0.17, rho_0 = 1035.0 /",
-            "&ocean_ic_nml alpha_T = 0.17, rho_0 = 1035.0, layer_rho_init = "
-            + ", ".join(str(v) for v in layer_rho) + " /")
-    return nml
+        cfg_text = cfg_text.replace(
+            "alpha_T = 0.17\nrho_0 = 1035.0\n",
+            "alpha_T = 0.17\nrho_0 = 1035.0\nlayer_rho_init = ["
+            + ", ".join(str(v) for v in layer_rho) + "]\n")
+    return cfg_text
 
 
 def test_thermo_off_refuses_balance_of_written_temperature():
     """T/S cannot change rho with thermodynamics off: refuse, don't return a
     silent zero velocity."""
-    with rdb.Model(_nml_no_thermo()) as m:
+    with rdb.Model(_toml_no_thermo()) as m:
         m.temperature[...] = _eddy()
         with pytest.raises(rdb.RdbInitialConditionError):
             m.balance()
-    p = rdb.Model.pending(_nml_no_thermo())
+    p = rdb.Model.pending(_toml_no_thermo())
     try:
         p.stage_tracer("temperature", _eddy())
         with pytest.raises(rdb.RdbInitialConditionError):
@@ -259,7 +286,7 @@ def test_thermo_off_refuses_balance_of_written_temperature():
         p.finalize()
     finally:
         p.close()
-    p = rdb.Model.pending(_nml_no_thermo())
+    p = rdb.Model.pending(_toml_no_thermo())
     try:
         p.stage_balance()
         with pytest.raises(rdb.RdbInitialConditionError):
@@ -271,9 +298,9 @@ def test_thermo_off_refuses_balance_of_written_temperature():
 
 def test_thermo_off_with_prescribed_layer_densities_is_allowed():
     rho = [1034.0, 1034.3, 1034.6, 1034.9]
-    with rdb.Model(_nml_no_thermo(rho)) as m:
+    with rdb.Model(_toml_no_thermo(rho)) as m:
         m.balance()
-    p = rdb.Model.pending(_nml_no_thermo(rho))
+    p = rdb.Model.pending(_toml_no_thermo(rho))
     try:
         p.stage_balance()
         p.finalize()

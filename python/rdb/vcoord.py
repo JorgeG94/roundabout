@@ -1,4 +1,4 @@
-"""P5 D2.10 -- vertical coordinate. `&vcoord_nml`. NOT spelled `z=` -- see
+"""P5 D2.10 -- vertical coordinate. `[vcoord]`. NOT spelled `z=` -- see
 D6.4: Roundabout has no explicit vertical-grid input in any form.
 """
 
@@ -40,7 +40,7 @@ class ZSigma:
 
 class ZStar:
     """``ZStar(remap="ppm")`` -> `"zstar"`. MOM6 z*: the `z_fixed`
-    nominal profile (`&vcoord_nml z_fixed_profile`, uniform by default)
+    nominal profile (`[vcoord] z_fixed_profile`, uniform by default)
     dilated per column by `(H + eta)/H` over partial bed cells and inert
     bed fillers. Pair with `zfixed_closed_faces` on sloping topography.
     Refused under an ice-shelf cavity and with wet/dry."""
@@ -71,7 +71,7 @@ class ZStarFull:
     `z_ref` from local bathymetry; surface layer anchored at
     `h_surf_target` regardless of `H`.
 
-    NOT offered: `stretching` / `n_surf`. `&vcoord_nml zstar_stretching`
+    NOT offered: `stretching` / `n_surf`. `[vcoord] zstar_stretching`
     (default `"log"`) and `zstar_n_surf` are registered on the schema but
     never copied onto `ocean_state%vcoord` -- the ocean path always runs
     `STRETCH_UNIFORM` / `n_surf=0` regardless (D5.6). Offering them here
@@ -89,7 +89,7 @@ class ZStarFull:
     to dynamically live (EOS / PGF / remap-drain / vdiff) while the
     coordinate still treats them as throwaway. `validate_config` refuses
     it. For a genuinely live minimum layer thickness use
-    `&ocean_isopycnal_nml angstrom_h`; the `Isopycnal` / `Hycom`
+    `[ocean.isopycnal] angstrom_h`; the `Isopycnal` / `Hycom`
     coordinates carry the opposite (keep-alive) contract on the same knob.
     """
 
@@ -133,7 +133,7 @@ class Hycom:
 
 
 class Lagrangian:
-    """-> `"lagrangian"`. Pairs with `&ocean_isopycnal_nml` grounding
+    """-> `"lagrangian"`. Pairs with `[ocean.isopycnal]` grounding
     knobs, which are generated-layer only."""
 
     def __init__(self, remap="ppm"):

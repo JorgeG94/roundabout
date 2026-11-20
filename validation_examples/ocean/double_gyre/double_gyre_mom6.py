@@ -32,13 +32,13 @@ Known caveats vs MOM6 (see ``README.md``):
 
 THE FORMERLY MOST SIGNIFICANT ESCAPE HATCH IN THIS PORT, NOW CLOSED:
 MOM6's "degrees-per-cell, arc-length-derived Cartesian" grid mode --
-``&ocean_grid_nml axis_units = "degrees"`` on an otherwise
+``[ocean.grid] axis_units = "degrees"`` on an otherwise
 ``grid_config = "cartesian"`` grid, with ``dx``/``dy`` DERIVED from
 ``len_lon``/``len_lat``/``rad_earth`` as arc lengths (no ``cos(lat)``
 factor) -- used to have NO curated route at all: ``RectilinearGrid``
 already accepted ``axis_units="degrees"`` (it forwards whatever
 ``extent=`` it is given straight to ``len_lon``/``len_lat``
-regardless of unit), but had no way to reach ``&ocean_grid_nml
+regardless of unit), but had no way to reach ``[ocean.grid]
 rad_earth``, which the "degrees" derivation needs. ``RectilinearGrid``
 now takes ``radius=`` for exactly this; see ``build_model()`` below.
 
@@ -89,34 +89,34 @@ from rdb.vcoord import ZStarFull
 
 def build_model():
     grid = RectilinearGrid(
-        size=(44, 40, 2),                  # &grid_nml nx/ny, &nonhydro-
-                                            # static_nml nz_layers
+        size=(44, 40, 2),                  # [grid] nx/ny, [nonhydrostatic]
+                                            # nz_layers
         extent=(22.0, 20.0),                # DEGREES here -- see the
                                              # module docstring: extent=
                                              # follows axis_units=
         axis_units="degrees",               # MOM6-parity arc-length dx/dy
-        radius=6.378e6,                     # &ocean_grid_nml rad_earth
+        radius=6.378e6,                     # [ocean.grid] rad_earth
         topology=(Topology.BOUNDED, Topology.BOUNDED),
-        halo=3,   # matches the .nml's explicit &grid_nml nghost=3 (pinned
+        halo=3,   # matches the .toml's explicit [grid] nghost=3 (pinned
                   # explicitly, matching seamount.py's convention, rather
                   # than relying on the derivation landing on 3 too).
     )
 
     model = rdb.Model(
         grid=grid,
-        timestep=1200.0,   # &time_nml dt_fixed
+        timestep=1200.0,   # [time] dt_fixed
 
         coriolis=BetaPlane(f0=9.4e-5, beta=1.76e-11, y_ref=1113200.0),
         momentum_advection=Sadourny(form="energy"),  # -> sadourny_energy
-        # No buoyancy= object here, DELIBERATELY: the .nml never touches
-        # &ocean_eos_nml (default "linear" already matches) or
-        # &ocean_ic_nml alpha_T/beta_S/T_ref/S_ref/rho_0 (all stay at
+        # No buoyancy= object here, DELIBERATELY: the .toml never touches
+        # [ocean.eos] (default "linear" already matches) or
+        # [ocean.ic] alpha_T/beta_S/T_ref/S_ref/rho_0 (all stay at
         # the Fortran's own defaults) -- and ocean_ic.alpha_T is unused
         # anyway once enable_thermodynamics=.false. below skips the EOS
         # call entirely.
         # An earlier draft of this script called
         # LinearEquationOfState(thermal_expansion=0.0, ...) here, which
-        # wrote a NON-default &ocean_ic_nml alpha_T=0.0 the .nml never
+        # wrote a NON-default [ocean.ic] alpha_T=0.0 the .toml never
         # sets -- caught by the config-identity gate (see the port
         # report); removed rather than papered over.
         pressure=ReducedGravity(g_free_surface=0.98, g_internal=0.0098),
@@ -125,9 +125,9 @@ def build_model():
 
         closures=[
             Smagorinsky(C=0.15, biharmonic=True, C_biharmonic=0.06,
-                        free_slip=True,  # &ocean_hvisc_nml no_slip is
+                        free_slip=True,  # [ocean.hvisc] no_slip is
                                           # False by Fortran default and
-                                          # the .nml never touches it --
+                                          # the .toml never touches it --
                                           # see acc_channel.py's fuller
                                           # note on this same gap.
                         nu_h=10000.0, kh_vel_scale=3.0e-3),
@@ -176,26 +176,26 @@ def build_model():
     # object per D2.6).
     VelocityTruncation(maxvel=6.0).apply(cfg)
 
-    # NOTE: &ocean_vmix_nml direct_stress/hmix_stress and &ocean_hvisc_nml
-    # ah_max are NOT set here -- the .nml's own values (direct_stress=
+    # NOTE: [ocean.vmix] direct_stress/hmix_stress and [ocean.hvisc]
+    # ah_max are NOT set here -- the .toml's own values (direct_stress=
     # False, hmix_stress=20.0, ah_max=1e4) are already the Fortran's OWN
     # schema defaults (and Smagorinsky()'s own ah_max default), so
     # setting them explicitly would be a behaviourally-inert no-op; see
     # the port report for the full accounting.
 
-    # NOTE: an earlier revision reproduced the .nml's belt-and-braces
+    # NOTE: an earlier revision reproduced the .toml's belt-and-braces
     # `cfg.tracer.alpha_T = cfg.tracer.beta_S = 0.0` here. Those two
     # keys are now RETIRED -- setting them is a fail-loud configure
-    # error naming `&ocean_ic_nml alpha_T`/`beta_S` -- and the .nml has
+    # error naming `[ocean.ic] alpha_T`/`beta_S` -- and the .toml has
     # dropped them too, so the pair is gone from both sides. Nothing
     # changes: they only ever reached tracer_t%eos_coeff, which no ocean
     # kernel reads. What actually decouples the carried tracers from the
     # dynamics is Thermodynamics(enabled=False) plus ReducedGravity
     # (gprime), which never calls the EOS.
 
-    # &output_nml output_to_file: cosmetic-only dead knob, see
+    # [output] output_to_file: cosmetic-only dead knob, see
     # acc_channel.py's matching note (Diagnostics(enabled=True) sets it
-    # True; the .nml sets it False independently; kept for text
+    # True; the .toml sets it False independently; kept for text
     # fidelity, not because it changes anything).
     cfg.output.output_to_file = False
 
@@ -204,7 +204,7 @@ def build_model():
 
 def main():
     model = build_model()
-    print(model.config.to_namelist()[:400], "...\n")
+    print(model.config.to_toml()[:400], "...\n")
 
     with model:
         ssh_min_series = []

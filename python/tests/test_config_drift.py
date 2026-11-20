@@ -20,6 +20,7 @@ found, e.g. a build tree that only shipped the installed `.so`.
 import filecmp
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
@@ -83,3 +84,67 @@ def test_config_generated_matches_live_schema(tmp_path):
             "tmp_local_artifacts/schema.json "
             "python/rdb/_config_generated.py\n\n"
             f"Diff (checked-in vs regenerated):\n{diff}")
+
+
+def test_table_mapping_is_the_one_rule_and_round_trips():
+    """Every generated group names its TOML table through the ONE rule in
+    `tools/gen_python_config.py` (only the leading `ocean_` nests), the
+    tables are unique, and a knob set in every group survives
+    `to_toml()` -> `config_from_toml_text`."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    try:
+        from gen_python_config import group_to_table
+    finally:
+        sys.path.pop(0)
+    from rdb._config import ALL_GROUPS, Config
+
+    tables = [cls._table for cls in ALL_GROUPS.values()]
+    assert len(set(tables)) == len(tables)
+    for cls in ALL_GROUPS.values():
+        assert cls._table == group_to_table(cls._group)
+
+    tomllib = pytest.importorskip("tomllib")
+    cfg = Config()
+    n = 0
+    for attr, cls in ALL_GROUPS.items():
+        inst = getattr(cfg, attr)
+        for name in dir(cls):
+            desc = getattr(cls, name, None)
+            if hasattr(desc, "kind") and desc.default is not None \
+                    and desc.kind != "real_array":
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")   # dead-knob notices
+                    setattr(inst, name, desc.default)
+                n += 1
+                break
+    from rdb._toml_load import config_from_toml_text
+
+    text = cfg.to_toml()
+    assert n >= len(ALL_GROUPS) - 3   # a group may have only array knobs
+    assert tomllib.loads(text)
+    back = config_from_toml_text(text)
+    assert set(back.explicit_knobs()) == set(cfg.explicit_knobs())
+
+
+def test_shipped_toml_inputs_only_use_tables_python_knows():
+    """The Python layer and the Fortran strict schema must agree on the
+    table list: every table and key of every shipped `.toml` input is
+    known to the generated config layer."""
+    tomllib = pytest.importorskip("tomllib")
+    from rdb._config import ALL_GROUPS
+    from rdb._toml_load import _flatten
+
+    by_table = {cls._table: cls for cls in ALL_GROUPS.values()}
+    checked = 0
+    for path in sorted((ROOT / "validation_examples").rglob("*.toml")):
+        text = path.read_text()
+        if "{{" in text:       # a text template, not yet a document
+            continue
+        for table, keys in _flatten(tomllib.loads(text)).items():
+            assert table in by_table, f"{path}: unknown table [{table}]"
+            for key in keys:
+                desc = getattr(by_table[table], key, None)
+                assert desc is not None and hasattr(desc, "kind"), (
+                    f"{path}: unknown key {key!r} in [{table}]")
+        checked += 1
+    assert checked > 0

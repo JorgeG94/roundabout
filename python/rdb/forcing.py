@@ -12,8 +12,8 @@ from ._errors import RdbIOError
 
 
 class ConstantWind:
-    """``ConstantWind(tau_x=0.0, tau_y=0.0)`` -> `&physics_nml
-    wind_stress_x/y` with `&ocean_topo_nml wind_config="constant"`."""
+    """``ConstantWind(tau_x=0.0, tau_y=0.0)`` -> `[physics]
+    wind_stress_x/y` with `[ocean.topo] wind_config="constant"`."""
 
     def __init__(self, tau_x=0.0, tau_y=0.0):
         self.tau_x, self.tau_y = tau_x, tau_y
@@ -49,7 +49,7 @@ class Neverworld2Wind:
 
 
 class Thermodynamics:
-    """``Thermodynamics(enabled=True)`` -> `&ocean_thermo_nml
+    """``Thermodynamics(enabled=True)`` -> `[ocean.thermo]
     enable_thermodynamics`.
 
     `enabled=False` is the MOM6 `ENABLE_THERMODYNAMICS = False` analogue
@@ -69,7 +69,7 @@ class Thermodynamics:
 
 
 class SurfaceHeatFlux:
-    """``SurfaceHeatFlux(q=0.0)`` -> `&ocean_thermo_nml q_heat` (W/m^2,
+    """``SurfaceHeatFlux(q=0.0)`` -> `[ocean.thermo] q_heat` (W/m^2,
     positive down)."""
 
     def __init__(self, q=0.0):
@@ -115,7 +115,7 @@ class ShortwavePenetration:
 
 class BuoyancyRestoring:
     """``BuoyancyRestoring(sst=None, sss=None, piston_t=0.0,
-    piston_s=0.0)`` -> `&ocean_restore_nml`.
+    piston_s=0.0)`` -> `[ocean.restore]`.
 
     Passing `sst`/`sss` without a matching non-zero piston raises: the
     Fortran would silently restore with zero piston velocity (a no-op
@@ -146,7 +146,7 @@ class BuoyancyRestoring:
 
 
 class Geothermal:
-    """``Geothermal(q=0.0)`` -> `&ocean_geothermal_nml enable` +
+    """``Geothermal(q=0.0)`` -> `[ocean.geothermal] enable` +
     `q_geo`."""
 
     def __init__(self, q=0.0):
@@ -158,7 +158,7 @@ class Geothermal:
 
 
 class AtmosphericPressure:
-    """``AtmosphericPressure(p_const=0.0)`` -> `&ocean_psurf_nml enable`
+    """``AtmosphericPressure(p_const=0.0)`` -> `[ocean.psurf] enable`
     + `p_surf_const`. Requires `SurfaceFluxComponents()` in the same
     `forcing=` list (checked at compose time)."""
 
@@ -171,7 +171,7 @@ class AtmosphericPressure:
 
 
 class SurfaceFluxComponents:
-    """``SurfaceFluxComponents()`` -> `&ocean_forcing_nml
+    """``SurfaceFluxComponents()`` -> `[ocean.forcing]
     enable_components`.
 
     Turning this on makes `Q_heat`/`Q_salt` DERIVED: a direct
@@ -186,7 +186,7 @@ class SurfaceFluxComponents:
 
 
 class FileVar:
-    """One `&ocean_dataovr_nml` file/variable pair.
+    """One `[ocean.dataovr]` file/variable pair.
     ``FileVar(path, var, scale=1.0, add=0.0)``."""
 
     def __init__(self, path, var, scale=1.0, add=0.0):
@@ -205,7 +205,7 @@ def _as_filevar(value):
 class FileForcing:
     """``FileForcing(tau_x=None, tau_y=None, heat=None, evap=None,
     lprec=None, salt=None, time_mode="linear", cycle_period=0.0,
-    t_offset=0.0, clamp=False)`` -> `&ocean_dataovr_nml`.
+    t_offset=0.0, clamp=False)`` -> `[ocean.dataovr]`.
 
     Each argument is a `(path, var)` pair or a `FileVar(path, var,
     scale=1.0, add=0.0)`. This is the ERA5 keystone and also the
@@ -261,7 +261,7 @@ class ScalarSAL:
 
 class EquilibriumTide:
     """``EquilibriumTide(constituents="M2 S2 N2 K2 K1 O1 P1 Q1",
-    ref_date="1900-01-01", nodal=False, sal=None)`` -> `&ocean_tides_nml`.
+    ref_date="1900-01-01", nodal=False, sal=None)`` -> `[ocean.tides]`.
 
     `sal=ScalarSAL(beta=...)` -> `use_sal` + `beta_sal`. Requires a
     non-cartesian grid (checked at compose time).
@@ -346,7 +346,7 @@ class BaroclinicJetIC:
 
 
 class LayerDensities:
-    """``LayerDensities([...])`` -> `&ocean_ic_nml layer_rho_init`.
+    """``LayerDensities([...])`` -> `[ocean.ic] layer_rho_init`.
 
     `k=1` BED first, `k=nz` surface last -- the same bottom-up order as
     every 3-D field. This object does NOT reverse.
@@ -373,7 +373,7 @@ class DensityRange:
 
 class ZLevelInitialCondition:
     """``ZLevelInitialCondition(file, t_var=None, s_var=None,
-    z_var=None, land_fill=(10.0, 35.0))`` -> `&ocean_zinit_nml`.
+    z_var=None, land_fill=(10.0, 35.0))`` -> `[ocean.zinit]`.
     Requires `RDB_ENABLE_NETCDF`."""
 
     def __init__(self, file, t_var=None, s_var=None, z_var=None,
@@ -401,7 +401,7 @@ class ZLevelInitialCondition:
 
 class UniformInitialCondition:
     """``UniformInitialCondition(temperature=15.0, salinity=35.0)`` ->
-    `&tracer_nml initial_temperature`/`initial_salinity`."""
+    `[tracer] initial_temperature`/`initial_salinity`."""
 
     def __init__(self, temperature=15.0, salinity=35.0):
         self.temperature, self.salinity = temperature, salinity
@@ -413,7 +413,7 @@ class UniformInitialCondition:
 
 class StratifiedInitialCondition:
     """``StratifiedInitialCondition(T_surface=None, T_bottom=None)`` ->
-    `&tracer_nml T_init_surface`/`T_init_bottom` -- linear T(z), bed
+    `[tracer] T_init_surface`/`T_init_bottom` -- linear T(z), bed
     (k=1) at `T_bottom`, surface (k=nz) at `T_surface`.
 
     The Fortran only builds this linear profile when BOTH are non-zero

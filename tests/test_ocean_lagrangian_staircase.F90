@@ -2,7 +2,7 @@
 !!
 !! The defect this pins
 !! --------------------
-!! `&ocean_isopycnal_nml pgf_skip_nonoverlap` (default ON under
+!! `[ocean.isopycnal] pgf_skip_nonoverlap` (default ON under
 !! `vcoord_type="lagrangian"`) zeroes the face PGF of a layer whose z-extents in
 !! the two abutting columns do not overlap.  That is right for what it was
 !! written for — an isopycnal layer GROUNDED against the bed, squeezed onto the
@@ -101,28 +101,67 @@ contains
       character(len=*), intent(in) :: scheme
       character(len=:), allocatable :: nml
       character(len=1), parameter :: nl = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
-            "&grid_nml nx = 24, ny = 16, dx = 20000.0, dy = 20000.0, nghost = 4 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 10 /"//nl// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 900.0 /"//nl// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.0 /"//nl// &
-            "&tracer_nml initial_temperature = 9.0, initial_salinity = 34.8, "// &
-            "T_init_surface = 16.0, T_init_bottom = 3.0, "// &
-            "S_init_surface = 34.6, S_init_bottom = 35.0 /"//nl// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 2000.0, "// &
-            "wind_config = 'constant', coriolis_beta = 2.0e-11, coriolis_y_ref = 160000.0 /"//nl// &
-            "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//nl// &
-            "&ocean_eos_nml eos = 'wright' /"//nl// &
-            "&ocean_pgf_nml form = 'fv_mom6' /"//nl// &
-            "&ocean_coriolis_nml form = 'sadourny_energy' /"//nl// &
-            "&ocean_hvisc_nml nu_h = 200.0, c_smag = 0.15, lateral_closure = 'smagorinsky', "// &
-            "smag_ah = .true. /"//nl// &
-            "&ocean_bdrag_nml form = 'quadratic', cd = 0.003, bg_vel = 0.05, hbbl = 10.0 /"//nl// &
-            "&ocean_vmix_nml use_closure = .true., use_kpp = .true. /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//nl// &
-            "&vcoord_nml vcoord_type = 'lagrangian' /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 24"//nl// &
+            "ny = 16"//nl// &
+            "dx = 20000.0"//nl// &
+            "dy = 20000.0"//nl// &
+            "nghost = 4"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 10"//nl// &
+            "[time]"//nl// &
+            "t_end = 1.0e9"//nl// &
+            "dt_fixed = 900.0"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = 1.0e-4"//nl// &
+            "wind_stress_x = 0.1"//nl// &
+            "wind_stress_y = 0.0"//nl// &
+            "[tracer]"//nl// &
+            "initial_temperature = 9.0"//nl// &
+            "initial_salinity = 34.8"//nl// &
+            "T_init_surface = 16.0"//nl// &
+            "T_init_bottom = 3.0"//nl// &
+            "S_init_surface = 34.6"//nl// &
+            "S_init_bottom = 35.0"//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "flat"'//nl// &
+            "max_depth = 2000.0"//nl// &
+            'wind_config = "constant"'//nl// &
+            "coriolis_beta = 2.0e-11"//nl// &
+            "coriolis_y_ref = 160000.0"//nl// &
+            "[ocean.thermo]"//nl// &
+            "enable_thermodynamics = true"//nl// &
+            "q_heat = -60.0"//nl// &
+            "[ocean.eos]"//nl// &
+            'eos = "wright"'//nl// &
+            "[ocean.pgf]"//nl// &
+            'form = "fv_mom6"'//nl// &
+            "[ocean.coriolis]"//nl// &
+            'form = "sadourny_energy"'//nl// &
+            "[ocean.hvisc]"//nl// &
+            "nu_h = 200.0"//nl// &
+            "c_smag = 0.15"//nl// &
+            'lateral_closure = "smagorinsky"'//nl// &
+            "smag_ah = true"//nl// &
+            "[ocean.bdrag]"//nl// &
+            'form = "quadratic"'//nl// &
+            "cd = 0.003"//nl// &
+            "bg_vel = 0.05"//nl// &
+            "hbbl = 10.0"//nl// &
+            "[ocean.vmix]"//nl// &
+            "use_closure = true"//nl// &
+            "use_kpp = true"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            'split_scheme = "'//scheme//'"'//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "lagrangian"'//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function staircase_nml
 
    subroutine layer_ke(handle, ke, finite)

@@ -1,5 +1,5 @@
 !! `VCOORD_Z_FIXED` on a STRETCHED nominal profile
-!! (`&vcoord_nml z_fixed_profile = "list" | "tanh"`).
+!! (`[vcoord] z_fixed_profile = "list" | "tanh"`).
 !!
 !! Until this knob `z_fixed` only knew UNIFORM nominal layers
 !! (`h_nominal = max_depth/nz`, i.e. 130 m each at 50 levels over a 6500 m
@@ -77,7 +77,7 @@ contains
                   new_unittest("stretched_closed_faces_staircase", test_closed_faces), &
                   new_unittest("list_of_equal_dz_matches_uniform", test_list_matches_uniform), &
 #ifndef RDB_NO_NETCDF
-                  ! Seeds through &ocean_zinit_nml, whose reader (rdb_ocean_z_init) is
+                  ! Seeds through [ocean.zinit], whose reader (rdb_ocean_z_init) is
                   ! only compiled with RDB_ENABLE_NETCDF=ON -- even source="linear".
                   new_unittest("flat_lid_rest_is_exact_zero", test_flat_lid_rest), &
 #endif
@@ -307,33 +307,80 @@ contains
       !! `cavity_flat_lid_rest_zfixed.toml`, reduced (24 x 6), on a tanh
       !! profile from a 10 m surface layer over 720 m / 15 levels.
       character(len=*), intent(in) :: extra
-         !! Appended `&vcoord_nml` keys.
+         !! Appended `[vcoord]` keys, one `key = value` per line.
       character(len=:), allocatable :: nml
       character(len=1), parameter :: nl = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
-            "&grid_nml nx = 24, ny = 6, nghost = 2, dx = 2000.0, dy = 2000.0 /"//nl// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 600.0, cfl_interval = 1 /"//nl// &
-            "&physics_nml coriolis_f = -1.409e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 15 /"//nl// &
-            "&vcoord_nml "//extra//" /"//nl// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 720.0, wind_config = 'constant', "// &
-            "taux_magnitude = 0.0, coriolis_beta = 0.0, coriolis_y_ref = 0.0 /"//nl// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'flat', draft_depth = 300.0, "// &
-            "h_min_cavity = 96.0 /"//nl// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true., maxvel = 2.0 /"//nl// &
-            "&ocean_eos_nml eos = 'linear' /"//nl// &
-            "&ocean_ic_nml alpha_T = 3.8356948e-2, beta_S = 8.0587609e-1, T_ref = -1.0, "// &
-            "S_ref = 34.2, rho_0 = 1027.51 /"//nl// &
-            "&ocean_zinit_nml enable = .true., source = 'linear', lin_t_ref = -1.9, "// &
-            "lin_dt_dz = 0.0, lin_s_ref = 33.8, lin_ds_dz = -1.0416667e-3 /"//nl// &
-            "&tracer_nml initial_temperature = -1.9, initial_salinity = 34.175 /"//nl// &
-            "&ocean_coriolis_nml form = 'sadourny' /"//nl// &
-            "&ocean_hvisc_nml nu_h = 0.0, nu_4 = 0.0 /"//nl// &
-            "&ocean_bdrag_nml form = 'quadratic', cd = 0.0 /"//nl// &
-            "&ocean_vmix_nml use_closure = .false., use_kpp = .false. /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 24"//nl// &
+            "ny = 6"//nl// &
+            "nghost = 2"//nl// &
+            "dx = 2000.0"//nl// &
+            "dy = 2000.0"//nl// &
+            "[time]"//nl// &
+            "t_end = 1.0e9"//nl// &
+            "dt_fixed = 600.0"//nl// &
+            "cfl_interval = 1"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = -1.409e-4"//nl// &
+            "wind_stress_x = 0.0"//nl// &
+            "wind_stress_y = 0.0"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 15"//nl// &
+            "[vcoord]"//nl// &
+            extra//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "flat"'//nl// &
+            "max_depth = 720.0"//nl// &
+            'wind_config = "constant"'//nl// &
+            "taux_magnitude = 0.0"//nl// &
+            "coriolis_beta = 0.0"//nl// &
+            "coriolis_y_ref = 0.0"//nl// &
+            "[ocean.cavity_dyn]"//nl// &
+            "enable = true"//nl// &
+            'draft_config = "flat"'//nl// &
+            "draft_depth = 300.0"//nl// &
+            "h_min_cavity = 96.0"//nl// &
+            "[ocean.pgf]"//nl// &
+            'form = "fv_mom6"'//nl// &
+            "p_top_in_bc = true"//nl// &
+            "maxvel = 2.0"//nl// &
+            "[ocean.eos]"//nl// &
+            'eos = "linear"'//nl// &
+            "[ocean.ic]"//nl// &
+            "alpha_T = 3.8356948e-2"//nl// &
+            "beta_S = 8.0587609e-1"//nl// &
+            "T_ref = -1.0"//nl// &
+            "S_ref = 34.2"//nl// &
+            "rho_0 = 1027.51"//nl// &
+            "[ocean.zinit]"//nl// &
+            "enable = true"//nl// &
+            'source = "linear"'//nl// &
+            "lin_t_ref = -1.9"//nl// &
+            "lin_dt_dz = 0.0"//nl// &
+            "lin_s_ref = 33.8"//nl// &
+            "lin_ds_dz = -1.0416667e-3"//nl// &
+            "[tracer]"//nl// &
+            "initial_temperature = -1.9"//nl// &
+            "initial_salinity = 34.175"//nl// &
+            "[ocean.coriolis]"//nl// &
+            'form = "sadourny"'//nl// &
+            "[ocean.hvisc]"//nl// &
+            "nu_h = 0.0"//nl// &
+            "nu_4 = 0.0"//nl// &
+            "[ocean.bdrag]"//nl// &
+            'form = "quadratic"'//nl// &
+            "cd = 0.0"//nl// &
+            "[ocean.vmix]"//nl// &
+            "use_closure = false"//nl// &
+            "use_kpp = false"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function nml_flat_lid
 
    subroutine test_flat_lid_rest(error)
@@ -353,9 +400,11 @@ contains
       integer :: n_fill, i, j, k
       character(len=200) :: msg
 
-      nml = nml_flat_lid("vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
-                         "z_fixed_profile = 'tanh', "// &
-                         "z_fixed_dz_top = 10.0, z_fixed_tanh_center = 0.5, "// &
+      nml = nml_flat_lid('vcoord_type = "z_fixed"'//new_line("a")// &
+                         "zfixed_closed_faces = true"//new_line("a")// &
+                         'z_fixed_profile = "tanh"'//new_line("a")// &
+                         "z_fixed_dz_top = 10.0"//new_line("a")// &
+                         "z_fixed_tanh_center = 0.5"//new_line("a")// &
                          "z_fixed_tanh_width = 0.25")
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
@@ -415,8 +464,10 @@ contains
       character(len=:), allocatable :: nml
       type(c_ptr) :: handle
       integer(c_int) :: status
-      nml = nml_flat_lid("vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
-                         "z_fixed_profile = 'list', z_fixed_dz = 10.0, 20.0, 30.0")
+      nml = nml_flat_lid('vcoord_type = "z_fixed"'//new_line("a")// &
+                         "zfixed_closed_faces = true"//new_line("a")// &
+                         'z_fixed_profile = "list"'//new_line("a")// &
+                         "z_fixed_dz = [10.0, 20.0, 30.0]")
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status /= OCEAN_STATUS_OK, "a z_fixed_dz list of the wrong length built")
@@ -429,7 +480,8 @@ contains
       character(len=:), allocatable :: nml
       type(c_ptr) :: handle
       integer(c_int) :: status
-      nml = nml_flat_lid("vcoord_type = 'sigma', z_fixed_profile = 'tanh'")
+      nml = nml_flat_lid('vcoord_type = "sigma"'//new_line("a")// &
+                         'z_fixed_profile = "tanh"')
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status /= OCEAN_STATUS_OK, "z_fixed_profile on sigma built")

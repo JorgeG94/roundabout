@@ -11,12 +11,12 @@ What it shows:
 
 1. The configuration is built with the typed ``rdb.Config`` API, knob by
    knob — the same knobs ``global_1deg_unforced.toml`` sets.  Before the run
-   the script checks that against the namelist file (``--no-check`` skips
+   the script checks that against the config file (``--no-check`` skips
    it), so the two cannot drift.
 2. ``rdb.Model(config)`` creates the solver; ``model.step(n)`` advances it.
 3. Every simulated day the diagnostic manager's own in-memory buffers
    (``model.diagnostic("SSH")``, ``"u"``, ``"v"`` — the top-10 m daily means
-   the namelist asks for) are read straight out of the running model, with
+   the config asks for) are read straight out of the running model, with
    no NetCDF round trip, and a movie frame is rendered from them
    (``global_movie.py``: stdlib PPM writer + ffmpeg).
 4. A daily log line: kinetic energy per unit mass, total mass drift, and the
@@ -43,7 +43,7 @@ sys.path.insert(0, HERE)
 import rdb  # noqa: E402
 from global_movie import FrameRenderer, encode, model_tpoints, speed_from_uv  # noqa: E402
 
-NAMELIST = os.path.join(HERE, "global_1deg_unforced.toml")
+CONFIG_FILE = os.path.join(HERE, "global_1deg_unforced.toml")
 RHO0_API = 1025.0  # rdb_ocean_get_total_mass's reference density (RHO0_DIAG)
 
 
@@ -124,10 +124,10 @@ def build_config(data_dir, days, out_dir):
     return cfg
 
 
-def check_against_namelist(cfg):
-    """Every knob of the shipped namelist, and nothing else, is set here
+def check_against_config(cfg):
+    """Every knob of the shipped config, and nothing else, is set here
     with the same value (file paths and run length excepted)."""
-    ref = rdb.Model.from_namelist(NAMELIST, defer=True)
+    ref = rdb.Model.from_toml(CONFIG_FILE, defer=True)
     try:
         mine = {(g, k): v for g, k, v in cfg.explicit_knobs()}
         theirs = {(g, k): v for g, k, v in ref.config.explicit_knobs()}
@@ -141,7 +141,7 @@ def check_against_namelist(cfg):
         raise SystemExit("Config API and global_1deg_unforced.toml disagree on: " +
                          ", ".join(f"&{g}_nml {k} ({mine.get((g, k))!r} vs "
                                    f"{theirs.get((g, k))!r})" for g, k in diff))
-    print(f"config: {len(mine)} knobs, identical to {os.path.basename(NAMELIST)}")
+    print(f"config: {len(mine)} knobs, identical to {os.path.basename(CONFIG_FILE)}")
 
 
 def max_face_velocity(field, ng):
@@ -177,7 +177,7 @@ def main():
     ap.add_argument("--frame-every", type=int, default=1, help="days between frames")
     ap.add_argument("--no-movie", action="store_true")
     ap.add_argument("--no-check", action="store_true",
-                    help="skip the Config-vs-namelist comparison")
+                    help="skip the Config-vs-config comparison")
     ap.add_argument("--max-velocity", action="store_true",
                     help="also log the daily 3-D max |u|, |v| and where (~2 s/day)")
     a = ap.parse_args()
@@ -190,7 +190,7 @@ def main():
 
     cfg = build_config(data, a.days, out)
     if not a.no_check:
-        check_against_namelist(cfg)
+        check_against_config(cfg)
     renderer = None if a.no_movie else FrameRenderer(
         os.path.join(data, "ocean_hgrid.nc"), os.path.join(data, "bathy_om1deg.nc"))
 

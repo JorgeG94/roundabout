@@ -54,8 +54,8 @@ def _check(field, shape):
 
 @pytest.mark.parametrize("order", ["C", "F"])
 @pytest.mark.parametrize("name", ["h", "temperature"])
-def test_3d_setter_layout(ocean_nml, name, order):
-    with rdb.Model(ocean_nml) as m:
+def test_3d_setter_layout(ocean_toml, name, order):
+    with rdb.Model(ocean_toml) as m:
         f = getattr(m, name)
         arr = FakeArray(f.shape, order, fn=_val)
         f[...] = arr
@@ -63,24 +63,24 @@ def test_3d_setter_layout(ocean_nml, name, order):
 
 
 @pytest.mark.parametrize("order", ["C", "F"])
-def test_2d_setter_layout(ocean_nml, order):
-    with rdb.Model(ocean_nml) as m:
+def test_2d_setter_layout(ocean_toml, order):
+    with rdb.Model(ocean_toml) as m:
         f = m.bathymetry
         arr = FakeArray(f.shape, order, fn=_val)
         f[...] = arr
         _check(m.bathymetry, f.shape)
 
 
-def test_float32_c_order(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_float32_c_order(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         shape = m.h.shape
         arr = FakeArray(shape, "C", code="f", typestr="<f4", fn=_val)
         m.h[...] = arr
         _check(m.h, shape)
 
 
-def test_nested_list_still_works(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_nested_list_still_works(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         nx, ny, nz = m.h.shape
         m.h[...] = [[[_val((i, j, k)) for k in range(nz)] for j in range(ny)]
                     for i in range(nx)]
@@ -150,8 +150,8 @@ def test_zero_stride_broadcast_flattens(axis):
         assert flat[sum(i * s for i, s in zip(idx, fs))] == fn(idx), idx
 
 
-def test_zero_stride_broadcast_through_setter(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_zero_stride_broadcast_through_setter(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         shape = m.h.shape
         fn = lambda idx: _val((0,) + tuple(idx[1:]))
         m.h[...] = BroadcastArray(shape, 0, fn)

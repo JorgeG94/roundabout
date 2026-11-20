@@ -127,54 +127,111 @@ contains
       bulk = (kind /= "dataovr_heat" .and. kind /= "api")
       is_epbl = (index(kind, "epbl") == 1)
       is_sw = (index(kind, "_sw") > 0)
-      thermo = "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL
-      if (is_sw) thermo = "&ocean_thermo_nml enable_thermodynamics = .true., "// &
-                          "sw_pen_frac = 0.6, sw_source = 'q_sw' /"//NL
-      if (is_sw .and. is_epbl) thermo = "&ocean_thermo_nml enable_thermodynamics = .true., "// &
-                                        "sw_pen_frac = 0.6, sw_source = 'q_sw', "// &
-                                        "epbl_sw_ctke = .true. /"//NL
+      thermo = "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL
+      if (is_sw) thermo = "[ocean.thermo]"//NL// &
+                          "enable_thermodynamics = true"//NL// &
+                          "sw_pen_frac = 0.6"//NL// &
+                          'sw_source = "q_sw"'//NL
+      if (is_sw .and. is_epbl) thermo = "[ocean.thermo]"//NL// &
+                                        "enable_thermodynamics = true"//NL// &
+                                        "sw_pen_frac = 0.6"//NL// &
+                                        'sw_source = "q_sw"'//NL// &
+                                        "epbl_sw_ctke = true"//NL
       bl = ""
-      if (is_epbl) bl = "&ocean_vmix_nml use_kpp = .false. /"//NL// &
-                        "&ocean_epbl_nml enable = .true. /"//NL
+      if (is_epbl) bl = "[ocean.vmix]"//NL// &
+                        "use_kpp = false"//NL// &
+                        "[ocean.epbl]"//NL// &
+                        "enable = true"//NL
       forcing = ""
-      if (bulk) forcing = "&ocean_forcing_nml enable_components = .true. /"//NL// &
-                          "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
-                          "z_ta = 10.0 /"//NL// &
-                          "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
-                          "sw_interp = 'linear', "// &
-                          "filelist_tas = '"//ATM_LIST//"', filelist_huss = '"//ATM_LIST// &
-                          "', filelist_uas = '"//ATM_LIST//"', filelist_vas = '"//ATM_LIST// &
-                          "', filelist_psl = '"//ATM_LIST//"', filelist_rlds = '"//ATM_LIST// &
-                          "', filelist_rsds = '"//ATM_LIST//"', filelist_prra = '"//ATM_LIST// &
-                          "', filelist_prsn = '"//ATM_LIST//"' /"//NL
+      if (bulk) forcing = "[ocean.forcing]"//NL// &
+                          "enable_components = true"//NL// &
+                          "[ocean.bulk_flux]"//NL// &
+                          "enable = true"//NL// &
+                          "n_iter = 5"//NL// &
+                          "z_wind = 10.0"//NL// &
+                          "z_ta = 10.0"//NL// &
+                          "[ocean.atm_forcing]"//NL// &
+                          "enable = true"//NL// &
+                          'time_mode = "interannual"'//NL// &
+                          'sw_interp = "linear"'//NL// &
+                          'filelist_tas = "'//ATM_LIST//'"'//NL// &
+                          'filelist_huss = "'//ATM_LIST//'"'//NL// &
+                          'filelist_uas = "'//ATM_LIST//'"'//NL// &
+                          'filelist_vas = "'//ATM_LIST//'"'//NL// &
+                          'filelist_psl = "'//ATM_LIST//'"'//NL// &
+                          'filelist_rlds = "'//ATM_LIST//'"'//NL// &
+                          'filelist_rsds = "'//ATM_LIST//'"'//NL// &
+                          'filelist_prra = "'//ATM_LIST//'"'//NL// &
+                          'filelist_prsn = "'//ATM_LIST//'"'//NL
       wind = ""
-      if (kind == "dataovr_heat") wind = "&physics_nml wind_stress_x = 0.2, wind_stress_y = 0.05 /"//NL
+      if (kind == "dataovr_heat") wind = "[physics]"//NL// &
+                                         "wind_stress_x = 0.2"//NL// &
+                                         "wind_stress_y = 0.05"//NL
       ovr = ""
-      if (kind == "kpp_salt") ovr = "&ocean_dataovr_nml enable = .true., time_mode = 'cyclic', "// &
-                                    "cycle_period = 1.0e6, salt_file = '"//SALT_FILE// &
-                                    "', salt_var = 'field' /"//NL
-      if (kind == "dataovr_heat") ovr = "&ocean_dataovr_nml enable = .true., time_mode = 'cyclic', "// &
-                                        "cycle_period = 1.0e6, heat_file = '"//HEAT_FILE// &
-                                        "', heat_var = 'field' /"//NL
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-            "smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&ocean_eos_nml eos = 'wright' /"//NL// &
-            thermo//forcing//ovr//bl//wind// &
-            "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-            "T_init_surface = 20.0, T_init_bottom = 19.0 /"//NL// &
-            "&grid_nml nx = 16, ny = 8, nghost = 3, dx = 22.5, dy = 1.0 /"//NL// &
-            "&ocean_grid_nml grid_config = 'spherical', lon_west = "//trim(adjustl(slon))// &
-            ", lat_south = 30.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml max_depth = 100.0 /"//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-            "north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      if (kind == "kpp_salt") ovr = "[ocean.dataovr]"//NL// &
+                                    "enable = true"//NL// &
+                                    'time_mode = "cyclic"'//NL// &
+                                    "cycle_period = 1.0e6"//NL// &
+                                    'salt_file = "'//SALT_FILE//'"'//NL// &
+                                    'salt_var = "field"'//NL
+      if (kind == "dataovr_heat") ovr = "[ocean.dataovr]"//NL// &
+                                        "enable = true"//NL// &
+                                        'time_mode = "cyclic"'//NL// &
+                                        "cycle_period = 1.0e6"//NL// &
+                                        'heat_file = "'//HEAT_FILE//'"'//NL// &
+                                        'heat_var = "field"'//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 1.0e9"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            'start_date = "2000-06-21"'//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 10"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "wright"'//NL// &
+            thermo//NL// &
+            forcing//NL// &
+            ovr//NL// &
+            bl//NL// &
+            wind//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = 12.0"//NL// &
+            "initial_salinity = 35.0"//NL// &
+            "T_init_surface = 20.0"//NL// &
+            "T_init_bottom = 19.0"//NL// &
+            "[grid]"//NL// &
+            "nx = 16"//NL// &
+            "ny = 8"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 22.5"//NL// &
+            "dy = 1.0"//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "spherical"'//NL// &
+            "lon_west = "//trim(adjustl(slon))//NL// &
+            "lat_south = 30.0"//NL// &
+            "rad_earth = 6.371e6"//NL// &
+            'coriolis_scheme = "planetary"'//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function case_nml
 
    subroutine run_case(error, kind, lon_west, out)
@@ -193,7 +250,7 @@ contains
       nml = case_nml(kind, lon_west)
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
-      call check(error, status == OCEAN_STATUS_OK, kind//": the namelist must build")
+      call check(error, status == OCEAN_STATUS_OK, kind//": the config must build")
       if (allocated(error)) return
       status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
       status = rdb_ocean_step(handle, int(N_STEPS, c_int))
@@ -456,7 +513,7 @@ contains
       nml = case_nml("api", 0.0_wp)
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
-      call check(error, status == OCEAN_STATUS_OK, "api: the namelist must build")
+      call check(error, status == OCEAN_STATUS_OK, "api: the config must build")
       if (allocated(error)) return
       status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
       do j = 1, NY
@@ -536,31 +593,80 @@ contains
       !! the cavity bands (`heat_cavity`/`salt_cavity`, written on physical
       !! cells only) differ across the seam unless the assembled flux is exchanged.
       character(len=:), allocatable :: nml
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 900.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&tracer_nml initial_salinity = 34.5, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = -1.409e-4 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
-            "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            "draft_depth = 500.0, draft_slope = -4.0e-4, draft_x0 = 0.0, "// &
-            "draft_x1 = 380000.0, draft_y1 = 260000.0, h_min_cavity = 100.0 /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
-            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
-            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0 /"//NL// &
-            "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
-            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-            "north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 1.0e9"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.5"//NL// &
+            "T_init_surface = 3.0"//NL// &
+            "T_init_bottom = 1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            'split_scheme = "ssp_rk2"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 26"//NL// &
+            "ny = 18"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = -1.409e-4"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "seamount"'//NL// &
+            "max_depth = 1000.0"//NL// &
+            "edge_depth = 400.0"//NL// &
+            "slope_scale = 80000.0"//NL// &
+            'wind_config = "constant"'//NL// &
+            "taux_magnitude = 0.05"//NL// &
+            "[ocean.cavity_dyn]"//NL// &
+            "enable = true"//NL// &
+            'draft_config = "linear"'//NL// &
+            "draft_depth = 500.0"//NL// &
+            "draft_slope = -4.0e-4"//NL// &
+            "draft_x0 = 0.0"//NL// &
+            "draft_x1 = 380000.0"//NL// &
+            "draft_y1 = 260000.0"//NL// &
+            "h_min_cavity = 100.0"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.cavity_melt]"//NL// &
+            "enable = true"//NL// &
+            'exchange_law = "const_gamma"'//NL// &
+            "gamma_t = 2.2e-2"//NL// &
+            "gamma_s = -1.0"//NL// &
+            "cdrag_top = 2.5e-3"//NL// &
+            'ice_conduction = "insulating"'//NL// &
+            "s_ice = 0.0"//NL// &
+            "far_field_depth = 10.0"//NL// &
+            "[ocean.tdrag]"//NL// &
+            "enable = true"//NL// &
+            'form = "quadratic"'//NL// &
+            "cd = 2.5e-3"//NL// &
+            "[ocean.pgf]"//NL// &
+            'form = "fv_mom6"'//NL// &
+            "p_top_in_bc = true"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "linear"'//NL// &
+            'tfreeze_set = "isomip"'//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function cavity_nml
 
    subroutine test_ghost_cavity(error)
@@ -582,7 +688,7 @@ contains
       nml = cavity_nml()
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
-      call check(error, status == OCEAN_STATUS_OK, "cavity: the namelist must build")
+      call check(error, status == OCEAN_STATUS_OK, "cavity: the config must build")
       if (allocated(error)) return
       status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
       call check(error, handle_check(handle, h) == HANDLE_OK, "cavity: handle")

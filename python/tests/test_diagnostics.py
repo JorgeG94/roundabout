@@ -25,19 +25,37 @@ import pytest
 import rdb
 
 
-def _diag_nml(output_dir, *, filename="p7test", enabled=True):
-    on = ".true." if enabled else ".false."
+def _diag_toml(output_dir, *, filename="p7test", enabled=True):
+    on = "true" if enabled else "false"
     return (
-        '&sim_nml sim_type = "ocean" /\n'
-        "&grid_nml nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /\n"
-        "&nonhydrostatic_nml nz_layers = 3 /\n"
-        "&time_nml t_end = 86400.0, dt_fixed = 300.0 /\n"
-        '&ocean_topo_nml topo_config = "flat", max_depth = 200.0 /\n'
-        "&ocean_bt_nml auto_n_inner = .true. /\n"
-        "&tracer_nml initial_salinity = 35.0, initial_temperature = 12.0 /\n"
-        f'&ocean_diag_nml enabled = {on}, dt_out = 300.0, '
-        f'filename = "{filename}" /\n'
-        f'&output_nml output_to_file = {on}, output_dir = "{output_dir}" /\n'
+        f"""[sim]
+sim_type = "ocean"
+[grid]
+nx = 8
+ny = 6
+dx = 2000.0
+dy = 2000.0
+[nonhydrostatic]
+nz_layers = 3
+[time]
+t_end = 86400.0
+dt_fixed = 300.0
+[ocean.topo]
+topo_config = "flat"
+max_depth = 200.0
+[ocean.bt]
+auto_n_inner = true
+[tracer]
+initial_salinity = 35.0
+initial_temperature = 12.0
+[ocean.diag]
+enabled = {on}
+dt_out = 300.0
+filename = "{filename}"
+[output]
+output_to_file = {on}
+output_dir = "{output_dir}"
+"""
     )
 
 
@@ -49,7 +67,7 @@ def test_missing_output_dir_is_created_not_a_crash(tmp_path):
     create() must succeed -- not abort the interpreter, not raise."""
     out_dir = tmp_path / "output"
     assert not out_dir.exists()
-    with rdb.Model(_diag_nml(str(out_dir))) as m:
+    with rdb.Model(_diag_toml(str(out_dir))) as m:
         m.step(1)
     assert out_dir.is_dir()
     assert (out_dir / "p7test_rank_000000.nc").is_file()
@@ -62,11 +80,11 @@ def test_deeply_missing_output_dir_raises_typed_error_not_a_crash(tmp_path):
     abort."""
     out_dir = tmp_path / "does" / "not" / "exist" / "output"
     with pytest.raises(rdb.RdbIOError):
-        rdb.Model(_diag_nml(str(out_dir)))
+        rdb.Model(_diag_toml(str(out_dir)))
     # The interpreter is provably still alive: a second, valid Model
     # can still be constructed in the same process.
     good_dir = tmp_path / "output2"
-    with rdb.Model(_diag_nml(str(good_dir))) as m:
+    with rdb.Model(_diag_toml(str(good_dir))) as m:
         m.step(1)
 
 
@@ -82,14 +100,14 @@ def test_available_diagnostics_is_nonempty_with_known_names():
     assert "ke_total" in names
 
 
-def test_diagnostics_available_matches_module_level(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_diagnostics_available_matches_module_level(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         assert m.diagnostics.available == rdb.available_diagnostics()
 
 
 def test_diagnostics_selected_reflects_live_registration(tmp_path):
     out_dir = tmp_path / "output"
-    with rdb.Model(_diag_nml(str(out_dir))) as m:
+    with rdb.Model(_diag_toml(str(out_dir))) as m:
         selected = m.diagnostics.selected
         for name in ("SSH", "temperature", "salinity", "u", "v", "KE"):
             assert name in selected
@@ -125,10 +143,10 @@ def test_diagnostics_enabled_false_suppresses_output(tmp_path):
 
 
 def test_diagnostics_bad_token_raises_before_create():
-    """A malformed &ocean_diag_nml diags token is a Python ValueError at
+    """A malformed [ocean.diag] diags token is a Python ValueError at
     construction time -- parse_one_spec_token's unknown-attribute branch
     (rdb_ocean_diag.F90) is one of the paths P0.1 did not convert, so
-    reaching it via the raw namelist would still error stop today."""
+    reaching it via the raw config would still error stop today."""
     try:
         rdb.Diagnostics(names=["temperature:not_a_real_attribute"])
         assert False, "expected ValueError"
@@ -141,7 +159,7 @@ def test_diagnostics_names_and_cadence_reach_the_config():
     rdb.Diagnostics(names=["KE:off", "temperature:6h:mean"],
                        every=1800.0, filename="mydiag",
                        precision="single").apply(cfg)
-    text = cfg.to_namelist()
+    text = cfg.to_toml()
     assert "diags = " in text
     assert "KE:off" in text
     assert "temperature:6h:mean" in text
@@ -154,7 +172,7 @@ def test_diagnostics_names_and_cadence_reach_the_config():
 
 def test_diagnostic_ssh_matches_sum_h_minus_b(tmp_path):
     out_dir = tmp_path / "output"
-    with rdb.Model(_diag_nml(str(out_dir))) as m:
+    with rdb.Model(_diag_toml(str(out_dir))) as m:
         m.step(1)
         ssh_diag = m.diagnostic("SSH")
         nx, ny, nz = ssh_diag.shape
@@ -168,7 +186,7 @@ def test_diagnostic_ssh_matches_sum_h_minus_b(tmp_path):
 
 def test_diagnostic_temperature_matches_tracer_concentration(tmp_path):
     out_dir = tmp_path / "output"
-    with rdb.Model(_diag_nml(str(out_dir))) as m:
+    with rdb.Model(_diag_toml(str(out_dir))) as m:
         m.step(1)
         t_diag = m.diagnostic("temperature")
         t_field = m.temperature
@@ -183,7 +201,7 @@ def test_diagnostic_temperature_matches_tracer_concentration(tmp_path):
 
 def test_diagnostic_not_registered_raises_typed_error(tmp_path):
     out_dir = tmp_path / "output"
-    with rdb.Model(_diag_nml(str(out_dir))) as m:
+    with rdb.Model(_diag_toml(str(out_dir))) as m:
         try:
             m.diagnostic("does_not_exist")
             assert False, "expected a not-found error"
@@ -193,7 +211,7 @@ def test_diagnostic_not_registered_raises_typed_error(tmp_path):
 
 def test_diagnostic_field_is_read_only(tmp_path):
     out_dir = tmp_path / "output"
-    with rdb.Model(_diag_nml(str(out_dir))) as m:
+    with rdb.Model(_diag_toml(str(out_dir))) as m:
         m.step(1)
         ssh_diag = m.diagnostic("SSH")
         try:
@@ -210,7 +228,7 @@ def test_diagnostic_normal_cell_is_not_nan(tmp_path):
     ordinary, non-vanished cell must NOT read NaN -- guards against a
     fix that is too aggressive (everything reads NaN)."""
     out_dir = tmp_path / "output"
-    with rdb.Model(_diag_nml(str(out_dir))) as m:
+    with rdb.Model(_diag_toml(str(out_dir))) as m:
         m.step(1)
         t_diag = m.diagnostic("temperature")
         for val in [v for row in t_diag[...] for col in row for v in col]:

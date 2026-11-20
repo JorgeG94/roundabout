@@ -122,7 +122,7 @@ module test_ocean_cavity_load
    !! any non-uniform barotropic-correction weight, not the default
    !! path's stability.
    !!
-   !! ### Under the MOM6 split (`&ocean_bt_nml bc_pgf_forcing`, default)
+   !! ### Under the MOM6 split (`[ocean.bt] bc_pgf_forcing`, default)
    !!
    !! Everything in the previous paragraph that says "the split solver
    !! replaces the depth mean" describes the LEGACY split
@@ -177,13 +177,13 @@ module test_ocean_cavity_load
       !! Buoyancy frequency squared (1/s^2) — the stratification the
       !! geopotential T(z) profile below is built to produce.
    real(wp), parameter :: ALPHA_T = 0.2_wp
-      !! `&ocean_ic_nml alpha_T`, DIMENSIONAL (kg/m^3 per degC).  Set
+      !! `[ocean.ic] alpha_T`, DIMENSIONAL (kg/m^3 per degC).  Set
       !! explicitly: the shipped default (1.7e-4) is three decades below
       !! a physical thermal expansion and would need a 6 K/m lapse rate
       !! to reach N^2 = 1e-5.
    real(wp), parameter :: RHO_0 = 1035.0_wp
    real(wp), parameter :: T_SURF = 10.0_wp
-      !! T at z = 0 (degC) — also `&ocean_ic_nml T_ref`, so the surface
+      !! T at z = 0 (degC) — also `[ocean.ic] T_ref`, so the surface
       !! density anomaly is zero.
    real(wp), parameter :: DTDZ = N2_TARGET*RHO_0/(GRAVITY*ALPHA_T)
       !! degC per metre of GEOPOTENTIAL height, from
@@ -250,7 +250,7 @@ contains
                   new_unittest("trim_ic_root_is_the_displaced_weight", test_trim_root), &
                   new_unittest("trim_ic_balances_the_depth_mean_pfu", test_trim_balances_pfu), &
 #ifndef RDB_NO_NETCDF
-                  ! Seeds through &ocean_zinit_nml, whose reader (rdb_ocean_z_init) is
+                  ! Seeds through [ocean.zinit], whose reader (rdb_ocean_z_init) is
                   ! only compiled with RDB_ENABLE_NETCDF=ON -- even source="linear".
                   new_unittest("trim_ic_uniform_rho_rest_end_to_end", &
                                test_trim_uniform_rho_rest), &
@@ -265,13 +265,13 @@ contains
    ! ==================================================================
 
    function rest_nml(legacy_split) result(nml)
-      !! The resting cavity namelist.  No wind, no heat/salt flux, `f = 0`
+      !! The resting cavity config.  No wind, no heat/salt flux, `f = 0`
       !! (so a spurious acceleration integrates cleanly to `a*t` instead of
       !! turning into a geostrophic balance whose amplitude is `a/f`), a
       !! flat bed, a linear ice draft, sigma, `pred_corr`, a pinned
       !! `n_inner`, and the load wired all the way through.
       logical, intent(in) :: legacy_split
-         !! `&ocean_bt_nml bc_pgf_forcing = .not. legacy_split`.
+         !! `[ocean.bt] bc_pgf_forcing = .not. legacy_split`.
       character(len=:), allocatable :: nml
       character(len=32) :: t_bot_s
       character(len=8) :: bcf
@@ -285,28 +285,54 @@ contains
       ! both ends keeps the ghost columns unstratified and the mismatch
       ! trivially small anyway.
       write (t_bot_s, '(F12.4)') T_SURF
-      bcf = ".true."
-      if (legacy_split) bcf = ".false."
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 32, ny = 6, nghost = 2, dx = 2000.0, dy = 2000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 10 /"//new_line("a")// &
-            "&time_nml t_end = 1.0e7, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0, taux_magnitude = 0.0 /"//new_line("a")// &
-            "&physics_nml coriolis_f = 0.0 /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, T_init_bottom = "// &
-            trim(adjustl(t_bot_s))//", T_init_surface = "// &
-            trim(adjustl(t_bot_s))//" /"//new_line("a")// &
-            "&ocean_ic_nml alpha_T = 0.2, T_ref = 10.0, S_ref = 35.0 /"//new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .false., "// &
-            "n_inner = 24, bc_pgf_forcing = "//trim(bcf)//" /"//new_line("a")// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            "draft_depth = 190.0, draft_slope = 1.0e-3, draft_x0 = -10000.0 /"// &
-            new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      bcf = "true"
+      if (legacy_split) bcf = "false"
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 32"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 10"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 1.0e7"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "taux_magnitude = 0.0"//new_line("a")// &
+            "[physics]"//new_line("a")// &
+            "coriolis_f = 0.0"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "T_init_bottom = "//trim(adjustl(t_bot_s))//new_line("a")// &
+            "T_init_surface = "//trim(adjustl(t_bot_s))//new_line("a")// &
+            "[ocean.ic]"//new_line("a")// &
+            "alpha_T = 0.2"//new_line("a")// &
+            "T_ref = 10.0"//new_line("a")// &
+            "S_ref = 35.0"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "fv_mom6"'//new_line("a")// &
+            "p_top_in_bc = true"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            'split_scheme = "pred_corr"'//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 24"//new_line("a")// &
+            "bc_pgf_forcing = "//trim(bcf)//new_line("a")// &
+            "[ocean.cavity_dyn]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'draft_config = "linear"'//new_line("a")// &
+            "draft_depth = 190.0"//new_line("a")// &
+            "draft_slope = 1.0e-3"//new_line("a")// &
+            "draft_x0 = -10000.0"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function rest_nml
 
    subroutine run_rest_case(stratified, umax, vmax, ok, ubt_max, ubc_max, legacy_split)
@@ -432,7 +458,7 @@ contains
       !! forcing: the spurious velocity after `N_STEPS` must stay under
       !! the sigma-PGF truncation bound `REST_SAFETY * A_PEAK * T_TOTAL`.
       !!
-      !! Run under the LEGACY split (`&ocean_bt_nml bc_pgf_forcing =
+      !! Run under the LEGACY split (`[ocean.bt] bc_pgf_forcing =
       !! .false.`), because what the bound describes is the part of the
       !! truncation that survives a depth-mean REPLACEMENT.  Under the
       !! default MOM6 split the depth-uniform load shortfall reaches the
@@ -465,7 +491,7 @@ contains
 
    subroutine test_load_shortfall_bt(error)
       !! The same resting stratified cavity under the DEFAULT split
-      !! (`&ocean_bt_nml bc_pgf_forcing`, MOM6 `BT_force`).  The load
+      !! (`[ocean.bt] bc_pgf_forcing`, MOM6 `BT_force`).  The load
       !! `p_ice_ref = rho_0*g*z_draft` is the displaced weight at the
       !! REFERENCE density; the stratified column it floats on is heavier
       !! by `rho_0*N^2*z_draft^2/(2g)`, so the raw face force is short by
@@ -488,7 +514,7 @@ contains
       !! BEBT damping; under the legacy split the same run holds
       !! 7.1e-8 m/s — the truncation floor of the gate above.
       !!
-      !! A TRIMMED initial surface (`&ocean_cavity_dyn_nml
+      !! A TRIMMED initial surface (`[ocean.cavity_dyn]
       !! trim_ic_for_p_surf`, MOM6 `trim_for_ice`) starts balanced and does
       !! not show this — `trim_ic_balances_the_depth_mean_pfu` below.  This
       !! case seeds its temperature through the API instead of the zinit
@@ -558,47 +584,78 @@ contains
    end subroutine test_rest_uniform
 
    function rest_nml_trim_uniform() result(nml)
-      !! `rest_nml`, but TRIMMED (`&ocean_cavity_dyn_nml
+      !! `rest_nml`, but TRIMMED (`[ocean.cavity_dyn]
       !! trim_ic_for_p_surf = .true.`) with a uniform, unstratified
-      !! density `rho_surf /= rho_ref`: `&ocean_zinit_nml source = "linear"`
+      !! density `rho_surf /= rho_ref`: `[ocean.zinit] source = "linear"`
       !! with `lin_dt_dz = 0` (uniform T everywhere, under the ice and in
-      !! the open ocean alike) and `&ocean_ic_nml T_ref` offset from
+      !! the open ocean alike) and `[ocean.ic] T_ref` offset from
       !! `lin_t_ref` so `rho_surf = rho_0 - alpha_T*(lin_t_ref - T_ref)
       !! /= rho_0`. This is `vcm_lid_slope_sigma_unstrat`
       !! (`tests/regression/vcoord_matrix.py`) at unit-test scale: `f = 0`
       !! (as `rest_nml`) so a residual force integrates cleanly to `a*t`
       !! rather than a geostrophic amplitude `a/f`.
       character(len=:), allocatable :: nml
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 32, ny = 6, nghost = 2, dx = 2000.0, dy = 2000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 10 /"//new_line("a")// &
-            "&time_nml t_end = 1.0e7, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0, taux_magnitude = 0.0 /"//new_line("a")// &
-            "&physics_nml coriolis_f = 0.0 /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, T_init_bottom = 10.0, "// &
-            "T_init_surface = 10.0 /"//new_line("a")// &
-            "&ocean_ic_nml alpha_T = 0.2, beta_S = 0.0, T_ref = 8.0, S_ref = 35.0 /"// &
-            new_line("a")// &
-            "&ocean_zinit_nml enable = .true., source = 'linear', "// &
-            "lin_t_ref = 10.0, lin_dt_dz = 0.0, lin_s_ref = 35.0, lin_ds_dz = 0.0 /"// &
-            new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .false., "// &
-            "n_inner = 24 /"//new_line("a")// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            "draft_depth = 190.0, draft_slope = 1.0e-3, draft_x0 = -10000.0, "// &
-            "trim_ic_for_p_surf = .true. /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 32"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 10"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 1.0e7"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "taux_magnitude = 0.0"//new_line("a")// &
+            "[physics]"//new_line("a")// &
+            "coriolis_f = 0.0"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "T_init_bottom = 10.0"//new_line("a")// &
+            "T_init_surface = 10.0"//new_line("a")// &
+            "[ocean.ic]"//new_line("a")// &
+            "alpha_T = 0.2"//new_line("a")// &
+            "beta_S = 0.0"//new_line("a")// &
+            "T_ref = 8.0"//new_line("a")// &
+            "S_ref = 35.0"//new_line("a")// &
+            "[ocean.zinit]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'source = "linear"'//new_line("a")// &
+            "lin_t_ref = 10.0"//new_line("a")// &
+            "lin_dt_dz = 0.0"//new_line("a")// &
+            "lin_s_ref = 35.0"//new_line("a")// &
+            "lin_ds_dz = 0.0"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "fv_mom6"'//new_line("a")// &
+            "p_top_in_bc = true"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            'split_scheme = "pred_corr"'//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 24"//new_line("a")// &
+            "[ocean.cavity_dyn]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'draft_config = "linear"'//new_line("a")// &
+            "draft_depth = 190.0"//new_line("a")// &
+            "draft_slope = 1.0e-3"//new_line("a")// &
+            "draft_x0 = -10000.0"//new_line("a")// &
+            "trim_ic_for_p_surf = true"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function rest_nml_trim_uniform
 
    subroutine test_trim_uniform_rho_rest(error)
       !! THE END-TO-END REGRESSION for the `g_bt` / free-surface-gravity
       !! mismatch fixed in `configure_ocean_pgf` (2026-09-28): a sloping
       !! ice lid, uniform density `rho_surf /= rho_ref`, TRIMMED to rest
-      !! under the MOM6 barotropic split (`&ocean_bt_nml bc_pgf_forcing`,
+      !! under the MOM6 barotropic split (`[ocean.bt] bc_pgf_forcing`,
       !! default) — exactly `vcm_lid_slope_sigma_unstrat`'s geometry.
       !!
       !! The raw PGF face force at this state is round-off

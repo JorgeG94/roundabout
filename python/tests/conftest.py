@@ -36,27 +36,43 @@ def pytest_configure(config):
 
 
 @pytest.fixture
-def ocean_nml():
-    """Minimal valid ocean namelist -- 8x6x3, matches the Fortran ctest
-    reference (tests/test_ocean_api_p2.F90's `ocean_nml()`), so a failure
+def ocean_toml():
+    """Minimal valid ocean config -- 8x6x3, matches the Fortran ctest
+    reference (tests/test_ocean_api_p2.F90's `ocean_toml()`), so a failure
     here is directly comparable against the Fortran-side gate."""
     return (
-        '&sim_nml sim_type = "ocean" /\n'
-        "&grid_nml nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /\n"
-        "&nonhydrostatic_nml nz_layers = 3 /\n"
-        "&time_nml t_end = 86400.0, dt_fixed = 300.0 /\n"
-        '&ocean_topo_nml topo_config = "flat", max_depth = 200.0 /\n'
-        "&ocean_bt_nml auto_n_inner = .true. /\n"
-        "&tracer_nml initial_salinity = 35.0, initial_temperature = 12.0 /\n"
-        "&ocean_diag_nml enabled = .false. /\n"
-        "&output_nml output_to_file = .false. /\n"
+        """[sim]
+sim_type = "ocean"
+[grid]
+nx = 8
+ny = 6
+dx = 2000.0
+dy = 2000.0
+[nonhydrostatic]
+nz_layers = 3
+[time]
+t_end = 86400.0
+dt_fixed = 300.0
+[ocean.topo]
+topo_config = "flat"
+max_depth = 200.0
+[ocean.bt]
+auto_n_inner = true
+[tracer]
+initial_salinity = 35.0
+initial_temperature = 12.0
+[ocean.diag]
+enabled = false
+[output]
+output_to_file = false
+"""
     )
 
 
 @pytest.fixture
-def bad_nml():
-    """A malformed namelist -- unknown key, strict schema parse failure."""
-    return "&grid_nml nx = 8, ny = 6, totally_bogus_key = 1 /\n"
+def bad_toml():
+    """A malformed config -- unknown key, strict schema parse failure."""
+    return "[grid]\nnx = 8\nny = 6\ntotally_bogus_key = 1\n"
 
 
 @pytest.fixture(autouse=True)

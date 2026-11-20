@@ -12,16 +12,16 @@ still owns the device; Python builds the configuration, creates the solver,
 advances it, and reads and writes its state arrays — in-process, through
 ``ctypes``, against the same ``librdb_core`` the executable links.
 
-This is a **runtime driver**, not a namelist generator. ``model.h`` is not a
+This is a **runtime driver**, not a config generator. ``model.h`` is not a
 copy of a file that was written earlier; it is a window onto the live
 ``h_layer`` array of a solver that is halfway through a run. The reason to
-reach for it is *decisions in between steps* — a namelist states one run from
+reach for it is *decisions in between steps* — a config states one run from
 beginning to end, a script can look at the mixed-layer depth at day 30 and
 decide what to do about it. Diagnosing a run interactively, sweeping a
-parameter without writing twenty ``.nml`` files, checking an analytical
+parameter without writing twenty ``.toml`` files, checking an analytical
 solution cell by cell, driving the model from a notebook: those are what this
 is for. A production run that is fully described before it starts is still
-better expressed as a namelist and handed to the ``rdb`` binary.
+better expressed as a config and handed to the ``rdb`` binary.
 
 The package is ``python/rdb`` in the repository. It has **no dependencies at
 all** — stdlib plus ``ctypes``, no numpy, nothing to install. numpy is used
@@ -40,8 +40,8 @@ One object does the work, and everything else describes it:
    * - Object
      - What it is
    * - ``rdb.Model``
-     - A live solver handle. Created from a namelist string, a
-       :class:`~rdb.Config`, a namelist file, or a set of curated physics
+     - A live solver handle. Created from a config string, a
+       :class:`~rdb.Config`, a config file, or a set of curated physics
        objects. Steps, exposes state, and must be closed.
    * - ``rdb.Field``
      - A window onto one state array — layer thickness, a velocity
@@ -54,11 +54,11 @@ One object does the work, and everything else describes it:
      - ``Loc.CENTER`` / ``Loc.FACE`` — the stagger point of each axis of a
        field.
    * - ``rdb.Config``
-     - Every namelist group and every knob, typed and validated on
+     - Every config group and every knob, typed and validated on
        assignment. Generated from the solver's own schema.
    * - ``rdb.Diagnostics``, ``rdb.Duration``, ``rdb.Restart``
-     - Curated writers over ``&ocean_diag_nml``, ``&time_nml`` and the
-       restart half of ``&output_nml``.
+     - Curated writers over ``[ocean.diag]``, ``[time]`` and the
+       restart half of ``[output]``.
    * - ``rdb.RdbError``
      - The base of a typed exception hierarchy. Every failure the Fortran can
        return arrives as a specific subclass carrying the Fortran's own
@@ -68,7 +68,7 @@ One object does the work, and everything else describes it:
 
    import rdb
 
-   with rdb.Model(open("case.nml").read()) as model:
+   with rdb.Model(open("case.toml").read()) as model:
        model.step(10)
        print(model.time, model.total_mass)
        print(model.temperature[0, 0, -1])     # surface layer, degC
@@ -187,24 +187,38 @@ route. For multi-million-cell fields pass a Fortran-ordered float64 array.
 A first run
 ===========
 
-The shortest complete thing. A namelist string, ten steps, one number out:
+The shortest complete thing. A config string, ten steps, one number out:
 
 .. code-block:: python
 
    import rdb
 
-   nml = """
-   &sim_nml            sim_type = "ocean" /
-   &grid_nml           nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /
-   &nonhydrostatic_nml nz_layers = 3 /
-   &time_nml           t_end = 86400.0, dt_fixed = 300.0 /
-   &ocean_topo_nml     topo_config = "flat", max_depth = 200.0 /
-   &ocean_bt_nml       auto_n_inner = .true. /
-   &tracer_nml         initial_salinity = 35.0, initial_temperature = 12.0 /
-   &ocean_diag_nml     enabled = .false. /
+   config = """
+   [sim]
+   sim_type = "ocean"
+   [grid]
+   nx = 8
+   ny = 6
+   dx = 2000.0
+   dy = 2000.0
+   [nonhydrostatic]
+   nz_layers = 3
+   [time]
+   t_end = 86400.0
+   dt_fixed = 300.0
+   [ocean.topo]
+   topo_config = "flat"
+   max_depth = 200.0
+   [ocean.bt]
+   auto_n_inner = true
+   [tracer]
+   initial_salinity = 35.0
+   initial_temperature = 12.0
+   [ocean.diag]
+   enabled = false
    """
 
-   with rdb.Model(nml) as model:
+   with rdb.Model(config) as model:
        print(model.grid_info)
        model.step(10)
        print(model.time, model.step_count)
@@ -218,7 +232,7 @@ The shortest complete thing. A namelist string, ten steps, one number out:
 
 Three things in that output are worth naming now.
 
-``nghost`` is **derived, not asked for**. The namelist above never mentions a
+``nghost`` is **derived, not asked for**. The config above never mentions a
 halo width; the solver worked out that this configuration needs three ghost
 cells and said so.
 
@@ -250,7 +264,7 @@ The **curated objects** are named physics: ``RectilinearGrid``,
 ``Smagorinsky``, ``EPBL``, ``Flather``. They are the readable surface, and
 they check things that cross object boundaries.
 
-The **generated config** is every namelist knob the schema carries — 57
+The **generated config** is every config knob the schema carries — 57
 groups, 613 keys — typed and validated, reachable by name. It is the escape
 hatch, and nothing is missing from it.
 
@@ -356,7 +370,7 @@ The modules, and what each covers:
      - ``Diagnostics``, ``Duration``, ``Restart``.
 
 What the curated layer adds over the raw knobs is the checks that need two
-objects in view at once, which no namelist can express and no single knob can
+objects in view at once, which no config can express and no single knob can
 catch. KPP and EPBL are mutually exclusive, so asking for both raises
 :class:`~rdb.ConfigConflictError`. ``HenyeyBackground`` on a
 ``RectilinearGrid`` raises, because a Cartesian grid has no latitude and
@@ -372,7 +386,7 @@ call earlier, with both objects in view.
 The generated config
 --------------------
 
-:class:`rdb.Config` is the other half. Every namelist group is an attribute,
+:class:`rdb.Config` is the other half. Every config group is an attribute,
 every knob is an attribute of that:
 
 .. code-block:: python
@@ -395,7 +409,7 @@ every knob is an attribute of that:
 
 ``python/rdb/_config_generated.py`` is **generated**, not written. It is
 produced by ``tools/gen_python_config.py`` from the solver's live
-``nml_schema_t`` — the same schema object that parses a namelist file, that
+``nml_schema_t`` — the same schema object that parses a config file, that
 the strict parser checks against, and that ``rdb_nml_doc`` dumps to
 ``docs/generated_nml_knobs.md``. That is why this page does not list the
 knobs: any list here would be a second copy with its own decay rate. Regenerate
@@ -422,7 +436,7 @@ in the canonical spelling, a length cap on strings:
 What it deliberately does *not* re-implement is the cross-knob semantics —
 ``validate_config`` and the schema's per-group ``cross_check`` callbacks stay
 in Fortran, and surface as :class:`~rdb.ConfigValidationError` when the
-composed namelist reaches the library. Two copies of a cross-knob rule is two
+composed config reaches the library. Two copies of a cross-knob rule is two
 rules, and one of them will be wrong.
 
 The knob metadata is readable from the class, without building anything:
@@ -437,31 +451,30 @@ The knob metadata is readable from the class, without building anything:
 Absence is the default
 ----------------------
 
-A fresh ``Config`` has every knob **unset**, and ``to_namelist()`` emits only
+A fresh ``Config`` has every knob **unset**, and ``to_toml()`` emits only
 what was explicitly assigned:
 
 .. code-block:: python
 
-   >>> rdb.Config().to_namelist()
+   >>> rdb.Config().to_toml()
    ''
    >>> cfg = rdb.Config()
    >>> cfg.ocean_hvisc.nu_h = 5000.0
    >>> cfg.ocean_hvisc.smag_ah = True
-   >>> print(cfg.to_namelist())
-   &ocean_hvisc_nml
-     nu_h = 5000.0
-     smag_ah = .true.
-   /
+   >>> print(cfg.to_toml())
+   [ocean.hvisc]
+   nu_h = 5000.0
+   smag_ah = true
 
 This is what makes a Python-built run bit-identical to the equivalent
-namelist: an empty buffer leaves the Fortran's own pristine defaults
+config: an empty buffer leaves the Fortran's own pristine defaults
 untouched, so nothing is silently re-stated at a Python-side idea of the
 default. ``explicit_knobs()`` yields ``(group, key, value)`` for what was
-actually set, and ``write_namelist(path)`` puts the same text on disk — which
+actually set, and ``write_toml(path)`` puts the same text on disk — which
 is the honest way to record what a script ran.
 
 Whatever the entry point, **that string is the only thing that crosses the
-ABI**. A curated model, a hand-built ``Config`` and a namelist file all end
+ABI**. A curated model, a hand-built ``Config`` and a config file all end
 up in ``read_config_from_string``, through the identical parse, the identical
 cross-checks and the identical ``validate_config``. There is no second,
 mirrored configuration path to fall out of sync.
@@ -478,7 +491,7 @@ be edited:
    model = rdb.Model(grid=..., closures=[...], ...)
    model.config.ocean_hvisc.bound_kh = True        # not a curated argument
    model.config.ocean_debug.chksum = True
-   print(model.config.to_namelist())               # exactly what will be sent
+   print(model.config.to_toml())               # exactly what will be sent
 
    with model:                                     # create() happens here
        model.run(steps=100)
@@ -486,22 +499,22 @@ be edited:
 ``defer=True`` requires the explicit ``create()`` even inside ``with``, for
 scripts that want the creation point named.
 
-Curated keywords and a raw namelist/``Config`` are **mutually exclusive
+Curated keywords and a raw config/``Config`` are **mutually exclusive
 entry points** — one model, one recipe. Passing both raises ``TypeError``
 rather than picking a winner. The escape hatch above is not a mix of the two;
 it is editing the config the curated objects composed.
 
 After creation ``model.config`` is a record, not a control panel: there is no
 reconfigure-in-place entry point, so assigning to it later changes nothing in
-the running solver. On a model built from a raw namelist *string*,
+the running solver. On a model built from a raw config *string*,
 ``model.config`` is an empty ``Config`` — the string is never parsed back
-into typed knobs. ``Model.from_namelist`` is the path that does parse, below.
+into typed knobs. ``Model.from_toml`` is the path that does parse, below.
 
 Dead knobs
 ----------
 
 Some knobs are registered on the schema — accepted, type-checked,
-round-tripped through ``to_namelist()`` — and read nowhere on the ocean path.
+round-tripped through ``to_toml()`` — and read nowhere on the ocean path.
 They were swept out once and flagged in the generator, so assigning one warns:
 
 .. code-block:: python
@@ -511,9 +524,9 @@ They were swept out once and flagged in the generator, so assigning one warns:
    stretching) has no effect on the ocean path: ...
 
 The assignment still *happens* — the knob is set, and it will appear in the
-namelist text — because the warning is about effect, not legality. The best
-known example is ``&output_nml output_to_file``, which several shipped
-namelists still set and which does nothing; ``&ocean_diag_nml enabled`` is
+config text — because the warning is about effect, not legality. The best
+known example is ``[output] output_to_file``, which several shipped
+configs still set and which does nothing; ``[ocean.diag] enabled`` is
 the real switch. Promote the warning to an error while developing a script if
 you want the stricter contract:
 
@@ -522,17 +535,17 @@ you want the stricter contract:
    import warnings
    warnings.simplefilter("error", rdb.RdbDeadKnobWarning)
 
-Starting from an existing namelist
+Starting from an existing config
 ----------------------------------
 
-``Model.from_namelist`` is the migration path. It reads the file in Python,
+``Model.from_toml`` is the migration path. It reads the file in Python,
 resolves relative paths inside it against *the file's own directory* (so a
 script's working directory stops mattering), and hands back a model whose
 ``.config`` is the same typed object a hand-written script would have built:
 
 .. code-block:: python
 
-   >>> model = rdb.Model.from_namelist("validation/case.nml", defer=True)
+   >>> model = rdb.Model.from_toml("validation/case.toml", defer=True)
    >>> model.config
    Config(14 knob(s) set)
    >>> model.config.ocean_topo.max_depth
@@ -547,7 +560,7 @@ script's working directory stops mattering), and hands back a model whose
 A knob the file never mentioned reads back as ``MISSING``, exactly as on a
 hand-built config — the object records what the file *said*, not what the
 Fortran will default it to. That is what lets a user move one knob at a time
-from a namelist into curated objects without ever holding two descriptions of
+from a config into curated objects without ever holding two descriptions of
 the same run.
 
 Curated keyword arguments can be passed alongside, and a disagreement is
@@ -555,7 +568,7 @@ refused rather than resolved:
 
 .. code-block:: python
 
-   >>> rdb.Model.from_namelist("case.nml", closures=[ConstantViscosity(nu_h=1.0)])
+   >>> rdb.Model.from_toml("case.toml", closures=[ConstantViscosity(nu_h=1.0)])
    rdb._errors.ConfigConflictError: ... nu_h ...
 
 
@@ -563,7 +576,7 @@ Grids, geometry and topology
 ============================
 
 The grid objects follow Oceananigans: size and extent on the grid, topology
-on the grid, the bottom as an immersed boundary rather than a namelist
+on the grid, the bottom as an immersed boundary rather than a config
 setting elsewhere. The spellings are Roundabout's, and where a concept has no
 analogue it raises rather than approximating one.
 
@@ -605,7 +618,7 @@ exactly when the longitude extent is 360 degrees, y is always bounded.
 Periodic latitude raises — a pole is a physical boundary, not a wrap, and the
 object points at ``TripolarGrid`` instead. ``TripolarGrid`` has no
 ``topology`` argument at all: it is periodic in x and north-folded by
-construction, and it forces the matching ``&ocean_bc_nml`` edges itself.
+construction, and it forces the matching ``[ocean.bc]`` edges itself.
 
 Topology lives on the grid
 --------------------------
@@ -621,7 +634,7 @@ dispatch to zero operators; a Roundabout run with ``ny=1`` still executes
 live differencing kernels, so the concept does not carry over. The string
 ``"flat"`` in a topology tuple raises rather than being quietly accepted.
 
-A grid's topology reaches ``&ocean_bc_nml`` whether or not a ``Boundaries``
+A grid's topology reaches ``[ocean.bc]`` whether or not a ``Boundaries``
 object was given. This matters more than it sounds: without it, a grid built
 periodic in x would derive its halo correctly, set its periodic flag — and
 leave west and east at the default wall, turning a re-entrant channel into a
@@ -1119,7 +1132,7 @@ Diagnostics
 ===========
 
 The diagnostic machinery is the same registry and cadence dispatch a
-namelist-driven run uses — the Python layer adds discovery and in-memory
+config-driven run uses — the Python layer adds discovery and in-memory
 reads on top of it.
 
 What can be asked for
@@ -1151,14 +1164,14 @@ sea-ice model). For what *this* run actually registered:
    True
 
 A name in ``available`` but not in ``selected`` was either gated off by
-another namelist group or simply never asked for. Derived diagnostics are
+another config group or simply never asked for. Derived diagnostics are
 never auto-registered.
 
 Configuring the stream
 ----------------------
 
-:class:`rdb.Diagnostics` writes ``&ocean_diag_nml``, plus the pieces of
-``&output_nml`` and ``&logging_nml`` that go with it:
+:class:`rdb.Diagnostics` writes ``[ocean.diag]``, plus the pieces of
+``[output]`` and ``[logging]`` that go with it:
 
 .. code-block:: python
 
@@ -1203,10 +1216,10 @@ and output plumbing rather than diagnostic selection.
 
 .. note::
 
-   ``Diagnostics(...).apply()`` also sets ``&output_nml output_to_file`` for
+   ``Diagnostics(...).apply()`` also sets ``[output] output_to_file`` for
    parity with the hand-written escape hatch, which emits a
    ``RdbDeadKnobWarning`` — that knob is dead on the ocean path. The warning
-   is accurate and harmless; ``&ocean_diag_nml enabled`` is the gate that
+   is accurate and harmless; ``[ocean.diag] enabled`` is the gate that
    actually does the work.
 
 Reading a diagnostic out of memory
@@ -1247,7 +1260,7 @@ Asking for a name that is not registered on *this* run raises
 Time and restarts
 =================
 
-:class:`rdb.Duration` reaches ``&time_nml``:
+:class:`rdb.Duration` reaches ``[time]``:
 
 .. code-block:: python
 
@@ -1263,9 +1276,9 @@ reliable first-run stumble, which is what this object is for.
 
 ``time_unit`` scales ``t_end``, ``status_interval`` and ``dt_out`` together.
 It does not scale ``dt_fixed``, which is always seconds — the same trap the
-namelist has, carried over unchanged.
+config has, carried over unchanged.
 
-:class:`rdb.Restart` sets the restart half of ``&output_nml`` without
+:class:`rdb.Restart` sets the restart half of ``[output]`` without
 dropping to the escape hatch:
 
 .. code-block:: python
@@ -1287,7 +1300,7 @@ set ``every=`` small enough that the cadence covers what you need.
 ABI's create routine deliberately does not pass ``restart_file`` through to
 the setup chain — its own comment says so, in as many words, and calls it a
 future phase's concern. ``Restart(file=...)`` writes the knob, and the knob
-is carried in the namelist text faithfully, but a model created from Python
+is carried in the config text faithfully, but a model created from Python
 starts from its initial condition. Restarting a run is a job for the ``rdb``
 executable today.
 
@@ -1303,7 +1316,7 @@ carries the Fortran's own sentence:
 
 .. code-block:: python
 
-   >>> rdb.Model("&grid_nml nx = 8, ny = 6, totally_bogus_key = 1 /\n")
+   >>> rdb.Model("[grid] nx = 8, ny = 6, totally_bogus_key = 1 /\n")
    rdb._errors.ConfigParseError: <config-string>:1: unknown key
    'totally_bogus_key' in group 'grid'
 
@@ -1484,7 +1497,7 @@ work means one process per member.
 no communicator argument, no rank query, and no decomposition control.
 ``comm_env_finalize`` calls ``MPI_Finalize`` and is irreversible, so it is
 deliberately not exposed. A multi-rank run is a job for the ``rdb``
-executable and a namelist.
+executable and a config.
 
 **The GPU build works.** This was verified rather than assumed: the NVHPC
 GPU ``.so`` does ``dlopen`` from stock CPython, ``acc_init`` creates a CUDA
@@ -1497,7 +1510,7 @@ a script actually reads.
 **No restart or out-of-cadence diagnostic write from a live handle.** The C
 ABI has no entry point for either. Both raise
 :class:`~rdb.RdbUnsupportedError` naming the gap. Restart and diagnostic
-output are namelist-driven: set them before ``create()``.
+output are config-driven: set them before ``create()``.
 
 **No grid coordinates.** ``field.nodes()`` raises — the C ABI exposes no
 longitude/latitude accessor yet. Derive coordinates from ``grid_info`` and

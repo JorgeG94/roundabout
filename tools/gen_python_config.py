@@ -4,7 +4,7 @@
 Stdlib only (project rule: never `pip install`; no numpy anywhere in this
 pipeline). Reads the JSON emitted by `rdb_nml_json` (built from
 `app/nml_json.F90` -> `schema%render_json`, `src/core/rdb_nml_schema.F90`)
-and writes ONE Python class per namelist group, with one descriptor
+and writes ONE Python class per config group, with one descriptor
 attribute per knob (see `python/rdb/_knob.py` for the descriptor
 machinery: `Real`/`Int`/`Bool`/`Str`/`Enum`/`RealArray`).
 
@@ -15,7 +15,7 @@ scraping text. That is the whole point of the pipeline (see
 the generated Python layer cannot drift from the Fortran schema because it
 is a direct rendering of it.
 
-`&ocean_bc_nml` is emitted here like every other group (P4.5 migrated it
+`[ocean.bc]` is emitted here like every other group (P4.5 migrated it
 onto the schema; there are no more externally-registered groups).
 
 Usage:
@@ -52,13 +52,13 @@ _HEADER = '''"""Generated typed config layer -- DO NOT EDIT.
 Emitted by `tools/gen_python_config.py` from the live `nml_schema_t`
 (`src/core/rdb_config.F90` -> `build_rdb_schema`, walked via
 `schema%render_json`, `src/core/rdb_nml_schema.F90`). One class per
-namelist group; one descriptor attribute per knob, carrying the schema's
+config group; one descriptor attribute per knob, carrying the schema's
 own doc/units/default/bounds/enum-set (see `python/rdb/_knob.py`).
 
 ABSENCE IS THE DEFAULT, NOT THE FORTRAN VALUE: every knob starts unset,
-and only explicitly-assigned knobs serialise via `to_namelist()`
+and only explicitly-assigned knobs serialise via `to_toml()`
 (`python/rdb/_config.py`). This is what gives bit-identity to existing
-namelists -- a config of all defaults serialises to nothing.
+configs -- a config of all defaults serialises to nothing.
 
 Regenerate with:
 
@@ -78,12 +78,28 @@ from ._knob import Bool, Enum, Group, Int, Real, RealArray, Str
 '''
 
 
+OCEAN_PREFIX = "ocean_"
+
+
+def group_to_table(group: str) -> str:
+    """TOML table path of a bare group name: `ocean_hvisc` -> `ocean.hvisc`,
+    `time` -> `time` (only the LEADING `ocean_` nests).  This is the ONE
+    place the Python package learns the mapping: it is emitted into every
+    generated group class as `_table` and read back from there by
+    `rdb._config` / `rdb._toml_load`.  It mirrors `group_to_table` in
+    `src/core/config/rdb_toml_read.F90`; `python/tests/test_config_drift.py`
+    keeps the table list consistent with the live schema."""
+    if len(group) > len(OCEAN_PREFIX) and group.startswith(OCEAN_PREFIX):
+        return "ocean." + group[len(OCEAN_PREFIX):]
+    return group
+
+
 def pascal_case(name: str) -> str:
     return "".join(part.capitalize() for part in name.split("_") if part)
 
 
 def py_attr(name: str) -> str:
-    """A namelist key name is already a valid-ish Python identifier
+    """A config key name is already a valid-ish Python identifier
     (letters/digits/underscore); guard only against a Python keyword
     collision (none currently exist in the schema, but a future knob
     could be named e.g. `class`)."""
@@ -164,10 +180,12 @@ def emit_group(group: dict) -> tuple[str, list[str]]:
     gname = group["name"]
     cls_name = pascal_case(gname)
     lines = [f"class {cls_name}(Group):"]
-    doc = group["doc"] or f"`&{gname}_nml`."
-    lines.append(f'    """`&{gname}_nml` -- {doc}"""')
+    table = group_to_table(gname)
+    doc = group["doc"] or f"`[{table}]`."
+    lines.append(f'    """`[{table}]` -- {doc}"""')
     lines.append("")
-    lines.append(f"    _nml_name = {gname!r}")
+    lines.append(f"    _group = {gname!r}")
+    lines.append(f"    _table = {table!r}")
     keys = group.get("keys", [])
     if not keys:
         lines.append("")

@@ -257,30 +257,64 @@ contains
       logical, intent(in) :: closed
       character(len=:), allocatable :: nml
       character(len=1), parameter :: nl = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
-            "&grid_nml nx = 8, ny = 4, nghost = 2, dx = 2000.0, dy = 2000.0 /"//nl// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 300.0, cfl_interval = 1 /"//nl// &
-            "&physics_nml coriolis_f = 1.0e-4 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//nl// &
-            "&vcoord_nml vcoord_type = 'zstar', z_fixed_profile = 'list', "// &
-            "z_fixed_dz = 20.0, 20.0, 40.0, 40.0, 40.0, 40.0, "// &
-            "zstar_h_min = 1.0e-4, "// &
-            "zfixed_closed_faces = "//merge(".true. ", ".false.", closed)//" /"//nl// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 200.0 /"//nl// &
-            "&tracer_nml initial_salinity = 35.0, T_init_surface = 15.0, "// &
-            "T_init_bottom = 5.0 /"//nl// &
-            "&ocean_eos_nml eos = 'linear' /"//nl// &
-            "&ocean_ic_nml alpha_T = 0.2, beta_S = 0.8, T_ref = 10.0, S_ref = 35.0, "// &
-            "rho_0 = 1027.0 /"//nl// &
-            "&ocean_pgf_nml form = 'fv_mom6' /"//nl// &
-            "&ocean_coriolis_nml form = 'sadourny_energy' /"//nl// &
-            "&ocean_hvisc_nml nu_h = 10.0 /"//nl// &
-            "&ocean_bdrag_nml form = 'linear', r = 1.0e-4, hbbl = 10.0 /"//nl// &
-            "&ocean_vmix_nml use_closure = .false., use_kpp = .false., "// &
-            "pp81_nu_bg = 0.0, pp81_kappa_bg = 0.0 /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 8"//nl// &
+            "ny = 4"//nl// &
+            "nghost = 2"//nl// &
+            "dx = 2000.0"//nl// &
+            "dy = 2000.0"//nl// &
+            "[time]"//nl// &
+            "t_end = 1.0e9"//nl// &
+            "dt_fixed = 300.0"//nl// &
+            "cfl_interval = 1"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = 1.0e-4"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 6"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "zstar"'//nl// &
+            'z_fixed_profile = "list"'//nl// &
+            "z_fixed_dz = [20.0, 20.0, 40.0, 40.0, 40.0, 40.0]"//nl// &
+            "zstar_h_min = 1.0e-4"//nl// &
+            "zfixed_closed_faces = "//merge("true ", "false", closed)//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "flat"'//nl// &
+            "max_depth = 200.0"//nl// &
+            "[tracer]"//nl// &
+            "initial_salinity = 35.0"//nl// &
+            "T_init_surface = 15.0"//nl// &
+            "T_init_bottom = 5.0"//nl// &
+            "[ocean.eos]"//nl// &
+            'eos = "linear"'//nl// &
+            "[ocean.ic]"//nl// &
+            "alpha_T = 0.2"//nl// &
+            "beta_S = 0.8"//nl// &
+            "T_ref = 10.0"//nl// &
+            "S_ref = 35.0"//nl// &
+            "rho_0 = 1027.0"//nl// &
+            "[ocean.pgf]"//nl// &
+            'form = "fv_mom6"'//nl// &
+            "[ocean.coriolis]"//nl// &
+            'form = "sadourny_energy"'//nl// &
+            "[ocean.hvisc]"//nl// &
+            "nu_h = 10.0"//nl// &
+            "[ocean.bdrag]"//nl// &
+            'form = "linear"'//nl// &
+            "r = 1.0e-4"//nl// &
+            "hbbl = 10.0"//nl// &
+            "[ocean.vmix]"//nl// &
+            "use_closure = false"//nl// &
+            "use_kpp = false"//nl// &
+            "pp81_nu_bg = 0.0"//nl// &
+            "pp81_kappa_bg = 0.0"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function staircase_nml
 
    subroutine create_staircase(handle, closed, status)

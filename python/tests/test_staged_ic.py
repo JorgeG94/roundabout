@@ -14,18 +14,35 @@ NX, NY, NZ = 8, 6, 3
 EPS = 2.220446049250313e-16
 
 
-def _nml(wind=False, depth=200.0):
+def _toml(wind=False, depth=200.0):
     return (
-        '&sim_nml sim_type = "ocean" /\n'
-        f"&grid_nml nx = {NX}, ny = {NY}, dx = 2000.0, dy = 2000.0 /\n"
-        f"&nonhydrostatic_nml nz_layers = {NZ} /\n"
-        "&time_nml t_end = 86400.0, dt_fixed = 300.0 /\n"
-        f'&ocean_topo_nml topo_config = "flat", max_depth = {depth} /\n'
-        "&ocean_bt_nml auto_n_inner = .true. /\n"
-        "&tracer_nml initial_salinity = 35.0, initial_temperature = 12.0 /\n"
-        + ("&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05 /\n" if wind else "")
-        + "&ocean_diag_nml enabled = .false. /\n"
-        "&output_nml output_to_file = .false. /\n"
+        f"""[sim]
+sim_type = "ocean"
+[grid]
+nx = {NX}
+ny = {NY}
+dx = 2000.0
+dy = 2000.0
+[nonhydrostatic]
+nz_layers = {NZ}
+[time]
+t_end = 86400.0
+dt_fixed = 300.0
+[ocean.topo]
+topo_config = "flat"
+max_depth = {depth}
+[ocean.bt]
+auto_n_inner = true
+[tracer]
+initial_salinity = 35.0
+initial_temperature = 12.0
+"""
+        + ("[physics]\ncoriolis_f = 1.0e-4\nwind_stress_x = 0.05\n" if wind else "")
+        + """[ocean.diag]
+enabled = false
+[output]
+output_to_file = false
+"""
     )
 
 
@@ -50,7 +67,7 @@ def test_staged_h_then_T_gives_staged_concentration():
     h[2][3] = [h[2][3][0] * 1.2, h[2][3][1] * 0.9, h[2][3][2] * 0.95]
     s = sum(h[2][3])
     h[2][3] = [x * 200.0 / s for x in h[2][3]]
-    m = rdb.Model.pending(_nml())
+    m = rdb.Model.pending(_toml())
     try:
         m.stage_tracer("temperature", T)    # T before h: order must not matter
         m.stage_h(h)
@@ -72,7 +89,7 @@ def test_staged_u_zeroed_on_land_faces():
     depth[3][2] = 0.0                       # one land cell
     u = _field(NX + 1, NY, NZ, lambda i, j, k: 0.5)
     v = _field(NX, NY + 1, NZ, lambda i, j, k: 0.25)
-    m = rdb.Model.pending(_nml())
+    m = rdb.Model.pending(_toml())
     try:
         m.stage_bathymetry(depth, rdb.BATHY_DEPTH_POSITIVE_DOWN)
         m.stage_u(u)
@@ -90,12 +107,12 @@ def test_staged_u_zeroed_on_land_faces():
 
 
 def test_pending_without_staging_is_bit_identical_to_one_shot():
-    nml = _nml(wind=True)
-    with rdb.Model(nml) as a:
+    cfg_text = _toml(wind=True)
+    with rdb.Model(cfg_text) as a:
         a.step(20)
         ref = (a.h[...], a.u[...], a.v[...], a.temperature[...],
                a.salinity[...])
-    m = rdb.Model.pending(nml)
+    m = rdb.Model.pending(cfg_text)
     try:
         m.finalize()
         m.step(20)
@@ -108,11 +125,11 @@ def test_pending_without_staging_is_bit_identical_to_one_shot():
 
 def test_staged_h_to_uniform_equals_default_seed():
     """Staging exactly what the seed would have produced changes nothing."""
-    nml = _nml(wind=True)
-    with rdb.Model(nml) as a:
+    cfg_text = _toml(wind=True)
+    with rdb.Model(cfg_text) as a:
         a.step(5)
         ref = (a.h[...], a.u[...], a.temperature[...])
-    m = rdb.Model.pending(nml)
+    m = rdb.Model.pending(cfg_text)
     try:
         m.stage_h(_field(NX, NY, NZ, lambda i, j, k: 200.0 / NZ))
         m.stage_tracer("temperature", _field(NX, NY, NZ, lambda i, j, k: 12.0))
@@ -128,7 +145,7 @@ def test_staged_h_to_uniform_equals_default_seed():
 
 
 def test_wrong_shape_raises_bad_shape():
-    m = rdb.Model.pending(_nml())
+    m = rdb.Model.pending(_toml())
     try:
         m.stage_u(_field(NX, NY, NZ, lambda i, j, k: 0.0))   # needs nx+1
         with pytest.raises(rdb.BadShapeError):
@@ -138,7 +155,7 @@ def test_wrong_shape_raises_bad_shape():
 
 
 def test_unknown_tracer_raises_not_found():
-    m = rdb.Model.pending(_nml())
+    m = rdb.Model.pending(_toml())
     try:
         m.stage_tracer("no_such_tracer", _field(NX, NY, NZ, lambda i, j, k: 1.0))
         with pytest.raises(rdb.TracerNotFoundError):
@@ -150,7 +167,7 @@ def test_unknown_tracer_raises_not_found():
 def test_nonpositive_h_raises_ic_error():
     h = _h()
     h[1][1][1] = 0.0
-    m = rdb.Model.pending(_nml())
+    m = rdb.Model.pending(_toml())
     try:
         m.stage_h(h)
         with pytest.raises(rdb.RdbInitialConditionError):
@@ -159,7 +176,7 @@ def test_nonpositive_h_raises_ic_error():
         m.close()
 
 
-def test_stage_on_non_pending_model_raises(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_stage_on_non_pending_model_raises(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         with pytest.raises(rdb.NotInitialisedError):
             m.stage_h(_h())

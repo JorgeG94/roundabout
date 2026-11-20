@@ -1,7 +1,7 @@
 !! Periodic-seam consistency of LOADED bathymetry, through the real setup.
 !!
 !! A bathymetry that does not come from a formula — the NetCDF file loader
-!! (`&ocean_topo_nml topo_config = "file"`) or the API's staged array
+!! (`[ocean.topo] topo_config = "file"`) or the API's staged array
 !! (`rdb_ocean_stage_bathymetry`) — has only its physical interior defined;
 !! the ghosts are filled by CONSTANT EXTRAPOLATION of the nearest edge
 !! column.  On a periodic-x domain that is the wrong value at the seam: the
@@ -130,25 +130,42 @@ contains
       !! own bathymetry copy), sigma coordinate.
       character(len=:), allocatable :: nml
       character(len=1), parameter :: nl = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 300.0, cfl_interval = 1 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//nl// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//nl// &
-            "&tracer_nml initial_temperature = 10.0, initial_salinity = 35.0, "// &
-            "T_init_surface = 20.0, T_init_bottom = 4.0 /"//nl// &
-            "&ocean_pgf_nml form = 'fv_mom6' /"//nl// &
-            "&ocean_coriolis_nml form = 'sadourny_energy' /"//nl// &
-            "&ocean_hvisc_nml nu_h = 100.0 /"//nl// &
-            "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3 /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .false., n_inner = 20 /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[time]"//nl// &
+            "t_end = 1.0e9"//nl// &
+            "dt_fixed = 300.0"//nl// &
+            "cfl_interval = 1"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 4"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "sigma"'//nl// &
+            "[tracer]"//nl// &
+            "initial_temperature = 10.0"//nl// &
+            "initial_salinity = 35.0"//nl// &
+            "T_init_surface = 20.0"//nl// &
+            "T_init_bottom = 4.0"//nl// &
+            "[ocean.pgf]"//nl// &
+            'form = "fv_mom6"'//nl// &
+            "[ocean.coriolis]"//nl// &
+            'form = "sadourny_energy"'//nl// &
+            "[ocean.hvisc]"//nl// &
+            "nu_h = 100.0"//nl// &
+            "[ocean.bdrag]"//nl// &
+            'form = "quadratic"'//nl// &
+            "cd = 3.0e-3"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = false"//nl// &
+            "n_inner = 20"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl
    end function common_nml
 
    function case_nml(grid_kind, bathy_file, walls_x) result(nml)
       !! `grid_kind` "cartesian" (20 km f-plane channel) or "spherical"
       !! (a 360-degree zonal band, 22.5 x 4 degree cells).  `bathy_file`
       !! blank ⇒ no `topo_config = "file"` (the staged-bathymetry case).
-      !! `walls_x` tags the east/west edges WALL in the namelist, so
+      !! `walls_x` tags the east/west edges WALL in the config, so
       !! periodicity can only come from the staged topology.
       character(len=*), intent(in) :: grid_kind, bathy_file
       logical, intent(in) :: walls_x
@@ -158,22 +175,51 @@ contains
 
       ew = "periodic"
       if (walls_x) ew = "wall"
-      nml = common_nml()//"&ocean_bc_nml west = '"//ew//"', east = '"//ew//"', "// &
-            "south = 'wall', north = 'wall' /"//nl
+      nml = common_nml()//nl// &
+            "[ocean.bc]"//nl// &
+            'west = "'//ew//'"'//nl// &
+            'east = "'//ew//'"'//nl// &
+            'south = "wall"'//nl// &
+            'north = "wall"'//nl
       if (grid_kind == "spherical") then
-         nml = nml//"&grid_nml nx = 16, ny = 8, nghost = 3, dx = 22.5, dy = 4.0 /"//nl// &
-               "&ocean_grid_nml grid_config = 'spherical', lon_west = -300.0, "// &
-               "lat_south = 20.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//nl
+         nml = nml//nl// &
+               "[grid]"//nl// &
+               "nx = 16"//nl// &
+               "ny = 8"//nl// &
+               "nghost = 3"//nl// &
+               "dx = 22.5"//nl// &
+               "dy = 4.0"//nl// &
+               "[ocean.grid]"//nl// &
+               'grid_config = "spherical"'//nl// &
+               "lon_west = -300.0"//nl// &
+               "lat_south = 20.0"//nl// &
+               "rad_earth = 6.371e6"//nl// &
+               'coriolis_scheme = "planetary"'//nl
       else
-         nml = nml//"&grid_nml nx = 16, ny = 8, nghost = 3, dx = 20000.0, dy = 20000.0 /"//nl// &
-               "&physics_nml coriolis_f = 1.0e-4 /"//nl
+         nml = nml//nl// &
+               "[grid]"//nl// &
+               "nx = 16"//nl// &
+               "ny = 8"//nl// &
+               "nghost = 3"//nl// &
+               "dx = 20000.0"//nl// &
+               "dy = 20000.0"//nl// &
+               "[physics]"//nl// &
+               "coriolis_f = 1.0e-4"//nl
       end if
       if (len_trim(bathy_file) > 0) then
-         nml = nml//"&ocean_topo_nml topo_config = 'file', max_depth = 2000.0 /"//nl// &
-               "&output_nml bathymetry_file = '"//bathy_file//"', output_to_file = .false. /"//nl
+         nml = nml//nl// &
+               "[ocean.topo]"//nl// &
+               'topo_config = "file"'//nl// &
+               "max_depth = 2000.0"//nl// &
+               "[output]"//nl// &
+               'bathymetry_file = "'//bathy_file//'"'//nl// &
+               "output_to_file = false"//nl
       else
-         nml = nml//"&ocean_topo_nml max_depth = 2000.0 /"//nl// &
-               "&output_nml output_to_file = .false. /"//nl
+         nml = nml//nl// &
+               "[ocean.topo]"//nl// &
+               "max_depth = 2000.0"//nl// &
+               "[output]"//nl// &
+               "output_to_file = false"//nl
       end if
    end function case_nml
 
@@ -253,7 +299,7 @@ contains
       nml = case_nml(grid_kind, fname, walls_x=.false.)
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
-      call check(error, status == OCEAN_STATUS_OK, grid_kind//": the namelist must build")
+      call check(error, status == OCEAN_STATUS_OK, grid_kind//": the config must build")
       if (allocated(error)) return
       call step_and_capture(error, handle, grid_kind//" file bathymetry", out)
       status = rdb_ocean_destroy(handle)
@@ -285,8 +331,8 @@ contains
    subroutine run_staged(error, roll, out)
       !! The API path: staged bathymetry (ghosts constant-extrapolated by
       !! `bathymetry_fill_ghosts_array`) + staged periodic-x topology over a
-      !! namelist that tags the east/west edges WALL — so the seed has to
-      !! learn the periodicity from the stage, not from `&ocean_bc_nml`.
+      !! config that tags the east/west edges WALL — so the seed has to
+      !! learn the periodicity from the stage, not from `[ocean.bc]`.
       type(error_type), allocatable, intent(out) :: error
       integer, intent(in) :: roll
       type(run_out_t), intent(out) :: out

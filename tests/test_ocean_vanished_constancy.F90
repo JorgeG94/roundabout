@@ -66,33 +66,77 @@ contains
       !! thickness through the fillers.  A passive pseudo-salt rides along.
       character(len=:), allocatable :: nml
       character(len=1), parameter :: nl = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
-            "&grid_nml nx = 22, ny = 20, nghost = 3 /"//nl// &
-            "&ocean_grid_nml axis_units = 'degrees', len_lon = 22.0, len_lat = 20.0, "// &
-            "rad_earth = 6.378e6 /"//nl// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 1200.0, cfl_interval = 1 /"//nl// &
-            "&physics_nml coriolis_f = 9.4e-5 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 2 /"//nl// &
-            "&tracer_nml initial_temperature = 15.0, initial_salinity = 35.0 /"//nl// &
-            "&ocean_ic_nml layer_rho_init = 1036.0, 1035.0 /"//nl// &
-            "&ocean_coriolis_nml form = 'sadourny_energy' /"//nl// &
-            "&ocean_thermo_nml enable_thermodynamics = .false. /"//nl// &
-            "&ocean_topo_nml topo_config = 'spoon', max_depth = 2000.0, edge_depth = 100.0, "// &
-            "slope_scale = 400000.0, wind_config = '2gyre', taux_magnitude = 0.1, "// &
-            "coriolis_beta = 1.76e-11, coriolis_y_ref = 1113200.0 /"//nl// &
-            "&ocean_pgf_nml form = 'gprime', gprime_gfs = 0.98, gprime_gint = 0.0098, "// &
-            "maxvel = 6.0 /"//nl// &
-            "&ocean_bdrag_nml form = 'linear', r = 2.5e-5, hbbl = 10.0, bg_vel = 0.1, "// &
-            "bbl_thick_min = 0.1 /"//nl// &
-            "&ocean_hvisc_nml nu_h = 10000.0, smag_ah = .true., lateral_closure = 'smagorinsky' /"//nl// &
-            "&ocean_vmix_nml hmix_fixed = 20.0, hmix_stress = 20.0, harmonic_visc = .true., "// &
-            "dt_therm_ratio = 2 /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true., cfl_bt_safety = 0.65, bebt = 0.2 /"//nl// &
-            "&vcoord_nml vcoord_type = 'zstar_full', zstar_h_surf_target = 1000.0, "// &
-            "zstar_h_min = 1.5e-4 /"//nl// &
-            "&ocean_tracers_nml enable_pseudo_salt = .true. /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 22"//nl// &
+            "ny = 20"//nl// &
+            "nghost = 3"//nl// &
+            "[ocean.grid]"//nl// &
+            'axis_units = "degrees"'//nl// &
+            "len_lon = 22.0"//nl// &
+            "len_lat = 20.0"//nl// &
+            "rad_earth = 6.378e6"//nl// &
+            "[time]"//nl// &
+            "t_end = 1.0e9"//nl// &
+            "dt_fixed = 1200.0"//nl// &
+            "cfl_interval = 1"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = 9.4e-5"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 2"//nl// &
+            "[tracer]"//nl// &
+            "initial_temperature = 15.0"//nl// &
+            "initial_salinity = 35.0"//nl// &
+            "[ocean.ic]"//nl// &
+            "layer_rho_init = [1036.0, 1035.0]"//nl// &
+            "[ocean.coriolis]"//nl// &
+            'form = "sadourny_energy"'//nl// &
+            "[ocean.thermo]"//nl// &
+            "enable_thermodynamics = false"//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "spoon"'//nl// &
+            "max_depth = 2000.0"//nl// &
+            "edge_depth = 100.0"//nl// &
+            "slope_scale = 400000.0"//nl// &
+            'wind_config = "2gyre"'//nl// &
+            "taux_magnitude = 0.1"//nl// &
+            "coriolis_beta = 1.76e-11"//nl// &
+            "coriolis_y_ref = 1113200.0"//nl// &
+            "[ocean.pgf]"//nl// &
+            'form = "gprime"'//nl// &
+            "gprime_gfs = 0.98"//nl// &
+            "gprime_gint = 0.0098"//nl// &
+            "maxvel = 6.0"//nl// &
+            "[ocean.bdrag]"//nl// &
+            'form = "linear"'//nl// &
+            "r = 2.5e-5"//nl// &
+            "hbbl = 10.0"//nl// &
+            "bg_vel = 0.1"//nl// &
+            "bbl_thick_min = 0.1"//nl// &
+            "[ocean.hvisc]"//nl// &
+            "nu_h = 10000.0"//nl// &
+            "smag_ah = true"//nl// &
+            'lateral_closure = "smagorinsky"'//nl// &
+            "[ocean.vmix]"//nl// &
+            "hmix_fixed = 20.0"//nl// &
+            "hmix_stress = 20.0"//nl// &
+            "harmonic_visc = true"//nl// &
+            "dt_therm_ratio = 2"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            "cfl_bt_safety = 0.65"//nl// &
+            "bebt = 0.2"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "zstar_full"'//nl// &
+            "zstar_h_surf_target = 1000.0"//nl// &
+            "zstar_h_min = 1.5e-4"//nl// &
+            "[ocean.tracers]"//nl// &
+            "enable_pseudo_salt = true"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function nml_zstar_full
 
    function nml_z_fixed_cavity() result(nml)
@@ -106,29 +150,69 @@ contains
       !! melt), so nothing but transport acts on the tracers.
       character(len=:), allocatable :: nml
       character(len=1), parameter :: nl = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
-            "&grid_nml nx = 24, ny = 12, nghost = 2, dx = 2000.0, dy = 2000.0 /"//nl// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 300.0, cfl_interval = 1 /"//nl// &
-            "&physics_nml coriolis_f = -1.409e-4 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 15 /"//nl// &
-            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//nl// &
-            "&ocean_topo_nml topo_config = 'seamount', max_depth = 720.0, edge_depth = 450.0, "// &
-            "slope_scale = 12000.0 /"//nl// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            "draft_depth = 250.0, draft_slope = -4.4e-3, draft_x0 = -2000.0, "// &
-            "draft_x1 = 36000.0, h_min_cavity = 96.0 /"//nl// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true., maxvel = 2.0 /"//nl// &
-            "&ocean_eos_nml eos = 'linear' /"//nl// &
-            "&ocean_ic_nml alpha_T = 3.8356948e-2, beta_S = 8.0587609e-1, T_ref = -1.0, "// &
-            "S_ref = 34.2, rho_0 = 1027.51 /"//nl// &
-            "&tracer_nml initial_temperature = 15.0, initial_salinity = 35.0 /"//nl// &
-            "&ocean_coriolis_nml form = 'sadourny' /"//nl// &
-            "&ocean_hvisc_nml nu_h = 20.0 /"//nl// &
-            "&ocean_bdrag_nml form = 'quadratic', cd = 2.5e-3 /"//nl// &
-            "&ocean_vmix_nml use_closure = .false., use_kpp = .false. /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      nml = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 24"//nl// &
+            "ny = 12"//nl// &
+            "nghost = 2"//nl// &
+            "dx = 2000.0"//nl// &
+            "dy = 2000.0"//nl// &
+            "[time]"//nl// &
+            "t_end = 1.0e9"//nl// &
+            "dt_fixed = 300.0"//nl// &
+            "cfl_interval = 1"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = -1.409e-4"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 15"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "z_fixed"'//nl// &
+            "zfixed_closed_faces = true"//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "seamount"'//nl// &
+            "max_depth = 720.0"//nl// &
+            "edge_depth = 450.0"//nl// &
+            "slope_scale = 12000.0"//nl// &
+            "[ocean.cavity_dyn]"//nl// &
+            "enable = true"//nl// &
+            'draft_config = "linear"'//nl// &
+            "draft_depth = 250.0"//nl// &
+            "draft_slope = -4.4e-3"//nl// &
+            "draft_x0 = -2000.0"//nl// &
+            "draft_x1 = 36000.0"//nl// &
+            "h_min_cavity = 96.0"//nl// &
+            "[ocean.pgf]"//nl// &
+            'form = "fv_mom6"'//nl// &
+            "p_top_in_bc = true"//nl// &
+            "maxvel = 2.0"//nl// &
+            "[ocean.eos]"//nl// &
+            'eos = "linear"'//nl// &
+            "[ocean.ic]"//nl// &
+            "alpha_T = 3.8356948e-2"//nl// &
+            "beta_S = 8.0587609e-1"//nl// &
+            "T_ref = -1.0"//nl// &
+            "S_ref = 34.2"//nl// &
+            "rho_0 = 1027.51"//nl// &
+            "[tracer]"//nl// &
+            "initial_temperature = 15.0"//nl// &
+            "initial_salinity = 35.0"//nl// &
+            "[ocean.coriolis]"//nl// &
+            'form = "sadourny"'//nl// &
+            "[ocean.hvisc]"//nl// &
+            "nu_h = 20.0"//nl// &
+            "[ocean.bdrag]"//nl// &
+            'form = "quadratic"'//nl// &
+            "cd = 2.5e-3"//nl// &
+            "[ocean.vmix]"//nl// &
+            "use_closure = false"//nl// &
+            "use_kpp = false"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function nml_z_fixed_cavity
 
    subroutine run_constancy(error, nml, what, seed_u, tracer_names, refs)
@@ -153,7 +237,7 @@ contains
 
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
-      call check(error, status == OCEAN_STATUS_OK, what//": the namelist must build an ocean")
+      call check(error, status == OCEAN_STATUS_OK, what//": the config must build an ocean")
       if (allocated(error)) return
 
       body: block

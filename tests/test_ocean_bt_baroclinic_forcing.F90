@@ -24,7 +24,7 @@ module test_ocean_bt_baroclinic_forcing
    !! Coriolis, pressure-gradient and horizontal-viscosity terms,
    !! `CAu + PFu + diffu`) and lets the barotropic loop see only
    !! the ANOMALY `-gtot*grad(eta - eta_PF)` about the free surface the
-   !! slow PGF was built on (`btloop_find_PF`).  `&ocean_bt_nml
+   !! slow PGF was built on (`btloop_find_PF`).  `[ocean.bt]
    !! bc_pgf_forcing` (default on) is that split: the forcing sheds only
    !! the free-surface term the slow PGF itself carries (none for the
    !! surface-relative Montgomery / FV-lite forms, `g*grad(eta_PF)` for
@@ -72,7 +72,7 @@ module test_ocean_bt_baroclinic_forcing
       !! Channel length `L = NX_PHYS*DXY = 1000 km`: one cosine wavelength.
    real(wp), parameter :: H_BED = 1000.0_wp
    real(wp), parameter :: RHO_0 = 1035.0_wp
-      !! `&ocean_ic_nml rho_0` (its default, set explicitly below).
+      !! `[ocean.ic] rho_0` (its default, set explicitly below).
    real(wp), parameter :: T_REF = 10.0_wp
    real(wp), parameter :: DT_T = 2.0_wp
       !! Temperature amplitude (degC).  With `alpha_T = 0.2` kg/m^3/degC the
@@ -100,27 +100,54 @@ contains
       character(len=:), allocatable :: nml
       character(len=8) :: flag
 
-      flag = ".true."
-      if (.not. bc_pgf_forcing) flag = ".false."
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 32, ny = 4, nghost = 3, dx = 31250.0, dy = 31250.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 10 /"//new_line("a")// &
-            "&time_nml t_end = 1.0e7, dt_fixed = 120.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0, taux_magnitude = 0.0 /"//new_line("a")// &
-            "&physics_nml coriolis_f = 0.0 /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, T_init_bottom = 10.0, "// &
-            "T_init_surface = 10.0 /"//new_line("a")// &
-            "&ocean_ic_nml alpha_T = 0.2, T_ref = 10.0, S_ref = 35.0, rho_0 = 1035.0 /"// &
-            new_line("a")// &
-            "&ocean_pgf_nml form = '"//pgf_form//"' /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic' /"//new_line("a")// &
-            "&ocean_bdrag_nml form = 'linear', r = 0.0 /"//new_line("a")// &
-            "&ocean_bt_nml split_scheme = '"//scheme//"', auto_n_inner = .false., "// &
-            "n_inner = 10, bc_pgf_forcing = "//trim(flag)//" /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      flag = "true"
+      if (.not. bc_pgf_forcing) flag = "false"
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 32"//new_line("a")// &
+            "ny = 4"//new_line("a")// &
+            "nghost = 3"//new_line("a")// &
+            "dx = 31250.0"//new_line("a")// &
+            "dy = 31250.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 10"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 1.0e7"//new_line("a")// &
+            "dt_fixed = 120.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "taux_magnitude = 0.0"//new_line("a")// &
+            "[physics]"//new_line("a")// &
+            "coriolis_f = 0.0"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "T_init_bottom = 10.0"//new_line("a")// &
+            "T_init_surface = 10.0"//new_line("a")// &
+            "[ocean.ic]"//new_line("a")// &
+            "alpha_T = 0.2"//new_line("a")// &
+            "T_ref = 10.0"//new_line("a")// &
+            "S_ref = 35.0"//new_line("a")// &
+            "rho_0 = 1035.0"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "'//pgf_form//'"'//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bc]"//new_line("a")// &
+            'west = "periodic"'//new_line("a")// &
+            'east = "periodic"'//new_line("a")// &
+            "[ocean.bdrag]"//new_line("a")// &
+            'form = "linear"'//new_line("a")// &
+            "r = 0.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            'split_scheme = "'//scheme//'"'//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 10"//new_line("a")// &
+            "bc_pgf_forcing = "//trim(flag)//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function case_nml
 
    subroutine run_case(scheme, pgf_form, bc_pgf_forcing, ratio_min, ratio_max, amax, ok)

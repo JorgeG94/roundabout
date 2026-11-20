@@ -77,8 +77,8 @@ def test_meke_backscatter_with_nonzero_biharmonic_composes():
         closures=[GentMcWilliams(kappa=100.0),
                   MEKE(backscatter=True, backscatter_ku=1.0),
                   Smagorinsky(biharmonic=True, C_biharmonic=0.06)])
-    text = composed.config.to_namelist()
-    assert "backscatter = .true." in text
+    text = composed.config.to_toml()
+    assert "backscatter = true" in text
 
 
 def test_meke_without_gm_raises():
@@ -103,8 +103,8 @@ def test_implicit_vertical_friction_bbl_glue_satisfied():
         closures=[ImplicitVerticalFriction(
             bbl_glue=True, harmonic_thickness=True),
             LinearDrag(r=1e-4)])
-    text = composed.config.to_namelist()
-    assert "bbl_glue = .true." in text
+    text = composed.config.to_toml()
+    assert "bbl_glue = true" in text
     assert 'form = "linear"' in text
 
 
@@ -120,7 +120,7 @@ def test_sadourny_energy_only_knobs_raise_off_energy_form():
 
 
 def test_grid_topology_reaches_ocean_bc_without_a_boundaries_object():
-    """A grid's PERIODIC topology must reach &ocean_bc_nml even when the
+    """A grid's PERIODIC topology must reach [ocean.bc] even when the
     user passes no Boundaries() object.
 
     Regression for the worst silent-wrongness bug of the P5 surface: a grid
@@ -141,7 +141,7 @@ def test_grid_topology_reaches_ocean_bc_without_a_boundaries_object():
     assert cfg.ocean_bc.west == "periodic"
     assert cfg.ocean_bc.east == "periodic"
     # y is BOUNDED -- must NOT be silently made periodic
-    text = cfg.to_namelist()
+    text = cfg.to_toml()
     assert 'south = "periodic"' not in text
     assert 'north = "periodic"' not in text
 

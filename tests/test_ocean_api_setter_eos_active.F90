@@ -3,7 +3,7 @@ module test_ocean_api_setter_eos_active
    !! `ocean_eos_compute`.  The time step passes
    !! `active = enable_thermodynamics`; the setters must too, or with
    !! `enable_thermodynamics = .false.` and prescribed layer densities
-   !! (`&ocean_ic_nml layer_rho_init`) an API setter overwrites those
+   !! (`[ocean.ic] layer_rho_init`) an API setter overwrites those
    !! densities with EOS values the step itself would never produce.
    !!
    !! Gates: thermodynamics OFF leaves `rho_layer` bit-identical across both
@@ -35,26 +35,53 @@ contains
       character(len=:), allocatable :: nml
       character(len=8) :: flag
 
-      flag = ".true."
-      if (.not. thermo) flag = ".false."
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 3, dx = 10000.0, dy = 10000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 1.0e7, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 300.0, taux_magnitude = 0.0 /"//new_line("a")// &
-            "&physics_nml coriolis_f = 0.0 /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, T_init_bottom = 10.0, "// &
-            "T_init_surface = 10.0 /"//new_line("a")// &
-            "&ocean_ic_nml alpha_T = 0.2, T_ref = 10.0, S_ref = 35.0, rho_0 = 1035.0, "// &
-            "layer_rho_init = 1030.0, 1028.0, 1026.0 /"//new_line("a")// &
-            "&ocean_thermo_nml enable_thermodynamics = "//trim(flag)//" /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic' /"//new_line("a")// &
-            "&ocean_bdrag_nml form = 'linear', r = 0.0 /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .false., n_inner = 10 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      flag = "true"
+      if (.not. thermo) flag = "false"
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 3"//new_line("a")// &
+            "dx = 10000.0"//new_line("a")// &
+            "dy = 10000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 1.0e7"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 300.0"//new_line("a")// &
+            "taux_magnitude = 0.0"//new_line("a")// &
+            "[physics]"//new_line("a")// &
+            "coriolis_f = 0.0"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "T_init_bottom = 10.0"//new_line("a")// &
+            "T_init_surface = 10.0"//new_line("a")// &
+            "[ocean.ic]"//new_line("a")// &
+            "alpha_T = 0.2"//new_line("a")// &
+            "T_ref = 10.0"//new_line("a")// &
+            "S_ref = 35.0"//new_line("a")// &
+            "rho_0 = 1035.0"//new_line("a")// &
+            "layer_rho_init = [1030.0, 1028.0, 1026.0]"//new_line("a")// &
+            "[ocean.thermo]"//new_line("a")// &
+            "enable_thermodynamics = "//trim(flag)//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bc]"//new_line("a")// &
+            'west = "periodic"'//new_line("a")// &
+            'east = "periodic"'//new_line("a")// &
+            "[ocean.bdrag]"//new_line("a")// &
+            'form = "linear"'//new_line("a")// &
+            "r = 0.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 10"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function case_nml
 
    subroutine run_case(thermo, changed_t, changed_h, ok)

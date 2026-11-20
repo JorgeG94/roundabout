@@ -6,7 +6,7 @@
 !!        window and (2) by create + post-create `set_h/u/v/tracer` +
 !!        `rebaseline` agrees on the wet cells: sponge reference (T, S,
 !!        pseudo-salt, u, v), u, v, h, T, S, pseudo-salt, rho_layer, bt_eta;
-!!        then 10 steps stay bit-identical.  The namelist enables the sponge
+!!        then 10 steps stay bit-identical.  The config enables the sponge
 !!        (`target_source = "ic"`, strong enough to matter within 10 steps),
 !!        pseudo-salt, an island and a periodic x axis, so each step of the
 !!        rebaseline is exercised.  Without `rebaseline` the sponge target and
@@ -66,23 +66,51 @@ contains
    function make_nml() result(nml)
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 10, ny = 8, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 300.0 /"//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-            "north = 'sponge', sponge_width = 3, sponge_strength = 2.0e-3, "// &
-            "sponge_relax_tracers = .true. /"//NL// &
-            "&ocean_sponge_nml enable = .true., damp_source = 'band', "// &
-            "target_source = 'ic', relax_uv = .true., relax_tracers = .true. /"//NL// &
-            "&ocean_tracers_nml enable_pseudo_salt = .true. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 3600.0"//NL// &
+            "dt_fixed = 300.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = 12.0"//NL// &
+            "initial_salinity = 35.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 10"//NL// &
+            "ny = 8"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 300.0"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "sponge"'//NL// &
+            "sponge_width = 3"//NL// &
+            "sponge_strength = 2.0e-3"//NL// &
+            "sponge_relax_tracers = true"//NL// &
+            "[ocean.sponge]"//NL// &
+            "enable = true"//NL// &
+            'damp_source = "band"'//NL// &
+            'target_source = "ic"'//NL// &
+            "relax_uv = true"//NL// &
+            "relax_tracers = true"//NL// &
+            "[ocean.tracers]"//NL// &
+            "enable_pseudo_salt = true"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function make_nml
 
    pure function bathymetry() result(b)

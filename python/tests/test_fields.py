@@ -5,8 +5,8 @@ no explicit sync_host() call ever required."""
 import rdb
 
 
-def test_field_read_returns_interior_shape_not_ghost_shape(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_field_read_returns_interior_shape_not_ghost_shape(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         info = m.grid_info
         h = m.h
         assert h.shape == (info["nx"], info["ny"], info["nz"])
@@ -17,26 +17,26 @@ def test_field_read_returns_interior_shape_not_ghost_shape(ocean_nml):
         assert full.shape[1] == info["ny"] + 2 * g
 
 
-def test_view_is_read_only(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_view_is_read_only(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         h = m.h
         info = h.__array_interface__
         assert info["data"][1] is True  # (address, readonly) -- readonly
 
 
-def test_tracer_field_is_the_stored_concentration(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_tracer_field_is_the_stored_concentration(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         T = m.temperature
         t_val = T[0, 0, 0]
-        # temperature is the namelist's initial_temperature=12.0 (the store
+        # temperature is the config's initial_temperature=12.0 (the store
         # IS the concentration, not h*T, so h plays no part).
         assert abs(t_val - 12.0) < 1e-6
         # a zero-copy raw field: it exposes a buffer
         assert T.__array_interface__["data"][1] is True  # read-only view
 
 
-def test_field_read_after_step_silently_resyncs(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_field_read_after_step_silently_resyncs(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         h = m.h  # Field object taken BEFORE stepping
         before = h[0, 0, 0]
         m.step(5)
@@ -48,8 +48,8 @@ def test_field_read_after_step_silently_resyncs(ocean_nml):
         assert isinstance(before, float) and isinstance(after, float)
 
 
-def test_writable_field_write_then_read_back(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_writable_field_write_then_read_back(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         h = m.h
         nx, ny, nz = h.shape
         new_h = [[[42.0 for _ in range(nz)] for _ in range(ny)]
@@ -59,7 +59,7 @@ def test_writable_field_write_then_read_back(ocean_nml):
         assert m.h[nx - 1, ny - 1, nz - 1] == 42.0
 
 
-def test_full_copy_reads_interior_not_ghosts_after_write(ocean_nml):
+def test_full_copy_reads_interior_not_ghosts_after_write(ocean_toml):
     """Regression: Field._flat()'s strided-read branch (taken whenever
     nghost > 0, i.e. shape != with_halo shape) once forgot to add the
     interior offset, so .copy()/[...] silently read GHOST cells -- still
@@ -67,7 +67,7 @@ def test_full_copy_reads_interior_not_ghosts_after_write(ocean_nml):
     A single-element read (m.h[0, 0, 0]) took a different code path and
     was unaffected, which is exactly why this needs its own full-array
     assertion rather than trusting the scalar-index tests above."""
-    with rdb.Model(ocean_nml) as m:
+    with rdb.Model(ocean_toml) as m:
         assert m.grid_info["nghost"] > 0  # otherwise this test proves nothing
         T = m.temperature
         nx, ny, nz = T.shape
@@ -81,8 +81,8 @@ def test_full_copy_reads_interior_not_ghosts_after_write(ocean_nml):
         assert full[0][0][0] == scalar
 
 
-def test_readonly_field_setitem_raises(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_readonly_field_setitem_raises(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         rho = m.rho
         try:
             rho[...] = rho.copy()
@@ -91,8 +91,8 @@ def test_readonly_field_setitem_raises(ocean_nml):
             pass
 
 
-def test_closed_model_field_access_raises(ocean_nml):
-    m = rdb.Model(ocean_nml)
+def test_closed_model_field_access_raises(ocean_toml):
+    m = rdb.Model(ocean_toml)
     h = m.h
     m.close()
     try:
@@ -102,15 +102,15 @@ def test_closed_model_field_access_raises(ocean_nml):
         pass
 
 
-def test_field_taken_after_step_reads_current_state(ocean_nml):
+def test_field_taken_after_step_reads_current_state(ocean_toml):
     """Regression (GPU `mem:separate` only): a Field constructed AFTER
     stepping is stamped by its getter with the current step count, so a
     `_fresh()` that compared only against the Field's own stamp never
     refreshed the host copy and read the INITIAL state. A constant wind
     spins up the surface layer from rest; a Field taken only after the
     steps must see that motion."""
-    nml = ocean_nml + "&physics_nml wind_stress_x = 0.1 /\n"
-    with rdb.Model(nml) as m:
+    cfg_text = ocean_toml + "[physics]\nwind_stress_x = 0.1\n"
+    with rdb.Model(cfg_text) as m:
         m.step(3)
         u = m.u.copy()  # first Field touch happens after the steps
         umax = max(abs(v) for plane in u for col in plane for v in col)

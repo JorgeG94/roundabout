@@ -67,26 +67,26 @@ def build_model():
         size=(GRID["nx"], GRID["ny"], GRID["nz"]),
         extent=(100000.0, 100000.0),   # 100 km x 100 km, metres
         topology=(Topology.BOUNDED, Topology.BOUNDED),  # closed walls
-        halo=2,   # matches the .nml's explicit &grid_nml nghost = 2
+        halo=2,   # matches the .toml's explicit [grid] nghost = 2
                   # (the derived minimum for this non-periodic, centered
                   # PV, PPM-tracer, no-fold, no-vertex-kappa-shear case
                   # would also land on 2 -- pinned explicitly here for
-                  # 1:1 fidelity with the .nml rather than relying on
+                  # 1:1 fidelity with the .toml rather than relying on
                   # the derivation matching by construction).
     )
 
     model = rdb.Model(
         grid=grid,
-        timestep=300.0,           # &time_nml dt_fixed, 5 min outer
+        timestep=300.0,           # [time] dt_fixed, 5 min outer
 
         coriolis=FPlane(f=0.0),   # f-plane, f = 0 (no Coriolis feedback)
         momentum_advection=Sadourny(form="enstrophy"),  # -> "sadourny"
 
-        # No buoyancy=/pressure= object: the .nml never touches
-        # &ocean_eos_nml (default "linear") or &ocean_pgf_nml form
+        # No buoyancy=/pressure= object: the .toml never touches
+        # [ocean.eos] (default "linear") or [ocean.pgf] form
         # (default "mont").
         vcoord=ZStarSigma(),   # "Production default -- same as Tasman"
-                                # per the .nml's own comment; NOT the
+                                # per the .toml's own comment; NOT the
                                 # plain "sigma" default.
 
         closures=[
@@ -94,7 +94,7 @@ def build_model():
             # is the curated route to an explicit nu_h=0.0/nu_4=0.0
             # floor (lateral_closure="none" is already the Fortran
             # default, so this line is behaviourally a no-op, kept for
-            # the same reason the .nml states it explicitly).
+            # the same reason the .toml states it explicitly).
             ConstantViscosity(nu_h=0.0, nu_4=0.0),
             # "Pure dyn-core test": no interior closure, no boundary
             # layer at all. PacanowskiPhilander(enabled=False) ->
@@ -109,7 +109,7 @@ def build_model():
         ],
 
         # wind_config="constant" with zero stress -- ConstantWind(0, 0)
-        # (the .nml ALSO sets ocean_topo.taux_magnitude=0.0, a 2gyre-only
+        # (the .toml ALSO sets ocean_topo.taux_magnitude=0.0, a 2gyre-only
         # knob that is inert under wind_config="constant"; matches its
         # own default 0.1->left unset would diverge textually so it is
         # NOT reproduced here -- see the port report's fallback list).
@@ -118,7 +118,7 @@ def build_model():
         initial_condition=UniformInitialCondition(
             temperature=15.0, salinity=35.0),
 
-        # This .nml pins a FIXED n_inner=60 and never touches
+        # This .toml pins a FIXED n_inner=60 and never touches
         # auto_n_inner, so auto=False (now also the curated default,
         # matching the Fortran) is stated explicitly for the record.
         barotropic=BarotropicSolver(n_inner=60, auto=False),
@@ -128,11 +128,11 @@ def build_model():
             output_dir="./out_seamount", status_interval=86400.0,
             log_level="info"),  # log_level matches the Fortran default;
                                  # kept for 1:1 textual fidelity with the
-                                 # .nml, which also states it explicitly.
+                                 # .toml, which also states it explicitly.
 
         duration=Duration(t_end=2592000.0),   # 30 days, time_unit="s"
                                                # (the default -- the
-                                               # .nml never touches it).
+                                               # .toml never touches it).
     )
 
     cfg = model.config
@@ -140,9 +140,9 @@ def build_model():
     Seamount(max_depth=4000.0, edge_depth=200.0,
              slope_scale=25000.0).apply(cfg)
     # taux_magnitude is a "2gyre"-wind_config-only knob, inert here
-    # under wind_config="constant" -- but the .nml sets it (to 0.0,
+    # under wind_config="constant" -- but the .toml sets it (to 0.0,
     # non-default 0.1) explicitly anyway, and ConstantWind() has no
-    # route to it (it only writes &physics_nml wind_stress_x/y):
+    # route to it (it only writes [physics] wind_stress_x/y):
     cfg.ocean_topo.taux_magnitude = 0.0
 
     cfg.output.output_to_file = False   # cosmetic-only dead knob, see
@@ -162,7 +162,7 @@ def _max_abs(field):
 
 def main():
     model = build_model()
-    print(model.config.to_namelist()[:400], "...\n")
+    print(model.config.to_toml()[:400], "...\n")
 
     with model:
         max_speed = 0.0

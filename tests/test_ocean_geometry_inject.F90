@@ -35,22 +35,22 @@ module test_ocean_geometry_inject
    public :: collect_ocean_geometry_inject_tests
 
    interface
-      function rdb_ocean_create_from_string(nml_text, nml_len, handle_out) &
+      function rdb_ocean_create_from_string(config_text, config_len, handle_out) &
          result(status) bind(c, name="rdb_ocean_create_from_string")
          import :: c_char, c_int, c_ptr
          implicit none
-         integer(c_int), intent(in), value :: nml_len
-         character(kind=c_char), intent(in) :: nml_text(nml_len)
+         integer(c_int), intent(in), value :: config_len
+         character(kind=c_char), intent(in) :: config_text(config_len)
          type(c_ptr), intent(out) :: handle_out
          integer(c_int) :: status
       end function rdb_ocean_create_from_string
 
-      function rdb_ocean_create_pending(nml_text, nml_len, handle_out) &
+      function rdb_ocean_create_pending(config_text, config_len, handle_out) &
          result(status) bind(c, name="rdb_ocean_create_pending")
          import :: c_char, c_int, c_ptr
          implicit none
-         integer(c_int), intent(in), value :: nml_len
-         character(kind=c_char), intent(in) :: nml_text(nml_len)
+         integer(c_int), intent(in), value :: config_len
+         character(kind=c_char), intent(in) :: config_text(config_len)
          type(c_ptr), intent(out) :: handle_out
          integer(c_int) :: status
       end function rdb_ocean_create_pending
@@ -166,40 +166,67 @@ contains
       !! `set_bathymetry_seamount` below — the "two routes, same field"
       !! reference trajectory.
       character(len=:), allocatable :: txt
-      txt = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = "//itoa(ONX)//", ny = "//itoa(ONY)// &
-            ", dx = "//rtoa(ODX)//", dy = "//rtoa(ODY)// &
-            ", nghost = "//itoa(ONGHOST)//" /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = "//itoa(ONZ)//" /"//new_line("a")// &
-            "&time_nml t_end = 86400.0, dt_fixed = 300.0 /"//new_line("a")// &
-            '&ocean_topo_nml topo_config = "seamount", max_depth = '//rtoa(SEAMOUNT_MAX_DEPTH)// &
-            ", edge_depth = "//rtoa(SEAMOUNT_PEAK_DEPTH)// &
-            ", slope_scale = "//rtoa(SEAMOUNT_HALF_WIDTH)//" /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, initial_temperature = 12.0 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      txt = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = "//itoa(ONX)//new_line("a")// &
+            "ny = "//itoa(ONY)//new_line("a")// &
+            "dx = "//rtoa(ODX)//new_line("a")// &
+            "dy = "//rtoa(ODY)//new_line("a")// &
+            "nghost = "//itoa(ONGHOST)//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = "//itoa(ONZ)//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 86400.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            'topo_config = "seamount"'//new_line("a")// &
+            "max_depth = "//rtoa(SEAMOUNT_MAX_DEPTH)//new_line("a")// &
+            "edge_depth = "//rtoa(SEAMOUNT_PEAK_DEPTH)//new_line("a")// &
+            "slope_scale = "//rtoa(SEAMOUNT_HALF_WIDTH)//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = true"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "initial_temperature = 12.0"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function seamount_nml
 
    function inject_nml(topo_max_depth) result(txt)
-      !! Base namelist for the injection-path handles: `topo_config="flat"`
+      !! Base config for the injection-path handles: `topo_config="flat"`
       !! at a DIFFERENT depth than anything injected, so a silent fallback
-      !! to the namelist path (injection not actually taking effect) would
+      !! to the config path (injection not actually taking effect) would
       !! be caught by comparison against the seamount reference.
       real(wp), intent(in) :: topo_max_depth
       character(len=:), allocatable :: txt
-      txt = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = "//itoa(ONX)//", ny = "//itoa(ONY)// &
-            ", dx = "//rtoa(ODX)//", dy = "//rtoa(ODY)// &
-            ", nghost = "//itoa(ONGHOST)//" /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = "//itoa(ONZ)//" /"//new_line("a")// &
-            "&time_nml t_end = 86400.0, dt_fixed = 300.0 /"//new_line("a")// &
-            '&ocean_topo_nml topo_config = "flat", max_depth = '//rtoa(topo_max_depth)//" /"// &
-            new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 35.0, initial_temperature = 12.0 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      txt = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = "//itoa(ONX)//new_line("a")// &
+            "ny = "//itoa(ONY)//new_line("a")// &
+            "dx = "//rtoa(ODX)//new_line("a")// &
+            "dy = "//rtoa(ODY)//new_line("a")// &
+            "nghost = "//itoa(ONGHOST)//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = "//itoa(ONZ)//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 86400.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            'topo_config = "flat"'//new_line("a")// &
+            "max_depth = "//rtoa(topo_max_depth)//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = true"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 35.0"//new_line("a")// &
+            "initial_temperature = 12.0"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function inject_nml
 
    function itoa(n) result(s)
@@ -220,7 +247,7 @@ contains
 
    subroutine seamount_interior(b_interior)
       !! Build the reference seamount interior array directly via the
-      !! SAME production formula the namelist path dispatches to
+      !! SAME production formula the config path dispatches to
       !! (`ocean_state_seed_from_cfg`'s "seamount" case) — the "two
       !! routes" both tests in this file compare against.
       real(wp), intent(out) :: b_interior(ONX, ONY)
@@ -239,7 +266,7 @@ contains
       !! (create_pending -> stage_bathymetry -> create_finalize) and
       !! assert the resulting `%barotropic%b` interior matches, cell for
       !! cell, what `topo_config="seamount"` produces through the ordinary
-      !! namelist path — same field, two routes (the headline P2.5 test).
+      !! config path — same field, two routes (the headline P2.5 test).
       type(error_type), allocatable, intent(out) :: error
       type(c_ptr) :: handle, ptr
       character(len=:), allocatable :: nml
@@ -253,7 +280,7 @@ contains
       call seamount_interior(b_interior)
       b_data = real(b_interior, c_double)
 
-      ! ---- Route 1: the ordinary namelist formula path. Only ONE ocean
+      ! ---- Route 1: the ordinary config formula path. Only ONE ocean
       ! handle may be live at a time (g_handle_live) -- snapshot the
       ! interior into an OWNED array and destroy this handle before
       ! creating route 2's, exactly as test_ocean_api_p2's
@@ -312,7 +339,7 @@ contains
             call check(error, &
                        maxval(abs(b_formula_snapshot - &
                                   bp(ng + 1:ng + ONX, ng + 1:ng + ONY))) < 1.0e-8_wp, &
-                       "injected interior matches the namelist seamount formula, cell for cell")
+                       "injected interior matches the config seamount formula, cell for cell")
             if (allocated(error)) exit route2
             call check(error, &
                        maxval(abs(bp(ng + 1:ng + ONX, ng + 1:ng + ONY) - b_interior)) < 1.0e-8_wp, &

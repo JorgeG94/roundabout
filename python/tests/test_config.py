@@ -30,7 +30,7 @@ def test_absence_is_the_default():
     """A config with nothing set serialises to nothing -- the
     bit-identity property `read_config_from_string` relies on."""
     cfg = Config()
-    assert cfg.to_namelist() == ""
+    assert cfg.to_toml() == ""
     assert list(cfg.explicit_knobs()) == []
 
 
@@ -39,16 +39,16 @@ def test_class_level_introspection():
     assert Config.vcoord.zstar_stretching.dead_on_ocean_path
 
 
-def test_to_namelist_emits_only_explicit_knobs():
+def test_to_toml_emits_only_explicit_knobs():
     cfg = Config()
     cfg.ocean_hvisc.nu_h = 5000.0
     cfg.ocean_hvisc.smag_ah = True
-    text = cfg.to_namelist()
-    assert "&ocean_hvisc_nml" in text
+    text = cfg.to_toml()
+    assert "[ocean.hvisc]" in text
     assert "nu_h = 5000.0" in text
-    assert "smag_ah = .true." in text
+    assert "smag_ah = true" in text
     # Only ONE group emitted (nothing else was ever touched).
-    assert text.count("&") == 1
+    assert text.count("[") == 1
     assert list(cfg.explicit_knobs()) == [
         ("ocean_hvisc", "nu_h", 5000.0),
         ("ocean_hvisc", "smag_ah", True),
@@ -96,8 +96,8 @@ def test_live_knob_does_not_warn():
                     for w in caught)
 
 
-def test_model_accepts_config_and_matches_string_path(ocean_nml):
-    """A Config built to say the exact same thing as `ocean_nml` (the
+def test_model_accepts_config_and_matches_string_path(ocean_toml):
+    """A Config built to say the exact same thing as `ocean_toml` (the
     fixture also driving the Fortran ctest reference) is accepted and
     produces the same grid."""
     cfg = Config()
@@ -119,13 +119,13 @@ def test_model_accepts_config_and_matches_string_path(ocean_nml):
         grid_from_config = m_cfg.grid_info
         assert m_cfg.config is cfg
 
-    with rdb.Model(ocean_nml) as m_str:
+    with rdb.Model(ocean_toml) as m_str:
         grid_from_string = m_str.grid_info
 
     assert grid_from_config == grid_from_string
 
 
-def test_model_pending_accepts_config(ocean_nml):
+def test_model_pending_accepts_config(ocean_toml):
     cfg = Config()
     cfg.sim.sim_type = "ocean"
     cfg.grid.nx = 8
@@ -149,11 +149,11 @@ def test_model_pending_accepts_config(ocean_nml):
         m.close()
 
 
-def test_model_config_property_on_string_build_is_empty_config(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
+def test_model_config_property_on_string_build_is_empty_config(ocean_toml):
+    with rdb.Model(ocean_toml) as m:
         cfg = m.config
         assert isinstance(cfg, Config)
-        assert cfg.to_namelist() == ""
+        assert cfg.to_toml() == ""
 
 
 def test_model_rejects_unrecognised_config_type():
@@ -165,7 +165,7 @@ def test_ocean_bc_stub_reachable_and_round_trips():
     cfg = Config()
     cfg.ocean_bc.west = "open"
     cfg.ocean_bc.mask_wall_velocity = False
-    text = cfg.to_namelist()
-    assert "&ocean_bc_nml" in text
+    text = cfg.to_toml()
+    assert "[ocean.bc]" in text
     assert 'west = "open"' in text
-    assert "mask_wall_velocity = .false." in text
+    assert "mask_wall_velocity = false" in text

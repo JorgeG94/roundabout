@@ -18,15 +18,15 @@ from __future__ import annotations
 
 
 class PacanowskiPhilander:
-    """PP81 interior closure. -> `&ocean_vmix_nml use_closure=.true.`
+    """PP81 interior closure. -> `[ocean.vmix] use_closure=true`
 
     ``PacanowskiPhilander(nu0=1e-2, nu_bg=1e-3, kappa_bg=1e-4, alpha=5.0,
     shear2_floor=1e-9, enabled=True)``
 
-    `use_closure` is ON by default in the namelist, so OMITTING this
+    `use_closure` is ON by default in the config, so OMITTING this
     object does not turn PP81 off -- pass `PacanowskiPhilander(enabled=
     False)` for that (mirrors `Diagnostics(enabled=False)` /
-    `KPP(enabled=False)`): sets `use_closure = .false.` and every other
+    `KPP(enabled=False)`): sets `use_closure = false` and every other
     keyword is ignored (nothing to configure).
     """
 
@@ -48,7 +48,7 @@ class PacanowskiPhilander:
 
 
 class KPP:
-    """KPP boundary-layer overlay. -> `&ocean_vmix_nml use_kpp=.true.`
+    """KPP boundary-layer overlay. -> `[ocean.vmix] use_kpp=true`
 
     ``KPP(ri_crit=0.3, cs_nonlocal=6.3, c_vt2=1.8,
     shortwave_method="mxl_sw", enabled=True)``
@@ -57,7 +57,7 @@ class KPP:
     `EPBL` already turns `use_kpp` OFF itself, since KPP defaults ON in
     the schema; see `EPBL`'s own docstring). `KPP(enabled=False)` is an
     EXPLICIT off-switch for the boundary-layer overlay entirely (mirrors
-    `Diagnostics(enabled=False)`): sets `use_kpp = .false.` and every
+    `Diagnostics(enabled=False)`): sets `use_kpp = false` and every
     other keyword is ignored. Used WITHOUT an `EPBL(...)` in the same
     `closures=[...]` list, this leaves NO surface boundary-layer scheme
     at all (PP81 interior + background floors + convective adjustment
@@ -87,7 +87,7 @@ class KPP:
 
 class Langmuir:
     """``Langmuir(scheme="rescale", coef=0.447, exponent=-1.33,
-    max_enhance=5.0, sl_fraction=0.04)`` -> `&ocean_epbl_nml lt_*`.
+    max_enhance=5.0, sl_fraction=0.04)`` -> `[ocean.epbl] lt_*`.
     Passed as `EPBL(langmuir=...)`."""
 
     def __init__(self, scheme="rescale", coef=0.447, exponent=-1.33,
@@ -105,17 +105,17 @@ class Langmuir:
 
 
 class EPBL:
-    """Reichl-Hallberg energetics PBL. -> `&ocean_epbl_nml enable=.true.`
+    """Reichl-Hallberg energetics PBL. -> `[ocean.epbl] enable=true`
 
     ``EPBL(mstar_scheme="om4", mstar=1.2, nstar=0.2, prandtl=1.0,
     combine="add", mld_iteration=True, mld_use_prev_guess=False,
     langmuir=None)``
 
     Mutually exclusive with `KPP` (checked at compose time) -- and this
-    object ITSELF sets `&ocean_vmix_nml use_kpp = .false.` (KPP defaults
+    object ITSELF sets `[ocean.vmix] use_kpp = false` (KPP defaults
     ON in the schema, so selecting EPBL structurally implies deselecting
     KPP; this is the same "stated requirement" pattern `GentMcWilliams`
-    uses for `&ocean_slopes_nml`, not a new rule). Nothing further is
+    uses for `[ocean.slopes]`, not a new rule). Nothing further is
     needed to turn KPP off when composing `EPBL(...)`.
 
     46 knobs live in this group; this constructor curates the ~8 a user
@@ -151,7 +151,7 @@ class EPBL:
 
 class KappaShear:
     """JHL08 prognostic interior shear turbulence. ->
-    `&ocean_kappa_shear_nml`
+    `[ocean.kappa_shear]`
 
     ``KappaShear(ri_crit=0.25, prandtl=1.0, at_vertex=False,
     vertex_geometric_mean=False, vertex_kdmin=0.0)``
@@ -180,7 +180,7 @@ class KappaShear:
 
 
 class TidalMixing:
-    """St-Laurent/Simmons. -> `&ocean_tidal_mixing_nml enable=.true.`
+    """St-Laurent/Simmons. -> `[ocean.tidal_mixing] enable=true`
 
     ``TidalMixing(gamma=0.3333, mu=0.2, decay_scale=500.0, energy=0.0,
     kd_max=1e-2, prandtl=1.0)``
@@ -205,7 +205,7 @@ class TidalMixing:
 
 
 class ConvectiveAdjustment:
-    """-> `&ocean_conv_nml enable=.true.`
+    """-> `[ocean.conv] enable=true`
 
     ``ConvectiveAdjustment(kd=1.0, prandtl=1.0, n2_threshold=0.0)``
     Writes `kv`/`kt` only, never `ks` (a `max()` contributor)."""
@@ -221,10 +221,10 @@ class ConvectiveAdjustment:
 
 
 class DoubleDiffusion:
-    """Salt fingering + diffusive convection. -> `&ocean_ddiff_nml`
+    """Salt fingering + diffusive convection. -> `[ocean.ddiff]`
 
     ``DoubleDiffusion(kappa_s=1e-4, strat_param_max=2.55, form="mc76")``
-    `form="k90"` -> `use_k90=.true.`. Folds the asymmetric `Kd_extra`
+    `form="k90"` -> `use_k90=true`. Folds the asymmetric `Kd_extra`
     into the `kt`/`ks` split -- the ONLY way `ks` stops being identical
     to `kt`.
     """
@@ -243,8 +243,8 @@ class DoubleDiffusion:
 
 
 class BryanLewisBackground:
-    """Depth-varying background Kd. -> `&ocean_vmix_nml
-    bkgnd_profile=.true.`
+    """Depth-varying background Kd. -> `[ocean.vmix]
+    bkgnd_profile=true`
 
     ``BryanLewisBackground(kd_surface=1e-5, kd_deep=1.3e-4, z0=2500.0,
     delta=222.0, prandtl=1.0)``
@@ -268,7 +268,7 @@ class BryanLewisBackground:
 
 
 class HenyeyBackground:
-    """Latitude-scaled background Kd. -> `bkgnd_henyey=.true.`
+    """Latitude-scaled background Kd. -> `bkgnd_henyey=true`
 
     ``HenyeyBackground(kd_min=-1.0, n0_2omega=20.0, max_lat=95.0)``
 
@@ -302,7 +302,7 @@ class ConstantBackground:
 
 class NearSurfaceViscosity:
     """MOM6 `KV_ML_INVZ2` near-surface viscosity band. ->
-    `&ocean_vmix_nml kv_ml_invz2`/`hmix_fixed`.
+    `[ocean.vmix] kv_ml_invz2`/`hmix_fixed`.
 
     ``NearSurfaceViscosity(kv=0.0, hmix=20.0)``
 
@@ -323,8 +323,8 @@ class NearSurfaceViscosity:
 
 
 class HarmonicFaceThickness:
-    """MOM6 `HARMONIC_VISC` vdiff-assembly parity. -> `&ocean_vmix_nml
-    harmonic_visc = .true.`
+    """MOM6 `HARMONIC_VISC` vdiff-assembly parity. -> `[ocean.vmix]
+    harmonic_visc = true`
 
     ``HarmonicFaceThickness()`` -- harmonic-mean (rather than
     arithmetic-mean) face thickness when building the vertical-friction
@@ -338,7 +338,7 @@ class HarmonicFaceThickness:
 
 
 class ThermoSubcycling:
-    """MOM6 `DT_THERM` sub-cycling ratio. -> `&ocean_vmix_nml
+    """MOM6 `DT_THERM` sub-cycling ratio. -> `[ocean.vmix]
     dt_therm_ratio`.
 
     ``ThermoSubcycling(ratio=1)`` -- the thermo step (EOS / vertical
@@ -355,13 +355,13 @@ class ThermoSubcycling:
 
 
 class ImplicitVerticalFriction:
-    """-> `&ocean_vdiff_nml`
+    """-> `[ocean.vdiff]`
 
     ``ImplicitVerticalFriction(stress=False, drag=False,
     harmonic_thickness=True, harmonic_visc=False, bbl_glue=True,
     hbbl=10.0, bbl_piston=3e-4)``
 
-    `harmonic_thickness` and `bbl_glue` default ON, matching the namelist
+    `harmonic_thickness` and `bbl_glue` default ON, matching the config
     defaults (MOM6's vertical-friction face treatment everywhere).
 
     `harmonic_thickness` -> `hvel_mom6` (MOM6's momentum face thickness);
@@ -393,7 +393,7 @@ class ImplicitVerticalFriction:
 
 class DiffusivityLimits:
     """``DiffusivityLimits(kv_max=1e6, kd_max=1e6, smoothing=0)`` ->
-    `&ocean_vmix_nml kv_max`, `kd_max`, `kd_smooth_iterations`. The
+    `[ocean.vmix] kv_max`, `kd_max`, `kd_smooth_iterations`. The
     single floors/ceilings/smoothing gate over `kv`/`kt`/`ks`."""
 
     def __init__(self, kv_max=1e6, kd_max=1e6, smoothing=0):
@@ -419,7 +419,7 @@ class Anisotropy:
 
 
 class Smagorinsky:
-    """-> `&ocean_hvisc_nml lateral_closure="smagorinsky"`
+    """-> `[ocean.hvisc] lateral_closure="smagorinsky"`
 
     ``Smagorinsky(C=0.15, biharmonic=False, C_biharmonic=0.06,
     form="laplacian", free_slip=True, bound_kh=False, bound_coef=0.8,
@@ -433,15 +433,15 @@ class Smagorinsky:
     `lateral_closure="smagorinsky"`; use `ConstantViscosity` instead if
     you want ONLY a constant floor with no flow-aware term at all.
 
-    `form="stress_tensor"` -> `stress_tensor=.true.` (MOM6
+    `form="stress_tensor"` -> `stress_tensor=true` (MOM6
     thickness-weighted stress-div operator); it COMPOSES with the
     biharmonic add-on, matching MOM6.
 
     `free_slip=True` is the DEFAULT, matching the Fortran schema's own
-    `&ocean_hvisc_nml no_slip = .false.` (rdb_config_register_lateral.F90 :: register_ocean_hvisc). An earlier
+    `[ocean.hvisc] no_slip = false` (rdb_config_register_lateral.F90 :: register_ocean_hvisc). An earlier
     version defaulted to `free_slip=False` and claimed that matched the
-    Fortran -- it did not; it wrote `no_slip = .true.`, silently inverting
-    the wall boundary condition relative to a namelist that omits the knob.
+    Fortran -- it did not; it wrote `no_slip = true`, silently inverting
+    the wall boundary condition relative to a config that omits the knob.
     Pass `free_slip=False` explicitly for no-slip walls.
 
     `anisotropy=Anisotropy(...)` requires `form="stress_tensor"`; passing
@@ -563,7 +563,7 @@ class ConstantViscosity:
 
 
 class HorizontalDiffusivity:
-    """``HorizontalDiffusivity(kappa_h=0.0)`` -> `&ocean_hdiff_nml
+    """``HorizontalDiffusivity(kappa_h=0.0)`` -> `[ocean.hdiff]
     kappa_h`. ALONG-COORDINATE, not neutral -- use `Redi` for neutral
     diffusion."""
 
@@ -575,7 +575,7 @@ class HorizontalDiffusivity:
 
 
 class MEKE:
-    """Prognostic mesoscale EKE. -> `&ocean_meke_nml enable=.true.`
+    """Prognostic mesoscale EKE. -> `[ocean.meke] enable=true`
 
     ``MEKE(gm_coeff=0.0, fr_coeff=0.0, damping=0.0, kh_coeff=1.0,
     backscatter=False, backscatter_ku=0.0, cdrag=2.5e-3)``
@@ -609,10 +609,10 @@ class MEKE:
 
 
 class GentMcWilliams:
-    """-> `&ocean_gm_nml enable=.true.`
+    """-> `[ocean.gm] enable=true`
 
     ``GentMcWilliams(kappa=0.0, max_cfl=0.1, slope_max=0.01)``
-    Implicitly enables `&ocean_slopes_nml` (its stated requirement); the
+    Implicitly enables `[ocean.slopes]` (its stated requirement); the
     composer adds that automatically.
     """
 
@@ -628,7 +628,7 @@ class GentMcWilliams:
 
 
 class Redi:
-    """``Redi(kappa=0.0)`` -> `&ocean_redi_nml enable=.true.`, `khtr`.
+    """``Redi(kappa=0.0)`` -> `[ocean.redi] enable=true`, `khtr`.
     Also implies slopes. `continuous=False` is rejected by the Fortran,
     so it is not an argument."""
 
@@ -644,7 +644,7 @@ class Redi:
 
 class IsopycnalSlopes:
     """``IsopycnalSlopes(kd_smooth=1e-6, min_dz_for_n2=1.0)`` ->
-    `&ocean_slopes_nml`. Rarely constructed directly (`GentMcWilliams`/
+    `[ocean.slopes]`. Rarely constructed directly (`GentMcWilliams`/
     `Redi`/`VariableMixing` imply it); offered so the smoothing knobs
     are reachable curated."""
 
@@ -658,7 +658,7 @@ class IsopycnalSlopes:
 
 
 class VariableMixing:
-    """Spatially-varying GM/Redi coefficients. -> `&ocean_varmix_nml`
+    """Spatially-varying GM/Redi coefficients. -> `[ocean.varmix]`
 
     ``VariableMixing(visbeck=False, resolution_scaled_khth=False,
     resolution_scaled_khtr=False, khth=0.0, khtr=0.0, res_fn_power=2,
@@ -703,7 +703,7 @@ class Bodner:
 
 
 class MixedLayerRestratification:
-    """Fox-Kemper MLE. -> `&ocean_foxkemper_nml enable=.true.`
+    """Fox-Kemper MLE. -> `[ocean.foxkemper] enable=true`
 
     ``MixedLayerRestratification(ce=0.0625, mom_mixrate=False,
     mld_decay_time=0.0, bodner=None)``
@@ -737,7 +737,7 @@ class MixedLayerRestratification:
 
 
 class WaveSpeed:
-    """``WaveSpeed(cadence=1)`` -> `&ocean_wavespeed_nml enable=.true.`,
+    """``WaveSpeed(cadence=1)`` -> `[ocean.wavespeed] enable=true`,
     `n_wavespeed`. Diagnostic; required by `VariableMixing` (implied
     automatically). `mono_n2` (not implemented) and `use_ebt` (EBT speed +
     structure, not yet consumed by GM) are not offered."""
@@ -751,7 +751,7 @@ class WaveSpeed:
 
 
 # ======================================================================
-# Bottom drag   ->  &ocean_bdrag_nml
+# Bottom drag   ->  [ocean.bdrag]
 # ======================================================================
 
 
@@ -797,7 +797,7 @@ class LinearDrag:
 
 
 class ChannelDrag:
-    """``ChannelDrag(cdrag_side=0.0)`` -> `channel_drag=.true.` +
+    """``ChannelDrag(cdrag_side=0.0)`` -> `channel_drag=true` +
     `cdrag_side`. A MODIFIER, composed alongside a `QuadraticDrag`/
     `LinearDrag` in the same `closures=` list."""
 

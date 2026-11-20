@@ -11,7 +11,7 @@ days. Any drift here is a real finding (metric/PGF inconsistency on the
 spherical grid at the ridge, or a periodic-seam metric issue), NOT a
 tuning target.
 
-VERIFIED (2026-06-11, V100, Fortran/.nml path): max|u|,|v| = 1.0e-11 /
+VERIFIED (2026-06-11, V100, Fortran/.toml path): max|u|,|v| = 1.0e-11 /
 5.5e-12 m/s, En = 6e-25 J, MaxCFL = 0 -- passes at roundoff. The
 spherical metrics + planetary Coriolis + periodic-x seam + seamount
 bathymetry are mutually consistent.
@@ -34,7 +34,7 @@ this script found ``LatitudeLongitudeGrid(topology=(Topology.PERIODIC,
 it with an explicit ``cfg.ocean_bc.west = cfg.ocean_bc.east =
 "periodic"`` escape hatch. That gap was fixed in
 ``rdb._compose.compose`` (commit ``36abbfbf``, "grid topology must
-reach &ocean_bc_nml without a Boundaries object") -- topology=(PERIODIC,
+reach [ocean.bc] without a Boundaries object") -- topology=(PERIODIC,
 ...) alone is now sufficient; the escape hatch below has been removed
 (verified directly: the solver's own startup banner now prints ``OBC:
 west=periodic east=periodic ...`` with no manual override).
@@ -81,7 +81,7 @@ from rdb.grids import LatitudeLongitudeGrid, Seamount, Topology
 from rdb.pressure import FiniteVolumeLite, VelocityTruncation
 from rdb.vcoord import ZStar
 
-GRID = dict(nx=48, ny=28, nz=16)  # matches the .nml's &grid_nml exactly
+GRID = dict(nx=48, ny=28, nz=16)  # matches the .toml's [grid] exactly
 
 
 def build_model():
@@ -96,7 +96,7 @@ def build_model():
 
     model = rdb.Model(
         grid=grid,
-        timestep=1200.0,   # &time_nml dt_fixed
+        timestep=1200.0,   # [time] dt_fixed
 
         coriolis=SphericalCoriolis(rotation_rate=7.2921e-5),
         momentum_advection=Sadourny(form="enstrophy"),
@@ -147,7 +147,7 @@ def build_model():
     # docstring / comments for the fuller explanation) ----
     cfg = model.config
 
-    # &physics_nml coriolis_f: SphericalCoriolis fills f from geolat, so
+    # [physics] coriolis_f: SphericalCoriolis fills f from geolat, so
     # this legacy value is provably inert under coriolis_scheme=
     # "planetary" -- see acc_channel.py's matching comment for why this
     # deliberately has no curated route (NOT the same gap as FPlane,
@@ -157,12 +157,12 @@ def build_model():
     Seamount(max_depth=3000.0, edge_depth=1500.0, slope_scale=3.0).apply(cfg)
     VelocityTruncation(maxvel=2.0).apply(cfg)
 
-    # &output_nml output_to_file: Diagnostics(enabled=True) above sets
-    # this True (it also controls &ocean_diag_nml enabled, its real
-    # gate); the .nml independently sets it False. Purely COSMETIC --
+    # [output] output_to_file: Diagnostics(enabled=True) above sets
+    # this True (it also controls [ocean.diag] enabled, its real
+    # gate); the .toml independently sets it False. Purely COSMETIC --
     # the P4 dead-knob sweep found output_to_file is validated but read
     # NOWHERE on the ocean path (RdbDeadKnobWarning fires on this
-    # line) -- kept only for namelist-text fidelity with the .nml.
+    # line) -- kept only for config-text fidelity with the .toml.
     cfg.output.output_to_file = False
 
     return model

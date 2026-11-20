@@ -1,4 +1,4 @@
-"""P5 D2.6 -- pressure gradient force. `&ocean_pgf_nml`."""
+"""P5 D2.6 -- pressure gradient force. `[ocean.pgf]`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ _RECON = {"plm": 1, "ppm": 2}
 
 
 class Montgomery:
-    """-> `form="mont"` (the namelist default)."""
+    """-> `form="mont"` (the config default)."""
 
     def apply(self, config):
         config.ocean_pgf.form = "mont"

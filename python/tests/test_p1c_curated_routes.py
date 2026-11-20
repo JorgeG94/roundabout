@@ -123,13 +123,13 @@ def test_pacanowski_philander_default_enabled():
 
 def test_smagorinsky_constant_nu_h_floor_composes():
     """CLAUDE.md's own production envelope: Smagorinsky + a constant
-    nu_h floor, in the SAME &ocean_hvisc_nml group."""
+    nu_h floor, in the SAME [ocean.hvisc] group."""
     cfg = rdb.Config()
     Smagorinsky(C=0.15, nu_h=10000.0, kh_vel_scale=3.0e-3).apply(cfg)
     assert cfg.ocean_hvisc.lateral_closure == "smagorinsky"
     assert cfg.ocean_hvisc.nu_h == 10000.0
     assert cfg.ocean_hvisc.kh_vel_scale == 3.0e-3
-    text = cfg.to_namelist()
+    text = cfg.to_toml()
     assert 'lateral_closure = "smagorinsky"' in text
     assert "nu_h = 10000.0" in text
 
@@ -203,7 +203,7 @@ def test_diagnostics_output_dir_status_interval_log_level_round_trip():
     assert cfg.output.output_dir == "./out_foo"
     assert cfg.logging.status_interval == 3600.0
     assert cfg.logging.log_level == "warning"
-    text = cfg.to_namelist()
+    text = cfg.to_toml()
     assert 'output_dir     = "./out_foo"' in text or "./out_foo" in text
     assert "status_interval = 3600.0" in text
     assert 'log_level = "warning"' in text
@@ -260,7 +260,7 @@ def test_rectilinear_grid_radius_none_leaves_rad_earth_unset():
     cfg = rdb.Config()
     grid.apply(cfg)
     assert "rad_earth" not in cfg.ocean_grid._explicit_names()
-    text = cfg.to_namelist()
+    text = cfg.to_toml()
     assert "rad_earth" not in text
 
 
@@ -296,7 +296,7 @@ def test_stratified_initial_condition_requires_both_together():
 def test_stratified_initial_condition_none_is_a_no_op():
     cfg = rdb.Config()
     StratifiedInitialCondition().apply(cfg)
-    text = cfg.to_namelist()
+    text = cfg.to_toml()
     assert "T_init_surface" not in text
     assert "T_init_bottom" not in text
 

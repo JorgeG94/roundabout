@@ -34,7 +34,7 @@
 !!     interior collapses.
 !!   - hycom_on_device — the full do-concurrent kernel through a device
 !!     enter_data round-trip stays finite + conservative.
-!!   - hycom_tanh_profile_engine / hycom_refuses_* — the namelist path:
+!!   - hycom_tanh_profile_engine / hycom_refuses_* — the config path:
 !!     `z_fixed_profile = "tanh"` and `rho_target_profile = "list"` reach
 !!     the kernel (a target list lighter than the whole column leaves the
 !!     floor binding everywhere, so the surface layer is `z_fixed_dz_top`),
@@ -738,30 +738,55 @@ contains
    end subroutine test_strong_strat_density
 
    ! -----------------------------------------------------------------
-   ! 10. namelist path — tanh z* floor + target list reach the kernel
+   ! 10. config path — tanh z* floor + target list reach the kernel
    ! -----------------------------------------------------------------
    function engine_nml(vcoord, extra) result(txt)
       !! Flat 600 m, 6 layers, Wright EOS (sigma-0 coordinate), salinity
-      !! stratified by the `&tracer_nml` linear-in-layer IC (no NetCDF).
+      !! stratified by the `[tracer]` linear-in-layer IC (no NetCDF).
       character(len=*), intent(in) :: vcoord, extra
       character(len=:), allocatable :: txt
       character(len=*), parameter :: nl = new_line("a")
-      txt = '&sim_nml sim_type = "ocean" /'//nl// &
-            "&grid_nml nx = 6, ny = 4, dx = 2000.0, dy = 2000.0, nghost = 2 /"//nl// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//nl// &
-            "&physics_nml coriolis_f = -1.409e-4 /"//nl// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//nl// &
-            '&vcoord_nml vcoord_type = "'//vcoord//'", rho_ref_pressure = 0.0, '// &
-            extra//" /"//nl// &
-            '&ocean_topo_nml topo_config = "flat", max_depth = 600.0 /'//nl// &
-            '&ocean_pgf_nml form = "fv_mom6", reconstruct_for_pressure = .true. /'//nl// &
-            '&ocean_eos_nml eos = "wright" /'//nl// &
-            "&tracer_nml initial_temperature = -1.9, initial_salinity = 33.8, "// &
-            "S_init_surface = 33.8, S_init_bottom = 34.55 /"//nl// &
-            "&ocean_vmix_nml use_closure = .false., use_kpp = .false. /"//nl// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
-            "&ocean_diag_nml enabled = .false. /"//nl// &
-            "&output_nml output_to_file = .false. /"//nl
+      txt = "[sim]"//nl// &
+            'sim_type = "ocean"'//nl// &
+            "[grid]"//nl// &
+            "nx = 6"//nl// &
+            "ny = 4"//nl// &
+            "dx = 2000.0"//nl// &
+            "dy = 2000.0"//nl// &
+            "nghost = 2"//nl// &
+            "[time]"//nl// &
+            "t_end = 86400.0"//nl// &
+            "dt_fixed = 600.0"//nl// &
+            "[physics]"//nl// &
+            "coriolis_f = -1.409e-4"//nl// &
+            "[nonhydrostatic]"//nl// &
+            "nz_layers = 6"//nl// &
+            "[vcoord]"//nl// &
+            'vcoord_type = "'//vcoord//'"'//nl// &
+            "rho_ref_pressure = 0.0"//nl// &
+            extra//nl// &
+            "[ocean.topo]"//nl// &
+            'topo_config = "flat"'//nl// &
+            "max_depth = 600.0"//nl// &
+            "[ocean.pgf]"//nl// &
+            'form = "fv_mom6"'//nl// &
+            "reconstruct_for_pressure = true"//nl// &
+            "[ocean.eos]"//nl// &
+            'eos = "wright"'//nl// &
+            "[tracer]"//nl// &
+            "initial_temperature = -1.9"//nl// &
+            "initial_salinity = 33.8"//nl// &
+            "S_init_surface = 33.8"//nl// &
+            "S_init_bottom = 34.55"//nl// &
+            "[ocean.vmix]"//nl// &
+            "use_closure = false"//nl// &
+            "use_kpp = false"//nl// &
+            "[ocean.bt]"//nl// &
+            "auto_n_inner = true"//nl// &
+            "[ocean.diag]"//nl// &
+            "enabled = false"//nl// &
+            "[output]"//nl// &
+            "output_to_file = false"//nl
    end function engine_nml
 
    subroutine test_tanh_profile_engine(error)
@@ -777,9 +802,11 @@ contains
       real(wp), pointer :: h(:, :, :)
       real(wp) :: err_top
       character(len=120) :: msg
-      nml = engine_nml("hycom", "z_fixed_profile = 'tanh', z_fixed_dz_top = 10.0, "// &
-                       "rho_target_profile = 'list', rho_target_list = 1020.0, 1020.5, "// &
-                       "1021.0, 1021.5, 1022.0, 1022.5, 1023.0")
+      nml = engine_nml("hycom", &
+                       'z_fixed_profile = "tanh"'//new_line("a")//"z_fixed_dz_top = 10.0"// &
+                       new_line("a")//'rho_target_profile = "list"'//new_line("a")// &
+                       "rho_target_list = [1020.0, 1020.5, 1021.0, 1021.5, 1022.0, "// &
+                       "1022.5, 1023.0]")
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status == OCEAN_STATUS_OK, "tanh+list hycom case must build")
@@ -815,29 +842,33 @@ contains
 
    subroutine test_refuses_rho_list_length(error)
       type(error_type), allocatable, intent(out) :: error
-      call expect_refused(error, "hycom", "rho_target_profile = 'list', "// &
-                          "rho_target_list = 1020.0, 1021.0, 1022.0", &
+      call expect_refused(error, "hycom", &
+                          'rho_target_profile = "list"'//new_line("a")// &
+                          "rho_target_list = [1020.0, 1021.0, 1022.0]", &
                           "a 3-entry rho_target_list for 6 layers")
    end subroutine test_refuses_rho_list_length
 
    subroutine test_refuses_rho_list_order(error)
       type(error_type), allocatable, intent(out) :: error
-      call expect_refused(error, "rho", "rho_target_profile = 'list', "// &
-                          "rho_target_list = 1020.0, 1021.0, 1022.0, 1022.0, 1023.0, "// &
-                          "1024.0, 1025.0", "a non-increasing rho_target_list")
+      call expect_refused(error, "rho", &
+                          'rho_target_profile = "list"'//new_line("a")// &
+                          "rho_target_list = [1020.0, 1021.0, 1022.0, 1022.0, 1023.0, "// &
+                          "1024.0, 1025.0]", "a non-increasing rho_target_list")
    end subroutine test_refuses_rho_list_order
 
    subroutine test_refuses_rho_list_sigma(error)
       type(error_type), allocatable, intent(out) :: error
-      call expect_refused(error, "sigma", "rho_target_profile = 'list', "// &
-                          "rho_target_list = 1020.0, 1021.0, 1022.0, 1023.0, 1024.0, "// &
-                          "1025.0, 1026.0", "rho_target_profile='list' on sigma")
+      call expect_refused(error, "sigma", &
+                          'rho_target_profile = "list"'//new_line("a")// &
+                          "rho_target_list = [1020.0, 1021.0, 1022.0, 1023.0, 1024.0, "// &
+                          "1025.0, 1026.0]", "rho_target_profile='list' on sigma")
    end subroutine test_refuses_rho_list_sigma
 
    subroutine test_refuses_rho_list_no_profile(error)
       type(error_type), allocatable, intent(out) :: error
-      call expect_refused(error, "hycom", "rho_target_list = 1020.0, 1021.0, 1022.0, "// &
-                          "1023.0, 1024.0, 1025.0, 1026.0", &
+      call expect_refused(error, "hycom", &
+                          "rho_target_list = [1020.0, 1021.0, 1022.0, "// &
+                          "1023.0, 1024.0, 1025.0, 1026.0]", &
                           "rho_target_list under rho_target_profile='uniform'")
    end subroutine test_refuses_rho_list_no_profile
 

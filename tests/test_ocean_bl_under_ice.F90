@@ -48,14 +48,14 @@
 !!     it alone, which is the whole reason it is a second field.
 !!   * `driver_publishes_shelf_stress_end_to_end` — the wiring gate, run
 !!     through the public API: under a full lid with no wind, switching
-!!     `&ocean_tdrag_nml` on raises KPP's `kv` by orders of magnitude,
+!!     `[ocean.tdrag]` on raises KPP's `kv` by orders of magnitude,
 !!     because the boundary layer now feels the ice.
 !!   * `melt_only_fallback_publishes_shelf_stress` — the OTHER filler:
-!!     with `&ocean_tdrag_nml` OFF and `&ocean_cavity_melt_nml` ON,
+!!     with `[ocean.tdrag]` OFF and `[ocean.cavity_melt]` ON,
 !!     `engine_step_finalize` publishes `rho_0*u_*^2` from the melt
 !!     slot's own `u_*` instead, one outer step late.
 !!   * `epbl_p_top_*` — the EPBL in-situ pressure port
-!!     (`&ocean_psurf_nml in_eos`): the knob off is bit-identical even
+!!     (`[ocean.psurf] in_eos`): the knob off is bit-identical even
 !!     under a loaded column; on, the pressure that reaches the EOS is
 !!     `>= p_top > 0` and increases toward the bed; a UNIFORM `p_top`
 !!     under a LINEAR (pressure-independent) EOS is gauge-neutral to a
@@ -111,8 +111,8 @@ module test_ocean_bl_under_ice
       !! kg/m^3/PSU (`eos%beta_S`).
    real(wp), parameter :: CD = 2.5e-3_wp
       !! ISOMIP+ ice-base drag coefficient (Asay-Davis et al. 2016), the
-      !! ONE `C_d` shared by `&ocean_tdrag_nml cd` and
-      !! `&ocean_cavity_melt_nml cdrag_top`.
+      !! ONE `C_d` shared by `[ocean.tdrag] cd` and
+      !! `[ocean.cavity_melt] cdrag_top`.
    real(wp), parameter :: PTOP_HK = 40.0_wp
       !! Layer thickness (m) in the EPBL pressure-port cases.
    real(wp), parameter :: PTOP_DT = 1800.0_wp
@@ -1173,7 +1173,7 @@ contains
       !! Configuration: a flat 300 m ice draft over the WHOLE domain, no
       !! wind (and under full cover there could be none anyway), a seeded
       !! zonal jet, KPP on.  Two runs, identical but for
-      !! `&ocean_tdrag_nml enable`.
+      !! `[ocean.tdrag] enable`.
       !!
       !! With the top drag OFF the covered column has `stress_mag = 0`
       !! and `stress_shelf = 0`, so `u_* = 0` and the KPP overlay is
@@ -1243,13 +1243,13 @@ contains
       n_run = 3
       if (present(n_steps)) n_run = n_steps
       if (present(melt_on)) then
-         nml = lid_namelist(tdrag_on, melt_on=melt_on)
+         nml = lid_config(tdrag_on, melt_on=melt_on)
       else
-         nml = lid_namelist(tdrag_on)
+         nml = lid_config(tdrag_on)
       end if
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status == OCEAN_STATUS_OK, &
-                 "the end-to-end cavity + KPP namelist must configure")
+                 "the end-to-end cavity + KPP config must configure")
       if (allocated(error)) return
 
       status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
@@ -1279,51 +1279,79 @@ contains
       status = rdb_ocean_destroy(handle)
    end subroutine kv_max_under_lid
 
-   function lid_namelist(tdrag_on, melt_on) result(nml)
+   function lid_config(tdrag_on, melt_on) result(nml)
       !! A flat, fully covered ice shelf over a flat bed, with KPP and
       !! the split solver on its DEFAULT scheme (`pred_corr`) — the scheme
       !! every cavity configuration runs; nothing here is outside its
       !! envelope, so it is not pinned.
       logical, intent(in) :: tdrag_on
       logical, intent(in), optional :: melt_on
-         !! Turn on `&ocean_cavity_melt_nml` instead of / as well as the
+         !! Turn on `[ocean.cavity_melt]` instead of / as well as the
          !! top drag.  Melt needs the PR-12 component set and the ISOMIP+
-         !! liquidus, both already in the base namelist.
+         !! liquidus, both already in the base config.
       character(len=:), allocatable :: nml
       logical :: melt
 
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 12, ny = 10, nghost = 2, dx = 5000.0, dy = 5000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
-            "&ocean_ic_nml rho_0 = 1035.0 /"//new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .false., "// &
-            "n_inner = 12 /"//new_line("a")// &
-            "&ocean_vmix_nml use_closure = .true., use_kpp = .true. /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")// &
-            "&ocean_eos_nml tfreeze_set = 'isomip' /"//new_line("a")// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'flat', "// &
-            "draft_depth = 300.0 /"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 12"//new_line("a")// &
+            "ny = 10"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 5000.0"//new_line("a")// &
+            "dy = 5000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 6"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "[ocean.ic]"//new_line("a")// &
+            "rho_0 = 1035.0"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "fv_mom6"'//new_line("a")// &
+            "p_top_in_bc = true"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 12"//new_line("a")// &
+            "[ocean.vmix]"//new_line("a")// &
+            "use_closure = true"//new_line("a")// &
+            "use_kpp = true"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")// &
+            "[ocean.eos]"//new_line("a")// &
+            'tfreeze_set = "isomip"'//new_line("a")// &
+            "[ocean.cavity_dyn]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'draft_config = "flat"'//new_line("a")// &
+            "draft_depth = 300.0"//new_line("a")
       if (tdrag_on) then
-         nml = nml//"&ocean_tdrag_nml enable = .true., cd = 2.5e-3 /"//new_line("a")
+         nml = nml//new_line("a")// &
+               "[ocean.tdrag]"//new_line("a")// &
+               "enable = true"//new_line("a")// &
+               "cd = 2.5e-3"//new_line("a")
       end if
       melt = .false.
       if (present(melt_on)) melt = melt_on
       if (melt) then
-         nml = nml//"&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
-               "&ocean_cavity_melt_nml enable = .true., cdrag_top = 2.5e-3, "// &
-               "u_tide = 0.0 /"//new_line("a")
+         nml = nml//new_line("a")// &
+               "[ocean.forcing]"//new_line("a")// &
+               "enable_components = true"//new_line("a")// &
+               "[ocean.cavity_melt]"//new_line("a")// &
+               "enable = true"//new_line("a")// &
+               "cdrag_top = 2.5e-3"//new_line("a")// &
+               "u_tide = 0.0"//new_line("a")
       end if
-   end function lid_namelist
+   end function lid_config
 
    subroutine test_melt_fallback(error)
-      !! THE OTHER FILLER.  `&ocean_tdrag_nml` is OFF here and
-      !! `&ocean_cavity_melt_nml` is ON, so the stage drivers publish
+      !! THE OTHER FILLER.  `[ocean.tdrag]` is OFF here and
+      !! `[ocean.cavity_melt]` is ON, so the stage drivers publish
       !! nothing and `engine_step_finalize` fills `ss%stress_shelf` from
       !! `rho_0*u_*^2` with the MELT slot's own `u_*` instead — the same
       !! `C_d` under the one-drag-coefficient rule.  Without it a
@@ -1361,7 +1389,7 @@ contains
    end subroutine test_melt_fallback
 
    ! ==================================================================
-   ! The EPBL in-situ pressure port (`&ocean_psurf_nml in_eos`)
+   ! The EPBL in-situ pressure port (`[ocean.psurf] in_eos`)
    ! ==================================================================
 
    subroutine epbl_ptop_run(in_eos, wright, p_top_val, epbl, error)
@@ -1431,7 +1459,7 @@ contains
    subroutine test_epbl_ptop_off(error)
       !! THE BIT-IDENTITY GATE, and it is not the trivial one.  A cavity
       !! fills `ms%p_top` with the ice load whether or not
-      !! `&ocean_psurf_nml in_eos` is set, so "the array is zero" does
+      !! `[ocean.psurf] in_eos` is set, so "the array is zero" does
       !! NOT keep an existing cavity + EPBL run unchanged -- only the
       !! `in_eos` gate does.  So this compares `p_top = 3e6 Pa` with
       !! `in_eos = .false.` against `p_top = 0`, and demands BYTE
