@@ -36,6 +36,7 @@ module test_cice_therm2
    use rdb_ice_therm2, only: ice_step_therm2, ice_therm2_remap_cell, ice_therm2_newice_cell, ice_therm2_lateral_cell, &
                              ice_therm2_cleanup_cell
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1372,7 +1373,7 @@ contains
       integer, parameter :: nx = 512, ny = 512, nilyr = 7, nrep = 5
       type(st_t) :: st, sv
       real(wp) :: hin_l(0:NCAT), sal(nilyr), secs(3)
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       integer :: k, v, nfatal
       character(len=24), parameter :: LBL(3) = [character(len=24) :: "4 launches (shim)", "3 launches (B+C fused)", "5 launches (stage shims)"]
 
@@ -1386,12 +1387,11 @@ contains
       call st_enter(sv)
       !$acc enter data copyin(hin_l, sal)
       secs = 0.0_wp
-      call system_clock(count_rate=rate)
       do v = 1, 3
          do k = 0, nrep
             call restore_state(nx, ny, nilyr, st%a, st%v, st%s, st%T, st%q, st%si, st%qs, st%aice, st%bank, sv%a, sv%v, sv%s, &
                                sv%T, sv%q, sv%si, sv%qs, sv%aice, sv%bank, st%fr, st%fs, st%fh, st%ml, st%fv)
-            call system_clock(t0)
+            t0 = wall_seconds()
             if (v == 3) then
                call staged_stages(st, p, 2400.0_wp, 1, nx, 1, ny, [1, 2, 3, 4, 5], hin_l, sal)
             else
@@ -1401,8 +1401,8 @@ contains
                                     st%ml, st%fv, st%ierr, v == 2)
             end if
             !$acc wait
-            call system_clock(t1)
-            if (k > 0) secs(v) = secs(v) + real(t1 - t0, wp)/real(rate, wp)
+            t1 = wall_seconds()
+            if (k > 0) secs(v) = secs(v) + (t1 - t0)
          end do
       end do
       !$acc exit data delete(hin_l, sal)

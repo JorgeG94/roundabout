@@ -35,6 +35,7 @@ module test_cice_itd_cleanup
    use rdb_ice_itd_cleanup, only: itd_cleanup, ice_cleanup_itd_cell, ice_cleanup_itd_step
    use lcg_deterministic, only: lcg_next, lcg_unit
    use test_cice_util, only: ice_golden_first_bad
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1654,7 +1655,7 @@ contains
       real(wp), allocatable :: qs_s(:, :, :, :)
       integer(int32), allocatable :: ierr(:, :)
       real(wp) :: hin_loc(0:NCAT), secs
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       integer :: k
       logical :: agg
 
@@ -1678,17 +1679,16 @@ contains
       ierr = 0_int32
       !$acc enter data copyin(hin_loc, Tf2, a, v, s, Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tc, qc, sc, qsc, fr, fs, fh, ierr, a_s, v_s, s_s, T_s, q_s, si_s, qs_s)
       secs = 0.0_wp
-      call system_clock(count_rate=rate)
       do k = 0, nrep
          !$acc kernels present(a, v, s, Tsfcn, qicen, sicen, qsnon, a_s, v_s, s_s, T_s, q_s, si_s, qs_s)
          a = a_s; v = v_s; s = s_s; Tsfcn = T_s; qicen = q_s; sicen = si_s; qsnon = qs_s
          !$acc end kernels
-         call system_clock(t0)
+         t0 = wall_seconds()
          call ice_cleanup_itd_step(nx, ny, NCAT, nilyr, 1, 1, nx, 1, ny, p, hin_loc, 3600.0_wp, Tf2, .true., .true., agg, a, v, s, &
                                    Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tc, qc, sc, qsc, fr, fs, fh, ierr)
          !$acc wait
-         call system_clock(t1)
-         if (k > 0) secs = secs + real(t1 - t0, wp)/real(rate, wp)
+         t1 = wall_seconds()
+         if (k > 0) secs = secs + (t1 - t0)
       end do
       !$acc update self(ierr)
       !$acc exit data delete(hin_loc, Tf2, a, v, s, Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tc, qc, sc, qsc, fr, fs, fh, ierr, a_s, v_s, s_s, T_s, q_s, si_s, qs_s)

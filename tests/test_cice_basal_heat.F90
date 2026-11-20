@@ -36,6 +36,7 @@ module test_cice_basal_heat
    use rdb_ice_basal_heat, only: ice_frzmlt_bottom_lateral, ice_frzmlt_bottom_lateral_cell, ice_basal_heat_step, &
                                  ICE_FBOT_CH
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1007,7 +1008,7 @@ contains
       real(wp), allocatable :: a(:, :, :), v(:, :, :), vs(:, :, :), qi(:, :, :, :), qs(:, :, :, :)
       real(wp), allocatable :: frz(:, :), sst(:, :), Tf(:, :), tx(:, :), ty(:, :), fb(:, :), rs(:, :), wl(:, :)
       integer(int32), allocatable :: ie(:, :)
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       integer :: i, j, it
       real(wp) :: secs, tot
 
@@ -1025,16 +1026,16 @@ contains
       call ice_basal_heat_step(NX, NY, NC, NIL, NSL, 1, NX, 1, NY, 1200.0_wp, p, a, v, vs, qi, qs, frz, sst, Tf, tx, ty, &
                                fb, rs, wl, ie)                                ! warm-up
       !$acc update self(fb)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do it = 1, NIT
          call ice_basal_heat_step(NX, NY, NC, NIL, NSL, 1, NX, 1, NY, 1200.0_wp, p, a, v, vs, qi, qs, frz, sst, Tf, tx, &
                                   ty, fb, rs, wl, ie)
       end do
       !$acc update self(fb)
-      call system_clock(t1)
+      t1 = wall_seconds()
       !$acc update self(rs, wl, ie)
       !$acc exit data delete(a, v, vs, qi, qs, frz, sst, Tf, tx, ty, fb, rs, wl, ie)
-      secs = real(t1 - t0, wp)/real(rate, wp)
+      secs = (t1 - t0)
       write (output_unit, '(a,f9.3,a,es10.3,a)') "basal_heat driver 512x512x5x7: ", 1.0e3_wp*secs/real(NIT, wp), &
          " ms/step, ", real(NX, wp)*real(NY, wp)*real(NIT, wp)/secs, " cells/s"
       tot = sum(fb) + sum(rs) + sum(wl)

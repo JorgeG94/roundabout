@@ -14,6 +14,7 @@ module test_config
                          ATM_PREREQ_DATAOVR, ATM_PREREQ_BULK_FLUX, ATM_PREREQ_N_ITER, &
                          ATM_PREREQ_ORB_YEAR
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -22,14 +23,14 @@ module test_config
 contains
 
    subroutine portable_sleep(seconds)
-      !! Portable sleep using system_clock (works on gfortran + nvhpc)
+      !! Portable sleep using the wall clock (works on gfortran + nvhpc)
       integer, intent(in) :: seconds
-      integer :: count_start, count_end, count_rate
+      real(wp) :: count_start, count_end
 
-      call system_clock(count_start, count_rate)
+      count_start = wall_seconds()
       do
-         call system_clock(count_end)
-         if ((count_end - count_start) >= seconds*count_rate) exit
+         count_end = wall_seconds()
+         if ((count_end - count_start) >= real(seconds, wp)) exit
       end do
    end subroutine portable_sleep
 

@@ -50,6 +50,7 @@ module test_cice_remap_flux
                                      TRANSPORT_CFG_REMAP
    use rdb_ice_transport_seam, only: transport_seam_t, seam_pair_fold_flux
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -2687,49 +2688,49 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
       type(sim_t), intent(inout) :: s
       integer, parameter :: NREP = 5
       integer :: rep, cfg, nbad, nneg
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       real(wp) :: tg, tc, tf, tu, ti
       integer(int32), allocatable :: ierr(:, :)
 
       allocate (ierr(s%nx, s%ny))
       ierr = 0_int32
       !$acc enter data copyin(ierr)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do rep = 1, NREP
          call remap_geometry(s%w%gw, s%is, s%ie, s%js, s%je, 1000.0_wp, 1, PUNY, s%u, s%v, s%dxU, s%dyU, s%HTE, s%HTN, s%earea, &
                              s%narea, s%epm, s%npm, s%uvm, ierr)
          !$acc wait
       end do
-      call system_clock(t1)
-      tg = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
-      call system_clock(t0)
+      t1 = wall_seconds()
+      tg = (t1 - t0)/real(NREP, wp)*1000.0_wp
+      t0 = wall_seconds()
       do rep = 1, NREP
          call remap_input_check(s%w%a, s%is, s%ie, s%js, s%je, s%hm, nbad, cfg)
          !$acc wait
       end do
-      call system_clock(t1)
-      ti = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
-      call system_clock(t0)
+      t1 = wall_seconds()
+      ti = (t1 - t0)/real(NREP, wp)*1000.0_wp
+      t0 = wall_seconds()
       do rep = 1, NREP
          call remap_recon_batch(s%w%a, s%w%rb, s%is - 1, s%ie + 1, s%js - 1, s%je + 1, 2, 2, PUNY, s%hm, cfg)
          !$acc wait
       end do
-      call system_clock(t1)
-      tc = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
-      call system_clock(t0)
+      t1 = wall_seconds()
+      tc = (t1 - t0)/real(NREP, wp)*1000.0_wp
+      t0 = wall_seconds()
       do rep = 1, NREP
          call remap_flux_integrals(s%w%a, s%w%gw, s%w%rb, s%w%fw, s%is, s%ie, s%js, s%je, 2, 2, PUNY)
          !$acc wait
       end do
-      call system_clock(t1)
-      tf = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
-      call system_clock(t0)
+      t1 = wall_seconds()
+      tf = (t1 - t0)/real(NREP, wp)*1000.0_wp
+      t0 = wall_seconds()
       do rep = 1, NREP
          call remap_update(s%w%a, s%w%b, s%w%fw, s%is, s%ie, s%js, s%je, 2, 2, PUNY, s%tarea, nbad, nneg)
          !$acc wait
       end do
-      call system_clock(t1)
-      tu = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
+      t1 = wall_seconds()
+      tu = (t1 - t0)/real(NREP, wp)*1000.0_wp
       !$acc exit data delete(ierr)
       write (error_unit, "(a,5(a,f8.2))") "  [remap] stage times [ms]:", " geometry ", tg, ", input check ", ti, &
          ", reconstruction (1 category) ", tc, ", fluxes e+n (1 category) ", tf, ", update (1 category) ", tu
@@ -2741,7 +2742,7 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
       type(transport_result_t) :: res
       integer :: nxp, nyp, i, j, n, k, rep, nxg, nyg
       integer, parameter :: NREP = 5
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       real(wp) :: tstep, cells, bpc, full_cells, dt
       real(wp) :: gb
       character(len=32) :: envv
@@ -2781,13 +2782,13 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
       call run_one(s, res)
       call chk_ierr(error, res, "throughput warm-up")
       if (allocated(error)) return
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do rep = 1, NREP
          call run_one(s, res)
       end do
-      call system_clock(t1)
+      t1 = wall_seconds()
       call sim_pull(s)
-      tstep = real(t1 - t0, wp)/real(NREP*rate, wp)
+      tstep = (t1 - t0)/real(NREP, wp)
       nxg = s%nx
       nyg = s%ny
       cells = real(nxg, wp)*real(nyg, wp)*5.0_wp

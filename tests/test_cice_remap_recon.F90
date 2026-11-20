@@ -45,6 +45,7 @@ module test_cice_remap_recon
    use rdb_ice_remap_recon, only: remap_recon_t, remap_reconstruct, RECON_CFG_OK, RECON_CFG_TABLE, RECON_CFG_WORKSPACE, &
                                   RECON_CFG_RANGE, RECON_CFG_MASK, RECON_XXAV
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1311,7 +1312,7 @@ contains
       type(transport_tracer_table_t) :: tab
       integer :: nxp, nyp, rep, nbad, cfg, i, j, n, nt
       integer, parameter :: NREP = 5
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       real(wp) :: tc, cells
 
 #ifdef RDB_GPU_OFFLOAD
@@ -1339,12 +1340,12 @@ contains
       end do
       call rig_push(r)
       call rig_run(r, 2, r%nx - 1, 2, r%ny - 1, nbad, cfg)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do rep = 1, NREP
          call rig_run(r, 2, r%nx - 1, 2, r%ny - 1, nbad, cfg)
       end do
-      call system_clock(t1)
-      tc = real(t1 - t0, wp)/real(rate, wp)/real(NREP, wp)
+      t1 = wall_seconds()
+      tc = (t1 - t0)/real(NREP, wp)
       cells = real(r%nx, wp)*real(r%ny, wp)*5.0_wp
       write (error_unit, "(a,i0,a,i0,a,i0,a,es10.3,a,f8.2,a,f7.2,a)") "  [recon] ", nxp, "x", nyp, "x5 cats, ntrace ", r%ntrace, &
          ": ", cells/tc, " cat-cells/s (", tc*1000.0_wp, " ms for 2 launches), buffers ", &

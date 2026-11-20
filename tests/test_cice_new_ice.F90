@@ -20,6 +20,7 @@ module test_cice_new_ice
    use rdb_ice_new_ice, only: ice_add_new_ice_cell, ice_new_ice_step
    use lcg_deterministic, only: lcg_next, lcg_unit
    use test_cice_util, only: ice_golden_check
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1056,7 +1057,7 @@ contains
       real(wp) :: sal(NIL), hv(0:NC), secs, tot
       logical, allocatable :: wet(:, :)
       integer(int32), allocatable :: ie(:, :)
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       integer :: rep, i, j, n
 
       p = params(ICE_CONSTANTS_ICEPACK, NIL, .true., 5.0_wp, 0.05_wp)
@@ -1072,16 +1073,16 @@ contains
       !$acc enter data copyin(a, v, ts, q, s, sal, a0, fr, fs, fz, frz, bank, tf, ie, wet)
       call ice_new_ice_step(NX, NY, NC, NIL, 1, NX, 1, NY, DT, p, hv, sal, wet, frz, bank, tf, a, v, ts, q, s, &
                             a0, fr, fs, fz, ie)                                   ! warm-up
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do rep = 1, NREP
          call ice_new_ice_step(NX, NY, NC, NIL, 1, NX, 1, NY, DT, p, hv, sal, wet, frz, bank, tf, a, v, ts, q, s, &
                                a0, fr, fs, fz, ie)
       end do
       !$acc wait
-      call system_clock(t1)
+      t1 = wall_seconds()
       !$acc update self(a, v, ts, q, s, a0, fz, ie)
       !$acc exit data delete(a, v, ts, q, s, sal, a0, fr, fs, fz, frz, bank, tf, ie, wet)
-      secs = real(t1 - t0, wp)/real(rate, wp)/real(NREP, wp)
+      secs = (t1 - t0)/real(NREP, wp)
       write (output_unit, '(a,f9.3,a,es10.3,a,es10.3,a)') "  new ice driver sweep (512x512, ncat 5, nilyr 7): ", secs*1.0e3_wp, &
          " ms/sweep, ", real(NX*NY, wp)/secs, " cells/s, ", real(NX*NY*NC, wp)/secs, " cell-categories/s"
       tot = 0.0_wp

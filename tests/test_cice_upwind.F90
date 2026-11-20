@@ -54,6 +54,7 @@ module test_cice_upwind
    use rdb_ice_transport_pack, only: transport_pack
    use rdb_ice_transport_checks, only: transport_conservation_compare
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1858,7 +1859,7 @@ write (error_unit, "(a,es10.3,a,es10.3,a,es10.3)") "  [upwind] category emptied 
       type(transport_result_t) :: res
       integer :: nxp, nyp, i, j, n, k, rep, nbad, nneg, cfg
       integer, parameter :: NREP = 5
-      integer(int64) :: t0, t1, t2, rate
+      real(wp) :: t0, t1, t2
       real(wp) :: tstep, tker, cells
 
 #ifdef RDB_GPU_OFFLOAD
@@ -1887,19 +1888,19 @@ write (error_unit, "(a,es10.3,a,es10.3,a,es10.3)") "  [upwind] category emptied 
       call sim_map(s)
       call sim_push(s)
       call run_one(s, res)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do rep = 1, NREP
          call run_one(s, res)
       end do
-      call system_clock(t1)
+      t1 = wall_seconds()
       do rep = 1, NREP
          call upwind_advect(s%w%a, s%w%b, s%is, s%ie, s%js, s%je, 6000.0_wp, PUNY, s%u, s%v, s%HTE, s%HTN, s%tarea, &
                             s%epm, s%npm, nbad, nneg, cfg)
       end do
-      call system_clock(t2)
+      t2 = wall_seconds()
       call sim_pull(s)
-      tstep = real(t1 - t0, wp)/real(rate, wp)/real(NREP, wp)
-      tker = real(t2 - t1, wp)/real(rate, wp)/real(NREP, wp)
+      tstep = (t1 - t0)/real(NREP, wp)
+      tker = (t2 - t1)/real(NREP, wp)
       cells = real(s%nx, wp)*real(s%ny, wp)*5.0_wp
       write (error_unit, "(a,i0,a,i0,a,es10.3,a,es10.3,a,i0,a,es10.3,a)") "  [upwind] ", nxp, "x", nyp, "x5x7: full step (check off, aggregate) ", &
          cells/tstep, " cat-cells/s (", tstep*1000.0_wp, " ms, ", res%n_launch, " launches); advection kernel alone ", &

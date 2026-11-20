@@ -32,9 +32,18 @@ set_target_properties(
   rdb_test_lcg PROPERTIES POSITION_INDEPENDENT_CODE ON
                           Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
 target_link_libraries(rdb_test_lcg PUBLIC pic::pic)
+# rdb_test_clock: wall seconds through pic_timer (tools/check_system_clock.py
+# keeps system_clock out of the tree); same object-library shape as the LCG.
+add_library(rdb_test_clock OBJECT rdb_test_clock.F90)
+set_target_properties(
+  rdb_test_clock
+  PROPERTIES POSITION_INDEPENDENT_CODE ON Fortran_MODULE_DIRECTORY
+                                          ${CMAKE_BINARY_DIR}/modules)
+target_link_libraries(rdb_test_clock PUBLIC pic::pic)
 add_library(
-  rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
-                        ocean_test_metrics.F90 $<TARGET_OBJECTS:rdb_test_lcg>)
+  rdb_analytical STATIC
+  ritter_dambreak.F90 thacker_bowl.F90 ocean_test_metrics.F90
+  $<TARGET_OBJECTS:rdb_test_lcg> $<TARGET_OBJECTS:rdb_test_clock>)
 set_target_properties(rdb_analytical PROPERTIES Fortran_MODULE_DIRECTORY
                                                 ${CMAKE_BINARY_DIR}/modules)
 target_include_directories(rdb_analytical PRIVATE "${CMAKE_BINARY_DIR}/modules"
@@ -748,8 +757,9 @@ set_target_properties(
   rdb_cice_test_util
   PROPERTIES POSITION_INDEPENDENT_CODE ON Fortran_MODULE_DIRECTORY
                                           ${CMAKE_BINARY_DIR}/modules_cice_test)
-target_link_libraries(rdb_cice_test_util PUBLIC rdb_test_lcg rdb_ice_core_objs
-                                                test-drive::test-drive)
+target_link_libraries(
+  rdb_cice_test_util PUBLIC rdb_test_lcg rdb_test_clock rdb_ice_core_objs
+                            test-drive::test-drive)
 target_include_directories(rdb_cice_test_util
                            PUBLIC ${CMAKE_BINARY_DIR}/modules_cice_test)
 foreach(row ${RDB_CICE_TESTS})
@@ -773,8 +783,8 @@ foreach(row ${RDB_CICE_TESTS})
     PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}"
             "${CMAKE_BINARY_DIR}/modules" "${RDB_SHARED_INCLUDE_DIR}")
   target_link_libraries(
-    ${test_name} PRIVATE rdb_cice_test_util rdb_test_lcg rdb_ice_core_objs
-                         rdb_core_objs test-drive::test-drive)
+    ${test_name} PRIVATE rdb_cice_test_util rdb_test_lcg rdb_test_clock
+                         rdb_ice_core_objs rdb_core_objs test-drive::test-drive)
   add_test(NAME rdb_${test_name} COMMAND ${test_name})
   set_tests_properties(
     rdb_${test_name} PROPERTIES LABELS "${TEST_REGIME}" ENVIRONMENT

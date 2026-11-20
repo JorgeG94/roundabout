@@ -39,6 +39,7 @@ module test_cice_diags
    use rdb_ocean_diag_ice_cice, only: cice_fill, CD_CONGEL, CD_FRAZIL, CD_SNOICE, CD_MELTT, CD_MELTB, CD_MELTL, &
                                       CD_DVIDTT, CD_DVIDTD, CD_DAIDTT, CD_DAIDTD, CD_TSFC, CD_FSWABS, CD_FLWUP, &
              CD_FSENS, CD_FLAT, CD_FHOCN, CD_FSWTHRU, CD_FRESH, CD_FSALT, CD_EVAP, CD_ALBSNI, CD_EVAPI, CD_EVAPS, CD_MELTS, CD_FSWDN
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1039,7 +1040,7 @@ contains
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       real(wp) :: t
-      integer(int64) :: c0, c1, rate
+      real(wp) :: c0, c1
       logical :: ok
 
       ms_per_step = 0.0_wp
@@ -1048,11 +1049,11 @@ contains
       if (allocated(error)) return
       t = 0.0_wp
       call advance(engine, cfg, t, 6, ok)
-      call system_clock(c0, rate)
+      c0 = wall_seconds()
       call advance(engine, cfg, t, n, ok)
-      call system_clock(c1)
+      c1 = wall_seconds()
       call check(error, ok, "cost steps ran")
-      ms_per_step = 1.0e3_wp*real(c1 - c0, wp)/real(rate, wp)/real(n, wp)
+      ms_per_step = 1.0e3_wp*(c1 - c0)/real(n, wp)
       call finish_engine(engine)
    end subroutine time_steps
 

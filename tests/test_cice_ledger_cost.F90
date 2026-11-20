@@ -13,6 +13,7 @@ module test_cice_ledger_cost
                                engine_step_finalize, engine_exit_data, engine_teardown
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -71,7 +72,7 @@ contains
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       integer :: ierr, n
-      integer(int64) :: c0, c1, rate
+      real(wp) :: c0, c1
       real(wp) :: t, tice
 
       ok = .false.
@@ -94,12 +95,12 @@ contains
          call engine_step(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
          !$acc wait
-         call system_clock(c0, rate)
+         c0 = wall_seconds()
          call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
          !$acc wait
-         call system_clock(c1)
+         c1 = wall_seconds()
          if (ierr /= OCEAN_STATUS_OK) exit
-         if (n > NWARM) tice = tice + real(c1 - c0, wp)/real(rate, wp)
+         if (n > NWARM) tice = tice + (c1 - c0)
          call engine_step_finalize(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
          t = t + DT

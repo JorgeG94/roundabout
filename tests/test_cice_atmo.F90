@@ -20,6 +20,7 @@ module test_cice_atmo
                              ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM
    use rdb_ice_thermo_shared, only: ice_qsat_surface
    use rdb_ice_atmo, only: ice_psi_m, ice_psi_h, ice_psi_stable, ice_atm_boundary_ice
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -631,7 +632,7 @@ contains
       integer(int32), allocatable :: ierr(:, :, :)
       real(wp) :: o(6), r, secs
       integer(int32) :: ierr_l
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       integer :: i, j, n, k
 
       p = ice_params_default(ICE_CONSTANTS_ICEPACK, NC, 7, 1)
@@ -671,15 +672,15 @@ contains
 
       !$acc enter data copyin(c, atm, Tsf, potT, ua, va, ui, vi, wnd, Qa, rho, ierr) create(sh, lh, sx, sy, dt, dq)
       call sweep_impl(NX, NY, NC, 1, NX, 1, NY, c, atm, Tsf, potT, ua, va, ui, vi, wnd, Qa, rho, sh, lh, sx, sy, dt, dq, ierr)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do k = 1, NREP
          call sweep_impl(NX, NY, NC, 1, NX, 1, NY, c, atm, Tsf, potT, ua, va, ui, vi, wnd, Qa, rho, sh, lh, sx, sy, dt, dq, &
                          ierr)
       end do
-      call system_clock(t1)
+      t1 = wall_seconds()
       !$acc update self(sh, lh, sx, sy, dt, dq, ierr)
       !$acc exit data delete(c, atm, Tsf, potT, ua, va, ui, vi, wnd, Qa, rho, ierr, sh, lh, sx, sy, dt, dq)
-      secs = real(t1 - t0, wp)/real(rate, wp)
+      secs = (t1 - t0)
       write (output_unit, '(a,f12.4,a,es11.3,a)') "atmo driver sweep: ", secs/real(NREP, wp)*1.0e3_wp, " ms/sweep, ", &
          real(NX*NY*NC, wp)*real(NREP, wp)/secs, " cell-categories/s"
 

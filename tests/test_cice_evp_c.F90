@@ -49,6 +49,7 @@ module test_cice_evp_c
    use rdb_ice_evp_c, only: ice_evp_c_step, ice_evp_c_substep, ice_evp_c_average, ice_evp_c_finish, &
                            ice_evp_c_wrap_faces, ice_evp_c_div_stress, ice_evp_c_copy_faces, evp_strain_u_impl, evp_stress_t_impl, &
                             evp_stress_u_impl
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -2180,14 +2181,14 @@ contains
          call fx_step(fx, .false., .false.)                 ! warm-up
          !$acc update self(fx%ice_err(1:1, 1:1))
          nrep = 3
-         call system_clock(c0, cr)
+         c0 = wall_seconds()
          do irep = 1, nrep
             call fx_step(fx, .false., .false.)
          end do
          !$acc update self(fx%ice_err(1:1, 1:1))            ! synchronise (one element: no bulk transfer in the timing)
-         call system_clock(c1)
+         c1 = wall_seconds()
          call fx_pull(fx)
-         tstep = real(c1 - c0, wp)/real(cr, wp)/real(nrep, wp)
+         tstep = (c1 - c0)/real(nrep, wp)
          write (error_unit, '(a,i0,a,i0,a,i0,a,f9.4,a,f9.3,a,f6.1,a)') "  [evp_c] state ", istate, ": ", nxp, " x ", nyp, &
             " ndte=120: ", tstep, " s per step, ", tstep/120.0_wp*1.0e3_wp, " ms per subcycle, ice T cells ", &
             100.0_wp*real(count(fx%w%iceTmask(fx%is:fx%ie, fx%js:fx%je)), wp)/real(nxp*nyp, wp), " %"

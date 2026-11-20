@@ -29,6 +29,7 @@ module test_cice_radiation
    use rdb_ice_radiation, only: ice_sw_band_split, ice_step_radiation, ICE_RAD_OK, ICE_RAD_ERR_NOT_INIT, &
                                 ICE_RAD_ERR_NOT_CONFIGURED, ICE_RAD_ERR_SHAPE
    use rdb_ice_shortwave, only: ice_albedo_fhtan, ice_albedos_ccsm3, ice_absorbed_ccsm3, ICE_ALBOCN, ICE_SW_PUNY
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -848,7 +849,7 @@ contains
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NREP = 10
       type(fix_t) :: f
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       real(wp) :: secs, av, ai, fsfc, fint, fthru, isw(NL)
       integer :: k, i, j, n, r, bad, ierr
 
@@ -858,16 +859,16 @@ contains
       call ice_step_radiation(f%rad, f%swp, 1, f%nx, 1, f%ny, f%nx, f%ny, NC, NL, &
                               f%aicen, f%vicen, f%vsnon, f%tsfcn, f%sw, f%ice_err, ierr)
       if (ierr /= ICE_RAD_OK) error stop "throughput: refused"
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do r = 1, NREP
          call ice_step_radiation(f%rad, f%swp, 1, f%nx, 1, f%ny, f%nx, f%ny, NC, NL, &
                                  f%aicen, f%vicen, f%vsnon, f%tsfcn, f%sw, f%ice_err, ierr)
       end do
       !$acc update self(f%rad%fswsfcn, f%rad%fswintn, f%rad%fswthrun, f%rad%alvn, f%rad%alin, f%rad%Iswabsn)
-      call system_clock(t1)
+      t1 = wall_seconds()
       call f%rad%exit_data()
       !$acc exit data delete(f%aicen, f%vicen, f%vsnon, f%tsfcn, f%sw, f%ice_err)
-      secs = real(t1 - t0, wp)/real(rate, wp)
+      secs = (t1 - t0)
       write (output_unit, '(a,f10.4,a,es11.3,a)') "radiation driver (step + aggregate): ", secs/real(NREP, wp)*1.0e3_wp, &
          " ms/step, ", real(f%nx*f%ny*NC, wp)*real(NREP, wp)/secs, " cell-categories/s"
       bad = 0

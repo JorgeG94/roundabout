@@ -7,6 +7,7 @@ module test_profiler
                            profiler_enable, profiler_disable, &
                            profiler_reset, profiler_report, &
                            profiler_get_time
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -29,25 +30,24 @@ contains
                   ]
    end subroutine collect_profiler_tests
 
-   ! Spin until system_clock advances by a few ticks, so the profiler always
+   ! Spin until the wall clock advances by 0.1 ms, so the profiler always
    ! records a non-zero interval. `dummy` is `volatile` so NVHPC -fast -O3
    ! cannot dead-code-eliminate the spin (its result is otherwise unread).
    subroutine spin_work(out)
-      use, intrinsic :: iso_fortran_env, only: int64
       real(wp), intent(out) :: out
       volatile :: out
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       integer :: i
       real(wp) :: s
       s = 0.0_wp
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       i = 0
       do
          i = i + 1
          s = s + sqrt(real(i, wp))
          if (iand(i, 1023) == 0) then
-            call system_clock(t1)
-            if (t1 - t0 >= 4 .or. i >= 10000000) exit
+            t1 = wall_seconds()
+            if (t1 - t0 >= 1.0e-4_wp .or. i >= 10000000) exit
          end if
       end do
       out = s

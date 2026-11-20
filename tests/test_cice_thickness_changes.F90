@@ -22,6 +22,7 @@ module test_cice_thickness_changes
    use rdb_ice_thickness, only: ice_thickness_changes, ice_thickness_changes_cell, ice_conservation_check_vthermo, &
                                 ice_conservation_check_vthermo_cell, ICE_FERRMAX
    use test_cice_util, only: ice_ledger_t
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1319,7 +1320,7 @@ call check(error, near(col%snoice, dhsn*c%rhos/c%rhoi, 1.0e-8_wp, 0.0_wp) .and. 
       real(wp), allocatable :: o_d(:, :, :, :), o_h(:, :, :, :)   ! 13 per-category outputs, last index
       integer(int32), allocatable :: ierr_d(:, :, :), ierr_h(:, :, :)
       integer :: i, j, n, k, nbad_err
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       real(wp) :: tdev, thost
       character(len=40) :: names(13)
 
@@ -1350,22 +1351,22 @@ call check(error, near(col%snoice, dhsn*c%rhos/c%rhoi, 1.0e-8_wp, 0.0_wp) .and. 
       hin_h = hin; hsn_h = hsn; hilyr_h = hilyr; hslyr_h = hslyr; qicen_h = qicen; qsnon_h = qsnon
 
       ! host sweep (plain loops over the same cell kernels)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       call host_sweep()
-      call system_clock(t1)
-      thost = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      thost = (t1 - t0)
 
       ! device sweep
       !$acc enter data copyin(c, Tbot, fbot, fsnow, flatn, fsurfn, fcondtopn, fcondbotn, sicen, fswint, einit, hin, hsn, hilyr, &
       !$acc&  hslyr, qicen, qsnon, o_d, ierr_d)
-      call system_clock(t0)
+      t0 = wall_seconds()
       call sweep(NX, NY, NCAT, NIL, c, lb, Tbot, fbot, fsnow, flatn, fsurfn, fcondtopn, fcondbotn, sicen, hin, hsn, hilyr, hslyr, &
                  qicen, qsnon, o_d(:, :, :, 1), o_d(:, :, :, 2), o_d(:, :, :, 3), o_d(:, :, :, 4), o_d(:, :, :, 5), &
                  o_d(:, :, :, 6), o_d(:, :, :, 7), o_d(:, :, :, 8), o_d(:, :, :, 9), o_d(:, :, :, 10), o_d(:, :, :, 11), &
                  o_d(:, :, :, 12), fswint, einit, o_d(:, :, :, 13), ierr_d)
       !$acc wait
-      call system_clock(t1)
-      tdev = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      tdev = (t1 - t0)
       !$acc update self(hin, hsn, hilyr, hslyr, qicen, qsnon, o_d, ierr_d)
       !$acc exit data delete(c, Tbot, fbot, fsnow, flatn, fsurfn, fcondtopn, fcondbotn, sicen, fswint, einit, hin, hsn, hilyr, &
       !$acc&  hslyr, qicen, qsnon, o_d, ierr_d)

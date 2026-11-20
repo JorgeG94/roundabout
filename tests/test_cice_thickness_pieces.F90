@@ -18,6 +18,7 @@ module test_cice_thickness_pieces
                              ice_params_t, ice_params_default
    use rdb_ice_thickness, only: ice_freeboard, ice_relayer, ice_update_state_vthermo
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -513,7 +514,8 @@ contains
       real(wp), allocatable :: Tsf_h(:, :, :), vicen_h(:, :, :), vsnon_h(:, :, :), dzi_h(:, :, :, :), zqin_h(:, :, :, :)
       real(wp), allocatable :: zqsn_h(:, :, :)
       integer(int32), allocatable :: ierr(:, :, :), ierr_h(:, :, :)
-      integer(int64) :: st, t0, t1, t2, t3, rate
+      integer(int64) :: st
+      real(wp) :: t0, t1, t2, t3
       integer :: i, j, n, nconv, nmelt
       logical :: bad
 
@@ -545,7 +547,7 @@ contains
       hin_h = hin; hsn_h = hsn; snoice_h = snoice; dsnow_h = dsnow; aicen_h = aicen; Tsf_h = Tsf
       vicen_h = vicen; vsnon_h = vsnon; zqsn_h = zqsn; dzi_h = dzi; zqin_h = zqin; ierr_h = ierr
 
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do n = 1, NC
          do j = 1, NY
             do i = 1, NX
@@ -554,20 +556,20 @@ contains
             end do
          end do
       end do
-      call system_clock(t1)
+      t1 = wall_seconds()
 
       !$acc enter data copyin(c, hin, hsn, dzi, zqin, zqsn, snoice, dsnow, Tsf, aicen, vicen, vsnon, ierr)
-      call system_clock(t2)
+      t2 = wall_seconds()
       do concurrent(n=1:NC, j=1:NY, i=1:NX)
          call cell_kernel(c, NX, NY, NC, NL, i, j, n, hin, hsn, dzi, zqin, zqsn, snoice, dsnow, Tsf, aicen, &
                           vicen, vsnon, ierr)
       end do
-      call system_clock(t3)
+      t3 = wall_seconds()
       !$acc update self(hin, hsn, dzi, zqin, zqsn, snoice, dsnow, Tsf, aicen, vicen, vsnon, ierr)
       !$acc exit data delete(c, hin, hsn, dzi, zqin, zqsn, snoice, dsnow, Tsf, aicen, vicen, vsnon, ierr)
       write (*, '(a,es10.3,a,es10.3,a)') "  thickness kernel throughput [cell-categories/s]: host serial ", &
-         real(NX*NY*NC, wp)/(real(t1 - t0, wp)/real(rate, wp)), "  do concurrent ", &
-         real(NX*NY*NC, wp)/(real(max(t3 - t2, 1_int64), wp)/real(rate, wp)), ""
+         real(NX*NY*NC, wp)/((t1 - t0)), "  do concurrent ", &
+         real(NX*NY*NC, wp)/(max(t3 - t2, tiny(1.0_wp))), ""
 
       call check(error, all(ierr == 0_int32) .and. all(ierr_h == 0_int32), "no error bits")
       if (allocated(error)) return

@@ -1,8 +1,9 @@
 !! Named profiling regions with wall-clock timers and optional NVTX ranges.
 !! -DUSE_NVTX enables NVTX (else no-op); -DDISABLE_PROFILER disables everything.
 module rdb_profiler
-   use, intrinsic :: iso_fortran_env, only: dp => real64, int64
+   use, intrinsic :: iso_fortran_env, only: dp => real64
    use pic_logger, only: logger => global_logger
+   use pic_timer, only: timer_type
 #ifdef USE_NVTX
    use nvtx, only: nvtxStartRange, nvtxEndRange
 #endif
@@ -31,6 +32,10 @@ module rdb_profiler
 
    type(profiler_state), save :: state
 
+   type(timer_type), save :: epoch
+      !! Free-running wall clock (pic_timer), started on first read.
+   logical, save :: epoch_started = .false.
+
    public :: profiler_init, profiler_end
    public :: profiler_start, profiler_stop
    public :: profiler_enable, profiler_disable
@@ -41,9 +46,11 @@ contains
 
    function get_wall_time() result(t)
       real(dp) :: t
-      integer(int64) :: count, count_rate
-      call system_clock(count, count_rate)
-      t = real(count, dp)/real(count_rate, dp)
+      if (.not. epoch_started) then
+         call epoch%start()
+         epoch_started = .true.
+      end if
+      t = epoch%get_elapsed_time()
    end function get_wall_time
 
    subroutine nvtx_range_push(name)

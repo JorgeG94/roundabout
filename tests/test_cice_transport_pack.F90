@@ -51,6 +51,7 @@ module test_cice_transport_pack
                                        transport_bounds, transport_check_monotone, transport_efp_decompose_seq, &
                                        transport_check_slivers
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1801,7 +1802,7 @@ contains
       type(transport_workspace_t) :: ws
       type(ice_constants_t) :: c
       integer(int32) :: ierr
-      integer(int64) :: t0, t1, t2, rate
+      real(wp) :: t0, t1, t2
       integer :: rep, i, j, n, k
       real(wp) :: tp, tu, cells
 
@@ -1827,20 +1828,20 @@ contains
       call map_in(ws, st)
       call transport_pack(ws, c, NIL, 1, 1, NX, 1, NY, st%aice0, st%aicen, st%vicen, st%vsnon, &
                           st%Tsfcn, st%qicen, st%sicen, st%qsnon, ierr)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do rep = 1, NREP
          call transport_pack(ws, c, NIL, 1, 1, NX, 1, NY, st%aice0, st%aicen, st%vicen, st%vsnon, &
                              st%Tsfcn, st%qicen, st%sicen, st%qsnon, ierr)
       end do
-      call system_clock(t1)
+      t1 = wall_seconds()
       do rep = 1, NREP
          call transport_unpack(ws, c, NIL, 1, 1, NX, 1, NY, st%aice0, st%aicen, st%vicen, st%vsnon, &
                                st%Tsfcn, st%qicen, st%sicen, st%qsnon, ierr)
       end do
-      call system_clock(t2)
+      t2 = wall_seconds()
       call map_out(ws, st)
-      tp = real(t1 - t0, wp)/real(rate, wp)/real(NREP, wp)
-      tu = real(t2 - t1, wp)/real(rate, wp)/real(NREP, wp)
+      tp = (t1 - t0)/real(NREP, wp)
+      tu = (t2 - t1)/real(NREP, wp)
       cells = real(NX, wp)*real(NY, wp)*real(NC, wp)
       write (error_unit, "(a,2(a,es10.3),a)") "  [transport_pack] 512x512x5x7: ", "pack ", cells/tp, " cat-cells/s, unpack ", &
          cells/tu, " cat-cells/s"

@@ -23,6 +23,7 @@ module test_cice_atm_inputs
    use rdb_ice_atm_inputs, only: ice_atm_prepare_cell_inputs, ice_atm_cell_inputs, ice_atm_heights, &
                                  ice_atm_velocity_T, ice_atm_stress_to_faces, ice_atm_grid_rotation, ICE_ATM_BENIGN_POTT, &
                                  ICE_ATM_BENIGN_RHOA
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1006,7 +1007,8 @@ contains
       real(wp), allocatable, dimension(:, :) :: ea, na, ua, uvm, ta, ai, uT, vT, sx, sy, sxE, syN, cA, sA
       real(wp), allocatable :: u(:, :), v(:, :)
       integer(int32), allocatable :: ie(:, :)
-      integer(int64) :: st, t0, t1, rate
+      integer(int64) :: st
+      real(wp) :: t0, t1
       integer :: k
       real(wp) :: sec
 
@@ -1034,29 +1036,29 @@ contains
       !$acc&  flw, fsn, frn, ea, na, ua, uvm, ta, ai, u, v, uT, vT, sx, sy, sxE, syN)
       call ice_atm_prepare_cell_inputs(NX, NY, 2, NX - 1, 2, NY - 1, 0.0_wp, hm, cA, sA, tas, huss, uas, vas, psl, rlds, prra, &
                                        prsn, potT, rhoa, wind, uatm, vatm, Qa, flw, fsn, frn, ie)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do k = 1, NREP
          call ice_atm_prepare_cell_inputs(NX, NY, 2, NX - 1, 2, NY - 1, 0.0_wp, hm, cA, sA, tas, huss, uas, vas, psl, rlds, &
                                           prra, prsn, potT, rhoa, wind, uatm, vatm, Qa, flw, fsn, frn, ie)
       end do
-      call system_clock(t1)
-      sec = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      sec = (t1 - t0)
       write (output_unit, '(a,es10.3,a)') "  ice_atm_prepare_cell_inputs: ", real(NX - 2, wp)*real(NY - 2, wp)*NREP/sec, &
          " cells/s (512x512)"
-      call system_clock(t0)
+      t0 = wall_seconds()
       do k = 1, NREP
          call ice_atm_velocity_T(NX, NY, 2, NX - 1, 2, NY - 1, 1.0e-11_wp, u, v, ea, na, ua, uvm, hm, ai, uT, vT, ie)
       end do
-      call system_clock(t1)
-      sec = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      sec = (t1 - t0)
       write (output_unit, '(a,es10.3,a)') "  ice_atm_velocity_T:          ", real(NX - 2, wp)*real(NY - 2, wp)*NREP/sec, &
          " cells/s (512x512)"
-      call system_clock(t0)
+      t0 = wall_seconds()
       do k = 1, NREP
          call ice_atm_stress_to_faces(NX, NY, 2, NX - 1, 2, NY - 1, sx, sy, ta, ea, na, sxE, syN)
       end do
-      call system_clock(t1)
-      sec = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      sec = (t1 - t0)
       write (output_unit, '(a,es10.3,a)') "  ice_atm_stress_to_faces:     ", real(NX - 2, wp)*real(NY - 2, wp)*NREP/sec, &
          " cells/s (512x512)"
       !$acc update self(potT, rhoa, wind, uT, sxE, ie)

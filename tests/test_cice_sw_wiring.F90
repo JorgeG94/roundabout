@@ -35,6 +35,7 @@ module test_cice_sw_wiring
    use rdb_ice_therm1, only: ice_step_therm1, ice_therm1_cell
    use rdb_ice_thermo_shared, only: ICE_SFC_BULK
    use rdb_ice_thickness, only: ICE_FERRMAX
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -820,7 +821,7 @@ contains
       type(world_t) :: w
       integer, parameter :: NX = 512, NY = 512, NC = 5, NL = 7, NREP = 3
       integer :: ierr, istat, rep, i, j, n, k
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       real(wp) :: secs, Sk, T
 
       call world_alloc(w, NX, NY, NC, NL)
@@ -849,7 +850,7 @@ contains
       call world_step(w, ierr, istat)     ! warm-up: workspace, first launch
       call check(error, ierr + istat, 0, "warm-up step accepted")
       if (.not. allocated(error)) then
-         call system_clock(t0, rate)
+         t0 = wall_seconds()
          do rep = 1, NREP
             call zero_fluxes_impl(w%nx, w%ny, w%fresh, w%fsalt, w%fhocn, w%evap, w%fsens, w%flat, w%flwout, w%fswabs, w%meltt, &
                                   w%meltb, w%congel, w%snoice, w%fswthru, w%fswthru_vis)
@@ -863,8 +864,8 @@ contains
                                     w%sy, w%fbot, w%rside, w%wlat, w%ierr_n, w%ice_err, w%fswthru, w%fswthru_vis, ierr, istat)
          end do
          !$acc update self(w%fswthru, w%ice_err)
-         call system_clock(t1)
-         secs = real(t1 - t0, wp)/real(rate, wp)
+         t1 = wall_seconds()
+         secs = (t1 - t0)
          write (output_unit, '(a,f8.1,a,es10.3,a)') "sw wiring 512x512x5x7: ", 1.0e3_wp*secs/real(NREP, wp), " ms/step, ", &
             real(NX*NY*NC, wp)*real(NREP, wp)/secs, " cell-categories/s (radiation + therm1 + producer)"
          call check(error, ierr + istat, 0, "timed steps accepted")

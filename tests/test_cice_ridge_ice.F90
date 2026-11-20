@@ -32,6 +32,7 @@ use rdb_ice_errors, only: ICE_ERR_FATAL_MASK, ICE_ERR_NONFINITE, ICE_ERR_RIDGE_N
    use rdb_ice_ridge, only: ice_step_ridge
    use rdb_ice_itd_cleanup, only: ice_cleanup_itd_cell, ice_cleanup_itd_step
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1408,7 +1409,7 @@ call check(error, nmulti >= 3 .and. nridge >= 500 .and. nskip >= 20, "the sweep 
       integer(int32), allocatable :: ierr(:, :), niter(:, :), ierr_c(:, :)
       logical, allocatable :: wet(:, :)
       real(wp) :: hin_loc(0:NCAT), secs, secs_c
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       integer :: k, i, j, nice, nmulti
       logical :: coherent, ok
 
@@ -1432,27 +1433,26 @@ call check(error, nmulti >= 3 .and. nridge >= 500 .and. nskip >= 20, "the sweep 
       !$acc enter data copyin(hin_loc, wet, Tf2, conv, shear, a, v, s, Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tc, qc, sc, qsc, fr, fs, fh, d1, d2, dv, op, niter, ierr, ierr_c, a_s, v_s, s_s, T_s, q_s, si_s, qs_s, a0_s)
       secs = 0.0_wp
       secs_c = 0.0_wp
-      call system_clock(count_rate=rate)
       do k = 0, nrep
          !$acc kernels present(a, v, s, Tsfcn, qicen, sicen, qsnon, aice0, a_s, v_s, s_s, T_s, q_s, si_s, qs_s, a0_s)
          a = a_s; v = v_s; s = s_s; Tsfcn = T_s; qicen = q_s; sicen = si_s; qsnon = qs_s; aice0 = a0_s
          !$acc end kernels
-         call system_clock(t0)
+         t0 = wall_seconds()
          call ice_step_ridge(nx, ny, NCAT, nilyr, 1, 1, nx, 1, ny, p, hin_loc, 3600.0_wp, 1, wet, Tf2, conv, shear, a, v, s, &
                              Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tc, qc, sc, qsc, fr, fs, fh, d1, d2, dv, op, &
                              niter, ierr, ok)
          !$acc wait
-         call system_clock(t1)
-         if (k > 0) secs = secs + real(t1 - t0, wp)/real(rate, wp)
+         t1 = wall_seconds()
+         if (k > 0) secs = secs + (t1 - t0)
          !$acc kernels present(a, v, s, Tsfcn, qicen, sicen, qsnon, aice0, a_s, v_s, s_s, T_s, q_s, si_s, qs_s, a0_s)
          a = a_s; v = v_s; s = s_s; Tsfcn = T_s; qicen = q_s; sicen = si_s; qsnon = qs_s; aice0 = a0_s
          !$acc end kernels
-         call system_clock(t0)
+         t0 = wall_seconds()
          call ice_cleanup_itd_step(nx, ny, NCAT, nilyr, 1, 1, nx, 1, ny, p, hin_loc, 3600.0_wp, Tf2, .true., .true., .true., a, v, &
                                    s, Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tc, qc, sc, qsc, fr, fs, fh, ierr_c)
          !$acc wait
-         call system_clock(t1)
-         if (k > 0) secs_c = secs_c + real(t1 - t0, wp)/real(rate, wp)
+         t1 = wall_seconds()
+         if (k > 0) secs_c = secs_c + (t1 - t0)
       end do
       !$acc update self(ierr, niter)
       !$acc exit data delete(hin_loc, wet, Tf2, conv, shear, a, v, s, Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tc, qc, sc, qsc, fr, fs, fh, d1, d2, dv, op, niter, ierr, ierr_c, a_s, v_s, s_s, T_s, q_s, si_s, qs_s, a0_s)

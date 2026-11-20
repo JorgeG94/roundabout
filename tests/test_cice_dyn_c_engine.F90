@@ -52,6 +52,7 @@ module test_cice_dyn_c_engine
    use rdb_ice_evp, only: ice_evp_step
    use rdb_ice_errors, only: ice_err_summary_t, ICE_ERR_DYN_VEL
    use rdb_ice_column, only: ICE_RHO_ICE
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1259,7 +1260,7 @@ contains
       character(len=:), allocatable :: nml
       logical :: ok
       integer :: n, nstep
-      integer(int64) :: c0, c1, crate
+      real(wp) :: c0, c1
       real(wp) :: ms
       type(ice_err_summary_t) :: summ
 
@@ -1273,13 +1274,13 @@ contains
       associate (st => engine%state, gr => engine%grid)
          call ice_dyn_c_step(gr, st%metrics, st%coriolis_adv%f_corner, st%barotropic%b, st%ice_cgrid, &
                              st%ice, st%multilayer, st%bc, DT, err_summary=summ)
-         call system_clock(c0, crate)
+         c0 = wall_seconds()
          do n = 1, nstep
             call ice_dyn_c_step(gr, st%metrics, st%coriolis_adv%f_corner, st%barotropic%b, st%ice_cgrid, &
                                 st%ice, st%multilayer, st%bc, DT, err_summary=summ)
          end do
-         call system_clock(c1)
-         ms = 1.0e3_wp*real(c1 - c0, wp)/real(crate, wp)/real(nstep, wp)
+         c1 = wall_seconds()
+         ms = 1.0e3_wp*(c1 - c0)/real(nstep, wp)
          write (*, '(a,f10.3,a,es11.3,a)') "step_throughput 512x512, ndte=120: ", ms, " ms/step, ", &
             512.0_wp*512.0_wp*120.0_wp/(ms*1.0e-3_wp), " cell-subcycles/s"
       end associate

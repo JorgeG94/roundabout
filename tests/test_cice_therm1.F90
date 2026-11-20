@@ -48,6 +48,7 @@ module test_cice_therm1
    use rdb_ice_therm1, only: ice_step_therm1, ice_therm1_impl, ice_therm1_cell, ice_therm1_merge_impl
    use rdb_ice_bl99, only: ICE_NITERMAX, ICE_SW_FRAC, ICE_SW_DTEMP
    use rdb_ice_thickness, only: ICE_FERRMAX
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1661,7 +1662,8 @@ contains
       integer, parameter :: NX = 512, NY = 512, NC = 5, NIL = 7
       type(world_t) :: w, h
       integer :: i, j, n
-      integer(int64) :: st, t0, t1, rate
+      integer(int64) :: st
+      real(wp) :: t0, t1
       real(wp) :: tdev, thost, ncell
       integer(int64) :: nbad
       integer :: rep, nexact
@@ -1697,16 +1699,16 @@ contains
       h = w
 
       ! host reference: plain loops over the same cell kernels
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       call host_step(h)
-      call system_clock(t1)
-      thost = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      thost = (t1 - t0)
 
       call world_map(w)
-      call system_clock(t0)
+      t0 = wall_seconds()
       call world_step(w)
-      call system_clock(t1)
-      tdev = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      tdev = (t1 - t0)
       write (output_unit, '(a,i0,a,i0,a,i0,a,i0,a,f8.3,a,f8.3,a)') "therm1 step ", NX, "x", NY, "x", NC, "x", NIL, &
          ": first step incl. the transfers of every array ", tdev, " s; host loops ", thost, " s"
       nbad = count(h%ierr_n(3:NX - 2, 3:NY - 2, :) /= 0_int32)
@@ -1741,7 +1743,7 @@ contains
       ! throughput with the data resident: the category launch alone and the whole four-launch step (state keeps evolving)
       if (.not. allocated(error)) then
          ncell = real(NX - 4, wp)*real(NY - 4, wp)*NC
-         call system_clock(t0)
+         t0 = wall_seconds()
          do rep = 1, 5
             call ice_therm1_impl(w%nx, w%ny, w%ncat, w%nilyr, w%nslyr, w%is, w%ie, w%js, w%je, w%dt, w%p%c, w%p%atm, &
                                  w%p%thermo%conduct, w%p%thermo%l_brine, w%p%thermo%emissivity, &
@@ -1754,8 +1756,8 @@ contains
                                  w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, w%strairxn, w%strairyn, w%ice_err, w%ierr_n)
          end do
          !$acc wait
-         call system_clock(t1)
-         tdev = real(t1 - t0, wp)/real(rate, wp)/5.0_wp
+         t1 = wall_seconds()
+         tdev = (t1 - t0)/5.0_wp
          write (output_unit, '(a,f8.4,a,es10.3,a,f8.3,a,es10.3,a)') "category launch alone (data resident): ", tdev, " s (", &
             ncell/max(tdev, 1.0e-9_wp), " cell-cat/s); host loops ", thost, " s (", ncell/max(thost, 1.0e-9_wp), " cell-cat/s)"
       end if
@@ -1764,7 +1766,7 @@ contains
       if (.not. allocated(error)) then
          call make_smooth(w, NX/2, NY/2)
          call world_step(w)
-         call system_clock(t0)
+         t0 = wall_seconds()
          do rep = 1, 5
             call ice_therm1_impl(w%nx, w%ny, w%ncat, w%nilyr, w%nslyr, w%is, w%ie, w%js, w%je, w%dt, w%p%c, w%p%atm, &
                                  w%p%thermo%conduct, w%p%thermo%l_brine, w%p%thermo%emissivity, &
@@ -1777,8 +1779,8 @@ contains
                                  w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, w%strairxn, w%strairyn, w%ice_err, w%ierr_n)
          end do
          !$acc wait
-         call system_clock(t1)
-         tdev = real(t1 - t0, wp)/real(rate, wp)/5.0_wp
+         t1 = wall_seconds()
+         tdev = (t1 - t0)/5.0_wp
          write (output_unit, '(a,f8.4,a,es10.3,a,i0)') "category launch alone, smooth state: ", tdev, " s (", &
             ncell/max(tdev, 1.0e-9_wp), " cell-cat/s); error words nonzero after the first smooth step: ", &
             count(w%ierr_n(3:NX - 2, 3:NY - 2, :) /= 0_int32)

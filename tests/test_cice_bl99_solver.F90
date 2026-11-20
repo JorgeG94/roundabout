@@ -33,6 +33,7 @@ module test_cice_bl99_solver
    use rdb_ice_bl99, only: ICE_NITERMAX, ICE_FERRMAX, ICE_SW_FRAC, ICE_SW_DTEMP, ice_temperature_changes, &
                            ice_temperature_changes_cell
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1166,7 +1167,7 @@ contains
       type(ice_constants_t) :: c
       type(grid_t) :: gd, gh
       integer, parameter :: NX = 512, NY = 512, NC = 5, NL = 7
-      integer(int64) :: t0, t1, t2, rate
+      real(wp) :: t0, t1, t2
       real(wp) :: worst, d, tdev, thost
       integer :: i, j, n, nerr, nmelt, nbad
       character(len=200) :: msg
@@ -1177,19 +1178,18 @@ contains
       call init_grid(gd, c)
       call init_grid(gh, c)
 
-      call system_clock(count_rate=rate)
-      call system_clock(t0)
+      t0 = wall_seconds()
       call run_host(gh, c)
-      call system_clock(t1)
-      thost = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      thost = (t1 - t0)
 
       !$acc enter data copyin(c, gd%potT, gd%flw, gd%Qa, gd%hilyr, gd%hslyr, gd%einit, gd%S, gd%fsw, gd%fsi, gd%Ssw, gd%Isw, &
       !$acc& gd%q, gd%T, gd%qsn, gd%Tsn, gd%Tsf, gd%fsens, gd%flat, gd%flwout, gd%fsurf, gd%fct, gd%fcb, gd%einex, gd%niter, &
       !$acc& gd%ierr)
-      call system_clock(t1)
+      t1 = wall_seconds()
       call run_dc(gd, c)
-      call system_clock(t2)
-      tdev = real(t2 - t1, wp)/real(rate, wp)
+      t2 = wall_seconds()
+      tdev = (t2 - t1)
       !$acc update self(gd%T, gd%q, gd%Isw, gd%Tsn, gd%qsn, gd%Ssw, gd%Tsf, gd%fsw, gd%fsi, gd%fsens, gd%flat, gd%flwout, &
       !$acc& gd%fsurf, gd%fct, gd%fcb, gd%einex, gd%niter, gd%ierr)
       !$acc exit data delete(c, gd%potT, gd%flw, gd%Qa, gd%hilyr, gd%hslyr, gd%einit, gd%S, gd%fsw, gd%fsi, gd%Ssw, gd%Isw, &

@@ -13,6 +13,7 @@
 module bench_ice_kernels_mod
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use, intrinsic :: iso_fortran_env, only: int32, int64
+   use pic_timer, only: timer_type
    use rdb_constants, only: wp
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX, ICE_NSLYR_MAX, ICE_NTRCR_MAX
    use rdb_ice_params, only: ice_constants_t, ice_params_t, ice_params_default, ICE_CONSTANTS_ICEPACK, &
@@ -585,18 +586,17 @@ contains
    subroutine time_loop(which)
       integer, intent(in) :: which
       real(wp) :: t(nrep), tmp
-      integer(int64) :: c0, c1, rate
+      type(timer_type) :: clk
       integer :: r, a, b
 
-      call system_clock(count_rate=rate)
       do r = 1, nwarm
          call launch(which)
       end do
       do r = 1, nrep
-         call system_clock(c0)
+         call clk%start()
          call launch(which)
-         call system_clock(c1)
-         t(r) = real(c1 - c0, wp)/real(rate, wp)
+         call clk%stop()
+         t(r) = clk%get_elapsed_time()
       end do
       do a = 2, nrep                                       ! insertion sort
          tmp = t(a)

@@ -25,6 +25,7 @@ module test_cice_flux
    use rdb_ice_flux_state, only: ice_flux_t, ice_flux_zero, ice_flux_merge_categories, ice_save_init, &
                                  ICE_FLUX_INIT_BAD_NCAT, ICE_FLUX_ERR_SHAPE
    use rdb_ice_ledger, only: ice_ledger_mirror_t, ICE_LEDGER_WATER, ICE_LEDGER_SALT, ICE_LEDGER_HEAT
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -1205,7 +1206,7 @@ contains
       character(len=8) :: e
       integer :: stat, ierr, r
       integer, parameter :: REPS = 20
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       real(wp) :: t_zero, t_merge, t_save, cells
 
       call get_environment_variable("RDB_CICE_BENCH", e, status=stat)
@@ -1223,27 +1224,27 @@ contains
       call ice_flux_zero(fx)
       call ice_flux_merge_categories(fx, st, FLW_BENCH, ierr)   ! warm up
       !$acc update self(fx%fresh)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do r = 1, REPS
          call ice_flux_zero(fx)
       end do
       !$acc update self(fx%fresh)
-      call system_clock(t1)
-      t_zero = real(t1 - t0, wp)/real(rate, wp)
-      call system_clock(t0)
+      t1 = wall_seconds()
+      t_zero = (t1 - t0)
+      t0 = wall_seconds()
       do r = 1, REPS
          call ice_flux_merge_categories(fx, st, FLW_BENCH, ierr)
       end do
       !$acc update self(fx%fresh)
-      call system_clock(t1)
-      t_merge = real(t1 - t0, wp)/real(rate, wp)
-      call system_clock(t0)
+      t1 = wall_seconds()
+      t_merge = (t1 - t0)
+      t0 = wall_seconds()
       do r = 1, REPS
          call ice_save_init(st)
       end do
       !$acc update self(st%aicen_init)
-      call system_clock(t1)
-      t_save = real(t1 - t0, wp)/real(rate, wp)
+      t1 = wall_seconds()
+      t_save = (t1 - t0)
       write (error_unit, "(a,i0,a,i0,a,i0)") "  [cice_flux] throughput on ", st%nx, " x ", st%ny, " x ncat ", NCAT
       write (error_unit, "(a,es10.3,a)") "  [cice_flux] ice_flux_zero             ", cells/t_zero, " cells/s"
       write (error_unit, "(a,es10.3,a)") "  [cice_flux] ice_flux_merge_categories ", cells/t_merge, " cells/s"

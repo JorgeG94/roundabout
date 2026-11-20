@@ -44,6 +44,7 @@ module test_cice_remap_geom
                                  remap_locate_edge, remap_src_di, remap_src_dj, REMAP_NSLOT, REMAP_EDGE_NORTH, &
                                  REMAP_EDGE_EAST
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_test_clock, only: wall_seconds
    implicit none
    private
 
@@ -3188,7 +3189,7 @@ contains
       type(geo_t) :: g
       integer :: nxp, nyp, rep
       integer, parameter :: NREP = 5
-      integer(int64) :: t0, t1, rate
+      real(wp) :: t0, t1
       real(wp) :: tg, edges
 
 #ifdef RDB_GPU_OFFLOAD
@@ -3205,14 +3206,14 @@ contains
       call geo_push(g)
       call remap_geometry(g%ws, g%is, g%ie, g%js, g%je, g%dt, 1, PUNY, g%u, g%v, g%dxU, g%dyU, g%HTE, g%HTN, g%earea, &
                           g%narea, g%epm, g%npm, g%uvm, g%ierr)
-      call system_clock(t0, rate)
+      t0 = wall_seconds()
       do rep = 1, NREP
          call remap_geometry(g%ws, g%is, g%ie, g%js, g%je, g%dt, 1, PUNY, g%u, g%v, g%dxU, g%dyU, g%HTE, g%HTN, g%earea, &
                              g%narea, g%epm, g%npm, g%uvm, g%ierr)
       end do
-      call system_clock(t1)
+      t1 = wall_seconds()
       call geo_pull(g)
-      tg = real(t1 - t0, wp)/real(rate, wp)/real(NREP, wp)
+      tg = (t1 - t0)/real(NREP, wp)
       edges = 2.0_wp*real(nxp, wp)*real(nyp, wp)
       write (error_unit, "(a,i0,a,i0,a,es10.3,a,f8.2,a,es10.3,a,f8.1,a)") "  [remap_geom] ", nxp, "x", nyp, ": geometry (5 launches, efa) ", &
          edges/tg, " edges/s (", tg*1000.0_wp, " ms), ", real(nxp, wp)*real(nyp, wp)/tg, " cells/s; workspace ", &
