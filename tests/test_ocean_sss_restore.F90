@@ -33,7 +33,7 @@ module test_ocean_sss_restore
    use rdb_decomp, only: decomp_t, decomp_init
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy
-   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config, &
                          ocean_restore_config_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t
@@ -582,10 +582,17 @@ contains
       integer :: ierr
       type(config_t) :: cfg
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')//"&ocean_restore_nml "//extra//" /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         "[sim]"//new_line('a')// &
+         'sim_type = "ocean"'//new_line('a')// &
+         "[grid]"//new_line('a')// &
+         "nx = 24"//new_line('a')// &
+         "ny = 16"//new_line('a')// &
+         "nghost = 3"//new_line('a')// &
+         "dx = 20000.0"//new_line('a')// &
+         "dy = 20000.0"//new_line('a')// &
+         "[ocean.restore]"//new_line('a')// &
+         extra, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr=ierr)
    end function validate_restore
@@ -593,36 +600,48 @@ contains
    subroutine test_refusals(error)
       type(error_type), allocatable, intent(out) :: error
       character(len=*), parameter :: OK = &
-                                     "enable_restore_salt = .true., piston_s = 0.11, sss_file = 'x.nc', "// &
-                                     "sss_var = 'asalt', sss_as_sflux = .true., "
+                                     "enable_restore_salt = true"//new_line("a")// &
+                                     "piston_s = 0.11"//new_line("a")// &
+                                     'sss_file = "x.nc"'//new_line("a")// &
+                                     'sss_var = "asalt"'//new_line("a")// &
+                                     "sss_as_sflux = true"//new_line("a")
 
-      call check(error, validate_restore("sss_file = ''") == OCEAN_STATUS_OK, &
+      call check(error, validate_restore('sss_file = ""'//new_line("a")) == OCEAN_STATUS_OK, &
                  "defaults must validate")
       if (allocated(error)) return
-      call check(error, validate_restore(OK//"sss_adjust_net_zero = .true., "// &
-                                         "sss_adjust_by_scaling = .true., "// &
-                                         "max_delta_sss = 0.5") == OCEAN_STATUS_OK, &
+      call check(error, validate_restore(OK// &
+                                         "sss_adjust_net_zero = true"//new_line("a")// &
+                                         "sss_adjust_by_scaling = true"//new_line("a")// &
+                                         "max_delta_sss = 0.5"//new_line("a")) == OCEAN_STATUS_OK, &
                  "the OM3 combination must validate")
       if (allocated(error)) return
-      call check(error, validate_restore("enable_restore_salt = .false., piston_s = 0.11, "// &
-                                         "sss_file = 'x.nc', sss_as_sflux = .true.") &
+      call check(error, validate_restore("enable_restore_salt = false"//new_line("a")// &
+                                         "piston_s = 0.11"//new_line("a")// &
+                                         'sss_file = "x.nc"'//new_line("a")// &
+                                         "sss_as_sflux = true"//new_line("a")) &
                  /= OCEAN_STATUS_OK, "sss_file without enable_restore_salt must be refused")
       if (allocated(error)) return
-      call check(error, validate_restore("enable_restore_salt = .true., piston_s = 0.11, "// &
-                                         "sss_file = 'x.nc', sss_as_sflux = .false.") &
+      call check(error, validate_restore("enable_restore_salt = true"//new_line("a")// &
+                                         "piston_s = 0.11"//new_line("a")// &
+                                         'sss_file = "x.nc"'//new_line("a")// &
+                                         "sss_as_sflux = false"//new_line("a")) &
                  /= OCEAN_STATUS_OK, "sss_file with sss_as_sflux = .false. must be refused")
       if (allocated(error)) return
-      call check(error, validate_restore("enable_restore_salt = .true., piston_s = 0.0, "// &
-                                         "sss_file = 'x.nc', sss_as_sflux = .true.") &
+      call check(error, validate_restore("enable_restore_salt = true"//new_line("a")// &
+                                         "piston_s = 0.0"//new_line("a")// &
+                                         'sss_file = "x.nc"'//new_line("a")// &
+                                         "sss_as_sflux = true"//new_line("a")) &
                  /= OCEAN_STATUS_OK, "sss_file with piston_s = 0 must be refused")
       if (allocated(error)) return
-      call check(error, validate_restore(OK//"sss_adjust_by_scaling = .true.") &
+      call check(error, validate_restore(OK// &
+                                         "sss_adjust_by_scaling = true"//new_line("a")) &
                  /= OCEAN_STATUS_OK, "by_scaling without net_zero must be refused")
       if (allocated(error)) return
-      call check(error, validate_restore(OK//"sss_convention = 'wrong'") &
+      call check(error, validate_restore(OK// &
+                                         'sss_convention = "wrong"'//new_line("a")) &
                  /= OCEAN_STATUS_OK, "an unknown sss_convention must be refused")
       if (allocated(error)) return
-      call check(error, validate_restore("max_delta_sss = 0.5") /= OCEAN_STATUS_OK, &
+      call check(error, validate_restore("max_delta_sss = 0.5"//new_line("a")) /= OCEAN_STATUS_OK, &
                  "max_delta_sss without sss_file must be refused")
       if (allocated(error)) return
 

@@ -34,7 +34,7 @@ module test_ocean_surface_flux_interval_mean
    use, intrinsic :: iso_fortran_env, only: output_unit
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, ocean_surface_flux_assemble, &
@@ -494,32 +494,73 @@ contains
       vmix = ""
       if (ratio > 1) then
          write (r_s, '(I0)') ratio
-         vmix = "&ocean_vmix_nml dt_therm_ratio = "//trim(adjustl(r_s))
-         if (deferred) vmix = vmix//", diabatic_first = .false., dt_tracer_advect_ratio = "//trim(adjustl(r_s))
-         vmix = vmix//" /"//NL
+         vmix = "[ocean.vmix]"//NL//"dt_therm_ratio = "//trim(adjustl(r_s))//NL
+         if (deferred) vmix = vmix//"diabatic_first = false"//NL// &
+                              "dt_tracer_advect_ratio = "//trim(adjustl(r_s))//NL
       end if
       ovr = ""
       if (present(filler)) then
-         if (filler) ovr = "&ocean_dataovr_nml enable = .true., time_mode = 'linear', heat_file = '"//HEAT_FILE// &
-                           "', heat_var = 'field', lprec_file = '"//LPREC_FILE//"', lprec_var = 'field' /"//NL
+         if (filler) ovr = "[ocean.dataovr]"//NL// &
+                           "enable = true"//NL// &
+                           'time_mode = "linear"'//NL// &
+                           'heat_file = "'//HEAT_FILE//'"'//NL// &
+                           'heat_var = "field"'//NL// &
+                           'lprec_file = "'//LPREC_FILE//'"'//NL// &
+                           'lprec_var = "field"'//NL
       end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 12, ny = 8, nghost = 3, dx = 4000.0, dy = 4000.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 300.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 400.0, wind_config = 'constant', "// &
-            "taux_magnitude = 0.0 /"//NL// &
-            "&tracer_nml initial_salinity = 34.5, T_init_bottom = 6.0, T_init_surface = 12.0 /"//NL// &
-            "&ocean_eos_nml eos = 'linear' /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .true. /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true., sw_pen_frac = 0.6, sw_source = 'q_sw' /"//NL// &
-            "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 100.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL// &
-            "&vcoord_nml vcoord_type = 'zstar' /"//NL//ovr//vmix
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 12"//NL// &
+            "ny = 8"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 4000.0"//NL// &
+            "dy = 4000.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[time]"//NL// &
+            "t_end = 1.0e9"//NL// &
+            "dt_fixed = 300.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 400.0"//NL// &
+            'wind_config = "constant"'//NL// &
+            "taux_magnitude = 0.0"//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.5"//NL// &
+            "T_init_bottom = 6.0"//NL// &
+            "T_init_surface = 12.0"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "linear"'//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[ocean.bt]"//NL// &
+            'split_scheme = "pred_corr"'//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "sw_pen_frac = 0.6"//NL// &
+            'sw_source = "q_sw"'//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            'freshwater = "mass"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 100.0"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "zstar"'//NL// &
+            ovr// &
+            vmix
    end function engine_nml
 
    subroutine start_engine(nml, engine, cfg, ok)
@@ -531,7 +572,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= 0) return
       call validate_config(cfg, ierr)
       if (ierr /= 0) return
@@ -552,7 +593,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= 0) return
       call validate_config(cfg, ierr)
       if (ierr /= 0) return

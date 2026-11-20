@@ -11,7 +11,7 @@ module test_ocean_knob_retirement
    !! `tests/test_ocean_bt_correction_weight.F90::correction_visc_rem_
    !! retired` for that contract), so it is still NOT covered here.  This
    !! suite pins the contract that makes the schema-level retirement
-   !! real: setting a retired key in a `.nml` must be REJECTED with an
+   !! real: setting a retired key in a `.toml` must be REJECTED with an
    !! "unknown key" error, not silently ignored — the exact defect class
    !! this PR closes.  Cloned from
    !! `tests/test_config_schema.F90:test_typo`
@@ -20,6 +20,7 @@ module test_ocean_knob_retirement
    use rdb_config, only: config_t
    use rdb_config_schema, only: build_rdb_schema
    use rdb_nml_schema, only: nml_schema_t
+   use rdb_toml_read, only: toml_schema_parse_file
    implicit none
    private
 
@@ -67,7 +68,7 @@ contains
    end function any_contains
 
    subroutine assert_retired(error, fn, group_line, key_line)
-      !! Shared body: write a scratch `.nml` with ONE retired key set
+      !! Shared body: write a scratch `.toml` with ONE retired key set
       !! inside its real group, parse against the real production
       !! schema, and assert the strict engine rejects it as unknown.
       type(error_type), allocatable, intent(out) :: error
@@ -78,8 +79,8 @@ contains
       character(len=:), allocatable :: errs(:)
 
       call build_rdb_schema(cfg, schema)
-      call write_file(fn, trim(group_line)//achar(10)//trim(key_line)//achar(10)//"/")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, trim(group_line)//achar(10)//trim(key_line))
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
 
       call check(error, stat >= 1, "retired key should be rejected, not ignored")
@@ -93,8 +94,8 @@ contains
       !! either `redi_calc_coeffs_x`/`_y` body.  Deleted whole (field,
       !! knob, copy site, kernel dummy).
       type(error_type), allocatable, intent(out) :: error
-      call assert_retired(error, "scratch_knobret_ref_pres.nml", &
-                          "&ocean_redi_nml", "  ref_pres = 2.0e7")
+      call assert_retired(error, "scratch_knobret_ref_pres.toml", &
+                          "[ocean.redi]", "ref_pres = 2.0e7")
    end subroutine test_redi_ref_pres
 
    subroutine test_tides_use_equilibrium(error)
@@ -102,8 +103,8 @@ contains
       !! slot, never read; `enable=.true.` always applies the full body
       !! tide regardless.
       type(error_type), allocatable, intent(out) :: error
-      call assert_retired(error, "scratch_knobret_use_equilibrium.nml", &
-                          "&ocean_tides_nml", "  use_equilibrium = .false.")
+      call assert_retired(error, "scratch_knobret_use_equilibrium.toml", &
+                          "[ocean.tides]", "use_equilibrium = false")
    end subroutine test_tides_use_equilibrium
 
    subroutine test_tides_use_eq_phase(error)
@@ -111,8 +112,8 @@ contains
       !! a slot; `rdb_ocean_tides.F90` unconditionally bakes V_c into
       !! phase0 regardless of the setting.
       type(error_type), allocatable, intent(out) :: error
-      call assert_retired(error, "scratch_knobret_use_eq_phase.nml", &
-                          "&ocean_tides_nml", "  use_eq_phase = .false.")
+      call assert_retired(error, "scratch_knobret_use_eq_phase.toml", &
+                          "[ocean.tides]", "use_eq_phase = false")
    end subroutine test_tides_use_eq_phase
 
    subroutine test_foxkemper_apply_cfl_limit(error)
@@ -122,8 +123,8 @@ contains
       !! `mle_compute_transports` is unconditional in production).
       !! Deleted as incoherent, not merely deferred.
       type(error_type), allocatable, intent(out) :: error
-      call assert_retired(error, "scratch_knobret_apply_cfl_limit.nml", &
-                          "&ocean_foxkemper_nml", "  apply_cfl_limit = .true.")
+      call assert_retired(error, "scratch_knobret_apply_cfl_limit.toml", &
+                          "[ocean.foxkemper]", "apply_cfl_limit = true")
    end subroutine test_foxkemper_apply_cfl_limit
 
 end module test_ocean_knob_retirement

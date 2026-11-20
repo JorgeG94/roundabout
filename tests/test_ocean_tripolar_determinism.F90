@@ -35,7 +35,7 @@ module test_ocean_tripolar_determinism
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -87,23 +87,51 @@ contains
       !! flat bed and a linear T profile in place of its input files.
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 24, ny = 16, nghost = 4, dx = 15.0, dy = 1.0 /"//NL// &
-            "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
-            "phi_join = 70.0, lon_pole = 0.0, coriolis_scheme = 'planetary' /"//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-            "north = 'tripolar_fold' /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 5 /"//NL// &
-            "&time_nml t_end = 5400.0, dt_fixed = 900.0 /"//NL// &
-            "&tracer_nml initial_temperature = 9.0, initial_salinity = 34.8, "// &
-            "T_init_surface = 16.0, T_init_bottom = 3.0 /"//NL// &
-            "&ocean_topo_nml max_depth = 2000.0 /"//NL// &
-            "&physics_nml wind_stress_x = 0.1 /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-            "c_smag = 0.15, smag_ah = .true. /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 24"//NL// &
+            "ny = 16"//NL// &
+            "nghost = 4"//NL// &
+            "dx = 15.0"//NL// &
+            "dy = 1.0"//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "tripolar"'//NL// &
+            "lon_west = 0.0"//NL// &
+            "lat_south = 59.0"//NL// &
+            "phi_join = 70.0"//NL// &
+            "lon_pole = 0.0"//NL// &
+            'coriolis_scheme = "planetary"'//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "tripolar_fold"'//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 5"//NL// &
+            "[time]"//NL// &
+            "t_end = 5400.0"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = 9.0"//NL// &
+            "initial_salinity = 34.8"//NL// &
+            "T_init_surface = 16.0"//NL// &
+            "T_init_bottom = 3.0"//NL// &
+            "[ocean.topo]"//NL// &
+            "max_depth = 2000.0"//NL// &
+            "[physics]"//NL// &
+            "wind_stress_x = 0.1"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "c_smag = 0.15"//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function case_nml
 
    subroutine run_case(snaps, max_u, n_nonfinite, ok)
@@ -124,7 +152,7 @@ contains
       max_u = huge(1.0_wp)
       n_nonfinite = 0
       call ensure_comm()
-      call read_config_from_string(case_nml(), cfg, ierr=ierr)
+      call read_config_from_toml_string(case_nml(), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return

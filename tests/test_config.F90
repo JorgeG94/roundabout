@@ -705,62 +705,49 @@ contains
       type(config_t) :: cfg
       integer :: io_unit
 
-      open (newunit=io_unit, file="test_ocean.nml", status="replace", action="write")
-      write (io_unit, '(a)') "&sim_nml"
-      write (io_unit, '(a)') '   sim_type = "ocean"'
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_coriolis_nml"
-      write (io_unit, '(a)') '   form = "sadourny_energy"'
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_thermo_nml"
-      write (io_unit, '(a)') "   enable_thermodynamics = .false."
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_tracers_nml"
-      write (io_unit, '(a)') "   enable_ideal_age = .true."
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_bt_nml"
-      write (io_unit, '(a)') "   n_inner = 60"
-      write (io_unit, '(a)') "   use_cont_type = .true."
-      write (io_unit, '(a)') "   correction_visc_rem = .true."
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_pgf_nml"
-      write (io_unit, '(a)') '   form = "fv_mom6"'
-      write (io_unit, '(a)') "   gfs_scale = 0.98"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_bdrag_nml"
-      write (io_unit, '(a)') '   form = "linear"'
-      write (io_unit, '(a)') "   r = 2.5e-5"
-      write (io_unit, '(a)') "   hbbl = 10.0"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_hvisc_nml"
-      write (io_unit, '(a)') "   nu_h = 10000.0"
-      write (io_unit, '(a)') "   smag_ah = .true."
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_vmix_nml"
-      write (io_unit, '(a)') "   use_closure = .false."
-      write (io_unit, '(a)') "   dt_therm_ratio = 2"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_continuity_nml"
-      write (io_unit, '(a)') "   ppm_limit_pos = .true."
-      write (io_unit, '(a)') "   h_min = 2.0"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_topo_nml"
-      write (io_unit, '(a)') '   topo_config = "spoon"'
-      write (io_unit, '(a)') "   max_depth = 4000.0"
-      write (io_unit, '(a)') "   coriolis_beta = 1.76e-11"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_ic_nml"
-      write (io_unit, '(a)') '   ic_config = "eady"'
-      write (io_unit, '(a)') "   alpha_T = 2.0e-4"
-      write (io_unit, '(a)') "/"
-      write (io_unit, '(a)') "&ocean_diag_nml"
-      write (io_unit, '(a)') "   enabled = .true."
-      write (io_unit, '(a)') '   vgrid = "z_fixed"'
-      write (io_unit, '(a)') "/"
+      open (newunit=io_unit, file="test_ocean.toml", status="replace", action="write")
+      write (io_unit, '(a)') "[sim]"
+      write (io_unit, '(a)') 'sim_type = "ocean"'
+      write (io_unit, '(a)') "[ocean.coriolis]"
+      write (io_unit, '(a)') 'form = "sadourny_energy"'
+      write (io_unit, '(a)') "[ocean.thermo]"
+      write (io_unit, '(a)') "enable_thermodynamics = false"
+      write (io_unit, '(a)') "[ocean.tracers]"
+      write (io_unit, '(a)') "enable_ideal_age = true"
+      write (io_unit, '(a)') "[ocean.bt]"
+      write (io_unit, '(a)') "n_inner = 60"
+      write (io_unit, '(a)') "use_cont_type = true"
+      write (io_unit, '(a)') "correction_visc_rem = true"
+      write (io_unit, '(a)') "[ocean.pgf]"
+      write (io_unit, '(a)') 'form = "fv_mom6"'
+      write (io_unit, '(a)') "gfs_scale = 0.98"
+      write (io_unit, '(a)') "[ocean.bdrag]"
+      write (io_unit, '(a)') 'form = "linear"'
+      write (io_unit, '(a)') "r = 2.5e-5"
+      write (io_unit, '(a)') "hbbl = 10.0"
+      write (io_unit, '(a)') "[ocean.hvisc]"
+      write (io_unit, '(a)') "nu_h = 10000.0"
+      write (io_unit, '(a)') "smag_ah = true"
+      write (io_unit, '(a)') "[ocean.vmix]"
+      write (io_unit, '(a)') "use_closure = false"
+      write (io_unit, '(a)') "dt_therm_ratio = 2"
+      write (io_unit, '(a)') "[ocean.continuity]"
+      write (io_unit, '(a)') "ppm_limit_pos = true"
+      write (io_unit, '(a)') "h_min = 2.0"
+      write (io_unit, '(a)') "[ocean.topo]"
+      write (io_unit, '(a)') 'topo_config = "spoon"'
+      write (io_unit, '(a)') "max_depth = 4000.0"
+      write (io_unit, '(a)') "coriolis_beta = 1.76e-11"
+      write (io_unit, '(a)') "[ocean.ic]"
+      write (io_unit, '(a)') 'ic_config = "eady"'
+      write (io_unit, '(a)') "alpha_T = 2.0e-4"
+      write (io_unit, '(a)') "[ocean.diag]"
+      write (io_unit, '(a)') "enabled = true"
+      write (io_unit, '(a)') 'vgrid = "z_fixed"'
       close (io_unit)
 
-      call wait_for_file("test_ocean.nml")
-      call read_config("test_ocean.nml", cfg)
+      call wait_for_file("test_ocean.toml")
+      call read_config("test_ocean.toml", cfg)
 
       ! coriolis / pgf / bdrag all have a `form` key — the three must
       ! land in their own sub-structs without cross-contamination.
@@ -847,7 +834,7 @@ contains
       call check(error, abs(cfg%ocean%bdrag%bed_factor - 1.0_wp) < 1.0e-12_wp, &
                  "unset ocean%bdrag%bed_factor should keep default 1.0")
 
-      open (newunit=io_unit, file="test_ocean.nml", status="old")
+      open (newunit=io_unit, file="test_ocean.toml", status="old")
       close (io_unit, status="delete")
    end subroutine test_read_ocean_subnmls
 

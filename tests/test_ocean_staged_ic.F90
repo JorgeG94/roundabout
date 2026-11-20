@@ -18,7 +18,7 @@
 module test_ocean_staged_ic
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_teardown
    use rdb_ocean_ic_inject, only: staged_tracer_t
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_IC_SEED, &
@@ -63,24 +63,51 @@ contains
       write (snx, '(i0)') NX
       write (sny, '(i0)') NY
       write (sdepth, '(f0.1)') DEPTH
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-            "dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = "//trim(sdepth)//" /"//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-            "north = 'sponge', sponge_width = 2, sponge_strength = 1.0e-4, "// &
-            "sponge_relax_tracers = .true. /"//NL// &
-            "&ocean_sponge_nml enable = .true., damp_source = 'band', "// &
-            "target_source = 'ic', relax_uv = .true., relax_tracers = .true. /"//NL
-      if (pseudo) nml = nml//"&ocean_tracers_nml enable_pseudo_salt = .true. /"//NL
-      nml = nml//"&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 3600.0"//NL// &
+            "dt_fixed = 300.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = 12.0"//NL// &
+            "initial_salinity = 35.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = "//trim(snx)//NL// &
+            "ny = "//trim(sny)//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = "//trim(sdepth)//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "sponge"'//NL// &
+            "sponge_width = 2"//NL// &
+            "sponge_strength = 1.0e-4"//NL// &
+            "sponge_relax_tracers = true"//NL// &
+            "[ocean.sponge]"//NL// &
+            "enable = true"//NL// &
+            'damp_source = "band"'//NL// &
+            'target_source = "ic"'//NL// &
+            "relax_uv = true"//NL// &
+            "relax_tracers = true"//NL
+      if (pseudo) nml = nml//"[ocean.tracers]"//NL// &
+                        "enable_pseudo_salt = true"//NL
+      nml = nml//"[output]"//NL// &
+            "output_to_file = false"//NL
    end function make_nml
 
    pure function conc_field(base, di, dj, dk) result(f)
@@ -111,7 +138,7 @@ contains
       character(len=*), intent(in) :: nml
       integer, intent(out) :: ierr
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return

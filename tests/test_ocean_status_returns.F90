@@ -17,7 +17,7 @@ module test_ocean_status_returns
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_eos, only: eos_t, eos_validate
    use rdb_ocean_metrics, only: ocean_metrics_t, metrics_fill_from_supergrid
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_PARSE, &
@@ -85,16 +85,19 @@ contains
    end subroutine collect_ocean_status_returns_tests
 
    subroutine test_bad_nml_returns_config_parse(error)
-      !! `read_config_from_string` with `ierr` PRESENT on an unknown
+      !! `read_config_from_toml_string` with `ierr` PRESENT on an unknown
       !! namelist key must return `ERR_CONFIG_PARSE`, not `error stop`.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
       integer :: ierr
 
-      nml = "&grid_nml nx = 8, ny = 6, totally_bogus_key = 1 /"//new_line("a")
+      nml = "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "totally_bogus_key = 1"//new_line("a")
       ierr = -999
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_PARSE, &
                  "unknown namelist key returns ERR_CONFIG_PARSE")
    end subroutine test_bad_nml_returns_config_parse
@@ -160,12 +163,20 @@ contains
       character(len=:), allocatable :: nml
       integer :: ierr
 
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 86400.0, dt_fixed = 300.0 /"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 86400.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")
       ierr = -999
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "well-formed namelist parses to OCEAN_STATUS_OK")
       if (allocated(error)) return
 

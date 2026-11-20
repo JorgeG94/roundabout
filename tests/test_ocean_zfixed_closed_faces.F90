@@ -56,7 +56,7 @@ module test_ocean_zfixed_closed_faces
                                ocean_vcoord_count_bed_steps, &
                                ocean_vcoord_z_fixed_target_uniform
    use rdb_ocean_vcoord, only: VCOORD_Z_FIXED
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t
    use rdb_ocean_setup, only: configure_ocean_closed_faces
@@ -341,7 +341,8 @@ contains
       !! bc-PGF `du_bc` block weight by the FULL column, so the
       !! correction's depth-mean-zero identity is not the OPEN column's.
       type(error_type), allocatable, intent(out) :: error
-      call check_refusal(error, "&ocean_bt_nml correction_bc_pgf = .true. /", &
+      call check_refusal(error, "[ocean.bt]"//new_line("a")// &
+                         "correction_bc_pgf = true"//new_line("a"), &
                          "correction_bc_pgf")
    end subroutine test_refuses_bc_pgf
 
@@ -525,14 +526,23 @@ contains
       character(len=*), intent(in) :: extra
       logical, intent(in) :: closed
       character(len=:), allocatable :: nml
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
-            '&vcoord_nml vcoord_type = "z_fixed", zfixed_closed_faces = '// &
-            merge(".true. ", ".false.", closed)//" /"//new_line("a")// &
-            extra//new_line("a")
-      call read_config_from_string(nml, cfg)
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "z_fixed"'//new_line("a")// &
+            "zfixed_closed_faces = "//merge("true ", "false", closed)//new_line("a")// &
+            extra
+      call read_config_from_toml_string(nml, cfg)
    end subroutine parse_case
 
 end module test_ocean_zfixed_closed_faces

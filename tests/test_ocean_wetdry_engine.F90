@@ -6,7 +6,7 @@
 !! it drops into that gate unchanged.
 !!
 !! Every other wet/dry test builds its state by hand; this is the first that
-!! goes `read_config_from_string` -> `validate_config` -> `engine_setup` ->
+!! goes `read_config_from_toml_string` -> `validate_config` -> `engine_setup` ->
 !! `engine_step`.  The test asserts
 !!   (a) every prognostic stays finite,
 !!   (b) the layer volume is conserved to round-off and no column goes
@@ -21,7 +21,7 @@ module test_ocean_wetdry_engine
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -79,25 +79,56 @@ contains
 
       write (snx, '(i0)') NX_G
       write (sny, '(i0)') NY_G
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-            "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-            "smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-            "dx = 4000.0, dy = 4000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.05 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'seamount', max_depth = 2.0, "// &
-            "edge_depth = 0.0, slope_scale = 28000.0, wind_config = 'constant' /"//NL// &
-            "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
-            "&ocean_wetdry_nml enable = .true. /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = 12.0"//NL// &
+            "initial_salinity = 35.0"//NL// &
+            "T_init_surface = 20.0"//NL// &
+            "T_init_bottom = 4.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            'split_scheme = "ssp_rk2"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = "//trim(snx)//NL// &
+            "ny = "//trim(sny)//NL// &
+            "nghost = 3"//NL// &
+            "dx = 4000.0"//NL// &
+            "dy = 4000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "wind_stress_x = 0.05"//NL// &
+            "wind_stress_y = 0.05"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "seamount"'//NL// &
+            "max_depth = 2.0"//NL// &
+            "edge_depth = 0.0"//NL// &
+            "slope_scale = 28000.0"//NL// &
+            'wind_config = "constant"'//NL// &
+            "[ocean.continuity]"//NL// &
+            "ppm_limit_pos = true"//NL// &
+            "[ocean.wetdry]"//NL// &
+            "enable = true"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function shoal_nml
 
    subroutine test_open_edge_depth(error)
@@ -112,13 +143,17 @@ contains
 
       call ensure_comm()
       ! A flat 0.3 m bed (wet, below 10 x dry_depth = 0.5 m) with an open east edge.
-      nml_shallow = replace_text(replace_text(shoal_nml(), "east = 'wall'", "east = 'open'"), &
-                                 "topo_config = 'seamount', max_depth = 2.0", "topo_config = 'flat', max_depth = 0.3")
-      nml_tidal = replace_text(replace_text(shoal_nml(), "south = 'wall'", &
-                                            "south = 'tidal', south_n_tidal = 1, south_tidal_amp = 0.1"), &
-                               "topo_config = 'seamount', max_depth = 2.0", "topo_config = 'flat', max_depth = 0.3")
+      nml_shallow = replace_text(replace_text(shoal_nml(), 'east = "wall"', 'east = "open"'), &
+                                 'topo_config = "seamount"'//new_line("a")//"max_depth = 2.0", &
+                                 'topo_config = "flat"'//new_line("a")//"max_depth = 0.3")
+      nml_tidal = replace_text(replace_text(shoal_nml(), 'south = "wall"', &
+                                            'south = "tidal"'//new_line("a")//"south_n_tidal = 1"//new_line("a")// &
+                                            "south_tidal_amp = [0.1]"), &
+                               'topo_config = "seamount"'//new_line("a")//"max_depth = 2.0", &
+                               'topo_config = "flat"'//new_line("a")//"max_depth = 0.3")
       nml_deep = replace_text(nml_shallow, "max_depth = 0.3", "max_depth = 2.0")
-      nml_wall = replace_text(shoal_nml(), "topo_config = 'seamount', max_depth = 2.0", "topo_config = 'flat', max_depth = 0.3")
+      nml_wall = replace_text(shoal_nml(), 'topo_config = "seamount"'//new_line("a")//"max_depth = 2.0", &
+                              'topo_config = "flat"'//new_line("a")//"max_depth = 0.3")
 
       call error_ring_clear()
       call setup_only(nml_shallow, ierr)
@@ -158,7 +193,7 @@ contains
       integer, intent(out) :: ierr
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) error stop "test_ocean_wetdry_engine: config rejected before the engine gate"
       call engine_setup(engine, cfg, ierr)
@@ -177,8 +212,8 @@ contains
       logical :: finite_ok
 
       call ensure_comm()
-      call read_config_from_string(shoal_nml(), cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "read_config_from_string failed")
+      call read_config_from_toml_string(shoal_nml(), cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "read_config_from_toml_string failed")
       if (allocated(error)) return
       call validate_config(cfg, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "validate_config refused the shoal case")

@@ -30,7 +30,7 @@ module test_ocean_surface_fw_mass
    use, intrinsic :: iso_fortran_env, only: output_unit, int64
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, RHO_WATER, H_VANISHED
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_grid, only: hgrid_t
    use rdb_efp, only: efp_t, efp_to_real
    use rdb_multilayer_state, only: multilayer_state_t
@@ -855,51 +855,87 @@ contains
       if (present(components)) comps = components
       fw_s = "mass"
       if (present(freshwater)) fw_s = freshwater
-      diag_s = "&ocean_diag_nml enabled = .false. /"//NL
-      out_s = "&output_nml output_to_file = .false. /"//NL
+      diag_s = "[ocean.diag]"//NL// &
+               "enabled = false"//NL
+      out_s = "[output]"//NL// &
+              "output_to_file = false"//NL
       if (present(diag_dir)) then
-         diag_s = "&ocean_diag_nml enabled = .true., filename = 'd.nc', dt_out = 1200.0 /"//NL
-         out_s = "&output_nml output_to_file = .true., output_dir = '"//diag_dir//"' /"//NL
+         diag_s = "[ocean.diag]"//NL// &
+                  "enabled = true"//NL// &
+                  'filename = "d.nc"'//NL// &
+                  "dt_out = 1200.0"//NL
+         out_s = "[output]"//NL// &
+                 "output_to_file = true"//NL// &
+                 'output_dir = "'//diag_dir//'"'//NL
       end if
       vmix_keys = ""
-      if (therm_ratio > 1) vmix_keys = vmix_keys//" dt_therm_ratio = "//trim(adjustl(ratio_s))
-      if (deferred) vmix_keys = vmix_keys//", diabatic_first = .false."
+      if (therm_ratio > 1) vmix_keys = vmix_keys//"dt_therm_ratio = "//trim(adjustl(ratio_s))//NL
+      if (deferred) vmix_keys = vmix_keys//"diabatic_first = false"//NL
       if (deferred .or. present(adv_ratio)) then
          if (present(adv_ratio)) then
             write (adv_s, '(I0)') adv_ratio
          else
             write (adv_s, '(I0)') therm_ratio
          end if
-         vmix_keys = vmix_keys//", dt_tracer_advect_ratio = "//trim(adjustl(adv_s))
+         vmix_keys = vmix_keys//"dt_tracer_advect_ratio = "//trim(adjustl(adv_s))//NL
       end if
-      if (len(vmix_keys) > 0) then
-         if (vmix_keys(1:1) == ",") vmix_keys = vmix_keys(2:)
-      end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 12, ny = 8, nghost = 3, dx = 4000.0, dy = 4000.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 300.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 400.0, wind_config = 'constant', "// &
-            "taux_magnitude = 0.0 /"//NL// &
-            "&tracer_nml initial_salinity = 34.5, T_init_bottom = 6.0, T_init_surface = "// &
-            trim(adjustl(tt_s))//" /"//NL// &
-            "&ocean_eos_nml eos = 'linear' /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&ocean_bt_nml split_scheme = '"//scheme//"', auto_n_inner = .true. /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = "//merge(".true. ", ".false.", comps)// &
-            ", freshwater = '"//fw_s//"'"
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 12"//NL// &
+            "ny = 8"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 4000.0"//NL// &
+            "dy = 4000.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[time]"//NL// &
+            "t_end = 1.0e9"//NL// &
+            "dt_fixed = 300.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 400.0"//NL// &
+            'wind_config = "constant"'//NL// &
+            "taux_magnitude = 0.0"//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.5"//NL// &
+            "T_init_bottom = 6.0"//NL// &
+            "T_init_surface = "//trim(adjustl(tt_s))//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "linear"'//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[ocean.bt]"//NL// &
+            'split_scheme = "'//scheme//'"'//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = "//merge("true ", "false", comps)//NL// &
+            'freshwater = "'//fw_s//'"'//NL
       if (present(forcing_keys)) nml = nml//forcing_keys
-      nml = nml//" /"//NL// &
-            "&ocean_hvisc_nml nu_h = 100.0 /"//NL//diag_s//out_s
+      nml = nml// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 100.0"//NL// &
+            diag_s// &
+            out_s
       if (trim(vcoord) == "zstar_list") then
-         nml = nml//"&vcoord_nml vcoord_type = 'zstar', z_fixed_profile = 'list', "// &
-               "z_fixed_dz = 20.0, 60.0, 120.0, 200.0 /"//NL
+         nml = nml//"[vcoord]"//NL// &
+               'vcoord_type = "zstar"'//NL// &
+               'z_fixed_profile = "list"'//NL// &
+               "z_fixed_dz = [20.0, 60.0, 120.0, 200.0]"//NL
       else
-         nml = nml//"&vcoord_nml vcoord_type = '"//trim(vcoord)//"' /"//NL
+         nml = nml//"[vcoord]"//NL// &
+               'vcoord_type = "'//trim(vcoord)//'"'//NL
       end if
-      if (len(vmix_keys) > 0) nml = nml//"&ocean_vmix_nml "//vmix_keys//" /"//NL
+      if (len(vmix_keys) > 0) nml = nml//"[ocean.vmix]"//NL//vmix_keys
       nml = nml//extra
    end function mass_nml
 
@@ -911,7 +947,7 @@ contains
       integer :: ierr
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= 0) return
       call validate_config(cfg, ierr)
       if (ierr /= 0) return
@@ -1334,7 +1370,7 @@ contains
       type(config_t) :: cfg
       integer :: ierr_read
 
-      call read_config_from_string(nml, cfg, ierr=ierr_read)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr_read)
       if (ierr_read /= OCEAN_STATUS_OK) then
          ierr = -ierr_read - 1000
          return
@@ -1347,7 +1383,10 @@ contains
       !! `validate_config` verdict (a parse failure would be a different code).
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: REFUSED = OCEAN_STATUS_ERR_CONFIG_VALIDATE
-      character(len=*), parameter :: ICE = "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2 /"//NL
+      character(len=*), parameter :: ICE = "[ocean.ice]"//NL// &
+                                     "enable = true"//NL// &
+                                     "ncat = 5"//NL// &
+                                     "nk_ice = 2"//NL
 
       call check(error, nml_ierr(mass_nml("pred_corr", 1, .false., "zstar", 6.0_wp, "")) == OCEAN_STATUS_OK, &
                  "accepted: pred_corr, zstar, ratio 1")
@@ -1368,7 +1407,8 @@ contains
                  "refused: lagrangian")
       if (allocated(error)) return
       call check(error, nml_ierr(mass_nml("ssp_rk2", 1, .false., "sigma", 6.0_wp, &
-                                          "&ocean_wetdry_nml enable = .true. /"//NL)) == REFUSED, &
+                                          "[ocean.wetdry]"//NL// &
+                                          "enable = true"//NL)) == REFUSED, &
                  "refused: wet/dry")
       if (allocated(error)) return
       call check(error, nml_ierr(mass_nml("pred_corr", 1, .false., "zstar", 6.0_wp, "", adv_ratio=2)) == REFUSED, &
@@ -1384,13 +1424,17 @@ contains
                  "refused: without the component set")
       if (allocated(error)) return
       call check(error, nml_ierr(mass_nml("pred_corr", 1, .false., "zstar", 6.0_wp, "", &
-                                          forcing_keys=", fw_evap_cfl_limit = 1.5")) == REFUSED, &
+                                          forcing_keys="fw_evap_cfl_limit = 1.5"//NL)) == REFUSED, &
                  "refused: fw_evap_cfl_limit outside (0, 1)")
       if (allocated(error)) return
       call check(error, nml_ierr(mass_nml("pred_corr", 1, .false., "zstar", 6.0_wp, &
-                                          "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-                                          "draft_depth = 100.0, draft_slope = -1.0e-3, draft_x0 = 0.0, "// &
-                                          "h_min_cavity = 50.0 /"//NL)) == REFUSED, &
+                                          "[ocean.cavity_dyn]"//NL// &
+                                          "enable = true"//NL// &
+                                          'draft_config = "linear"'//NL// &
+                                          "draft_depth = 100.0"//NL// &
+                                          "draft_slope = -1.0e-3"//NL// &
+                                          "draft_x0 = 0.0"//NL// &
+                                          "h_min_cavity = 50.0"//NL)) == REFUSED, &
                  "refused: the ice-shelf cavity")
    end subroutine test_refusals
 

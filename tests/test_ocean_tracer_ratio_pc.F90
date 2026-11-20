@@ -31,7 +31,7 @@ module test_ocean_tracer_ratio_pc
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -49,11 +49,16 @@ module test_ocean_tracer_ratio_pc
    character(len=*), parameter :: FN = "test_ocean_tracer_ratio_pc_rt.nc"
    integer, parameter :: NSTEP = 12
       !! Three 4-step windows: the drain closes a window on steps 4, 8, 12.
-   character(len=*), parameter :: KD_NML = "&ocean_tidal_mixing_nml enable = .true., e_uniform = 1.0e-3 /"// &
-                                  new_line("a")// &
-                                  "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"// &
-                                  new_line("a")// &
-                                  "&ocean_bbl_mixing_nml enable = .true. /"
+   character(len=*), parameter :: KD_NML = "[ocean.tidal_mixing]"//new_line("a")// &
+                                  "enable = true"//new_line("a")// &
+                                  "e_uniform = 1.0e-3"//new_line("a")// &
+                                  "[ocean.bdrag]"//new_line("a")// &
+                                  'form = "quadratic"'//new_line("a")// &
+                                  "cd = 3.0e-3"//new_line("a")// &
+                                  "hbbl = 10.0"//new_line("a")// &
+                                  "bg_vel = 0.1"//new_line("a")// &
+                                  "[ocean.bbl_mixing]"//new_line("a")// &
+                                  "enable = true"//new_line("a")
       !! Tidal + law-of-the-wall BBL mixing: two persistent `kd_int` fields.
    logical :: comm_inited = .false.
 
@@ -111,33 +116,63 @@ contains
       if (present(vcoord)) vc = vcoord
       df = ""
       if (present(dfirst)) then
-         if (.not. dfirst) df = ", diabatic_first = .false."
+         if (.not. dfirst) df = "diabatic_first = false"//NL
       end if
       write (ts, '(i0)') 4
       if (present(therm)) write (ts, '(i0)') therm
       if (uniform) then
-         tr = "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0 /"//NL
+         tr = "[tracer]"//NL// &
+              "initial_temperature = 12.0"//NL// &
+              "initial_salinity = 35.0"//NL
       else
-         tr = "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-              "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL
+         tr = "[tracer]"//NL// &
+              "initial_temperature = 12.0"//NL// &
+              "initial_salinity = 35.0"//NL// &
+              "T_init_surface = 20.0"//NL// &
+              "T_init_bottom = 4.0"//NL
       end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 6"//NL// &
             tr// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-            "smag_ah = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = "//trim(ts)//", dt_tracer_advect_ratio = "//trim(rs)//df//" /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
-            "&vcoord_nml vcoord_type = '"//vc//"' /"//NL// &
-            "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-            "slope_scale = 0.25 /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
-            "north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = "//trim(ts)//NL// &
+            "dt_tracer_advect_ratio = "//trim(rs)//NL// &
+            df// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 24"//NL// &
+            "ny = 16"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 10000.0"//NL// &
+            "dy = 10000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "wind_stress_x = 0.08"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "'//vc//'"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "island"'//NL// &
+            "max_depth = 1000.0"//NL// &
+            "slope_scale = 0.25"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
       if (present(extra)) nml = nml//extra//NL
    end function case_nml
 
@@ -152,7 +187,7 @@ contains
       integer :: ierr
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
@@ -584,8 +619,10 @@ contains
       real(wp) :: t4, t1, s4, s1, ref
       integer :: n
       logical :: ok
-      nml4 = case_nml(4, .false.)//"&ocean_tracers_nml enable_ideal_age = .true. /"//new_line("a")
-      nml1 = case_nml(1, .false.)//"&ocean_tracers_nml enable_ideal_age = .true. /"//new_line("a")
+      nml4 = case_nml(4, .false.)//"[ocean.tracers]"//new_line("a")// &
+             "enable_ideal_age = true"//new_line("a")
+      nml1 = case_nml(1, .false.)//"[ocean.tracers]"//new_line("a")// &
+             "enable_ideal_age = true"//new_line("a")
       call make_engine(e4, c4, nml4, ok)
       call check(error, ok, "engine (ratio 4) setup failed")
       if (allocated(error)) return
@@ -670,7 +707,8 @@ contains
       real(wp) :: t, td, s, a(8), ad1
       integer :: n
       logical :: ok
-      nml = case_nml(4, .false., dfirst=.false.)//"&ocean_tracers_nml enable_ideal_age = .true. /"//new_line("a")
+      nml = case_nml(4, .false., dfirst=.false.)//"[ocean.tracers]"//new_line("a")// &
+            "enable_ideal_age = true"//new_line("a")
       call make_engine(e, c, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -702,7 +740,8 @@ contains
       call engine_exit_data(e)
       call engine_teardown(e)
       if (allocated(error)) return
-      nml = case_nml(4, .false.)//"&ocean_tracers_nml enable_ideal_age = .true. /"//new_line("a")
+      nml = case_nml(4, .false.)//"[ocean.tracers]"//new_line("a")// &
+            "enable_ideal_age = true"//new_line("a")
       call make_engine(ed, cd, nml, ok)
       call check(error, ok, "default engine setup failed")
       if (allocated(error)) return
@@ -724,24 +763,58 @@ contains
       character(len=*), parameter :: NL = new_line("a")
       character(len=8) :: rs
       write (rs, '(i0)') ratio
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 20, ny = 16, dx = 10000.0, dy = 10000.0, nghost = 3 /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.435e-4 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&tracer_nml initial_salinity = 34.0, initial_temperature = -1.80 /"//NL// &
-            "&ocean_ic_nml alpha_T = 1.7e-4, rho_0 = 1027.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 50.0 /"//NL// &
-            "&ocean_hvisc_nml nu_h = 500.0 /"//NL// &
-            "&ocean_vmix_nml kv_ml_invz2 = 0.01, hmix_fixed = 20.0, dt_therm_ratio = 4, "// &
-      "dt_tracer_advect_ratio = "//trim(rs)//merge("                          ", ", diabatic_first = .false.", dfirst)//" /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
-            "restore_lambda = 20.0, sw_down = 0.0, transport = .false., dynamics = .false. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 20"//NL// &
+            "ny = 16"//NL// &
+            "dx = 10000.0"//NL// &
+            "dy = 10000.0"//NL// &
+            "nghost = 3"//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.435e-4"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "initial_temperature = -1.80"//NL// &
+            "[ocean.ic]"//NL// &
+            "alpha_T = 1.7e-4"//NL// &
+            "rho_0 = 1027.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "q_heat = -60.0"//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 50.0"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 500.0"//NL// &
+            "[ocean.vmix]"//NL// &
+            "kv_ml_invz2 = 0.01"//NL// &
+            "hmix_fixed = 20.0"//NL// &
+            "dt_therm_ratio = 4"//NL// &
+            "dt_tracer_advect_ratio = "//trim(rs)//NL// &
+            trim(merge("                       ", "diabatic_first = false"//NL, dfirst))// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            "ncat = 5"//NL// &
+            "nk_ice = 2"//NL// &
+            "air_temp = -20.0"//NL// &
+            "restore_lambda = 20.0"//NL// &
+            "sw_down = 0.0"//NL// &
+            "transport = false"//NL// &
+            "dynamics = false"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function polar_ice_nml
 
    subroutine test_df_ice_restart(error)
@@ -850,27 +923,56 @@ contains
       write (rs, '(i0)') ratio
       write (ds, '(f10.2)') dtv
       df = ""
-      if (therm > 1) df = ", diabatic_first = .false."
+      if (therm > 1) df = "diabatic_first = false"//NL
       if (uniform) then
-         tr = "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0 /"//NL
+         tr = "[tracer]"//NL// &
+              "initial_temperature = 12.0"//NL// &
+              "initial_salinity = 35.0"//NL
       else
-         tr = "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-              "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL
+         tr = "[tracer]"//NL// &
+              "initial_temperature = 12.0"//NL// &
+              "initial_salinity = 35.0"//NL// &
+              "T_init_surface = 20.0"//NL// &
+              "T_init_bottom = 4.0"//NL
       end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = "//trim(adjustl(ds))//" /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = "//trim(adjustl(ds))//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 6"//NL// &
             tr// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = "//trim(ts)//", dt_tracer_advect_ratio = "//trim(rs)//df//" /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-            "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /"//NL// &
-            "&ocean_tracers_nml enable_ideal_age = .true. /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = "//trim(ts)//NL// &
+            "dt_tracer_advect_ratio = "//trim(rs)//NL// &
+            df// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 24"//NL// &
+            "ny = 16"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 10000.0"//NL// &
+            "dy = 10000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "zstar"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 1000.0"//NL// &
+            "[ocean.tracers]"//NL// &
+            "enable_ideal_age = true"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
       if (present(extra)) nml = nml//extra//NL
    end function flat_nml
 
@@ -940,7 +1042,8 @@ contains
       real(wp) :: dmax, err, d_exp
       integer :: r, nz, j, k, i
       logical :: ok
-      nk = "&ocean_hdiff_nml kappa_h = 4166.6666666666667 /"
+      nk = "[ocean.hdiff]"//new_line("a")// &
+           "kappa_h = 4166.6666666666667"//new_line("a")
       do r = 1, 4, 3
          call run_age_profile(flat_nml(DT, 4, r, .true.), 3, IC, AL, AR, h0, ok)
          call check(error, ok, "control run (3 steps) failed")
@@ -1001,8 +1104,10 @@ contains
       !! the drain, so its CFL-driven subcycle count is the one a single
       !! 2400 s step (dt = 2400, ratio 1) needs -- more than the 600 s one.
       type(error_type), allocatable, intent(out) :: error
-      character(len=*), parameter :: RD = "&ocean_redi_nml enable = .true., khtr = 1.2e5, "// &
-                                     "check_diffusive_cfl = .true. /"
+      character(len=*), parameter :: RD = "[ocean.redi]"//new_line("a")// &
+                                     "enable = true"//new_line("a")// &
+                                     "khtr = 1.2e5"//new_line("a")// &
+                                     "check_diffusive_cfl = true"//new_line("a")
       integer :: na, nb, nc
       logical :: ok
       call redi_nitt(flat_nml(DT, 4, 4, .false., RD), 4, DT, na, ok)

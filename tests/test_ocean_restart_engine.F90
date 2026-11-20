@@ -61,7 +61,7 @@ module test_ocean_restart_engine
    use, intrinsic :: iso_fortran_env, only: int64
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -194,25 +194,52 @@ contains
          ! Periodic channel with an island, `z_fixed` (tanh) layers, wind,
          ! Smagorinsky + a Laplacian floor, KPP (default), `pred_corr`
          ! (default).
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
-               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-               "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
-               "&vcoord_nml vcoord_type = 'z_fixed', z_fixed_profile = 'tanh', "// &
-               "z_fixed_dz_top = 20.0, z_fixed_tanh_center = 0.5, "// &
-               "z_fixed_tanh_width = 0.25 /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-               "slope_scale = 0.25 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 6"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 12.0"//NL// &
+               "initial_salinity = 35.0"//NL// &
+               "T_init_surface = 20.0"//NL// &
+               "T_init_bottom = 4.0"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[grid]"//NL// &
+               "nx = 24"//NL// &
+               "ny = 16"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 10000.0"//NL// &
+               "dy = 10000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.08"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "z_fixed"'//NL// &
+               'z_fixed_profile = "tanh"'//NL// &
+               "z_fixed_dz_top = 20.0"//NL// &
+               "z_fixed_tanh_center = 0.5"//NL// &
+               "z_fixed_tanh_width = 0.25"//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "island"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.25"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
       case ("island_periodic_zfixed_visc_rem")
          ! PR-1: the SAME island/periodic/z_fixed/pred_corr case as
          ! `island_periodic_zfixed`, but with the visc_rem chain live
@@ -222,27 +249,60 @@ contains
          ! closes compat row `restart_visc_rem`.  Linear bed drag with
          ! `hbbl = 0` (no HBBL band — `implicit_drag` + `hbbl > 0` stays
          ! refused at configure).
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
-               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-               "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., visc_rem_chain = .true. /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_bdrag_nml form = 'linear', r = 2.0e-4, hbbl = 0.0, bg_vel = 0.1 /"//NL// &
-               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
-               "&vcoord_nml vcoord_type = 'z_fixed', z_fixed_profile = 'tanh', "// &
-               "z_fixed_dz_top = 20.0, z_fixed_tanh_center = 0.5, "// &
-               "z_fixed_tanh_width = 0.25 /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-               "slope_scale = 0.25 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 6"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 12.0"//NL// &
+               "initial_salinity = 35.0"//NL// &
+               "T_init_surface = 20.0"//NL// &
+               "T_init_bottom = 4.0"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               "visc_rem_chain = true"//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.bdrag]"//NL// &
+               'form = "linear"'//NL// &
+               "r = 2.0e-4"//NL// &
+               "hbbl = 0.0"//NL// &
+               "bg_vel = 0.1"//NL// &
+               "[ocean.vdiff]"//NL// &
+               "implicit_drag = true"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[grid]"//NL// &
+               "nx = 24"//NL// &
+               "ny = 16"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 10000.0"//NL// &
+               "dy = 10000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.08"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "z_fixed"'//NL// &
+               'z_fixed_profile = "tanh"'//NL// &
+               "z_fixed_dz_top = 20.0"//NL// &
+               "z_fixed_tanh_center = 0.5"//NL// &
+               "z_fixed_tanh_width = 0.25"//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "island"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.25"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
       case ("seamount_periodic_zstar_visc_rem_kshear_vertex")
          ! c069 restart fix regression.  A wind-driven channel over a
          ! seamount (real depth variation -> real vertical shear, needed
@@ -279,31 +339,68 @@ contains
          ! Bryan-Lewis and pseudo-salt are NOT (the real c069 cell fails
          ! identically with or without them, and passes identically with
          ! or without them once this fix is in).
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
-               "&tracer_nml initial_temperature = 9.0, initial_salinity = 34.8, "// &
-               "T_init_surface = 16.0, T_init_bottom = 3.0, "// &
-               "S_init_surface = 34.6, S_init_bottom = 35.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr', "// &
-               "visc_rem_chain = .true. /"//NL// &
-               "&ocean_hvisc_nml nu_h = 10.0 /"//NL// &
-               "&ocean_bdrag_nml form = 'quadratic', cd = 0.003, hbbl = 0.0, "// &
-               "bg_vel = 0.05 /"//NL// &
-               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
-               "&ocean_kappa_shear_nml enable = .true., at_vertex = .true. /"//NL// &
-               "&ocean_vmix_nml use_closure = .true., use_kpp = .false. /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&grid_nml nx = 24, ny = 16, nghost = 4, dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 2.0 /"//NL// &
-               "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1600.0, slope_scale = 80000.0, "// &
-               "coriolis_beta = 2.0e-11 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 10"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 9.0"//NL// &
+               "initial_salinity = 34.8"//NL// &
+               "T_init_surface = 16.0"//NL// &
+               "T_init_bottom = 3.0"//NL// &
+               "S_init_surface = 34.6"//NL// &
+               "S_init_bottom = 35.0"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "pred_corr"'//NL// &
+               "visc_rem_chain = true"//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 10.0"//NL// &
+               "[ocean.bdrag]"//NL// &
+               'form = "quadratic"'//NL// &
+               "cd = 0.003"//NL// &
+               "hbbl = 0.0"//NL// &
+               "bg_vel = 0.05"//NL// &
+               "[ocean.vdiff]"//NL// &
+               "implicit_drag = true"//NL// &
+               "[ocean.kappa_shear]"//NL// &
+               "enable = true"//NL// &
+               "at_vertex = true"//NL// &
+               "[ocean.vmix]"//NL// &
+               "use_closure = true"//NL// &
+               "use_kpp = false"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "q_heat = -60.0"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[grid]"//NL// &
+               "nx = 24"//NL// &
+               "ny = 16"//NL// &
+               "nghost = 4"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 2.0"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "zstar"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 1600.0"//NL// &
+               "slope_scale = 80000.0"//NL// &
+               "coriolis_beta = 2.0e-11"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
       case ("island_periodic_zfixed_bkgnd")
          ! PR-2 review: the SAME island/periodic/z_fixed/pred_corr/
          ! visc_rem-chain case as `island_periodic_zfixed_visc_rem`
@@ -313,30 +410,66 @@ contains
          ! the FULL seed (the bug this case was added to catch: the
          ! first `reseed_arrays` fix skipped kt/ks/kd_bg too, not just
          ! kv) loses the background diffusivity entirely post-resume.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
-               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-               "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., visc_rem_chain = .true. /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_bdrag_nml form = 'linear', r = 2.0e-4, hbbl = 0.0, bg_vel = 0.1 /"//NL// &
-               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
-               "&ocean_vmix_nml bkgnd_profile = .true., bkgnd_kd_sfc = 2.0e-5, "// &
-               "bkgnd_kd_deep = 3.0e-4, bkgnd_z0 = 1500.0, "// &
-               "pp81_kappa_bg = 4.0e-5 /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
-               "&vcoord_nml vcoord_type = 'z_fixed', z_fixed_profile = 'tanh', "// &
-               "z_fixed_dz_top = 20.0, z_fixed_tanh_center = 0.5, "// &
-               "z_fixed_tanh_width = 0.25 /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-               "slope_scale = 0.25 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 6"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 12.0"//NL// &
+               "initial_salinity = 35.0"//NL// &
+               "T_init_surface = 20.0"//NL// &
+               "T_init_bottom = 4.0"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               "visc_rem_chain = true"//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.bdrag]"//NL// &
+               'form = "linear"'//NL// &
+               "r = 2.0e-4"//NL// &
+               "hbbl = 0.0"//NL// &
+               "bg_vel = 0.1"//NL// &
+               "[ocean.vdiff]"//NL// &
+               "implicit_drag = true"//NL// &
+               "[ocean.vmix]"//NL// &
+               "bkgnd_profile = true"//NL// &
+               "bkgnd_kd_sfc = 2.0e-5"//NL// &
+               "bkgnd_kd_deep = 3.0e-4"//NL// &
+               "bkgnd_z0 = 1500.0"//NL// &
+               "pp81_kappa_bg = 4.0e-5"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[grid]"//NL// &
+               "nx = 24"//NL// &
+               "ny = 16"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 10000.0"//NL// &
+               "dy = 10000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.08"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "z_fixed"'//NL// &
+               'z_fixed_profile = "tanh"'//NL// &
+               "z_fixed_dz_top = 20.0"//NL// &
+               "z_fixed_tanh_center = 0.5"//NL// &
+               "z_fixed_tanh_width = 0.25"//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "island"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.25"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
       case ("sea_ice_periodic", "sea_ice_periodic_ssp_rk2", "sea_ice_components")
          ! The decomposition harness's sea-ice channel (cold, cooled,
          ! oblique wind over a seamount, 0.7 conc of 1 m ice), with the
@@ -344,62 +477,140 @@ contains
          ! column sits just above the liquidus so the ice survives the
          ! basal flux (see that harness's comment), the EVP stresses are
          ! live, and `cfl_trunc` is tight enough that the final clip fires.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-               "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
-               "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"// &
-               trim(merge("ssp_rk2  ", "pred_corr", label == "sea_ice_periodic_ssp_rk2"))//"' /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, "// &
-               "edge_depth = 800.0, slope_scale = 60000.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
-               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-               "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
-               "restore_lambda = 20.0, sw_down = 40.0, snowfall = 2.0e-5, "// &
-               "dynamics = .true., evp_sub_steps = 30, cfl_trunc = 0.01, "// &
-               "project_ci = .true., transport = .true., adv_substeps = 2 /"//NL// &
-               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 4"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = -1.83"//NL// &
+               "initial_salinity = 34.0"//NL// &
+               "T_init_surface = -1.82"//NL// &
+               "T_init_bottom = -1.835"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "'//trim(merge("ssp_rk2  ", "pred_corr", label == "sea_ice_periodic_ssp_rk2"))//'"'//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[grid]"//NL// &
+               "nx = 24"//NL// &
+               "ny = 16"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.4e-4"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "wind_stress_y = 0.04"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "edge_depth = 800.0"//NL// &
+               "slope_scale = 60000.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "q_heat = -100.0"//NL// &
+               "[ocean.vmix]"//NL// &
+               "dt_therm_ratio = 2"//NL// &
+               "[ocean.ice]"//NL// &
+               "enable = true"//NL// &
+               "ncat = 5"//NL// &
+               "nk_ice = 2"//NL// &
+               "air_temp = -20.0"//NL// &
+               "restore_lambda = 20.0"//NL// &
+               "sw_down = 40.0"//NL// &
+               "snowfall = 2.0e-5"//NL// &
+               "dynamics = true"//NL// &
+               "evp_sub_steps = 30"//NL// &
+               "cfl_trunc = 0.01"//NL// &
+               "project_ci = true"//NL// &
+               "transport = true"//NL// &
+               "adv_substeps = 2"//NL// &
+               "[ocean.ice_ic]"//NL// &
+               'conc_config = "uniform"'//NL// &
+               "h_ice = 1.0"//NL// &
+               "conc = 0.7"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
          if (label == "sea_ice_components") then
-            nml = nml//"&ocean_forcing_nml enable_components = .true. /"//NL
+            nml = nml//"[ocean.forcing]"//NL// &
+                  "enable_components = true"//NL
          end if
       case ("bulk_bl_periodic")
          ! Bulk forcing + components + KPP under a cold dry atmosphere over a
          ! re-entrant 100 m basin on ten layers: the boundary layer is deeper
          ! than the top interface, so it reads the assembled `Q_heat` in the
          ! ghost columns (the seam-flux refresh's case).
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&ocean_eos_nml eos = 'wright' /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-               "&ocean_forcing_nml enable_components = .true. /"//NL// &
-               "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
-               "z_ta = 10.0 /"//NL// &
-               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-               "T_init_surface = 20.0, T_init_bottom = 19.0 /"//NL// &
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               'start_date = "2000-06-21"'//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 10"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "pred_corr"'//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[ocean.eos]"//NL// &
+               'eos = "wright"'//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "[ocean.forcing]"//NL// &
+               "enable_components = true"//NL// &
+               "[ocean.bulk_flux]"//NL// &
+               "enable = true"//NL// &
+               "n_iter = 5"//NL// &
+               "z_wind = 10.0"//NL// &
+               "z_ta = 10.0"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 12.0"//NL// &
+               "initial_salinity = 35.0"//NL// &
+               "T_init_surface = 20.0"//NL// &
+               "T_init_bottom = 19.0"//NL// &
                atm_group(ATM_LIST)// &
-               "&grid_nml nx = 16, ny = 8, nghost = 3, dx = 22.5, dy = 1.0 /"//NL// &
-               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
-               "lat_south = 30.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml max_depth = 100.0 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+               "[grid]"//NL// &
+               "nx = 16"//NL// &
+               "ny = 8"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 22.5"//NL// &
+               "dy = 1.0"//NL// &
+               "[ocean.grid]"//NL// &
+               'grid_config = "spherical"'//NL// &
+               "lon_west = 0.0"//NL// &
+               "lat_south = 30.0"//NL// &
+               "rad_earth = 6.371e6"//NL// &
+               'coriolis_scheme = "planetary"'//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               "max_depth = 100.0"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
       case ("sea_ice_components_bulk", "sea_ice_components_bulk_fw", "sea_ice_components_bulk_none", &
             "sea_ice_components_bulk_fw_ratio1")
          ! Ice + components + the atmosphere-driven bulk forcing: the path on
@@ -408,147 +619,341 @@ contains
          ! on one rank).  The transmitted shortwave, the open-water
          ! shortwave and the brine/heat components are all live, and the
          ! checkpoint lands mid thermo window.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&ocean_eos_nml eos = 'wright' /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-               "&ocean_forcing_nml enable_components = .true. /"//NL// &
-               "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
-               "z_ta = 10.0 /"//NL// &
-               "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
-               "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               'start_date = "2000-06-21"'//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 4"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "pred_corr"'//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[ocean.eos]"//NL// &
+               'eos = "wright"'//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "[ocean.forcing]"//NL// &
+               "enable_components = true"//NL// &
+               "[ocean.bulk_flux]"//NL// &
+               "enable = true"//NL// &
+               "n_iter = 5"//NL// &
+               "z_wind = 10.0"//NL// &
+               "z_ta = 10.0"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = -1.83"//NL// &
+               "initial_salinity = 34.0"//NL// &
+               "T_init_surface = -1.82"//NL// &
+               "T_init_bottom = -1.835"//NL// &
                atm_group(ATM_LIST)// &
-               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-               "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, "// &
-               "restore_lambda = 20.0, dynamics = .true., evp_sub_steps = 30, "// &
-               "cfl_trunc = 0.01, project_ci = .true., transport = .true., "// &
-               "adv_substeps = 2 /"//NL// &
-               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
-               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 1.0, dy = 1.0 /"//NL// &
-               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
-               "lat_south = 20.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
-               "edge_depth = 300.0, slope_scale = 300000.0 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+               "[ocean.vmix]"//NL// &
+               "dt_therm_ratio = 2"//NL// &
+               "[ocean.ice]"//NL// &
+               "enable = true"//NL// &
+               "ncat = 5"//NL// &
+               "nk_ice = 2"//NL// &
+               "restore_lambda = 20.0"//NL// &
+               "dynamics = true"//NL// &
+               "evp_sub_steps = 30"//NL// &
+               "cfl_trunc = 0.01"//NL// &
+               "project_ci = true"//NL// &
+               "transport = true"//NL// &
+               "adv_substeps = 2"//NL// &
+               "[ocean.ice_ic]"//NL// &
+               'conc_config = "uniform"'//NL// &
+               "h_ice = 1.0"//NL// &
+               "conc = 0.7"//NL// &
+               "[grid]"//NL// &
+               "nx = 24"//NL// &
+               "ny = 16"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 1.0"//NL// &
+               "dy = 1.0"//NL// &
+               "[ocean.grid]"//NL// &
+               'grid_config = "spherical"'//NL// &
+               "lon_west = 0.0"//NL// &
+               "lat_south = 20.0"//NL// &
+               "rad_earth = 6.371e6"//NL// &
+               'coriolis_scheme = "planetary"'//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "spoon"'//NL// &
+               "max_depth = 3000.0"//NL// &
+               "edge_depth = 300.0"//NL// &
+               "slope_scale = 300000.0"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
       case ("cice_bulk_fw")
          ! The CICE-port ice under the prescribed atmosphere with `freshwater = 'virtual'`, thermo every
          ! second step: the checkpoint lands mid window, where the window mean of `fresh` carries the
          ! rain-through term the hook keeps under the knob.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
-               "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-               "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
-               "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 70.0, "// &
-               "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-               "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-               "&ocean_forcing_nml enable_components = .true., freshwater = 'virtual' /"//NL// &
-               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-               "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-               "dynamics = .true., transport = .true. /"//NL// &
-               "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-               "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.6, h_snow = 0.1, t_ice = -8.0 /"//NL// &
-               "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', fluxes_regrid = 'bilinear', "// &
-               "time_mode = 'interannual', wind_relative = .false., "// &
-               "filelist_tas = 'rsw_cice_atm.txt', filelist_huss = 'rsw_cice_atm.txt', "// &
-               "filelist_uas = 'rsw_cice_atm.txt', filelist_vas = 'rsw_cice_atm.txt', "// &
-               "filelist_psl = 'rsw_cice_atm.txt', filelist_rlds = 'rsw_cice_atm.txt', "// &
-               "filelist_rsds = 'rsw_cice_atm.txt', filelist_prra = 'rsw_cice_atm.txt', "// &
-               "filelist_prsn = 'rsw_cice_atm.txt' /"//NL// &
-               "&ocean_bulk_flux_nml enable = .true. /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               'start_date = "2000-01-01"'//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 3"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = -1.0"//NL// &
+               "initial_salinity = 34.0"//NL// &
+               "T_init_surface = -1.0"//NL// &
+               "T_init_bottom = -1.0"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               "[grid]"//NL// &
+               "nx = 12"//NL// &
+               "ny = 10"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 0.25"//NL// &
+               "dy = 0.25"//NL// &
+               "[ocean.grid]"//NL// &
+               'grid_config = "spherical"'//NL// &
+               "lon_west = 20.0"//NL// &
+               "lat_south = 70.0"//NL// &
+               "rad_earth = 6.371e6"//NL// &
+               'coriolis_scheme = "planetary"'//NL// &
+               "[physics]"//NL// &
+               "wind_stress_x = 0.0"//NL// &
+               "wind_stress_y = 0.0"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "flat"'//NL// &
+               "max_depth = 100.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "[ocean.forcing]"//NL// &
+               "enable_components = true"//NL// &
+               'freshwater = "virtual"'//NL// &
+               "[ocean.vmix]"//NL// &
+               "dt_therm_ratio = 2"//NL// &
+               "[ocean.ice]"//NL// &
+               "enable = true"//NL// &
+               'scheme = "cice"'//NL// &
+               "ncat = 5"//NL// &
+               "nilyr = 4"//NL// &
+               "hfreeze = 10.0"//NL// &
+               "dynamics = true"//NL// &
+               "transport = true"//NL// &
+               "[ocean.ice_thermo]"//NL// &
+               "update_ocn_f = true"//NL// &
+               "[ocean.ice_dyn]"//NL// &
+               'advection = "upwind"'//NL// &
+               "ndte = 40"//NL// &
+               "[ocean.ice_ic]"//NL// &
+               'conc_config = "uniform"'//NL// &
+               "h_ice = 1.0"//NL// &
+               "conc = 0.6"//NL// &
+               "h_snow = 0.1"//NL// &
+               "t_ice = -8.0"//NL// &
+               "[ocean.atm_forcing]"//NL// &
+               "enable = true"//NL// &
+               'sw_interp = "linear"'//NL// &
+               'fluxes_regrid = "bilinear"'//NL// &
+               'time_mode = "interannual"'//NL// &
+               "wind_relative = false"//NL// &
+               'filelist_tas = "rsw_cice_atm.txt"'//NL// &
+               'filelist_huss = "rsw_cice_atm.txt"'//NL// &
+               'filelist_uas = "rsw_cice_atm.txt"'//NL// &
+               'filelist_vas = "rsw_cice_atm.txt"'//NL// &
+               'filelist_psl = "rsw_cice_atm.txt"'//NL// &
+               'filelist_rlds = "rsw_cice_atm.txt"'//NL// &
+               'filelist_rsds = "rsw_cice_atm.txt"'//NL// &
+               'filelist_prra = "rsw_cice_atm.txt"'//NL// &
+               'filelist_prsn = "rsw_cice_atm.txt"'//NL// &
+               "[ocean.bulk_flux]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
       case ("fw_mass_r1", "fw_mass_ssp", "fw_mass_r2", "fw_mass_def")
          ! Real fresh-water MASS (`freshwater = 'mass'`) under the prescribed atmosphere, no ice: rain,
          ! snow and evaporation move real volume.  `_r1` = every step a thermo step (pred_corr), `_ssp` =
          ! ssp_rk2, `_r2` = `dt_therm_ratio = 2` in-stage, `_def` = the deferred order (`diabatic_first
          ! = .false.`, pred_corr).  The checkpoint of the ratio-2 cases lands mid thermo interval, where
          ! the assembled `fw_net` / `Q_salt_tracer` snapshot is pending and must come out of the registry.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&tracer_nml initial_temperature = 4.0, initial_salinity = 34.0, "// &
-               "T_init_surface = 5.0, T_init_bottom = 3.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"// &
-               merge("ssp_rk2  ", "pred_corr", label == "fw_mass_ssp")//"' /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-               "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
-               "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 60.0, "// &
-               "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-               "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-               "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', fluxes_regrid = 'bilinear', "// &
-               "time_mode = 'interannual', wind_relative = .false., "// &
-               "filelist_tas = 'rsw_cice_atm.txt', filelist_huss = 'rsw_cice_atm.txt', "// &
-               "filelist_uas = 'rsw_cice_atm.txt', filelist_vas = 'rsw_cice_atm.txt', "// &
-               "filelist_psl = 'rsw_cice_atm.txt', filelist_rlds = 'rsw_cice_atm.txt', "// &
-               "filelist_rsds = 'rsw_cice_atm.txt', filelist_prra = 'rsw_cice_atm.txt', "// &
-               "filelist_prsn = 'rsw_cice_atm.txt' /"//NL// &
-               "&ocean_bulk_flux_nml enable = .true. /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
-         if (label == "fw_mass_r2") nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2 /"//NL
-         if (label == "fw_mass_def") nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               'start_date = "2000-01-01"'//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 3"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 4.0"//NL// &
+               "initial_salinity = 34.0"//NL// &
+               "T_init_surface = 5.0"//NL// &
+               "T_init_bottom = 3.0"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "'//merge("ssp_rk2  ", "pred_corr", label == "fw_mass_ssp")//'"'//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               "[grid]"//NL// &
+               "nx = 12"//NL// &
+               "ny = 10"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 0.25"//NL// &
+               "dy = 0.25"//NL// &
+               "[ocean.grid]"//NL// &
+               'grid_config = "spherical"'//NL// &
+               "lon_west = 20.0"//NL// &
+               "lat_south = 60.0"//NL// &
+               "rad_earth = 6.371e6"//NL// &
+               'coriolis_scheme = "planetary"'//NL// &
+               "[physics]"//NL// &
+               "wind_stress_x = 0.0"//NL// &
+               "wind_stress_y = 0.0"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "flat"'//NL// &
+               "max_depth = 100.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "[ocean.forcing]"//NL// &
+               "enable_components = true"//NL// &
+               'freshwater = "mass"'//NL// &
+               "[ocean.atm_forcing]"//NL// &
+               "enable = true"//NL// &
+               'sw_interp = "linear"'//NL// &
+               'fluxes_regrid = "bilinear"'//NL// &
+               'time_mode = "interannual"'//NL// &
+               "wind_relative = false"//NL// &
+               'filelist_tas = "rsw_cice_atm.txt"'//NL// &
+               'filelist_huss = "rsw_cice_atm.txt"'//NL// &
+               'filelist_uas = "rsw_cice_atm.txt"'//NL// &
+               'filelist_vas = "rsw_cice_atm.txt"'//NL// &
+               'filelist_psl = "rsw_cice_atm.txt"'//NL// &
+               'filelist_rlds = "rsw_cice_atm.txt"'//NL// &
+               'filelist_rsds = "rsw_cice_atm.txt"'//NL// &
+               'filelist_prra = "rsw_cice_atm.txt"'//NL// &
+               'filelist_prsn = "rsw_cice_atm.txt"'//NL// &
+               "[ocean.bulk_flux]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
+         if (label == "fw_mass_r2") nml = nml//"[ocean.vmix]"//NL// &
+                                          "dt_therm_ratio = 2"//NL
+         if (label == "fw_mass_def") nml = nml//"[ocean.vmix]"//NL// &
+                                           "dt_therm_ratio = 2"//NL// &
+                                           "diabatic_first = false"//NL
       case ("gm_meke_varmix_therm2")
          ! Stratified seamount on z* with GM + MEKE + VarMix (the compat
          ! matrix's `gm_meke` overlay), thermo every second step.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
-               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-               "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
-               "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, "// &
-               "edge_depth = 800.0, slope_scale = 40000.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-               "&ocean_slopes_nml enable = .true. /"//NL// &
-               "&ocean_gm_nml enable = .true., khth = 500.0 /"//NL// &
-               "&ocean_meke_nml enable = .true., gmcoeff = 0.15, khcoeff = 1.0, "// &
-               "damping = 1.0e-6 /"//NL// &
-               "&ocean_wavespeed_nml enable = .true. /"//NL// &
-               "&ocean_varmix_nml enable = .true., use_visbeck = .true., "// &
-               "khth_slope_cff = 0.1, khtr_slope_cff = 0.1, visbeck_l_scale = 3.0e4, "// &
-               "khth_max = 2000.0, khtr_max = 2000.0 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 600.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 6"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 12.0"//NL// &
+               "initial_salinity = 35.0"//NL// &
+               "T_init_surface = 20.0"//NL// &
+               "T_init_bottom = 4.0"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[grid]"//NL// &
+               "nx = 24"//NL// &
+               "ny = 16"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 10000.0"//NL// &
+               "dy = 10000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.08"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "zstar"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "edge_depth = 800.0"//NL// &
+               "slope_scale = 40000.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "[ocean.vmix]"//NL// &
+               "dt_therm_ratio = 2"//NL// &
+               "[ocean.slopes]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.gm]"//NL// &
+               "enable = true"//NL// &
+               "khth = 500.0"//NL// &
+               "[ocean.meke]"//NL// &
+               "enable = true"//NL// &
+               "gmcoeff = 0.15"//NL// &
+               "khcoeff = 1.0"//NL// &
+               "damping = 1.0e-6"//NL// &
+               "[ocean.wavespeed]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.varmix]"//NL// &
+               "enable = true"//NL// &
+               "use_visbeck = true"//NL// &
+               "khth_slope_cff = 0.1"//NL// &
+               "khtr_slope_cff = 0.1"//NL// &
+               "visbeck_l_scale = 3.0e4"//NL// &
+               "khth_max = 2000.0"//NL// &
+               "khtr_max = 2000.0"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "[output]"//NL// &
+               "output_to_file = false"//NL
       case default
          error stop "test_ocean_restart_engine: unknown case"
       end select
       ! The fresh-water variants of the bulk case: the same namelist with the knob set.
       select case (label)
       case ("sea_ice_components_bulk_fw", "sea_ice_components_bulk_fw_ratio1")
-         nml = swap(nml, "&ocean_forcing_nml enable_components = .true. /", &
-                    "&ocean_forcing_nml enable_components = .true., freshwater = 'virtual' /")
+         nml = swap(nml, "[ocean.forcing]"//new_line("a")// &
+                    "enable_components = true"//new_line("a"), &
+                    "[ocean.forcing]"//new_line("a")// &
+                    "enable_components = true"//new_line("a")// &
+                    'freshwater = "virtual"'//new_line("a"))
       case ("sea_ice_components_bulk_none")
-         nml = swap(nml, "&ocean_forcing_nml enable_components = .true. /", &
-                    "&ocean_forcing_nml enable_components = .true., freshwater = 'none' /")
+         nml = swap(nml, "[ocean.forcing]"//new_line("a")// &
+                    "enable_components = true"//new_line("a"), &
+                    "[ocean.forcing]"//new_line("a")// &
+                    "enable_components = true"//new_line("a")// &
+                    'freshwater = "none"'//new_line("a"))
       end select
       if (label == "sea_ice_components_bulk_fw_ratio1") nml = swap(nml, "dt_therm_ratio = 2", "dt_therm_ratio = 1")
    end function case_nml
@@ -586,55 +991,109 @@ contains
       melt_extra = ""
       if (zfixed) then
          nzl = "8"
-         vc = "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL
-         cav = ", h_min_cavity = 250.0 /"//NL
-         vk = "use_kpp = .false., pp81_nu0 = 0.0, pp81_nu_bg = 1.0e-3, pp81_kappa_bg = 5.0e-5"
+         vc = "[vcoord]"//NL// &
+              'vcoord_type = "z_fixed"'//NL// &
+              "zfixed_closed_faces = true"//NL
+         cav = "h_min_cavity = 250.0"//NL
+         vk = "use_kpp = false"//NL//"pp81_nu0 = 0.0"//NL//"pp81_nu_bg = 1.0e-3"//NL//"pp81_kappa_bg = 5.0e-5"//NL
       else
          nzl = "4"
          if (index(label, "ustar") > 0) then
             nzl = "16"
-            melt_extra = ", u_tide = 0.2"
+            melt_extra = "u_tide = 0.2"//NL
          end if
-         vc = "&vcoord_nml vcoord_type = 'sigma' /"//NL
-         cav = ", h_min_cavity = 100.0 /"//NL
+         vc = "[vcoord]"//NL// &
+              'vcoord_type = "sigma"'//NL
+         cav = "h_min_cavity = 100.0"//NL
       end if
       if (index(label, "therm2") > 0) then
-         if (len(vk) > 0) vk = vk//", "
-         vk = vk//"dt_therm_ratio = 2"
+         vk = vk//"dt_therm_ratio = 2"//NL
       end if
       vm = ""
-      if (len(vk) > 0) vm = "&ocean_vmix_nml "//vk//" /"//NL
-      if (index(label, "mass") > 0) melt_extra = melt_extra//", freshwater = 'mass'"
-      if (index(label, "_uo") > 0) melt_extra = melt_extra//", volume_compensation = 'uniform_open_ocean'"
-      bt = "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL
-      if (index(label, "ssp") > 0) bt = "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL
+      if (len(vk) > 0) vm = "[ocean.vmix]"//NL//vk
+      if (index(label, "mass") > 0) melt_extra = melt_extra//'freshwater = "mass"'//NL
+      if (index(label, "_uo") > 0) melt_extra = melt_extra//'volume_compensation = "uniform_open_ocean"'//NL
+      bt = "[ocean.bt]"//NL// &
+           "auto_n_inner = true"//NL// &
+           'split_scheme = "pred_corr"'//NL
+      if (index(label, "ssp") > 0) bt = "[ocean.bt]"//NL// &
+                                        "auto_n_inner = true"//NL// &
+                                        'split_scheme = "ssp_rk2"'//NL
       td = ""
-      if (top_drag) td = "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = "//nzl//" /"//NL// &
-            "&tracer_nml initial_salinity = 34.5, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
+      if (top_drag) td = "[ocean.tdrag]"//NL// &
+                         "enable = true"//NL// &
+                         'form = "quadratic"'//NL// &
+                         "cd = 2.5e-3"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = "//nzl//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.5"//NL// &
+            "T_init_surface = 3.0"//NL// &
+            "T_init_bottom = 1.0"//NL// &
             bt// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = -1.409e-4 /"//NL// &
-            vc//vm// &
-            "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
-            "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            "draft_depth = 500.0, draft_slope = -4.0e-4, draft_x0 = 0.0, "// &
-            "draft_x1 = 380000.0, draft_y1 = 260000.0"//cav// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
-            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
-            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"// &
-            melt_extra//" /"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 26"//NL// &
+            "ny = 18"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = -1.409e-4"//NL// &
+            vc// &
+            vm// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "seamount"'//NL// &
+            "max_depth = 1000.0"//NL// &
+            "edge_depth = 400.0"//NL// &
+            "slope_scale = 80000.0"//NL// &
+            'wind_config = "constant"'//NL// &
+            "taux_magnitude = 0.05"//NL// &
+            "[ocean.cavity_dyn]"//NL// &
+            "enable = true"//NL// &
+            'draft_config = "linear"'//NL// &
+            "draft_depth = 500.0"//NL// &
+            "draft_slope = -4.0e-4"//NL// &
+            "draft_x0 = 0.0"//NL// &
+            "draft_x1 = 380000.0"//NL// &
+            "draft_y1 = 260000.0"//NL// &
+            cav// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.cavity_melt]"//NL// &
+            "enable = true"//NL// &
+            'exchange_law = "const_gamma"'//NL// &
+            "gamma_t = 2.2e-2"//NL// &
+            "gamma_s = -1.0"//NL// &
+            "cdrag_top = 2.5e-3"//NL// &
+            'ice_conduction = "insulating"'//NL// &
+            "s_ice = 0.0"//NL// &
+            "far_field_depth = 10.0"//NL// &
+            melt_extra// &
             td// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
-            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+            "[ocean.pgf]"//NL// &
+            'form = "fv_mom6"'//NL// &
+            "p_top_in_bc = true"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "linear"'//NL// &
+            'tfreeze_set = "isomip"'//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function cavity_nml
 
    subroutine make_engine(engine, cfg, nml, ok, restart_file, t0, step0)
@@ -649,7 +1108,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
@@ -1363,11 +1822,19 @@ contains
       !! `&ocean_atm_forcing_nml` pointing all nine fields at one filelist.
       character(len=*), intent(in) :: list
       character(len=:), allocatable :: g
-      g = "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
-          "sw_interp = 'linear', filelist_tas = '"//list//"', filelist_huss = '"//list// &
-          "', filelist_uas = '"//list//"', filelist_vas = '"//list//"', filelist_psl = '"// &
-          list//"', filelist_rlds = '"//list//"', filelist_rsds = '"//list// &
-          "', filelist_prra = '"//list//"', filelist_prsn = '"//list//"' /"//NL
+      g = "[ocean.atm_forcing]"//NL// &
+          "enable = true"//NL// &
+          'time_mode = "interannual"'//NL// &
+          'sw_interp = "linear"'//NL// &
+          'filelist_tas = "'//list//'"'//NL// &
+          'filelist_huss = "'//list//'"'//NL// &
+          'filelist_uas = "'//list//'"'//NL// &
+          'filelist_vas = "'//list//'"'//NL// &
+          'filelist_psl = "'//list//'"'//NL// &
+          'filelist_rlds = "'//list//'"'//NL// &
+          'filelist_rsds = "'//list//'"'//NL// &
+          'filelist_prra = "'//list//'"'//NL// &
+          'filelist_prsn = "'//list//'"'//NL
    end function atm_group
 
    subroutine write_atm_file(path, listname, tas0, huss0, rsds_const)
@@ -1758,26 +2225,62 @@ contains
       character(len=:), allocatable :: nml
       character(len=2) :: sr
       write (sr, '(i0)') ratio
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 6, ny = 6, nghost = 3, dx = 1.0, dy = 1.0 /"//NL// &
-            "&time_nml t_end = 4800.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&ocean_eos_nml eos = 'wright' /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, z_ta = 10.0 /"//NL// &
-            "&tracer_nml initial_temperature = 15.0, initial_salinity = 35.0 /"//NL// &
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 6"//NL// &
+            "ny = 6"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 1.0"//NL// &
+            "dy = 1.0"//NL// &
+            "[time]"//NL// &
+            "t_end = 4800.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            'start_date = "2000-06-21"'//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            'split_scheme = "pred_corr"'//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "wright"'//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.bulk_flux]"//NL// &
+            "enable = true"//NL// &
+            "n_iter = 5"//NL// &
+            "z_wind = 10.0"//NL// &
+            "z_ta = 10.0"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = 15.0"//NL// &
+            "initial_salinity = 35.0"//NL// &
             atm_group(list)// &
-            "&ocean_vmix_nml dt_therm_ratio = "//trim(sr)//" /"//NL// &
-            "&ocean_ice_nml enable = "//trim(merge(".true. ", ".false.", ice_on))//" /"//NL// &
-            "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
-            "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = "//trim(sr)//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = "//trim(merge("true ", "false", ice_on))//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "spherical"'//NL// &
+            "lon_west = 0.0"//NL// &
+            "lat_south = 20.0"//NL// &
+            "rad_earth = 6.371e6"//NL// &
+            'coriolis_scheme = "planetary"'//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function probe_nml
 
    subroutine run_probe(ratio, ice_on, list, nsteps, t_top, ok)

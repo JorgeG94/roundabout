@@ -20,7 +20,7 @@ module test_ocean_sw_chl
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
    use rdb_grid, only: hgrid_t
-   use rdb_config, only: config_t, ocean_thermo_config_t, read_config_from_string, &
+   use rdb_config, only: config_t, ocean_thermo_config_t, read_config_from_toml_string, &
                          validate_config
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: EOS_VARIANT_LINEAR
@@ -728,10 +728,17 @@ contains
       integer :: ierr
       type(config_t) :: cfg
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')//"&ocean_thermo_nml "//body//" /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         "[sim]"//new_line('a')// &
+         'sim_type = "ocean"'//new_line('a')// &
+         "[grid]"//new_line('a')// &
+         "nx = 24"//new_line('a')// &
+         "ny = 16"//new_line('a')// &
+         "nghost = 3"//new_line('a')// &
+         "dx = 20000.0"//new_line('a')// &
+         "dy = 20000.0"//new_line('a')// &
+         "[ocean.thermo]"//new_line('a')// &
+         body, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr=ierr)
    end function validate_thermo
@@ -748,21 +755,24 @@ contains
       integer :: ierr
 
       ! ---- validate_config: namelist level ----
-      call check(error, validate_thermo("sw_scheme = 'manizza05', sw_chl_file = 'x.nc', "// &
-                                        "sw_chl_var = 'chl_a'") == OCEAN_STATUS_OK, &
+      call check(error, validate_thermo('sw_scheme = "manizza05"'//new_line("a")// &
+                                        'sw_chl_file = "x.nc"'//new_line("a")// &
+                                        'sw_chl_var = "chl_a"'//new_line("a")) == OCEAN_STATUS_OK, &
                  "a complete manizza05 block must validate (and its keys must parse)")
       if (allocated(error)) return
-      call check(error, validate_thermo("sw_scheme = 'manizza05', sw_chl_file = 'x.nc', "// &
-                                        "sw_pen_frac = 0.5") /= OCEAN_STATUS_OK, &
+      call check(error, validate_thermo('sw_scheme = "manizza05"'//new_line("a")// &
+                                        'sw_chl_file = "x.nc"'//new_line("a")// &
+                                        "sw_pen_frac = 0.5"//new_line("a")) /= OCEAN_STATUS_OK, &
                  "a conflicting sw_pen_frac must be refused")
       if (allocated(error)) return
-      call check(error, validate_thermo("sw_scheme = 'manizza05'") /= OCEAN_STATUS_OK, &
+      call check(error, validate_thermo('sw_scheme = "manizza05"'//new_line("a")) /= OCEAN_STATUS_OK, &
                  "manizza05 without sw_chl_file must be refused")
       if (allocated(error)) return
-      call check(error, validate_thermo("sw_scheme = 'bogus'") /= OCEAN_STATUS_OK, &
+      call check(error, validate_thermo('sw_scheme = "bogus"'//new_line("a")) /= OCEAN_STATUS_OK, &
                  "an unknown sw_scheme must be refused")
       if (allocated(error)) return
-      call check(error, validate_thermo("sw_scheme = 'default', sw_pen_frac = 0.5") == OCEAN_STATUS_OK, &
+      call check(error, validate_thermo('sw_scheme = "default"'//new_line("a")// &
+                                        "sw_pen_frac = 0.5"//new_line("a")) == OCEAN_STATUS_OK, &
                  "the default scheme keeps its sw_pen_frac semantics")
       if (allocated(error)) return
 

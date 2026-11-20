@@ -35,7 +35,7 @@ module test_ocean_redi_obc_budget
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp, RHO_WATER
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -92,28 +92,58 @@ contains
 
       write (snx, '(i0)') NX_G
       write (sny, '(i0)') NY_G
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 21600.0, dt_fixed = 900.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
-            "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-            "T_init_surface = 20.0, T_init_bottom = 4.0, "// &
-            "S_init_surface = 34.5, S_init_bottom = 35.2 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_eos_nml eos = 'wright' /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-            "smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-            "dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-            "edge_depth = 800.0, slope_scale = 80000.0 /"//NL// &
-            "&ocean_bc_nml east = 'open' /"//NL// &
-            "&ocean_slopes_nml enable = .true. /"//NL// &
-            "&ocean_redi_nml enable = .true., khtr = "//khtr//" /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 21600.0"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 6"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = 12.0"//NL// &
+            "initial_salinity = 35.0"//NL// &
+            "T_init_surface = 20.0"//NL// &
+            "T_init_bottom = 4.0"//NL// &
+            "S_init_surface = 34.5"//NL// &
+            "S_init_bottom = 35.2"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "wright"'//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            'split_scheme = "'//scheme//'"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = "//trim(snx)//NL// &
+            "ny = "//trim(sny)//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "wind_stress_x = 0.1"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "seamount"'//NL// &
+            "max_depth = 2000.0"//NL// &
+            "edge_depth = 800.0"//NL// &
+            "slope_scale = 80000.0"//NL// &
+            "[ocean.bc]"//NL// &
+            'east = "open"'//NL// &
+            "[ocean.slopes]"//NL// &
+            "enable = true"//NL// &
+            "[ocean.redi]"//NL// &
+            "enable = true"//NL// &
+            "khtr = "//khtr//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function channel_nml
 
    subroutine run_channel(scheme, khtr, salt_res, heat_res, salt1, ok)
@@ -135,7 +165,7 @@ contains
       heat_res = huge(1.0_wp)
       salt1 = 0.0_wp
       call ensure_comm()
-      call read_config_from_string(channel_nml(scheme, khtr), cfg, ierr=ierr)
+      call read_config_from_toml_string(channel_nml(scheme, khtr), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return

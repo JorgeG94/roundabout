@@ -255,7 +255,7 @@ program test_ocean_decomp_bitid_mpi
    use, intrinsic :: iso_fortran_env, only: int32, int64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_error_ring, only: error_ring_clear, error_ring_count, error_ring_get
    use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_format
@@ -617,14 +617,21 @@ contains
          ! `runoff_river` reuses the basin points (both sides of every x / y seam); the fold twin adds
          ! points on the periodic west/east wrap, (2,12) and (29,10) (within `nghost` of the wrap) (see `write_runoff_files`).
          nml = case_nml(merge("island_basin", "tripolar    ", label == "runoff_river"), scheme, px, py)// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-               "&ocean_epbl_nml enable = .true., rivermix_depth = 40.0 /"//NL// &
-               "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
-               "lrunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD_W, label == "runoff_river")// &
-               "', lrunoff_var = 'lrunoff', "// &
-               "frunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD_W, label == "runoff_river")// &
-               "', frunoff_var = 'frunoff' /"//NL
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "[ocean.forcing]"//NL// &
+               "enable_components = true"//NL// &
+               'freshwater = "mass"'//NL// &
+               "[ocean.epbl]"//NL// &
+               "enable = true"//NL// &
+               "rivermix_depth = 40.0"//NL// &
+               "[ocean.dataovr]"//NL// &
+               "enable = true"//NL// &
+               'time_mode = "static"'//NL// &
+               'lrunoff_file = "'//merge(RUNOFF_BASIN, RUNOFF_FOLD_W, label == "runoff_river")//'"'//NL// &
+               'lrunoff_var = "lrunoff"'//NL// &
+               'frunoff_file = "'//merge(RUNOFF_BASIN, RUNOFF_FOLD_W, label == "runoff_river")//'"'//NL// &
+               'frunoff_var = "frunoff"'//NL
          return
       end if
       if (label == "runoff_mass" .or. label == "runoff_mass_fold") then
@@ -635,13 +642,18 @@ contains
          ! reader's per-rank windows, `q_fus_rof`, the seam-exchanged `fw_net` snapshot, the layer
          ! growth and the console mass source all cross a seam.
          nml = case_nml(merge("island_basin", "tripolar    ", label == "runoff_mass"), scheme, px, py)// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-               "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
-               "lrunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")// &
-               "', lrunoff_var = 'lrunoff', "// &
-               "frunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")// &
-               "', frunoff_var = 'frunoff' /"//NL
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "[ocean.forcing]"//NL// &
+               "enable_components = true"//NL// &
+               'freshwater = "mass"'//NL// &
+               "[ocean.dataovr]"//NL// &
+               "enable = true"//NL// &
+               'time_mode = "static"'//NL// &
+               'lrunoff_file = "'//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")//'"'//NL// &
+               'lrunoff_var = "lrunoff"'//NL// &
+               'frunoff_file = "'//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")//'"'//NL// &
+               'frunoff_var = "frunoff"'//NL
          return
       end if
 
@@ -652,35 +664,35 @@ contains
       ! z* open-step case under bbl_glue -- so both cases below now
       ! exercise `visc_rem_chain` (producer + bt_rem_from_av_rem + wt_u
       ! forcing + renorm_visc_rem, UNIFORM BT-correction fold) instead.
-      vortex_balance = "vortex_balance = 'geostrophic'"
-      if (index(label, "balance_") == 1) vortex_balance = "vortex_balance = 'none'"
-      ice_dyn = "dynamics = .true., evp_sub_steps = 30, cfl_trunc = 0.01, "// &
-                "project_ci = .true., "
-      if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
+      vortex_balance = 'vortex_balance = "geostrophic"'//NL
+      if (index(label, "balance_") == 1) vortex_balance = 'vortex_balance = "none"'//NL
+      ice_dyn = "dynamics = true"//NL//"evp_sub_steps = 30"//NL//"cfl_trunc = 0.01"//NL// &
+                "project_ci = true"//NL
+      if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = false"//NL
       bt_extra = ""
-      bt_head = "auto_n_inner = .true., "
+      bt_head = "auto_n_inner = true"//NL
       ! Per-step (period 0) / hourly (period 3600 s) re-derivation of n_inner from
       ! the live thicknesses; the fraction sits at an n_inner threshold (see case).
       if (index(label, "wave_drag_rough") == 1) &
-         bt_head = bt_head//"wave_drag = .true., wave_drag_form = 'roughness_proxy', "// &
-                   "wave_drag_scale = 1.0e4, "
-      if (label == "dtbt_reset") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 0.0, "
-      if (label == "dtbt_reset_period") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 3600.0, "
-      if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
+         bt_head = bt_head//"wave_drag = true"//NL//'wave_drag_form = "roughness_proxy"'//NL// &
+                   "wave_drag_scale = 1.0e4"//NL
+      if (label == "dtbt_reset") bt_head = "dtbt = "//DTBT_FRAC//NL//"dtbt_reset_period = 0.0"//NL
+      if (label == "dtbt_reset_period") bt_head = "dtbt = "//DTBT_FRAC//NL//"dtbt_reset_period = 3600.0"//NL
+      if (label == "visc_rem_zstar") bt_extra = "visc_rem_chain = true"//NL
       ! The periodic-edge cases need more than two substeps per solve: the
       ! corner they pin reaches the owned cells from the third substep on.
       if (label == "perx_open_south" .or. label == "perx_clamped_south" .or. &
           label == "pery_open_west" .or. label == "perxy_fplane") &
-         bt_head = "auto_n_inner = .false., n_inner = 20, "
+         bt_head = "auto_n_inner = false"//NL//"n_inner = 20"//NL
       if (label == "visc_rem_chain") then
-         bt_extra = ", visc_rem_chain = .true., frhat_scheme = 'hybrid'"
+         bt_extra = "visc_rem_chain = true"//NL//'frhat_scheme = "hybrid"'//NL
       end if
       hv_extra = ""
       ! dx = 250 m puts the fixed nu_h = 200 far past the viscous CFL: clamp it.
-      if (index(label, "drain") == 1) hv_extra = ", bound_kh = .true."
+      if (index(label, "drain") == 1) hv_extra = "bound_kh = true"//NL
       drain_extra = ""
       if (index(label, "drain_ratio_weno") == 1) then
-         drain_extra = ", tracer_recon = '"//label(len_trim(label) - 4:len_trim(label))//"'"
+         drain_extra = 'tracer_recon = "'//label(len_trim(label) - 4:len_trim(label))//'"'//NL
       end if
       rad_earth_s = "6.378e6"
       wind_s = "0.05"
@@ -691,25 +703,25 @@ contains
          wind_y_s = "0.3"   ! meridional stress drives flow INTO the fold row
       end if
       if (label == "drain_ratio_h3" .or. label == "drain_ratio_fold_h3") then
-         drain_extra = ", tracer_advection_scheme = 'ppm_h3', diabatic_first = .false."
+         drain_extra = 'tracer_advection_scheme = "ppm_h3"'//NL//"diabatic_first = false"//NL
       end if
       if (label == "hvisc_om3_floors") then
-         hv_extra = ", kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0, ah_vel_scale = 0.01, "// &
-                    "bound_coriolis_biharm = .true., bound_coriolis_vel = 6.0"
+         hv_extra = "kh_sin_lat = 2000.0"//NL//"kh_pwr_of_sine = 4.0"//NL//"ah_vel_scale = 0.01"//NL// &
+                    "bound_coriolis_biharm = true"//NL//"bound_coriolis_vel = 6.0"//NL
       end if
       if (label == "hvisc_kh_points") then
          ! Stress-tensor path with the static Laplacian floors built AT the T
          ! centres and Bu corners (local latitude, local harmonic length).
-         hv_extra = ", stress_tensor = .true., kh_bg_at_points = .true., "// &
-                    "kh_vel_scale = 0.01, kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0"
+         hv_extra = "stress_tensor = true"//NL//"kh_bg_at_points = true"//NL// &
+                    "kh_vel_scale = 0.01"//NL//"kh_sin_lat = 2000.0"//NL//"kh_pwr_of_sine = 4.0"//NL
       end if
       if (label == "hvisc_thin_layer") then
-         hv_extra = ", stress_tensor = .true., bound_thin_layer = .true., "// &
-                    "kh_bg_at_points = .true., kh_vel_scale = 0.01, "// &
-                    "kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0"
+         hv_extra = "stress_tensor = true"//NL//"bound_thin_layer = true"//NL// &
+                    "kh_bg_at_points = true"//NL//"kh_vel_scale = 0.01"//NL// &
+                    "kh_sin_lat = 2000.0"//NL//"kh_pwr_of_sine = 4.0"//NL
       end if
       if (label == "hvisc_biharm_stress") then
-         hv_extra = ", stress_tensor = .true., biharm_stress = .true., nu_4 = 1.0e9"
+         hv_extra = "stress_tensor = true"//NL//"biharm_stress = true"//NL//"nu_4 = 1.0e9"//NL
       end if
       ! biharm_stress chains four stencil levels: validate_config needs nghost >= 4.
       sng = "3"
@@ -739,21 +751,36 @@ contains
          snx = "27"
          sny = "19"
       end if
-      common = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = "//trim(snz)//" /"//NL// &
-               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-               "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml "//bt_head//"split_scheme = '"//scheme//"'"// &
-               bt_extra//" /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true."//hv_extra//" /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               ""
+      common = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[mpi]"//NL// &
+               "px = "//trim(spx)//NL// &
+               "py = "//trim(spy)//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 900.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = "//trim(snz)//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 12.0"//NL// &
+               "initial_salinity = 35.0"//NL// &
+               "T_init_surface = 20.0"//NL// &
+               "T_init_bottom = 4.0"//NL// &
+               "[ocean.bt]"//NL// &
+               bt_head// &
+               'split_scheme = "'//scheme//'"'//NL// &
+               bt_extra// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               hv_extra// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL
 
       if (index(label, "cavity_") == 1) then
-         nml = cavity_nml(label, scheme, spx, spy)//"&output_nml output_to_file = .false. /"//NL
+         nml = cavity_nml(label, scheme, spx, spy)//"[output]"//NL// &
+               "output_to_file = false"//NL
          return
       end if
 
@@ -762,14 +789,28 @@ contains
          ! Closed Cartesian basin, interior land block (static land mask),
          ! beta plane, eastward wind onto the island.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
-               "coriolis_beta = 2.0e-11 /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "island"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.15"//NL// &
+               'wind_config = "2gyre"'//NL// &
+               "taux_magnitude = 0.1"//NL// &
+               "coriolis_beta = 2.0e-11"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("sss_restore")
          ! The island basin with FILE sea-surface-salinity restoring: the
          ! per-rank windowed read of a two-record (t = 0 and 86400 s) target,
@@ -777,17 +818,35 @@ contains
          ! (global-mean shift) adjustment through the EFP allreduce.  The
          ! target varies in both directions so a wrong window cannot match.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
-               "coriolis_beta = 2.0e-11 /"//NL// &
-               "&ocean_restore_nml enable_restore_salt = .true., piston_s = 0.5, "// &
-               "sss_file = '"//SSS_FILE//"', sss_var = 'salt', sss_as_sflux = .true., "// &
-               "sss_adjust_net_zero = .true. /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "island"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.15"//NL// &
+               'wind_config = "2gyre"'//NL// &
+               "taux_magnitude = 0.1"//NL// &
+               "coriolis_beta = 2.0e-11"//NL// &
+               "[ocean.restore]"//NL// &
+               "enable_restore_salt = true"//NL// &
+               "piston_s = 0.5"//NL// &
+               'sss_file = "'//SSS_FILE//'"'//NL// &
+               'sss_var = "salt"'//NL// &
+               "sss_as_sflux = true"//NL// &
+               "sss_adjust_net_zero = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("manizza")
          ! The island basin with the Manizza (2005) chlorophyll shortwave: the
          ! per-rank windowed read of a two-record spatially non-uniform,
@@ -798,17 +857,35 @@ contains
          ! several interfaces: the opacities, not just the surface layer, drive
          ! the heating.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 100.0, "// &
-               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
-               "coriolis_beta = 2.0e-11 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = 400.0, "// &
-               "sw_pen_frac = 1.0, sw_scheme = 'manizza05', "// &
-               "sw_chl_file = '"//CHL_FILE//"', sw_chl_var = 'CHL' /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "island"'//NL// &
+               "max_depth = 100.0"//NL// &
+               "slope_scale = 0.15"//NL// &
+               'wind_config = "2gyre"'//NL// &
+               "taux_magnitude = 0.1"//NL// &
+               "coriolis_beta = 2.0e-11"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "q_heat = 400.0"//NL// &
+               "sw_pen_frac = 1.0"//NL// &
+               'sw_scheme = "manizza05"'//NL// &
+               'sw_chl_file = "'//CHL_FILE//'"'//NL// &
+               'sw_chl_var = "CHL"'//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("visc_rem_chain")
          ! The island basin with the visc_rem chain live end to end: MOM6
          ! BOTTOMDRAGLAW glue (hvel_mom6 + bbl_glue) feeding the producer,
@@ -817,15 +894,31 @@ contains
          ! `visc_rem_chain`, bt_extra above) -- the BT-correction fold
          ! itself stays UNIFORM (D1 follow-up).
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
-               "coriolis_beta = 2.0e-11 /"//NL// &
-               "&ocean_vdiff_nml hvel_mom6 = .true., bbl_glue = .true. /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "island"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.15"//NL// &
+               'wind_config = "2gyre"'//NL// &
+               "taux_magnitude = 0.1"//NL// &
+               "coriolis_beta = 2.0e-11"//NL// &
+               "[ocean.vdiff]"//NL// &
+               "hvel_mom6 = true"//NL// &
+               "bbl_glue = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("balanced_vortex", "balanced_vortex_t0", "balance_rest", "balance_rest_t0", &
             "balance_keep_t0")
          ! Isolated balanced cold-core vortex (ic_config = 'balanced_vortex') on a
@@ -835,20 +928,42 @@ contains
          ! so f(y) differs rank to rank.  The `_t0` twin takes zero steps: the
          ! seeded IC (h, T, face velocities incl. ghosts) alone must match.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0, "// &
-               "coriolis_beta = 1.0e-10, coriolis_y_ref = 180000.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-               "&ocean_eos_nml eos = 'linear' /"//NL// &
-               "&ocean_ic_nml ic_config = 'balanced_vortex', alpha_T = 0.17, "// &
-               "rho_0 = 1035.0, vortex_x0 = 260000.0, vortex_y0 = 180000.0, "// &
-               "vortex_radius = 60000.0, vortex_hv = 300.0, vortex_dT = -2.0, "// &
-               "vortex_T_surf = 20.0, vortex_dT_dz = 1.5e-2, "// &
-               trim(vortex_balance)//" /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "flat"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "coriolis_beta = 1.0e-10"//NL// &
+               "coriolis_y_ref = 180000.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "[ocean.eos]"//NL// &
+               'eos = "linear"'//NL// &
+               "[ocean.ic]"//NL// &
+               'ic_config = "balanced_vortex"'//NL// &
+               "alpha_T = 0.17"//NL// &
+               "rho_0 = 1035.0"//NL// &
+               "vortex_x0 = 260000.0"//NL// &
+               "vortex_y0 = 180000.0"//NL// &
+               "vortex_radius = 60000.0"//NL// &
+               "vortex_hv = 300.0"//NL// &
+               "vortex_dT = -2.0"//NL// &
+               "vortex_T_surf = 20.0"//NL// &
+               "vortex_dT_dz = 1.5e-2"//NL// &
+               trim(vortex_balance)// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("weno7_pv")
          ! The island basin on the Sadourny enstrophy path with the weno7 PV
          ! face interpolation, at its gate's halo (stencil radius 4 + 1 =
@@ -858,15 +973,31 @@ contains
          ! own ny = 24, so every 1xN tile (1x4: 6 rows) is wider than the
          ! 5-deep ghost band it sends.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = 24, nghost = 5, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
-               "coriolis_beta = 2.0e-11 /"//NL// &
-               "&ocean_coriolis_nml form = 'sadourny', pv_adv_scheme = 'weno7' /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = 24"//NL// &
+               "nghost = 5"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "island"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.15"//NL// &
+               'wind_config = "2gyre"'//NL// &
+               "taux_magnitude = 0.1"//NL// &
+               "coriolis_beta = 2.0e-11"//NL// &
+               "[ocean.coriolis]"//NL// &
+               'form = "sadourny"'//NL// &
+               'pv_adv_scheme = "weno7"'//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("eulz", "eulz_periodic")
          ! Plain eulerian_z (per-step vertical advection pins h to the
          ! reference; no EPBL, no MLE): the vertical advection runs after the
@@ -875,17 +1006,34 @@ contains
          ! (walls: seam ghosts only); "eulz_periodic" = the periodic channel
          ! of periodic_channel_zstar (wrap ghosts, also on one rank).
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = -1.0e-4, wind_stress_x = 0.1 /"//NL// &
-               "&vcoord_nml vcoord_type = 'eulerian_z' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = -1.0e-4"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "eulerian_z"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 1500.0"//NL// &
+               "slope_scale = 60000.0"//NL
          if (label == "eulz_periodic") then
-            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-                  "north = 'wall' /"//NL
+            nml = nml//"[ocean.bc]"//NL// &
+                  'west = "periodic"'//NL// &
+                  'east = "periodic"'//NL// &
+                  'south = "wall"'//NL// &
+                  'north = "wall"'//NL
          else
-            nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+            nml = nml//"[ocean.bc]"//NL// &
+                  'west = "wall"'//NL// &
+                  'east = "wall"'//NL// &
+                  'south = "wall"'//NL// &
+                  'north = "wall"'//NL
          end if
       case ("wave_drag_rough", "wave_drag_rough_periodic")
          ! Barotropic linear wave drag, form = 'roughness_proxy', over a
@@ -895,30 +1043,61 @@ contains
          ! "_periodic" = re-entrant in x (the periodic edge ghost stays 0,
          ! as on one rank).
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = -1.0e-4, wind_stress_x = 0.1 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = -1.0e-4"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 1500.0"//NL// &
+               "slope_scale = 60000.0"//NL
          if (label == "wave_drag_rough_periodic") then
-            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-                  "north = 'wall' /"//NL
+            nml = nml//"[ocean.bc]"//NL// &
+                  'west = "periodic"'//NL// &
+                  'east = "periodic"'//NL// &
+                  'south = "wall"'//NL// &
+                  'north = "wall"'//NL
          else
-            nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+            nml = nml//"[ocean.bc]"//NL// &
+                  'west = "wall"'//NL// &
+                  'east = "wall"'//NL// &
+                  'south = "wall"'//NL// &
+                  'north = "wall"'//NL
          end if
       case ("periodic_channel_zstar")
          ! Re-entrant channel over a seamount, z* (ALE remap every step).
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = -1.0e-4, wind_stress_x = 0.1 /"//NL// &
-               "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
-               "&ocean_porous_nml enable = .true. /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = -1.0e-4"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "zstar"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 1500.0"//NL// &
+               "slope_scale = 60000.0"//NL// &
+               "[ocean.porous]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("visc_rem_zstar")
          ! Closed, cooled Cartesian spoon basin, MOM6 z* (the 300 m rim
          ! carries bed fillers), with the visc_rem chain (producer +
@@ -927,16 +1106,36 @@ contains
          ! needs the implicit drag fold, which refuses an HBBL-distributed
          ! drag: bed-only drag.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
-               "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
-               "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
-               "edge_depth = 300.0, slope_scale = 300000.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
-               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
-               "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 0.0 /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "zstar"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "spoon"'//NL// &
+               "max_depth = 3000.0"//NL// &
+               "edge_depth = 300.0"//NL// &
+               "slope_scale = 300000.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "q_heat = -60.0"//NL// &
+               "[ocean.vdiff]"//NL// &
+               "implicit_drag = true"//NL// &
+               "[ocean.bdrag]"//NL// &
+               'form = "quadratic"'//NL// &
+               "cd = 3.0e-3"//NL// &
+               "hbbl = 0.0"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("perx_open_south", "perx_clamped_south", "pery_open_west", "perxy_fplane")
          ! A periodic axis meeting a non-wall edge on the other axis (f-plane
          ! Cartesian seamount, 6 h of fast loop at n_inner = 20).  Decomposed
@@ -945,25 +1144,48 @@ contains
          ! columns, leaving the corner at the wrap of Pass-1 ghost-row garbage
          ! (one rank) vs the exchange's (decomposed).
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 1500.0"//NL// &
+               "slope_scale = 60000.0"//NL
          select case (label)
          case ("perx_open_south")
-            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'open', "// &
-                  "north = 'wall' /"//NL
+            nml = nml//"[ocean.bc]"//NL// &
+                  'west = "periodic"'//NL// &
+                  'east = "periodic"'//NL// &
+                  'south = "open"'//NL// &
+                  'north = "wall"'//NL
          case ("perx_clamped_south")
-            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'clamped', "// &
-                  "south_clamped_v = 0.01, north = 'wall' /"//NL
+            nml = nml//"[ocean.bc]"//NL// &
+                  'west = "periodic"'//NL// &
+                  'east = "periodic"'//NL// &
+                  'south = "clamped"'//NL// &
+                  "south_clamped_v = 0.01"//NL// &
+                  'north = "wall"'//NL
          case ("pery_open_west")
-            nml = nml//"&ocean_bc_nml west = 'open', east = 'wall', south = 'periodic', "// &
-                  "north = 'periodic' /"//NL
+            nml = nml//"[ocean.bc]"//NL// &
+                  'west = "open"'//NL// &
+                  'east = "wall"'//NL// &
+                  'south = "periodic"'//NL// &
+                  'north = "periodic"'//NL
          case default
-            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', "// &
-                  "north = 'periodic' /"//NL
+            nml = nml//"[ocean.bc]"//NL// &
+                  'west = "periodic"'//NL// &
+                  'east = "periodic"'//NL// &
+                  'south = "periodic"'//NL// &
+                  'north = "periodic"'//NL
          end select
       case ("periodic_sponge")
          ! Re-entrant channel, periodic west/east, with a relaxing sponge
@@ -976,15 +1198,30 @@ contains
          ! and the seam-ghost refresh gated on `sponge_seam` in
          ! `rdb_ocean_dyn.F90`.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.2 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'sponge', sponge_width = 3, sponge_strength = 1.0e-2, "// &
-               "sponge_relax_tracers = .true. /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.2"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 1500.0"//NL// &
+               "slope_scale = 60000.0"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "sponge"'//NL// &
+               "sponge_width = 3"//NL// &
+               "sponge_strength = 1.0e-2"//NL// &
+               "sponge_relax_tracers = true"//NL
       case ("drain_ratio", "drain_ratio_h3", "drain_ratio_weno5", "drain_ratio_weno7", &
             "drain_ratio_weno9")
          ! Windowed tracer-advection drain (`dt_tracer_advect_ratio = 4`, 12
@@ -995,17 +1232,34 @@ contains
          ! `ppm_h3` drain reconstruction and the OM3 interval order
          ! (`diabatic_first = .false.`, pred_corr only).
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = "//trim(sng)//", "// &
-               "dx = 250.0, dy = 250.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 1.0 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1500.0, slope_scale = 1000.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
-               "&ocean_vmix_nml dt_therm_ratio = 4, dt_tracer_advect_ratio = 4"// &
-               ""//trim(drain_extra)//" /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = "//trim(sng)//NL// &
+               "dx = 250.0"//NL// &
+               "dy = 250.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 1.0"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 1500.0"//NL// &
+               "slope_scale = 1000.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "q_heat = -100.0"//NL// &
+               "[ocean.vmix]"//NL// &
+               "dt_therm_ratio = 4"//NL// &
+               "dt_tracer_advect_ratio = 4"//NL// &
+               trim(drain_extra)// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("wetdry_shoal")
          ! Emergent shoal under dynamic wet/dry (`&ocean_wetdry_nml`): a seamount
          ! whose summit sits exactly at rest level (4 central cells seed dry,
@@ -1016,31 +1270,66 @@ contains
          ! flips on one rank).  ssp_rk2 only; `ppm_limit_pos` is the
          ! positivity limiter the wet/dry continuity needs.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 4000.0, dy = 4000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.05 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2.0, "// &
-               "edge_depth = 0.0, slope_scale = 28000.0, wind_config = 'constant' /"//NL// &
-               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
-               "&ocean_wetdry_nml enable = .true. /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 4000.0"//NL// &
+               "dy = 4000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.05"//NL// &
+               "wind_stress_y = 0.05"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2.0"//NL// &
+               "edge_depth = 0.0"//NL// &
+               "slope_scale = 28000.0"//NL// &
+               'wind_config = "constant"'//NL// &
+               "[ocean.continuity]"//NL// &
+               "ppm_limit_pos = true"//NL// &
+               "[ocean.wetdry]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("wetdry_periodic")
          ! The shoal with periodic west/east: px = 1 wraps locally every
          ! substep, px > 1 turns the wrap into a seam.  Meridional wind only:
          ! a zonal wind on a periodic channel has no wall to stop it and the
          ! reference itself runs away (CFL panic) by step 96.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 4000.0, dy = 4000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.02 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2.0, "// &
-               "edge_depth = 0.0, slope_scale = 28000.0, wind_config = 'constant' /"//NL// &
-               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
-               "&ocean_wetdry_nml enable = .true. /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 4000.0"//NL// &
+               "dy = 4000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.0"//NL// &
+               "wind_stress_y = 0.02"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2.0"//NL// &
+               "edge_depth = 0.0"//NL// &
+               "slope_scale = 28000.0"//NL// &
+               'wind_config = "constant"'//NL// &
+               "[ocean.continuity]"//NL// &
+               "ppm_limit_pos = true"//NL// &
+               "[ocean.wetdry]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("wetdry_file")
          ! An emergent shoal whose bathymetry is READ from a file (the windowed
          ! per-rank reader): a plateau at 0.07 m, inside the hysteresis band
@@ -1049,29 +1338,61 @@ contains
          ! seam ghosts from the file, so `engine_setup`'s cold-start exchange of
          ! `wd_wet_dyn` is not what this case exercises.)
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 4000.0, dy = 4000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.02, wind_stress_y = 0.02 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'file', max_depth = 0.4, wind_config = 'constant' /"//NL// &
-               "&output_nml bathymetry_file = '"//WD_BATHY_FILE//"', output_to_file = .false. /"//NL// &
-               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
-               "&ocean_wetdry_nml enable = .true. /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 4000.0"//NL// &
+               "dy = 4000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.02"//NL// &
+               "wind_stress_y = 0.02"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "file"'//NL// &
+               "max_depth = 0.4"//NL// &
+               'wind_config = "constant"'//NL// &
+               "[output]"//NL// &
+               'bathymetry_file = "'//WD_BATHY_FILE//'"'//NL// &
+               "output_to_file = false"//NL// &
+               "[ocean.continuity]"//NL// &
+               "ppm_limit_pos = true"//NL// &
+               "[ocean.wetdry]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "wall"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("dtbt_reset", "dtbt_reset_period")
          ! Re-entrant channel with a Gaussian TRENCH (peak_depth > max_depth) at the
          ! domain centre, which on the odd 27 x 19 grid is the middle of cell (14, 10):
          ! the unique deepest, hence CFL-controlling, cell.  It is the first/last
          ! column and row of a 2x1 / 1x2 tile, so its limit reads h across the seam.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.2 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 3000.0, slope_scale = 60000.0 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.2"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 3000.0"//NL// &
+               "slope_scale = 60000.0"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("wetdry_tidal_flat")
          ! Tidal flat: a beach (file bathymetry, 0.02 m at the west wall deepening
          ! to 1.0 m by i = 8, east edge column floored at 0.6 m) plus two shoals on the line j = 9.5 (one
@@ -1080,34 +1401,76 @@ contains
          ! open edge is split by py > 1 and the front reaches the corner where
          ! the j seam meets it.  Sigma, ssp_rk2.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 4000.0, dy = 4000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'file', max_depth = 2.0, wind_config = 'constant' /"//NL// &
-               "&output_nml bathymetry_file = '"//WDT_BATHY_FILE//"', output_to_file = .false. /"//NL// &
-               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
-               "&ocean_wetdry_nml enable = .true. /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'tidal', south = 'wall', north = 'wall', "// &
-               "east_n_tidal = 1, east_tidal_amp = 0.25, east_tidal_phase = 0.0, "// &
-               "east_tidal_omega = 1.4051890e-4 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 4000.0"//NL// &
+               "dy = 4000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.0"//NL// &
+               "wind_stress_y = 0.0"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "file"'//NL// &
+               "max_depth = 2.0"//NL// &
+               'wind_config = "constant"'//NL// &
+               "[output]"//NL// &
+               'bathymetry_file = "'//WDT_BATHY_FILE//'"'//NL// &
+               "output_to_file = false"//NL// &
+               "[ocean.continuity]"//NL// &
+               "ppm_limit_pos = true"//NL// &
+               "[ocean.wetdry]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "tidal"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "east_n_tidal = 1"//NL// &
+               "east_tidal_amp = [0.25]"//NL// &
+               "east_tidal_phase = [0.0]"//NL// &
+               "east_tidal_omega = [1.4051890e-4]"//NL
       case ("wetdry_open_flat")
          ! The beach turned north-south (shallow north, 1.0 m at the south edge)
          ! under a TIDAL south edge and a Flather OPEN east edge (an open x open
          ! corner); shoals near the south edge at the i seam, beside the east edge
          ! and on the i seam (edge columns floored at 0.6 m).
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 4000.0, dy = 4000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'file', max_depth = 2.0, wind_config = 'constant' /"//NL// &
-               "&output_nml bathymetry_file = '"//WDO_BATHY_FILE//"', output_to_file = .false. /"//NL// &
-               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
-               "&ocean_wetdry_nml enable = .true. /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'open', south = 'tidal', north = 'wall', "// &
-               "south_n_tidal = 1, south_tidal_amp = 0.25, south_tidal_phase = 0.0, "// &
-               "south_tidal_omega = 1.4051890e-4 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 4000.0"//NL// &
+               "dy = 4000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.0"//NL// &
+               "wind_stress_y = 0.0"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "file"'//NL// &
+               "max_depth = 2.0"//NL// &
+               'wind_config = "constant"'//NL// &
+               "[output]"//NL// &
+               'bathymetry_file = "'//WDO_BATHY_FILE//'"'//NL// &
+               "output_to_file = false"//NL// &
+               "[ocean.continuity]"//NL// &
+               "ppm_limit_pos = true"//NL// &
+               "[ocean.wetdry]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "open"'//NL// &
+               'south = "tidal"'//NL// &
+               'north = "wall"'//NL// &
+               "south_n_tidal = 1"//NL// &
+               "south_tidal_amp = [0.25]"//NL// &
+               "south_tidal_phase = [0.0]"//NL// &
+               "south_tidal_omega = [1.4051890e-4]"//NL
       case ("tracer_ppm_h3")
          ! Re-entrant channel (periodic west/east) over a seamount, sigma, with
          ! the ppm_h3 horizontal tracer advection (Huynh edges + limiter, a
@@ -1115,27 +1478,58 @@ contains
          ! per-step path read tracer ghosts across the seam on every tile
          ! boundary and across the wrap.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.2 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
-               "&ocean_vmix_nml tracer_advection_scheme = 'ppm_h3' /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.2"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 1500.0"//NL// &
+               "slope_scale = 60000.0"//NL// &
+               "[ocean.vmix]"//NL// &
+               'tracer_advection_scheme = "ppm_h3"'//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("open_obc")
          ! Tidal west edge (eta target) + Flather open east edge.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 10000.0, dy = 10000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.02 /"//NL// &
-               "&vcoord_nml vcoord_type = 'zstar_sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 200.0, slope_scale = 40000.0 /"//NL// &
-               "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
-               "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
-               "west_tidal_omega = 1.4051890e-4 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 10000.0"//NL// &
+               "dy = 10000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.05"//NL// &
+               "wind_stress_y = 0.02"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "zstar_sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 200.0"//NL// &
+               "slope_scale = 40000.0"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "tidal"'//NL// &
+               'east = "open"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL// &
+               "west_n_tidal = 1"//NL// &
+               "west_tidal_amp = [0.5]"//NL// &
+               "west_tidal_phase = [0.0]"//NL// &
+               "west_tidal_omega = [1.4051890e-4]"//NL
       case ("obc_epbl")
          ! Flather east edge, sigma, EPBL, cooled surface: the open-edge ghost
          ! columns are evolved by the continuity chain and the owned boundary
@@ -1152,32 +1546,80 @@ contains
          ! ghosts in the remainder; on an AVX-512 build (`-march=native`) the
          ! tile may sit differently in the vector width and this case may then
          ! not catch a regression.  That caveat does not apply to CI.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-               "&time_nml t_end = 21600.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
-               "&tracer_nml initial_temperature = 9.0, initial_salinity = 34.8, "// &
-               "T_init_surface = 16.0, T_init_bottom = 3.0, "// &
-               "S_init_surface = 34.6, S_init_bottom = 35.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, nu_4 = 1.0e11 /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&ocean_eos_nml eos = 'linear' /"//NL// &
-               "&ocean_ic_nml T_ref = 10.0, S_ref = 35.0, alpha_T = 0.2, beta_S = 0.77, "// &
-               "rho_0 = 1027.0 /"//NL// &
-               "&ocean_bdrag_nml form = 'quadratic', cd = 0.003, bg_vel = 0.05, hbbl = 0.0 /"//NL// &
-               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
-               "&grid_nml nx = 24, ny = 16, nghost = 4, dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.0 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'spoon', max_depth = 2000.0, "// &
-               "edge_depth = 300.0, slope_scale = 150000.0, wind_config = 'constant', "// &
-               "coriolis_beta = 2.0e-11, coriolis_y_ref = 160000.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
-               "&ocean_vmix_nml use_kpp = .false. /"//NL// &
-               "&ocean_epbl_nml enable = .true., mld_use_prev_guess = .true., "// &
-               "mstar_scheme = 'om4' /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'open', south = 'wall', north = 'wall' /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[mpi]"//NL// &
+               "px = "//trim(spx)//NL// &
+               "py = "//trim(spy)//NL// &
+               "[time]"//NL// &
+               "t_end = 21600.0"//NL// &
+               "dt_fixed = 900.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 10"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = 9.0"//NL// &
+               "initial_salinity = 34.8"//NL// &
+               "T_init_surface = 16.0"//NL// &
+               "T_init_bottom = 3.0"//NL// &
+               "S_init_surface = 34.6"//NL// &
+               "S_init_bottom = 35.0"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "'//scheme//'"'//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               "nu_4 = 1.0e11"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[ocean.eos]"//NL// &
+               'eos = "linear"'//NL// &
+               "[ocean.ic]"//NL// &
+               "T_ref = 10.0"//NL// &
+               "S_ref = 35.0"//NL// &
+               "alpha_T = 0.2"//NL// &
+               "beta_S = 0.77"//NL// &
+               "rho_0 = 1027.0"//NL// &
+               "[ocean.bdrag]"//NL// &
+               'form = "quadratic"'//NL// &
+               "cd = 0.003"//NL// &
+               "bg_vel = 0.05"//NL// &
+               "hbbl = 0.0"//NL// &
+               "[ocean.vdiff]"//NL// &
+               "implicit_drag = true"//NL// &
+               "[grid]"//NL// &
+               "nx = 24"//NL// &
+               "ny = 16"//NL// &
+               "nghost = 4"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "wind_stress_y = 0.0"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "spoon"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 300.0"//NL// &
+               "slope_scale = 150000.0"//NL// &
+               'wind_config = "constant"'//NL// &
+               "coriolis_beta = 2.0e-11"//NL// &
+               "coriolis_y_ref = 160000.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "q_heat = -60.0"//NL// &
+               "[ocean.vmix]"//NL// &
+               "use_kpp = false"//NL// &
+               "[ocean.epbl]"//NL// &
+               "enable = true"//NL// &
+               "mld_use_prev_guess = true"//NL// &
+               'mstar_scheme = "om4"'//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "wall"'//NL// &
+               'east = "open"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("chapman_obc")
          ! Chapman radiation on the east AND north edges (both split by the
          ! decomposition: py > 1 splits the east line, px > 1 the north one)
@@ -1186,15 +1628,32 @@ contains
          ! edge-mean eta target and the SW-corner phase-speed scale are
          ! global quantities; a per-rank partial mean breaks the compare.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 10000.0, dy = 10000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.02 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 500.0, slope_scale = 40000.0 /"//NL// &
-               "&ocean_bc_nml west = 'tidal', east = 'chapman', south = 'wall', north = 'chapman', "// &
-               "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
-               "west_tidal_omega = 1.4051890e-4 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 10000.0"//NL// &
+               "dy = 10000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "wind_stress_x = 0.05"//NL// &
+               "wind_stress_y = 0.02"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 500.0"//NL// &
+               "slope_scale = 40000.0"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "tidal"'//NL// &
+               'east = "chapman"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "chapman"'//NL// &
+               "west_n_tidal = 1"//NL// &
+               "west_tidal_amp = [0.5]"//NL// &
+               "west_tidal_phase = [0.0]"//NL// &
+               "west_tidal_omega = [1.4051890e-4]"//NL
       case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3", "eulz_tripolar")
          ! Analytic tripolar cap (59N-83N, phi_join 74N) closed by the north
          ! fold, periodic in x, under a constant wind, with the double-Drake
@@ -1205,24 +1664,46 @@ contains
          ! through the distributed fold exchange, 1xN through the local
          ! kernels.  `compare` is size-agnostic.
          nml = common// &
-               "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
-               "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
-               "phi_join = 74.0, lon_pole = 0.0, rad_earth = "//trim(rad_earth_s)//", "// &
-               "coriolis_scheme = 'planetary' /"//NL// &
-               "&physics_nml wind_stress_x = "//trim(wind_s)//", wind_stress_y = "//trim(wind_y_s)//" /"//NL// &
-               "&vcoord_nml vcoord_type = '"//trim(merge("eulerian_z", "sigma     ", label == "eulz_tripolar"))//"' /"//NL// &
-               "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
-               "slope_scale = 0.2 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'tripolar_fold' /"//NL
+               "[grid]"//NL// &
+               "nx = 30"//NL// &
+               "ny = 24"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 12.0"//NL// &
+               "dy = 1.0"//NL// &
+               "[ocean.grid]"//NL// &
+               'grid_config = "tripolar"'//NL// &
+               "lon_west = 0.0"//NL// &
+               "lat_south = 59.0"//NL// &
+               "phi_join = 74.0"//NL// &
+               "lon_pole = 0.0"//NL// &
+               "rad_earth = "//trim(rad_earth_s)//NL// &
+               'coriolis_scheme = "planetary"'//NL// &
+               "[physics]"//NL// &
+               "wind_stress_x = "//trim(wind_s)//NL// &
+               "wind_stress_y = "//trim(wind_y_s)//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "'//trim(merge("eulerian_z", "sigma     ", label == "eulz_tripolar"))//'"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "double_drake"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.2"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "tripolar_fold"'//NL
          if (label == "drain_ratio_fold" .or. label == "drain_ratio_fold_h3") then
             ! Windowed tracer drain (ratio 4) across the tripolar fold.  A
             ! 1/100-size planet (rad_earth) brings the accumulated window
             ! Courant number above 0.5 so the sub-cycle runs >1 pass, and
             ! the cap rows (fold seam) carry the flow; thermodynamics on.
             nml = nml// &
-                  "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
-                  "&ocean_vmix_nml dt_therm_ratio = 4, dt_tracer_advect_ratio = 4 /"//NL
+                  "[ocean.thermo]"//NL// &
+                  "enable_thermodynamics = true"//NL// &
+                  "q_heat = -100.0"//NL// &
+                  "[ocean.vmix]"//NL// &
+                  "dt_therm_ratio = 4"//NL// &
+                  "dt_tracer_advect_ratio = 4"//NL
          end if
          if (label == "redi_cfl_fold") then
             ! Redi at a diffusivity far above the explicit-diffusion limit
@@ -1230,10 +1711,14 @@ contains
             ! n_itt > 1 passes, each followed by a tracer-halo refresh that
             ! must cross the fold and the periodic seam.
             nml = nml// &
-                  "&ocean_eos_nml eos = 'wright' /"//NL// &
-                  "&ocean_slopes_nml enable = .true. /"//NL// &
-                  "&ocean_redi_nml enable = .true., khtr = 2.0e6, "// &
-                  "check_diffusive_cfl = .true. /"//NL
+                  "[ocean.eos]"//NL// &
+                  'eos = "wright"'//NL// &
+                  "[ocean.slopes]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.redi]"//NL// &
+                  "enable = true"//NL// &
+                  "khtr = 2.0e6"//NL// &
+                  "check_diffusive_cfl = true"//NL
          end if
       case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
             "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
@@ -1246,50 +1731,87 @@ contains
          ! OM3-parity labels (the `select case` after the block below) each
          ! add ONE feature to this basin.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = "//trim(sng)//", "// &
-               "dx = 1.0, dy = 1.0 /"//NL// &
-               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
-               "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-               "&vcoord_nml vcoord_type = '"// &
-               trim(merge("zstar     ", merge("eulerian_z", "sigma     ", label == "eulz_epbl_mle"), &
-                          label == "diabatic_end"))// &
-               "' /"//NL// &
-               "&ocean_eos_nml eos = 'wright' /"//NL// &
-               "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
-               "edge_depth = 300.0, slope_scale = 300000.0, wind_config = '2gyre', "// &
-               "taux_magnitude = 0.1 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = "//trim(sng)//NL// &
+               "dx = 1.0"//NL// &
+               "dy = 1.0"//NL// &
+               "[ocean.grid]"//NL// &
+               'grid_config = "spherical"'//NL// &
+               "lon_west = 0.0"//NL// &
+               "lat_south = 20.0"//NL// &
+               "rad_earth = 6.371e6"//NL// &
+               'coriolis_scheme = "planetary"'//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "'//trim(merge("zstar     ", merge("eulerian_z", "sigma     ", label == "eulz_epbl_mle"), &
+                                             label == "diabatic_end"))//'"'//NL// &
+               "[ocean.eos]"//NL// &
+               'eos = "wright"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "spoon"'//NL// &
+               "max_depth = 3000.0"//NL// &
+               "edge_depth = 300.0"//NL// &
+               "slope_scale = 300000.0"//NL// &
+               'wind_config = "2gyre"'//NL// &
+               "taux_magnitude = 0.1"//NL
          ! `body_tide_nodal`: the equilibrium body tide (four constituents, with the
          ! nodal correction, per-cell `tides_build_struct` sin/cos on the lon-lat
          ! tile) plus a tidal west edge on the same four constituents with
          ! `obc_tidal_nodal` (host phase reduction + `safe_cos`).  Every other
          ! label keeps four walls.
          if (label == "body_tide_nodal") then
-            sph_bc = "&ocean_bc_nml west = 'tidal', east = 'wall', south = 'wall', "// &
-                     "north = 'wall', west_n_tidal = 4, "// &
-                     "west_tidal_amp = 0.4, 0.2, 0.1, 0.08, "// &
-                     "west_tidal_phase = 0.3, 1.1, 2.0, 4.0, "// &
-                     "west_tidal_omega = 1.4051890e-4, 1.4544410e-4, 0.7292117e-4, 0.6759774e-4, "// &
-                     "obc_tidal_nodal = .true. /"//NL// &
-                     "&ocean_tides_nml enable = .true., constituents = 'M2,S2,K1,O1', "// &
-                     "ref_date = '2020-03-15', add_nodal = .true. /"//NL
+            sph_bc = "[ocean.bc]"//NL// &
+                     'west = "tidal"'//NL// &
+                     'east = "wall"'//NL// &
+                     'south = "wall"'//NL// &
+                     'north = "wall"'//NL// &
+                     "west_n_tidal = 4"//NL// &
+                     "west_tidal_amp = [0.4, 0.2, 0.1, 0.08]"//NL// &
+                     "west_tidal_phase = [0.3, 1.1, 2.0, 4.0]"//NL// &
+                     "west_tidal_omega = [1.4051890e-4, 1.4544410e-4, 0.7292117e-4, 0.6759774e-4]"//NL// &
+                     "obc_tidal_nodal = true"//NL// &
+                     "[ocean.tides]"//NL// &
+                     "enable = true"//NL// &
+                     'constituents = "M2,S2,K1,O1"'//NL// &
+                     'ref_date = "2020-03-15"'//NL// &
+                     "add_nodal = true"//NL
          else
-            sph_bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+            sph_bc = "[ocean.bc]"//NL// &
+                     'west = "wall"'//NL// &
+                     'east = "wall"'//NL// &
+                     'south = "wall"'//NL// &
+                     'north = "wall"'//NL
          end if
          nml = nml//sph_bc
          if (label == "closures") then
             nml = nml// &
-                  "&ocean_vmix_nml use_kpp = .false. /"//NL// &
-                  "&ocean_epbl_nml enable = .true. /"//NL// &
-                  "&ocean_foxkemper_nml enable = .true. /"//NL// &
-                  "&ocean_slopes_nml enable = .true. /"//NL// &
-                  "&ocean_gm_nml enable = .true. /"//NL// &
-                  "&ocean_meke_nml enable = .true. /"//NL// &
-                  "&ocean_redi_nml enable = .true., khtr = 100.0 /"//NL// &
-                  "&ocean_kappa_shear_nml enable = .true. /"//NL// &
-                  "&ocean_tidal_mixing_nml enable = .true., e_uniform = 1.0e-3 /"//NL// &
-                  "&ocean_conv_nml enable = .true. /"//NL// &
-                  "&ocean_geothermal_nml enable = .true. /"//NL// &
-                  "&ocean_hdiff_nml kappa_h = 100.0 /"//NL
+                  "[ocean.vmix]"//NL// &
+                  "use_kpp = false"//NL// &
+                  "[ocean.epbl]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.foxkemper]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.slopes]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.gm]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.meke]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.redi]"//NL// &
+                  "enable = true"//NL// &
+                  "khtr = 100.0"//NL// &
+                  "[ocean.kappa_shear]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.tidal_mixing]"//NL// &
+                  "enable = true"//NL// &
+                  "e_uniform = 1.0e-3"//NL// &
+                  "[ocean.conv]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.geothermal]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.hdiff]"//NL// &
+                  "kappa_h = 100.0"//NL
          end if
          select case (label)
          case ("eulz_epbl_mle")
@@ -1297,68 +1819,111 @@ contains
             ! with EPBL and Fox-Kemper MLE: the pair that once drifted at
             ! round-off under ssp_rk2.
             nml = nml// &
-                  "&ocean_vmix_nml use_kpp = .false. /"//NL// &
-                  "&ocean_epbl_nml enable = .true., mstar_scheme = 'om4', "// &
-                  "mld_use_prev_guess = .true. /"//NL// &
-                  "&ocean_foxkemper_nml enable = .true., use_mom_mixrate = .true., "// &
-                  "mld_decay_time = 86400.0 /"//NL
+                  "[ocean.vmix]"//NL// &
+                  "use_kpp = false"//NL// &
+                  "[ocean.epbl]"//NL// &
+                  "enable = true"//NL// &
+                  'mstar_scheme = "om4"'//NL// &
+                  "mld_use_prev_guess = true"//NL// &
+                  "[ocean.foxkemper]"//NL// &
+                  "enable = true"//NL// &
+                  "use_mom_mixrate = true"//NL// &
+                  "mld_decay_time = 86400.0"//NL
          case ("gm_ebt_struct")
             ! GM with the EBT vertical structure of KhTh (the structure is the
             ! wave-speed slot's `ebt_struct`, a per-cell field read at both
             ! cells of every face).
             nml = nml// &
-                  "&ocean_slopes_nml enable = .true. /"//NL// &
-                  "&ocean_wavespeed_nml enable = .true., use_ebt = .true. /"//NL// &
-                  "&ocean_gm_nml enable = .true., khth = 500.0, use_ebt_struct = .true. /"//NL
+                  "[ocean.slopes]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.wavespeed]"//NL// &
+                  "enable = true"//NL// &
+                  "use_ebt = true"//NL// &
+                  "[ocean.gm]"//NL// &
+                  "enable = true"//NL// &
+                  "khth = 500.0"//NL// &
+                  "use_ebt_struct = true"//NL
          case ("gm_fgnv")
             ! GM with the FGNV streamfunction (a tridiagonal BVP per face
             ! column on the cg1 of the two bounding cells).
             nml = nml// &
-                  "&ocean_slopes_nml enable = .true. /"//NL// &
-                  "&ocean_wavespeed_nml enable = .true. /"//NL// &
-                  "&ocean_gm_nml enable = .true., khth = 500.0, use_fgnv = .true., "// &
-                  "fgnv_filter_scale = 0.1 /"//NL
+                  "[ocean.slopes]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.wavespeed]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.gm]"//NL// &
+                  "enable = true"//NL// &
+                  "khth = 500.0"//NL// &
+                  "use_fgnv = true"//NL// &
+                  "fgnv_filter_scale = 0.1"//NL
          case ("meke_gm_work")
             ! MEKE sourced from the work of the final bolus transports, fed
             ! back into the VarMix KhTh (`khth_fac`) so the source reaches
             ! the state: with the feedback off the MEKE field alone changes.
             nml = nml// &
-                  "&ocean_slopes_nml enable = .true. /"//NL// &
-                  "&ocean_wavespeed_nml enable = .true. /"//NL// &
-                  "&ocean_varmix_nml enable = .true., khth = 500.0 /"//NL// &
-                  "&ocean_gm_nml enable = .true., khth = 500.0, gm_src_form = 'work' /"//NL// &
-                  "&ocean_meke_nml enable = .true., gmcoeff = 0.15, damping = 1.0e-6, "// &
-                  "khth_fac = 1.0, alpha_grid = 1.0 /"//NL
+                  "[ocean.slopes]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.wavespeed]"//NL// &
+                  "enable = true"//NL// &
+                  "[ocean.varmix]"//NL// &
+                  "enable = true"//NL// &
+                  "khth = 500.0"//NL// &
+                  "[ocean.gm]"//NL// &
+                  "enable = true"//NL// &
+                  "khth = 500.0"//NL// &
+                  'gm_src_form = "work"'//NL// &
+                  "[ocean.meke]"//NL// &
+                  "enable = true"//NL// &
+                  "gmcoeff = 0.15"//NL// &
+                  "damping = 1.0e-6"//NL// &
+                  "khth_fac = 1.0"//NL// &
+                  "alpha_grid = 1.0"//NL
          case ("vmix_no_interior")
             ! No interior (shear / PP81) closure: KPP boundary layer only.
             nml = nml// &
-                  "&ocean_vmix_nml interior_closure = 'none' /"//NL
+                  "[ocean.vmix]"//NL// &
+                  'interior_closure = "none"'//NL
          case ("tidal_files", "tidal_polzin")
             ! Tidal mixing with `tideamp` and `h2` read from a whole-grid
             ! file (each rank reads its own band); `tidal_polzin` adds the
             ! Polzin stretched-height vertical profile.
             nml = nml// &
-                  "&ocean_tidal_mixing_nml enable = .true., e_compute = .true., "// &
-                  "tideamp_source = 'file', tideamp_file = '"//TIDE_FILE//"', "// &
-                  "h2_source = 'file', h2_file = '"//TIDE_FILE//"', "// &
-                  "kd_max = 0.1, energy_limiter = 'reinject', bed_share = 'lump'"
-            if (label == "tidal_polzin") nml = nml//", profile = 'polzin'"
-            nml = nml//" /"//NL
+                  "[ocean.tidal_mixing]"//NL// &
+                  "enable = true"//NL// &
+                  "e_compute = true"//NL// &
+                  'tideamp_source = "file"'//NL// &
+                  'tideamp_file = "'//TIDE_FILE//'"'//NL// &
+                  'h2_source = "file"'//NL// &
+                  'h2_file = "'//TIDE_FILE//'"'//NL// &
+                  "kd_max = 0.1"//NL// &
+                  'energy_limiter = "reinject"'//NL// &
+                  'bed_share = "lump"'//NL
+            if (label == "tidal_polzin") nml = nml//'profile = "polzin"'//NL
          case ("bbl_lotw")
             ! Law-of-the-wall BBL tracer mixing: needs the per-face viscous
             ! BBL (bbl_glue + a bottom drag with hbbl > 0) under it.
             nml = nml// &
-                  "&ocean_vdiff_nml hvel_mom6 = .true., bbl_glue = .true. /"//NL// &
-                  "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, "// &
-                  "bg_vel = 0.1 /"//NL// &
-                  "&ocean_bbl_mixing_nml enable = .true. /"//NL
+                  "[ocean.vdiff]"//NL// &
+                  "hvel_mom6 = true"//NL// &
+                  "bbl_glue = true"//NL// &
+                  "[ocean.bdrag]"//NL// &
+                  'form = "quadratic"'//NL// &
+                  "cd = 3.0e-3"//NL// &
+                  "hbbl = 10.0"//NL// &
+                  "bg_vel = 0.1"//NL// &
+                  "[ocean.bbl_mixing]"//NL// &
+                  "enable = true"//NL
          case ("diabatic_end")
             ! OM3 ordering of the thermo interval: surface heat flux +
             ! KPP vertical tracer diffusion applied at the interval end,
             ! then the ALE remap (pred_corr only; the loop skips ssp_rk2).
             nml = nml// &
-                  "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
-                  "&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
+                  "[ocean.thermo]"//NL// &
+                  "enable_thermodynamics = true"//NL// &
+                  "q_heat = -100.0"//NL// &
+                  "[ocean.vmix]"//NL// &
+                  "dt_therm_ratio = 2"//NL// &
+                  "diabatic_first = false"//NL
          end select
       case ("obc_radiation_sponge", "obc_sponge_east")
          ! Orlanski-radiating open south edge with tracer reservoirs, a
@@ -1370,19 +1935,35 @@ contains
             sponge_e = "sponge"
          end if
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 10000.0, dy = 10000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 500.0, slope_scale = 40000.0, wind_config = '2gyre', "// &
-               "taux_magnitude = 0.05 /"//NL// &
-               "&ocean_bc_nml west = '"//trim(sponge_w)//"', east = '"//trim(sponge_e)// &
-               "', south = 'open', "// &
-               "north = 'clamped', north_clamped_v = -0.01, sponge_width = 3, "// &
-               "sponge_strength = 1.0e-4, sponge_relax_tracers = .true., "// &
-               "radiation_scheme = 'orlanski', res_lscale_out = 20000.0, "// &
-               "res_lscale_in = 20000.0 /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 10000.0"//NL// &
+               "dy = 10000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.0e-4"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 2000.0"//NL// &
+               "edge_depth = 500.0"//NL// &
+               "slope_scale = 40000.0"//NL// &
+               'wind_config = "2gyre"'//NL// &
+               "taux_magnitude = 0.05"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "'//trim(sponge_w)//'"'//NL// &
+               'east = "'//trim(sponge_e)//'"'//NL// &
+               'south = "open"'//NL// &
+               'north = "clamped"'//NL// &
+               "north_clamped_v = -0.01"//NL// &
+               "sponge_width = 3"//NL// &
+               "sponge_strength = 1.0e-4"//NL// &
+               "sponge_relax_tracers = true"//NL// &
+               'radiation_scheme = "orlanski"'//NL// &
+               "res_lscale_out = 20000.0"//NL// &
+               "res_lscale_in = 20000.0"//NL
       case ("file_readers", "file_readers_zstar_full", "file_readers_zstar")
          ! The three per-rank windowed readers (supergrid, bathymetry,
          ! z-level T/S IC) on files the test writes, with the global-1-degree
@@ -1396,23 +1977,54 @@ contains
          ! ML is the top layer alone, mu(0) - mu(-1) = 0, and MLE moves
          ! nothing.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3 /"//NL// &
-               "&ocean_grid_nml grid_config = 'supergrid', supergrid_file = '"//SG_FILE// &
-               "', coriolis_scheme = 'planetary', rad_earth = 6.371e6 /"//NL// &
-               "&physics_nml wind_stress_x = 0.08, wind_stress_y = 0.0 /"//NL// &
-               "&ocean_topo_nml topo_config = 'file', max_depth = 3000.0 /"//NL// &
-               "&output_nml bathymetry_file = '"//BATHY_FILE//"', output_to_file = .false. /"//NL// &
-               "&ocean_zinit_nml enable = .true., source = 'file', file = '"//ZINIT_FILE//"' /"//NL// &
-               "&ocean_pgf_nml form = 'fv_mom6' /"//NL// &
-               "&ocean_coriolis_nml form = 'sadourny_energy' /"//NL// &
-               "&ocean_eos_nml eos = 'wright' /"//NL// &
-               "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"//NL// &
-               "&ocean_redi_nml enable = .true., khtr = 600.0 /"//NL// &
-               "&ocean_vmix_nml use_kpp = .false. /"//NL// &
-               "&ocean_epbl_nml enable = .true. /"//NL// &
-               "&ocean_foxkemper_nml enable = .true., ce = 0.08 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "[ocean.grid]"//NL// &
+               'grid_config = "supergrid"'//NL// &
+               'supergrid_file = "'//SG_FILE//'"'//NL// &
+               'coriolis_scheme = "planetary"'//NL// &
+               "rad_earth = 6.371e6"//NL// &
+               "[physics]"//NL// &
+               "wind_stress_x = 0.08"//NL// &
+               "wind_stress_y = 0.0"//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "file"'//NL// &
+               "max_depth = 3000.0"//NL// &
+               "[output]"//NL// &
+               'bathymetry_file = "'//BATHY_FILE//'"'//NL// &
+               "output_to_file = false"//NL// &
+               "[ocean.zinit]"//NL// &
+               "enable = true"//NL// &
+               'source = "file"'//NL// &
+               'file = "'//ZINIT_FILE//'"'//NL// &
+               "[ocean.pgf]"//NL// &
+               'form = "fv_mom6"'//NL// &
+               "[ocean.coriolis]"//NL// &
+               'form = "sadourny_energy"'//NL// &
+               "[ocean.eos]"//NL// &
+               'eos = "wright"'//NL// &
+               "[ocean.bdrag]"//NL// &
+               'form = "quadratic"'//NL// &
+               "cd = 3.0e-3"//NL// &
+               "hbbl = 10.0"//NL// &
+               "bg_vel = 0.1"//NL// &
+               "[ocean.redi]"//NL// &
+               "enable = true"//NL// &
+               "khtr = 600.0"//NL// &
+               "[ocean.vmix]"//NL// &
+               "use_kpp = false"//NL// &
+               "[ocean.epbl]"//NL// &
+               "enable = true"//NL// &
+               "[ocean.foxkemper]"//NL// &
+               "enable = true"//NL// &
+               "ce = 0.08"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("sea_ice", "sea_ice_transport")
          ! Sea ice on the ocean's decomposition (thermo + EVP dynamics +
          ! the ice->ocean stress blend; category transport off): a cold,
@@ -1434,65 +2046,151 @@ contains
          ! even -1.2 degC at the surface) melts every physical cell out at
          ! the first thermo window and leaves the EVP, the transport and
          ! the blend nothing to move.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-               "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
-               "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-               "dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, "// &
-               "edge_depth = 800.0, slope_scale = 60000.0 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
-               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-               "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
-               "restore_lambda = 20.0, sw_down = 0.0, dynamics = .true., "// &
-               "evp_sub_steps = 30, cfl_trunc = 0.01, project_ci = .true., "// &
-               "transport = "//merge(".true. ", ".false.", label == "sea_ice_transport")// &
-               ", adv_substeps = 2 /"//NL// &
-               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'wall' /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[mpi]"//NL// &
+               "px = "//trim(spx)//NL// &
+               "py = "//trim(spy)//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 900.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 4"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = -1.83"//NL// &
+               "initial_salinity = 34.0"//NL// &
+               "T_init_surface = -1.82"//NL// &
+               "T_init_bottom = -1.835"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "'//scheme//'"'//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[grid]"//NL// &
+               "nx = "//trim(snx)//NL// &
+               "ny = "//trim(sny)//NL// &
+               "nghost = 3"//NL// &
+               "dx = 20000.0"//NL// &
+               "dy = 20000.0"//NL// &
+               "[physics]"//NL// &
+               "coriolis_f = 1.4e-4"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "wind_stress_y = 0.04"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "seamount"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "edge_depth = 800.0"//NL// &
+               "slope_scale = 60000.0"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "q_heat = -100.0"//NL// &
+               "[ocean.vmix]"//NL// &
+               "dt_therm_ratio = 2"//NL// &
+               "[ocean.ice]"//NL// &
+               "enable = true"//NL// &
+               "ncat = 5"//NL// &
+               "nk_ice = 2"//NL// &
+               "air_temp = -20.0"//NL// &
+               "restore_lambda = 20.0"//NL// &
+               "sw_down = 0.0"//NL// &
+               "dynamics = true"//NL// &
+               "evp_sub_steps = 30"//NL// &
+               "cfl_trunc = 0.01"//NL// &
+               "project_ci = true"//NL// &
+               "transport = "//merge("true ", "false", label == "sea_ice_transport")//NL// &
+               "adv_substeps = 2"//NL// &
+               "[ocean.ice_ic]"//NL// &
+               'conc_config = "uniform"'//NL// &
+               "h_ice = 1.0"//NL// &
+               "conc = 0.7"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "wall"'//NL
       case ("sea_ice_fold", "sea_ice_fold_nodyn")
          ! Sea ice on the tripolar cap (A7, #143): the `tripolar` grid / land /
          ! fold + the `sea_ice_transport` ice block (cold column just above
          ! the liquidus, partial uniform cover, CFL clip live, `project_ci`,
          ! 2 advective substeps), under an oblique wind so the ice drifts
          ! into the fold row.  `_nodyn` switches the EVP off.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-               "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
-               "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
-               "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
-               "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, "// &
-               "coriolis_scheme = 'planetary' /"//NL// &
-               "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
-               "slope_scale = 0.2 /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
-               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-               "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
-               "restore_lambda = 20.0, sw_down = 0.0, "// &
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[mpi]"//NL// &
+               "px = "//trim(spx)//NL// &
+               "py = "//trim(spy)//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 900.0"//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = 4"//NL// &
+               "[tracer]"//NL// &
+               "initial_temperature = -1.83"//NL// &
+               "initial_salinity = 34.0"//NL// &
+               "T_init_surface = -1.82"//NL// &
+               "T_init_bottom = -1.835"//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "'//scheme//'"'//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[grid]"//NL// &
+               "nx = 30"//NL// &
+               "ny = 24"//NL// &
+               "nghost = 3"//NL// &
+               "dx = 12.0"//NL// &
+               "dy = 1.0"//NL// &
+               "[ocean.grid]"//NL// &
+               'grid_config = "tripolar"'//NL// &
+               "lon_west = 0.0"//NL// &
+               "lat_south = 59.0"//NL// &
+               "phi_join = 74.0"//NL// &
+               "lon_pole = 0.0"//NL// &
+               "rad_earth = 6.378e6"//NL// &
+               'coriolis_scheme = "planetary"'//NL// &
+               "[physics]"//NL// &
+               "wind_stress_x = 0.1"//NL// &
+               "wind_stress_y = 0.04"//NL// &
+               "[vcoord]"//NL// &
+               'vcoord_type = "sigma"'//NL// &
+               "[ocean.topo]"//NL// &
+               'topo_config = "double_drake"'//NL// &
+               "max_depth = 1000.0"//NL// &
+               "slope_scale = 0.2"//NL// &
+               "[ocean.thermo]"//NL// &
+               "enable_thermodynamics = true"//NL// &
+               "q_heat = -100.0"//NL// &
+               "[ocean.vmix]"//NL// &
+               "dt_therm_ratio = 2"//NL// &
+               "[ocean.ice]"//NL// &
+               "enable = true"//NL// &
+               "ncat = 5"//NL// &
+               "nk_ice = 2"//NL// &
+               "air_temp = -20.0"//NL// &
+               "restore_lambda = 20.0"//NL// &
+               "sw_down = 0.0"//NL// &
                ice_dyn// &
-               "transport = .true., adv_substeps = 2 /"//NL// &
-               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
-               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-               "north = 'tripolar_fold' /"//NL
+               "transport = true"//NL// &
+               "adv_substeps = 2"//NL// &
+               "[ocean.ice_ic]"//NL// &
+               'conc_config = "uniform"'//NL// &
+               "h_ice = 1.0"//NL// &
+               "conc = 0.7"//NL// &
+               "[ocean.bc]"//NL// &
+               'west = "periodic"'//NL// &
+               'east = "periodic"'//NL// &
+               'south = "wall"'//NL// &
+               'north = "tripolar_fold"'//NL
       case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
             "bulk_flux_ice_fw", "bulk_flux_bl", "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
             "bulk_flux_bl_ratio2", "bulk_flux_ice_fold", "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
@@ -1538,75 +2236,132 @@ contains
          ! (the bulk consumer), so a stale ghost flux makes the seam tile disagree with
          ! its neighbour (and the serial periodic seam with the interior).  `_bl_sw`
          ! adds `sw_source = 'q_sw'` so `sw_net` is read in the ghosts too.
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
-               "&nonhydrostatic_nml nz_layers = "//merge("10", "4 ", &
-                                                       index(label, "bulk_flux_bl") == 1 .or. label == "fw_mass_thin")//" /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
-               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&ocean_eos_nml eos = 'wright' /"//NL
+         nml = "[sim]"//NL// &
+               'sim_type = "ocean"'//NL// &
+               "[mpi]"//NL// &
+               "px = "//trim(spx)//NL// &
+               "py = "//trim(spy)//NL// &
+               "[time]"//NL// &
+               "t_end = 86400.0"//NL// &
+               "dt_fixed = 900.0"//NL// &
+               'start_date = "2000-06-21"'//NL// &
+               "[nonhydrostatic]"//NL// &
+               "nz_layers = "//merge("10", "4 ", &
+                                     index(label, "bulk_flux_bl") == 1 .or. label == "fw_mass_thin")//NL// &
+               "[ocean.bt]"//NL// &
+               "auto_n_inner = true"//NL// &
+               'split_scheme = "'//scheme//'"'//NL// &
+               "[ocean.hvisc]"//NL// &
+               "nu_h = 200.0"//NL// &
+               'lateral_closure = "smagorinsky"'//NL// &
+               "smag_ah = true"//NL// &
+               "[ocean.diag]"//NL// &
+               "enabled = false"//NL// &
+               "[ocean.eos]"//NL// &
+               'eos = "wright"'//NL
          if (label == "bulk_flux_sw" .or. label == "bulk_flux_bl_sw") then
-            nml = nml//"&ocean_thermo_nml enable_thermodynamics = .true., sw_pen_frac = 0.6, "// &
-                  "sw_source = 'q_sw' /"//NL
+            nml = nml//"[ocean.thermo]"//NL// &
+                  "enable_thermodynamics = true"//NL// &
+                  "sw_pen_frac = 0.6"//NL// &
+                  'sw_source = "q_sw"'//NL
          else
-            nml = nml//"&ocean_thermo_nml enable_thermodynamics = .true. /"//NL
+            nml = nml//"[ocean.thermo]"//NL// &
+                  "enable_thermodynamics = true"//NL
          end if
          nml = nml// &
-               "&ocean_forcing_nml enable_components = .true."// &
-               merge(", freshwater = 'virtual'", repeat(" ", 24), &
-                     label == "bulk_flux_fw" .or. label == "bulk_flux_ice_fw")// &
-               fw_mass_keys(label)//" /"//NL// &
-               "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
-               "z_ta = 10.0 /"//NL
+               "[ocean.forcing]"//NL// &
+               "enable_components = true"//NL// &
+               trim(merge('freshwater = "virtual"'//NL, repeat(" ", 23), &
+                          label == "bulk_flux_fw" .or. label == "bulk_flux_ice_fw"))// &
+               fw_mass_keys(label)// &
+               "[ocean.bulk_flux]"//NL// &
+               "enable = true"//NL// &
+               "n_iter = 5"//NL// &
+               "z_wind = 10.0"//NL// &
+               "z_ta = 10.0"//NL
          if (label == "bulk_flux_bl_epbl") then
-            nml = nml//"&ocean_vmix_nml use_kpp = .false. /"//NL// &
-                  "&ocean_epbl_nml enable = .true. /"//NL
+            nml = nml//"[ocean.vmix]"//NL// &
+                  "use_kpp = false"//NL// &
+                  "[ocean.epbl]"//NL// &
+                  "enable = true"//NL
          end if
          if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. label == "bulk_flux_ice_fold") then
             wl = ATM_COLD_LIST
             if (label == "bulk_flux_ice_fold") wl = ATM_CRSE_COLD_LIST
             nml = nml// &
-                  "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
-                  "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-                  "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
-                  "filelist_tas = '"//trim(wl)//"', filelist_huss = '"//trim(wl)// &
-                  "', filelist_uas = '"//trim(wl)//"', filelist_vas = '"//trim(wl)// &
-                  "', filelist_psl = '"//trim(wl)//"', filelist_rlds = '"//trim(wl)// &
-                  "', filelist_rsds = '"//trim(wl)//"', filelist_prra = '"//trim(wl)// &
-                  "', filelist_prsn = '"//trim(wl)//"' /"//NL// &
-                  "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-                  "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, "// &
-                  "restore_lambda = 20.0, dynamics = .true., evp_sub_steps = 30, "// &
-                  "cfl_trunc = 0.01, project_ci = .true., transport = .true., "// &
-                  "adv_substeps = 2 /"//NL// &
-                  "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL
+                  "[tracer]"//NL// &
+                  "initial_temperature = -1.83"//NL// &
+                  "initial_salinity = 34.0"//NL// &
+                  "T_init_surface = -1.82"//NL// &
+                  "T_init_bottom = -1.835"//NL// &
+                  "[ocean.atm_forcing]"//NL// &
+                  "enable = true"//NL// &
+                  'time_mode = "interannual"'//NL// &
+                  'filelist_tas = "'//trim(wl)//'"'//NL// &
+                  'filelist_huss = "'//trim(wl)//'"'//NL// &
+                  'filelist_uas = "'//trim(wl)//'"'//NL// &
+                  'filelist_vas = "'//trim(wl)//'"'//NL// &
+                  'filelist_psl = "'//trim(wl)//'"'//NL// &
+                  'filelist_rlds = "'//trim(wl)//'"'//NL// &
+                  'filelist_rsds = "'//trim(wl)//'"'//NL// &
+                  'filelist_prra = "'//trim(wl)//'"'//NL// &
+                  'filelist_prsn = "'//trim(wl)//'"'//NL// &
+                  "[ocean.vmix]"//NL// &
+                  "dt_therm_ratio = 2"//NL// &
+                  "[ocean.ice]"//NL// &
+                  "enable = true"//NL// &
+                  "ncat = 5"//NL// &
+                  "nk_ice = 2"//NL// &
+                  "restore_lambda = 20.0"//NL// &
+                  "dynamics = true"//NL// &
+                  "evp_sub_steps = 30"//NL// &
+                  "cfl_trunc = 0.01"//NL// &
+                  "project_ci = true"//NL// &
+                  "transport = true"//NL// &
+                  "adv_substeps = 2"//NL// &
+                  "[ocean.ice_ic]"//NL// &
+                  'conc_config = "uniform"'//NL// &
+                  "h_ice = 1.0"//NL// &
+                  "conc = 0.7"//NL
          else
             wl = ATM_WARM_LIST
             if (label == "bulk_flux_fold" .or. label == "bulk_flux_fw_mass_fold") wl = ATM_CRSE_LIST
             if (index(label, "bulk_flux_bl") == 1) wl = ATM_COLD_LIST
             if (label == "bulk_flux_bl_fold") wl = ATM_CRSE_COLD_LIST
             nml = nml// &
-                  "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
-                  "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-                  "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
-                  "filelist_tas = '"//trim(wl)//"', filelist_huss = '"//trim(wl)// &
-                  "', filelist_uas = '"//trim(wl)//"', filelist_vas = '"//trim(wl)// &
-                  "', filelist_psl = '"//trim(wl)//"', filelist_rlds = '"//trim(wl)// &
-                  "', filelist_rsds = '"//trim(wl)//"', filelist_prra = '"//trim(wl)// &
-                  "', filelist_prsn = '"//trim(wl)//"' /"//NL
+                  "[tracer]"//NL// &
+                  "initial_temperature = 12.0"//NL// &
+                  "initial_salinity = 35.0"//NL// &
+                  "T_init_surface = 20.0"//NL// &
+                  "T_init_bottom = 4.0"//NL// &
+                  "[ocean.atm_forcing]"//NL// &
+                  "enable = true"//NL// &
+                  'time_mode = "interannual"'//NL// &
+                  'filelist_tas = "'//trim(wl)//'"'//NL// &
+                  'filelist_huss = "'//trim(wl)//'"'//NL// &
+                  'filelist_uas = "'//trim(wl)//'"'//NL// &
+                  'filelist_vas = "'//trim(wl)//'"'//NL// &
+                  'filelist_psl = "'//trim(wl)//'"'//NL// &
+                  'filelist_rlds = "'//trim(wl)//'"'//NL// &
+                  'filelist_rsds = "'//trim(wl)//'"'//NL// &
+                  'filelist_prra = "'//trim(wl)//'"'//NL// &
+                  'filelist_prsn = "'//trim(wl)//'"'//NL
          end if
          if (label == "bulk_flux_bl_ratio2") then
-            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
+            nml = nml//"[ocean.vmix]"//NL// &
+                  "dt_therm_ratio = 2"//NL// &
+                  "diabatic_first = false"//NL
          end if
          if (label == "fw_mass_deferred") then
-            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false., "// &
-                  "dt_tracer_advect_ratio = 2 /"//NL
+            nml = nml//"[ocean.vmix]"//NL// &
+                  "dt_therm_ratio = 2"//NL// &
+                  "diabatic_first = false"//NL// &
+                  "dt_tracer_advect_ratio = 2"//NL
          end if
          if (label == "fw_mass_deferred_nowin") then
-            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
+            nml = nml//"[ocean.vmix]"//NL// &
+                  "dt_therm_ratio = 2"//NL// &
+                  "diabatic_first = false"//NL
          end if
          if (label == "bulk_flux_fold" .or. label == "bulk_flux_bl_fold" .or. &
              label == "bulk_flux_ice_fold" .or. label == "bulk_flux_fw_mass_fold") then
@@ -1619,38 +2374,73 @@ contains
             ! of `phi_join`, so the bilinear state regrid has a meridional
             ! gradient over the whole cap, not only in longitude.
             nml = nml// &
-                  "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
-                  "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, "// &
-                  "lat_south = 59.0, phi_join = 74.0, lon_pole = 0.0, "// &
-                  "rad_earth = 6.378e6, coriolis_scheme = 'planetary' /"//NL// &
-                  "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-                  "&ocean_topo_nml topo_config = 'double_drake', max_depth = "// &
-                  trim(merge("100.0 ", "1000.0", label == "bulk_flux_bl_fold"))// &
-                  ", slope_scale = 0.2 /"//NL// &
-                  "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-                  "north = 'tripolar_fold' /"//NL
+                  "[grid]"//NL// &
+                  "nx = 30"//NL// &
+                  "ny = 24"//NL// &
+                  "nghost = 3"//NL// &
+                  "dx = 12.0"//NL// &
+                  "dy = 1.0"//NL// &
+                  "[ocean.grid]"//NL// &
+                  'grid_config = "tripolar"'//NL// &
+                  "lon_west = 0.0"//NL// &
+                  "lat_south = 59.0"//NL// &
+                  "phi_join = 74.0"//NL// &
+                  "lon_pole = 0.0"//NL// &
+                  "rad_earth = 6.378e6"//NL// &
+                  'coriolis_scheme = "planetary"'//NL// &
+                  "[vcoord]"//NL// &
+                  'vcoord_type = "sigma"'//NL// &
+                  "[ocean.topo]"//NL// &
+                  'topo_config = "double_drake"'//NL// &
+                  "max_depth = "//trim(merge("100.0 ", "1000.0", label == "bulk_flux_bl_fold"))//NL// &
+                  "slope_scale = 0.2"//NL// &
+                  "[ocean.bc]"//NL// &
+                  'west = "periodic"'//NL// &
+                  'east = "periodic"'//NL// &
+                  'south = "wall"'//NL// &
+                  'north = "tripolar_fold"'//NL
          else
             nml = nml// &
-                  "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
-                  "dx = 1.0, dy = 1.0 /"//NL// &
-                  "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
-                  "lat_south = 20.0, rad_earth = 6.371e6, "// &
-                  "coriolis_scheme = 'planetary' /"//NL// &
-                  "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-                  "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
-                  "edge_depth = 300.0, slope_scale = 300000.0 /"//NL
+                  "[grid]"//NL// &
+                  "nx = "//trim(snx)//NL// &
+                  "ny = "//trim(sny)//NL// &
+                  "nghost = 3"//NL// &
+                  "dx = 1.0"//NL// &
+                  "dy = 1.0"//NL// &
+                  "[ocean.grid]"//NL// &
+                  'grid_config = "spherical"'//NL// &
+                  "lon_west = 0.0"//NL// &
+                  "lat_south = 20.0"//NL// &
+                  "rad_earth = 6.371e6"//NL// &
+                  'coriolis_scheme = "planetary"'//NL// &
+                  "[vcoord]"//NL// &
+                  'vcoord_type = "sigma"'//NL// &
+                  "[ocean.topo]"//NL// &
+                  'topo_config = "spoon"'//NL// &
+                  "max_depth = 3000.0"//NL// &
+                  "edge_depth = 300.0"//NL// &
+                  "slope_scale = 300000.0"//NL
             if (index(label, "bulk_flux_bl") == 1) then
                ! 100 m / ten layers; the spoon's rim stays deeper than 60 m.
-               nml = nml(:index(nml, "&ocean_topo_nml") - 1)// &
-                     "&ocean_topo_nml topo_config = 'spoon', max_depth = 100.0, "// &
-                     "edge_depth = 60.0, slope_scale = 300000.0 /"//NL
+               nml = nml(:index(nml, "[ocean.topo]") - 1)// &
+                     "[ocean.topo]"//NL// &
+                     'topo_config = "spoon"'//NL// &
+                     "max_depth = 100.0"//NL// &
+                     "edge_depth = 60.0"//NL// &
+                     "slope_scale = 300000.0"//NL
             end if
             if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. index(label, "bulk_flux_bl") == 1) then
-               nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', "// &
-                     "south = 'wall', north = 'wall' /"//NL
+               nml = nml//"[ocean.bc]"//NL// &
+                     'west = "periodic"'//NL// &
+                     'east = "periodic"'//NL// &
+                     'south = "wall"'//NL// &
+                     'north = "wall"'//NL
             else
-               nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
-                     "north = 'wall' /"//NL
+               nml = nml//"[ocean.bc]"//NL// &
+                     'west = "wall"'//NL// &
+                     'east = "wall"'//NL// &
+                     'south = "wall"'//NL// &
+                     'north = "wall"'//NL
             end if
          end if
       case default
@@ -1663,21 +2453,29 @@ contains
       ! rank from the exchanged bathymetry) and its on-target seed both
       ! straddle the rank seams.
       if (label == "file_readers") then
-         nml = nml//"&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
-               "z_fixed_profile = 'tanh', z_fixed_dz_top = 100.0 /"//NL
+         nml = nml//"[vcoord]"//NL// &
+               'vcoord_type = "z_fixed"'//NL// &
+               "zfixed_closed_faces = true"//NL// &
+               'z_fixed_profile = "tanh"'//NL// &
+               "z_fixed_dz_top = 100.0"//NL
       else if (label == "file_readers_zstar_full") then
-         nml = nml//"&vcoord_nml vcoord_type = 'zstar_full', zstar_h_surf_target = 1500.0, "// &
-               "zfixed_closed_faces = .true. /"//NL
+         nml = nml//"[vcoord]"//NL// &
+               'vcoord_type = "zstar_full"'//NL// &
+               "zstar_h_surf_target = 1500.0"//NL// &
+               "zfixed_closed_faces = true"//NL
       else if (label == "file_readers_zstar") then
          ! MOM6 z*: the z_fixed staircase (the same fillers, the same mask)
          ! with every live layer dilated by the column's (H + eta)/H each
          ! regrid, and the IC seeded on the eta = 0 target.
-         nml = nml//"&vcoord_nml vcoord_type = 'zstar', zfixed_closed_faces = .true. /"//NL
+         nml = nml//"[vcoord]"//NL// &
+               'vcoord_type = "zstar"'//NL// &
+               "zfixed_closed_faces = true"//NL
       end if
       if (label /= "file_readers" .and. label /= "file_readers_zstar_full" .and. &
           label /= "file_readers_zstar" .and. label /= "wetdry_file" .and. &
           label /= "wetdry_tidal_flat" .and. label /= "wetdry_open_flat") then
-         nml = nml//"&output_nml output_to_file = .false. /"//NL
+         nml = nml//"[output]"//NL// &
+               "output_to_file = false"//NL
       end if
    end function case_nml
 
@@ -1711,104 +2509,243 @@ contains
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
       write (sny, '(i0)') NY_G
-      bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = 'wall' /"//NL
-      topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
-             "slope_scale = 60000.0 /"//NL
-      atm = "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 8.0, uni_vas = 2.0 /"//NL
+      bc = "[ocean.bc]"//NL// &
+           'west = "periodic"'//NL// &
+           'east = "periodic"'//NL// &
+           'south = "wall"'//NL// &
+           'north = "wall"'//NL
+      topo = "[ocean.topo]"//NL// &
+             'topo_config = "seamount"'//NL// &
+             "max_depth = 1000.0"//NL// &
+             "edge_depth = 800.0"//NL// &
+             "slope_scale = 60000.0"//NL
+      atm = "[ocean.ice_atm]"//NL// &
+            "uni_tas = 255.0"//NL// &
+            "uni_rlds = 180.0"//NL// &
+            "uni_uas = 8.0"//NL// &
+            "uni_vas = 2.0"//NL
       if (lbl == "cice_ice_pp") then
          ! periodic in BOTH directions: the corner ghosts and both wraps, on every split
-         bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', north = 'periodic' /"//NL
-         topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "periodic"'//NL// &
+              'east = "periodic"'//NL// &
+              'south = "periodic"'//NL// &
+              'north = "periodic"'//NL
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "island"'//NL// &
+                "max_depth = 1000.0"//NL// &
+                "slope_scale = 0.15"//NL
       end if
       if (lbl == "cice_ice_wall") then
-         bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-         topo = "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "wall"'//NL// &
+              'east = "wall"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "wall"'//NL
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "flat"'//NL// &
+                "max_depth = 1000.0"//NL
       end if
       if (lbl == "cice_ice_island") then
-         bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-         topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "wall"'//NL// &
+              'east = "wall"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "wall"'//NL
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "island"'//NL// &
+                "max_depth = 1000.0"//NL// &
+                "slope_scale = 0.15"//NL
       end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL//topo// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'remap', ndte = 10 /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7, h_snow = 0.1, "// &
-            "t_ice = -8.0 /"//NL//atm//bc// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[mpi]"//NL// &
+            "px = "//trim(spx)//NL// &
+            "py = "//trim(spy)//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.83"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.82"//NL// &
+            "T_init_bottom = -1.835"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            'split_scheme = "'//scheme//'"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = "//trim(snx)//NL// &
+            "ny = "//trim(sny)//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.4e-4"//NL// &
+            "wind_stress_x = 0.1"//NL// &
+            "wind_stress_y = 0.04"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            topo// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 2"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "remap"'//NL// &
+            "ndte = 10"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 0.7"//NL// &
+            "h_snow = 0.1"//NL// &
+            "t_ice = -8.0"//NL// &
+            atm// &
+            bc// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
       if (lbl == "cice_ice_r1") call replace_once(nml, "dt_therm_ratio = 2", "dt_therm_ratio = 1")
       if (lbl == "cice_ice_epbl") then
          ! EPBL instead of KPP (its boundary-layer reads the same surface-flux ghosts)
-         call replace_once(nml, "&ocean_vmix_nml dt_therm_ratio = 2 /", &
-                           "&ocean_vmix_nml dt_therm_ratio = 2, use_kpp = .false. /"//NL//"&ocean_epbl_nml enable = .true. /")
+         call replace_once(nml, "[ocean.vmix]"//new_line("a")// &
+                           "dt_therm_ratio = 2"//new_line("a"), &
+                           "[ocean.vmix]"//NL// &
+                           "dt_therm_ratio = 2"//NL// &
+                           "use_kpp = false"//NL// &
+                           "[ocean.epbl]"//NL// &
+                           "enable = true"//NL)
       end if
-      if (lbl == "cice_ice_upwind") call replace_once(nml, "advection = 'remap'", "advection = 'upwind'")
+      if (lbl == "cice_ice_upwind") call replace_once(nml, 'advection = "remap"', 'advection = "upwind"')
       if (lbl == "cice_ice_sph" .or. lbl == "cice_ice_lat") then
          ! the channel on a lon-lat grid: latitude-dependent metrics (areas, spacings) under the uniform atmosphere
-         call replace_once(nml, "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)// &
-                           ", nghost = 3, dx = 20000.0, dy = 20000.0 /", &
-                           "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, dx = 1.0, dy = 1.0 /"//NL// &
-                           "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 50.0, "// &
-                           "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /")
-         call replace_once(nml, "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /", &
-                           "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /")
-         call replace_once(nml, "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
-                           "slope_scale = 60000.0 /", "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
-                           "edge_depth = 300.0, slope_scale = 300000.0 /")
+         call replace_once(nml, "[grid]"//new_line("a")// &
+                           "nx = "//trim(snx)//new_line("a")// &
+                           "ny = "//trim(sny)//new_line("a")// &
+                           "nghost = 3"//new_line("a")// &
+                           "dx = 20000.0"//new_line("a")// &
+                           "dy = 20000.0"//new_line("a"), &
+                           "[grid]"//NL// &
+                           "nx = "//trim(snx)//NL// &
+                           "ny = "//trim(sny)//NL// &
+                           "nghost = 3"//NL// &
+                           "dx = 1.0"//NL// &
+                           "dy = 1.0"//NL// &
+                           "[ocean.grid]"//NL// &
+                           'grid_config = "spherical"'//NL// &
+                           "lon_west = 0.0"//NL// &
+                           "lat_south = 50.0"//NL// &
+                           "rad_earth = 6.371e6"//NL// &
+                           'coriolis_scheme = "planetary"'//NL)
+         call replace_once(nml, "[physics]"//new_line("a")// &
+                           "coriolis_f = 1.4e-4"//new_line("a")// &
+                           "wind_stress_x = 0.1"//new_line("a")// &
+                           "wind_stress_y = 0.04"//new_line("a"), &
+                           "[physics]"//new_line("a")// &
+                           "wind_stress_x = 0.1"//new_line("a")// &
+                           "wind_stress_y = 0.04"//new_line("a"))
+         call replace_once(nml, "[ocean.topo]"//new_line("a")// &
+                           'topo_config = "seamount"'//new_line("a")// &
+                           "max_depth = 1000.0"//new_line("a")// &
+                           "edge_depth = 800.0"//new_line("a")// &
+                           "slope_scale = 60000.0"//new_line("a"), "[ocean.topo]"//new_line("a")// &
+                           'topo_config = "spoon"'//new_line("a")// &
+                           "max_depth = 3000.0"//new_line("a")// &
+                           "edge_depth = 300.0"//new_line("a")// &
+                           "slope_scale = 300000.0"//new_line("a"))
       end if
       if (lbl == "cice_ice_lat") then
          ! the `latitudes` seed: ice only poleward of 59 N, so the southern tile of a 1x2 / 1x4 split holds none
          ! (an empty tile must stay empty and still take part in every exchange)
-         call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
-                           "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 59.0")
+         call replace_once(nml, 'conc_config = "uniform"'//NL//"h_ice = 1.0"//NL//"conc = 0.7"//NL, &
+                           'conc_config = "latitudes"'//NL//"h_ice = 1.0"//NL//"conc = 0.7"//NL// &
+                           "arctic_edge = 59.0"//NL)
       end if
       if (lbl == "cice_ice_fw_mass" .or. lbl == "cice_ice_fw_mass_fold") then
          ! Real fresh-water mass with the sea ice's weight on the surface pressure (`freshwater = 'mass'`,
          ! `&ocean_psurf_nml ice_load`): the ice's water leaves and enters the layers as volume (`seaice_melt` ->
          ! `fw_net` -> the mass step, ratio 2: the in-stage thermo path) and its weight rides the `eta_forcing`
          ! seam.  The channel over the seamount (the ice crosses every rank seam) / the tripolar cap (below).
-         call replace_once(nml, "&ocean_forcing_nml enable_components = .true. /", &
-                           "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-                           "&ocean_psurf_nml enable = .true., ice_load = .true. /")
+         call replace_once(nml, "[ocean.forcing]"//new_line("a")// &
+                           "enable_components = true"//new_line("a"), &
+                           "[ocean.forcing]"//NL// &
+                           "enable_components = true"//NL// &
+                           'freshwater = "mass"'//NL// &
+                           "[ocean.psurf]"//NL// &
+                           "enable = true"//NL// &
+                           "ice_load = true"//NL)
       end if
       if (index(lbl, "cice_ice_fold") == 1 .or. lbl == "cice_ice_fw_mass_fold") then
          ! the tripolar cap of `sea_ice_fold` (59N-83N, phi_join 74N, double-Drake land reaching the fold line, closed by
          ! the north fold; 30 x 24, so 2x1 is 15|15 and 4x1 is 8/8/7/7) under the CICE-port ice: stage B
-         call replace_once(nml, "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)// &
-                           ", nghost = 3, dx = 20000.0, dy = 20000.0 /", &
-                           "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
-                           "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
-                           "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, "// &
-                           "coriolis_scheme = 'planetary' /")
-         call replace_once(nml, "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /", &
-                           "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /")
-         call replace_once(nml, "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
-                           "slope_scale = 60000.0 /", "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
-                           "slope_scale = 0.2 /")
-         call replace_once(nml, "south = 'wall', north = 'wall' /", "south = 'wall', north = 'tripolar_fold' /")
-         call replace_once(nml, "&ocean_thermo_nml enable_thermodynamics = .true. /", &
-                           "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /")
+         call replace_once(nml, "[grid]"//new_line("a")// &
+                           "nx = "//trim(snx)//new_line("a")// &
+                           "ny = "//trim(sny)//new_line("a")// &
+                           "nghost = 3"//new_line("a")// &
+                           "dx = 20000.0"//new_line("a")// &
+                           "dy = 20000.0"//new_line("a"), &
+                           "[grid]"//NL// &
+                           "nx = 30"//NL// &
+                           "ny = 24"//NL// &
+                           "nghost = 3"//NL// &
+                           "dx = 12.0"//NL// &
+                           "dy = 1.0"//NL// &
+                           "[ocean.grid]"//NL// &
+                           'grid_config = "tripolar"'//NL// &
+                           "lon_west = 0.0"//NL// &
+                           "lat_south = 59.0"//NL// &
+                           "phi_join = 74.0"//NL// &
+                           "lon_pole = 0.0"//NL// &
+                           "rad_earth = 6.378e6"//NL// &
+                           'coriolis_scheme = "planetary"'//NL)
+         call replace_once(nml, "[physics]"//new_line("a")// &
+                           "coriolis_f = 1.4e-4"//new_line("a")// &
+                           "wind_stress_x = 0.1"//new_line("a")// &
+                           "wind_stress_y = 0.04"//new_line("a"), &
+                           "[physics]"//new_line("a")// &
+                           "wind_stress_x = 0.1"//new_line("a")// &
+                           "wind_stress_y = 0.04"//new_line("a"))
+         call replace_once(nml, "[ocean.topo]"//new_line("a")// &
+                           'topo_config = "seamount"'//new_line("a")// &
+                           "max_depth = 1000.0"//new_line("a")// &
+                           "edge_depth = 800.0"//new_line("a")// &
+                           "slope_scale = 60000.0"//new_line("a"), "[ocean.topo]"//new_line("a")// &
+                           'topo_config = "double_drake"'//new_line("a")// &
+                           "max_depth = 1000.0"//new_line("a")// &
+                           "slope_scale = 0.2"//new_line("a"))
+         call replace_once(nml, 'south = "wall"'//NL//'north = "wall"'//NL, &
+                           'south = "wall"'//NL//'north = "tripolar_fold"'//NL)
+         call replace_once(nml, "[ocean.thermo]"//new_line("a")// &
+                           "enable_thermodynamics = true"//new_line("a"), &
+                           "[ocean.thermo]"//new_line("a")// &
+                           "enable_thermodynamics = true"//new_line("a")// &
+                           "q_heat = -100.0"//new_line("a"))
       end if
       if (lbl == "cice_ice_fold_edge") then
          ! ice only poleward of 66 N on a column at the liquidus without cooling: the southern rows carry no ice, so
          ! on a 1x4 split a tile is ice free (an empty tile must stay empty and still take part in every exchange,
          ! the fold's included) and the cold start seeds the cap through the fold
-         call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
-                           "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 66.0")
+         call replace_once(nml, 'conc_config = "uniform"'//NL//"h_ice = 1.0"//NL//"conc = 0.7"//NL, &
+                           'conc_config = "latitudes"'//NL//"h_ice = 1.0"//NL//"conc = 0.7"//NL// &
+                           "arctic_edge = 66.0"//NL)
          call replace_once(nml, "q_heat = -100.0", "q_heat = 0.0")
       end if
       if (lbl == "cice_ice_bulk_fold") then
@@ -1827,16 +2764,23 @@ contains
          ! load and the in-flight fresh-water snapshot in the checkpoint.
          nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
          call swap_to_cice(nml)
-         call replace_once(nml, "&ocean_forcing_nml enable_components = .true.", &
-                           "&ocean_forcing_nml enable_components = .true., freshwater = 'mass'")
+         call replace_once(nml, "[ocean.forcing]"//NL//"enable_components = true"//NL, &
+                           "[ocean.forcing]"//NL//"enable_components = true"//NL//'freshwater = "mass"'//NL)
          ! the vmix group the bulk namelist carries (a group may appear once): ratio 8, deferred
-         a_v = index(nml, "&ocean_vmix_nml")
-         b_v = a_v + index(nml(a_v:), "/") - 1
-         nml = nml(1:a_v - 1)//"&ocean_vmix_nml dt_therm_ratio = 8, diabatic_first = .false. /"//nml(b_v + 1:)
-         nml = nml//"&ocean_psurf_nml enable = .true., ice_load = .true., atm_load = .true. /"//NL
+         a_v = index(nml, "[ocean.vmix]")
+         b_v = toml_table_end(nml, a_v)
+         nml = nml(1:a_v - 1)//"[ocean.vmix]"//new_line("a")// &
+               "dt_therm_ratio = 8"//new_line("a")// &
+               "diabatic_first = false"//new_line("a")// &
+               nml(b_v + 1:)
+         nml = nml//"[ocean.psurf]"//NL// &
+               "enable = true"//NL// &
+               "ice_load = true"//NL// &
+               "atm_load = true"//NL
          ! 'coszen' needs the 3-hourly rsds interval to divide the 8 x 900 s thermo interval; 'linear' does not
-         call replace_once(nml, "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual',", &
-                           "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', time_mode = 'interannual',")
+         call replace_once(nml, "[ocean.atm_forcing]"//NL//"enable = true"//NL//'time_mode = "interannual"'//NL, &
+                           "[ocean.atm_forcing]"//NL//"enable = true"//NL//'sw_interp = "linear"'//NL// &
+                           'time_mode = "interannual"'//NL)
       end if
       if (lbl == "cice_ice_bulk_cz" .or. lbl == "cice_ice_bulk_cz_fold") then
          ! The prescribed atmosphere with `sw_interp = 'coszen'` (the default) at a 7200 s thermo window
@@ -1856,8 +2800,11 @@ contains
             call replace_all(nml, ATM_CRSE_COLD_LIST, ATM_CRSE_COLD_T_LIST)
          end if
          call swap_to_cice(nml)
-         call replace_once(nml, "&ocean_vmix_nml dt_therm_ratio = 2 /", &
-                           "&ocean_vmix_nml dt_therm_ratio = 8, diabatic_first = .false. /")
+         call replace_once(nml, "[ocean.vmix]"//new_line("a")// &
+                           "dt_therm_ratio = 2"//new_line("a"), &
+                           "[ocean.vmix]"//new_line("a")// &
+                           "dt_therm_ratio = 8"//new_line("a")// &
+                           "diabatic_first = false"//new_line("a"))
       end if
       if (lbl == "cice_ice_bulk_cz_s" .or. lbl == "cice_ice_bulk_cz_s_fold") then
          ! The step ITSELF straddles a record edge: records every 4800 s (`sw_offset_s = 2400`), dt 900,
@@ -1874,9 +2821,11 @@ contains
             call replace_all(nml, ATM_CRSE_COLD_LIST, ATM_CRSE_COLD_B_LIST)
          end if
          call swap_to_cice(nml)
-         call replace_once(nml, "&ocean_vmix_nml dt_therm_ratio = 2 /", "&ocean_vmix_nml dt_therm_ratio = 1 /")
-         call replace_once(nml, "&ocean_atm_forcing_nml enable = .true.,", &
-                           "&ocean_atm_forcing_nml enable = .true., sw_offset_s = 2400.0,")
+         call replace_once(nml, "[ocean.vmix]"//new_line("a")// &
+                           "dt_therm_ratio = 2"//new_line("a"), "[ocean.vmix]"//new_line("a")// &
+                           "dt_therm_ratio = 1"//new_line("a"))
+         call replace_once(nml, "[ocean.atm_forcing]"//NL//"enable = true"//NL, &
+                           "[ocean.atm_forcing]"//NL//"enable = true"//NL//"sw_offset_s = 2400.0"//NL)
       end if
       if (lbl == "cice_ice_bulk" .or. lbl == "cice_ice_bulk_sw") then
          ! the lon-lat re-entrant channel of `bulk_flux_ice` (non-uniform prescribed atmosphere, regridded per
@@ -1886,11 +2835,16 @@ contains
          if (label == "cice_ice_bulk_sw") then
             ! penetrating shortwave from the bulk `q_sw`: the through-ice shortwave also feeds `sw_net`, which the
             ! boundary layer reads in the ghost columns
-            call replace_once(nml, "&ocean_thermo_nml enable_thermodynamics = .true. /", &
-                              "&ocean_thermo_nml enable_thermodynamics = .true., sw_pen_frac = 0.6, sw_source = 'q_sw' /")
+            call replace_once(nml, "[ocean.thermo]"//new_line("a")// &
+                              "enable_thermodynamics = true"//new_line("a"), &
+                              "[ocean.thermo]"//new_line("a")// &
+                              "enable_thermodynamics = true"//new_line("a")// &
+                              "sw_pen_frac = 0.6"//new_line("a")// &
+                              'sw_source = "q_sw"'//new_line("a"))
          end if
       end if
-      if (led) call replace_once(nml, "dynamics = .true., transport = .true. /", "dynamics = .true., transport = .true., ledger = .true. /")
+      if (led) call replace_once(nml, "dynamics = true"//NL//"transport = true"//NL, &
+                                 "dynamics = true"//NL//"transport = true"//NL//"ledger = true"//NL)
       ! the land-block ledger case carries snow thinner than `hs_min` (and cold), so the thin-snow reset term is non-zero
       if (led .and. lbl == "cice_ice_island") call replace_once(nml, "h_snow = 0.1", "h_snow = 0.00005")
    end function cice_ice_nml
@@ -1908,12 +2862,19 @@ contains
       character(len=:), allocatable :: dyn
       integer :: a, b
 
-      dyn = "&ocean_ice_ridge_nml kstrength = 0 /"//NL// &
-            "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 10 /"//NL
+      dyn = "[ocean.ice_ridge]"//NL// &
+            "kstrength = 0"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'dyn_scheme = "cice_c"'//NL// &
+            "ndte = 10"//NL
       if (label == "sea_ice_cdyn_rev") then
-         dyn = "&ocean_ice_ridge_nml kstrength = 0 /"//NL// &
-               "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 10, revised_evp = .true., "// &
-               "visc_method = 'avg_strength' /"//NL
+         dyn = "[ocean.ice_ridge]"//NL// &
+               "kstrength = 0"//NL// &
+               "[ocean.ice_dyn]"//NL// &
+               'dyn_scheme = "cice_c"'//NL// &
+               "ndte = 10"//NL// &
+               "revised_evp = true"//NL// &
+               'visc_method = "avg_strength"'//NL
       end if
       if (label == "sea_ice_cdyn_fold") then
          nml = case_nml("sea_ice_fold", scheme, px, py)//dyn
@@ -1924,23 +2885,46 @@ contains
          ! southern rows carry no ice at all, so on a 1x4 split one rank's tile is ice free
          ! (an empty tile must stay empty and still take part in every exchange).
          nml = case_nml("sea_ice_fold", scheme, px, py)//dyn
-         call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
-                           "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 66.0")
+         call replace_once(nml, 'conc_config = "uniform"'//NL//"h_ice = 1.0"//NL//"conc = 0.7"//NL, &
+                           'conc_config = "latitudes"'//NL//"h_ice = 1.0"//NL//"conc = 0.7"//NL// &
+                           "arctic_edge = 66.0"//NL)
          call replace_once(nml, "q_heat = -100.0", "q_heat = 0.0")
          return
       end if
       nml = case_nml("sea_ice_transport", scheme, px, py)//dyn
       if (label == "sea_ice_cdyn_island") then
-         a = index(nml, "&ocean_topo_nml")
-         b = a + index(nml(a:), "/") - 1
-         nml = nml(1:a - 1)//"&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
-               "slope_scale = 0.15 /"//nml(b + 1:)
-         a = index(nml, "&ocean_bc_nml")
-         b = a + index(nml(a:), "/") - 1
-         nml = nml(1:a - 1)//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
-               "north = 'wall' /"//nml(b + 1:)
+         a = index(nml, "[ocean.topo]")
+         b = toml_table_end(nml, a)
+         nml = nml(1:a - 1)//"[ocean.topo]"//new_line("a")// &
+               'topo_config = "island"'//new_line("a")// &
+               "max_depth = 1000.0"//new_line("a")// &
+               "slope_scale = 0.15"//new_line("a")// &
+               nml(b + 1:)
+         a = index(nml, "[ocean.bc]")
+         b = toml_table_end(nml, a)
+         nml = nml(1:a - 1)//"[ocean.bc]"//new_line("a")// &
+               'west = "wall"'//new_line("a")// &
+               'east = "wall"'//new_line("a")// &
+               'south = "wall"'//new_line("a")// &
+               'north = "wall"'//new_line("a")// &
+               nml(b + 1:)
       end if
    end function cdyn_nml
+
+   pure function toml_table_end(text, a) result(b)
+      !! Index of the last character of the TOML table whose `[header]` starts at `a`: the NL that
+      !! precedes the next header (or the end of the text), so `text(1:a-1)//new//text(b+1:)` replaces
+      !! the whole table.
+      character(len=*), intent(in) :: text
+      integer, intent(in) :: a
+      integer :: b, k
+      k = index(text(a:), new_line("a")//"[")
+      if (k == 0) then
+         b = len(text)
+      else
+         b = a + k - 1
+      end if
+   end function toml_table_end
 
    subroutine replace_once(str, old, new)
       !! Replace the first occurrence of `old` in `str` (stop when absent: a test-namelist typo).
@@ -2003,7 +2987,10 @@ contains
       xlaw = "const_gamma"
       xedge = "wall"
       if (label == "cavity_periodic") xedge = "periodic"
-      tdrag = "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL
+      tdrag = "[ocean.tdrag]"//NL// &
+              "enable = true"//NL// &
+              'form = "quadratic"'//NL// &
+              "cd = 2.5e-3"//NL
       if (label == "cavity_melt_only") tdrag = ""
       fw = ""
       pst = ""
@@ -2011,62 +2998,126 @@ contains
          ! Real freshwater mass (a Boussinesq volume on the top layer); the
          ! pseudo-salt tracer runs the mass step's pseudo-salt mirror.  Both
          ! cases are in the checkpoint/resume leg.
-         fw = ", freshwater = 'mass', volume_compensation = '"// &
-              merge("uniform_open_ocean", "none              ", label == "cavity_mass_comp")//"'"
-         pst = "&ocean_tracers_nml enable_pseudo_salt = .true. /"//NL
+         fw = 'freshwater = "mass"'//NL//'volume_compensation = "'// &
+              trim(merge("uniform_open_ocean", "none              ", label == "cavity_mass_comp"))//'"'//NL
+         pst = "[ocean.tracers]"//NL// &
+               "enable_pseudo_salt = true"//NL
       end if
       if (label == "cavity_zfixed") then
          nzl = "8"
-         vc = "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL
-         cav = ", h_min_cavity = 250.0 /"//NL
-         vm = "&ocean_vmix_nml use_kpp = .false., pp81_nu0 = 0.0, pp81_nu_bg = 1.0e-3, "// &
-              "pp81_kappa_bg = 5.0e-5 /"//NL
+         vc = "[vcoord]"//NL// &
+              'vcoord_type = "z_fixed"'//NL// &
+              "zfixed_closed_faces = true"//NL
+         cav = "h_min_cavity = 250.0"//NL
+         vm = "[ocean.vmix]"//NL// &
+              "use_kpp = false"//NL// &
+              "pp81_nu0 = 0.0"//NL// &
+              "pp81_nu_bg = 1.0e-3"//NL// &
+              "pp81_kappa_bg = 5.0e-5"//NL
       else
          nzl = "4"
-         vc = "&vcoord_nml vcoord_type = 'sigma' /"//NL
-         cav = ", h_min_cavity = 100.0 /"//NL
-         if (label == "cavity_sigma_ratio2") vm = "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL
+         vc = "[vcoord]"//NL// &
+              'vcoord_type = "sigma"'//NL
+         cav = "h_min_cavity = 100.0"//NL
+         if (label == "cavity_sigma_ratio2") vm = "[ocean.vmix]"//NL// &
+                                                  "dt_therm_ratio = 2"//NL
          if (label == "cavity_combo") then
-            vm = "&ocean_vmix_nml use_kpp = .false., dt_therm_ratio = 2, dt_tracer_advect_ratio = 2 /"//NL// &
-                 "&ocean_epbl_nml enable = .true. /"//NL
-            vdf = "&ocean_vdiff_nml implicit_top_drag = .true. /"//NL
+            vm = "[ocean.vmix]"//NL// &
+                 "use_kpp = false"//NL// &
+                 "dt_therm_ratio = 2"//NL// &
+                 "dt_tracer_advect_ratio = 2"//NL// &
+                 "[ocean.epbl]"//NL// &
+                 "enable = true"//NL
+            vdf = "[ocean.vdiff]"//NL// &
+                  "implicit_top_drag = true"//NL
             xlaw = "hj99"
          end if
       end if
-      topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
-             "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL
-      draft = "draft_depth = 500.0, draft_slope = -4.0e-4, draft_x0 = 0.0, "// &
-              "draft_x1 = 380000.0, draft_y1 = 260000.0"
+      topo = "[ocean.topo]"//NL// &
+             'topo_config = "seamount"'//NL// &
+             "max_depth = 1000.0"//NL// &
+             "edge_depth = 400.0"//NL// &
+             "slope_scale = 80000.0"//NL// &
+             'wind_config = "constant"'//NL// &
+             "taux_magnitude = 0.05"//NL
+      draft = "draft_depth = 500.0"//NL//"draft_slope = -4.0e-4"//NL//"draft_x0 = 0.0"//NL// &
+              "draft_x1 = 380000.0"//NL//"draft_y1 = 260000.0"//NL
       if (index(label, "cavity_gall") == 1) then
-         topo = "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0, "// &
-                "wind_config = 'constant', taux_magnitude = 0.05 /"//NL
-         draft = "draft_depth = 1400.0, draft_slope = -2.2e-3, draft_x0 = 0.0"
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "flat"'//NL// &
+                "max_depth = 1000.0"//NL// &
+                'wind_config = "constant"'//NL// &
+                "taux_magnitude = 0.05"//NL
+         draft = "draft_depth = 1400.0"//NL//"draft_slope = -2.2e-3"//NL//"draft_x0 = 0.0"//NL
          sfrac = "0.6"
          if (present(gfrac)) write (sfrac, '(f6.3)') gfrac
-         cav = ", h_min_cavity = 100.0, grounded_max_frac = "//trim(adjustl(sfrac))//" /"//NL
+         cav = "h_min_cavity = 100.0"//NL//"grounded_max_frac = "//trim(adjustl(sfrac))//NL
       end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = "//nzl//" /"//NL// &
-            "&tracer_nml initial_salinity = 34.5, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = -1.409e-4 /"//NL// &
-            vc//vm//topo// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            draft//cav// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_cavity_melt_nml enable = .true., exchange_law = '"//trim(xlaw)//"', "// &
-            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
-            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"//trim(fw)//" /"//NL// &
-            pst//tdrag//vdf// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
-            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
-            "&ocean_bc_nml west = '"//xedge//"', east = '"//xedge//"', south = 'wall', "// &
-            "north = 'wall' /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[mpi]"//NL// &
+            "px = "//trim(spx)//NL// &
+            "py = "//trim(spy)//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = "//nzl//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.5"//NL// &
+            "T_init_surface = 3.0"//NL// &
+            "T_init_bottom = 1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            'split_scheme = "'//scheme//'"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 26"//NL// &
+            "ny = 18"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = -1.409e-4"//NL// &
+            vc// &
+            vm// &
+            topo// &
+            "[ocean.cavity_dyn]"//NL// &
+            "enable = true"//NL// &
+            'draft_config = "linear"'//NL// &
+            draft// &
+            cav// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.cavity_melt]"//NL// &
+            "enable = true"//NL// &
+            'exchange_law = "'//trim(xlaw)//'"'//NL// &
+            "gamma_t = 2.2e-2"//NL// &
+            "gamma_s = -1.0"//NL// &
+            "cdrag_top = 2.5e-3"//NL// &
+            'ice_conduction = "insulating"'//NL// &
+            "s_ice = 0.0"//NL// &
+            "far_field_depth = 10.0"//NL// &
+            trim(fw)// &
+            pst// &
+            tdrag// &
+            vdf// &
+            "[ocean.pgf]"//NL// &
+            'form = "fv_mom6"'//NL// &
+            "p_top_in_bc = true"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "linear"'//NL// &
+            'tfreeze_set = "isomip"'//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "'//xedge//'"'//NL// &
+            'east = "'//xedge//'"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL
    end function cavity_nml
 
    subroutine run_one(nml, csize, crank, snap, ok)
@@ -2085,7 +3136,7 @@ contains
       real(wp), allocatable :: wd_prev(:, :)
 
       ok = .false.
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       ! Dev axes (env): the in-halo BT march on the DECOMPOSED runs only
       ! (RDB_BITID_INHALO=1: N ranks with the march == 1 rank without), or on
@@ -2127,7 +3178,7 @@ contains
       do n = 1, n_steps_cur
          call engine_step(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
-         if (engine%state%cavity_flux%enable .and. index(nml, "freshwater = 'mass'") > 0) then
+         if (engine%state%cavity_flux%enable .and. index(nml, 'freshwater = "mass"') > 0) then
             call track_mass_range(snap, engine%state%cavity_flux%melt_volume_step, &
                                   engine%state%cavity_flux%comp_withdrawal_step, n)
          end if
@@ -2631,7 +3682,7 @@ contains
       logical :: ok
 
       nml_off = nml
-      call replace_once(nml_off, ", ledger = .true.", "")
+      call replace_once(nml_off, "ledger = true"//new_line("a"), "")
       call run_one(nml_off, nprocs, rank, off, ok)
       nb = 0
       nb = 0
@@ -2681,7 +3732,7 @@ contains
       integer :: ierr, n, ng, pass, st(2), smin(2), smax(2)
       logical :: fin
 
-      call read_config_from_string(case_nml("cice_ice_led", "pred_corr", nprocs, 1), cfg, ierr=ierr)
+      call read_config_from_toml_string(case_nml("cice_ice_led", "pred_corr", nprocs, 1), cfg, ierr=ierr)
       call validate_config(cfg, ierr)
       call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
       if (ierr /= OCEAN_STATUS_OK) then
@@ -2763,7 +3814,7 @@ contains
       else
          what = "ocean import refuses on the last rank"
       end if
-      call read_config_from_string(case_nml("cice_ice", "pred_corr", nprocs, 1), cfg, ierr=ierr)
+      call read_config_from_toml_string(case_nml("cice_ice", "pred_corr", nprocs, 1), cfg, ierr=ierr)
       call validate_config(cfg, ierr)
       call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
       if (ierr /= OCEAN_STATUS_OK) then
@@ -3009,7 +4060,7 @@ contains
       fname = output_rank_filename(RST_DIR, "restart", rank)
 
       ! ---- leg 1: N_CKPT steps, checkpoint ----
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr == OCEAN_STATUS_OK) &
          call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
@@ -3027,7 +4078,7 @@ contains
 
       ! ---- leg 2: warm restart from the per-rank files, finish ----
       if (ierr == OCEAN_STATUS_OK) then
-         call read_config_from_string(nml, cfg, ierr=ierr)
+         call read_config_from_toml_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
          if (ierr == OCEAN_STATUS_OK) &
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs, &
@@ -3262,12 +4313,13 @@ contains
    end subroutine compare_ghosts
 
    pure function fw_mass_keys(label) result(keys)
-      !! The `&ocean_forcing_nml` keys the fresh-water MASS cases add (empty elsewhere).
+      !! The `[ocean.forcing]` keys the fresh-water MASS cases add (empty elsewhere).
       character(len=*), intent(in) :: label
       character(len=:), allocatable :: keys
+      character(len=*), parameter :: NL = new_line("a")
       keys = ""
-      if (is_fw_mass_label(label)) keys = ", freshwater = 'mass'"
-      if (label == "fw_mass_thin") keys = keys//", fw_evap_cfl_limit = "//FW_THIN_CFL
+      if (is_fw_mass_label(label)) keys = 'freshwater = "mass"'//NL
+      if (label == "fw_mass_thin") keys = keys//"fw_evap_cfl_limit = "//FW_THIN_CFL//NL
    end function fw_mass_keys
 
    pure logical function is_fw_mass_label(label)
@@ -3733,8 +4785,9 @@ contains
          nbad = 0
          write (tag, '(a,i0,a,i0)') "cavity_grounded_refused ", px, "x", nprocs/px
          nml = cavity_nml("cavity_gall", "pred_corr", int_str(px), int_str(nprocs/px), 0.4_wp)// &
-               "&output_nml output_to_file = .false. /"//new_line("a")
-         call read_config_from_string(nml, cfg, ierr=ierr)
+               "[output]"//new_line("a")// &
+               "output_to_file = false"//new_line("a")
+         call read_config_from_toml_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
          if (ierr /= OCEAN_STATUS_OK) then
             write (*, '(3a,i0)') "FAIL ", trim(tag), ": validate_config refused the probe, rank ", rank
@@ -3965,10 +5018,10 @@ contains
       type(config_t) :: cfg
       integer :: ierr, ierr_b, st(2), ibc, nfold, nf(1)
       character(len=:), allocatable :: nml
-      character(len=*), parameter :: WALLS = "north = 'wall'"
-      character(len=*), parameter :: FOLD = "north = 'tripolar_fold'"
-      character(len=*), parameter :: PERIODIC_X = "west = 'periodic', east = 'periodic'"
-      character(len=*), parameter :: ALL_WALLS = "west = 'wall', east = 'wall'"
+      character(len=*), parameter :: WALLS = 'north = "wall"'
+      character(len=*), parameter :: FOLD = 'north = "tripolar_fold"'
+      character(len=*), parameter :: PERIODIC_X = 'west = "periodic"'//new_line("a")//'east = "periodic"'
+      character(len=*), parameter :: ALL_WALLS = 'west = "wall"'//new_line("a")//'east = "wall"'
 
       ierr_b = -1
       nfold = 0
@@ -3977,7 +5030,7 @@ contains
       if (ibc > 0) nml = nml(:ibc - 1)//PERIODIC_X//nml(ibc + len(ALL_WALLS):)
       ibc = index(nml, WALLS)
       if (ibc > 0) nml = nml(:ibc - 1)//FOLD//nml(ibc + len(WALLS):)
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr == OCEAN_STATUS_OK) call engine_setup(engine, cfg, ierr, compute_rank=rank, &
                                                      compute_size=nprocs)
@@ -4014,16 +5067,31 @@ contains
       character(len=*), parameter :: NL = new_line("a")
       integer :: a, b
 
-      a = index(nml, "&ocean_ice_nml")
-      b = a + index(nml(a:), "/") - 1
-      nml = nml(1:a - 1)//"&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, "// &
-            "hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'remap', ndte = 10 /"//NL//nml(b + 1:)
-      a = index(nml, "&ocean_ice_ic_nml")
-      b = a + index(nml(a:), "/") - 1
-      nml = nml(1:a - 1)//"&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7, h_snow = 0.1, "// &
-            "t_ice = -8.0 /"//nml(b + 1:)
+      a = index(nml, "[ocean.ice]")
+      b = toml_table_end(nml, a)
+      nml = nml(1:a - 1)//"[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "remap"'//NL// &
+            "ndte = 10"//NL// &
+            nml(b + 1:)
+      a = index(nml, "[ocean.ice_ic]")
+      b = toml_table_end(nml, a)
+      nml = nml(1:a - 1)//"[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 0.7"//NL// &
+            "h_snow = 0.1"//NL// &
+            "t_ice = -8.0"//NL// &
+            nml(b + 1:)
    end subroutine swap_to_cice
 
    subroutine check_cice_fences()
@@ -4039,7 +5107,7 @@ contains
       integer :: ierr
 
       base = cice_ice_nml("cice_ice", "pred_corr", nprocs, 1)
-      call read_config_from_string(base, cfg, ierr=ierr)
+      call read_config_from_toml_string(base, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          write (*, '(a,i0)') "FAIL cice fence: the accepted base namelist is refused, rank ", rank
@@ -4048,8 +5116,9 @@ contains
       end if
       ! the ledger: accepted at configure on several ranks (explicit process grid)
       nml = base
-      call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call replace_once(nml, "hfreeze = 10.0"//new_line("a")//"dynamics", &
+                        "hfreeze = 10.0"//new_line("a")//"ledger = true"//new_line("a")//"dynamics")
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          write (*, '(a,i0)') "FAIL cice fence: ledger = .true. is REFUSED on several ranks (it is supported now), rank ", rank
@@ -4060,15 +5129,15 @@ contains
       call check_cice_ledger_unset_grid()
       ! the accepted tripolar-cap twin (`cice_ice_fold`, stage B) with ONLY the advection swapped to the upwind scheme
       nml = cice_ice_nml("cice_ice_fold", "pred_corr", nprocs, 1)
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          write (*, '(a,i0)') "FAIL cice fence: the accepted tripolar twin is refused, rank ", rank
          n_fail = n_fail + 1
          return
       end if
-      call replace_once(nml, "advection = 'remap'", "advection = 'upwind'")
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call replace_once(nml, 'advection = "remap"', 'advection = "upwind"')
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr == OCEAN_STATUS_OK) then
          write (*, '(a,i0)') "FAIL cice fence: the upwind advection across the fold was ACCEPTED on several ranks, rank ", rank
@@ -4087,8 +5156,9 @@ contains
       integer :: ierr
 
       nml = cice_ice_nml("cice_ice", "pred_corr", 1, 1)
-      call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call replace_once(nml, "hfreeze = 10.0"//new_line("a")//"dynamics", &
+                        "hfreeze = 10.0"//new_line("a")//"ledger = true"//new_line("a")//"dynamics")
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          write (*, '(a,i0)') "FAIL cice fence: validate_config refused the unset-grid ledger namelist, rank ", rank
@@ -4124,51 +5194,89 @@ contains
       ! entry honest.  The cavity itself RUNS decomposed (the `cavity_*` cases);
       ! each entry below is one narrow combination that has no case yet.
       character(len=*), parameter :: CAV = &
-                                     "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-                                     "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
-                                     "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//new_line("a")// &
-                                     "&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
-                                     "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//new_line("a")
+                                     "[vcoord]"//new_line("a")// &
+                                     'vcoord_type = "sigma"'//new_line("a")// &
+                                     "[ocean.pgf]"//new_line("a")// &
+                                     'form = "fv_mom6"'//new_line("a")// &
+                                     "p_top_in_bc = true"//new_line("a")// &
+                                     "[ocean.eos]"//new_line("a")// &
+                                     'eos = "linear"'//new_line("a")// &
+                                     'tfreeze_set = "isomip"'//new_line("a")// &
+                                     "[ocean.forcing]"//new_line("a")// &
+                                     "enable_components = true"//new_line("a")// &
+                                     "[ocean.tdrag]"//new_line("a")// &
+                                     "enable = true"//new_line("a")// &
+                                     'form = "quadratic"'//new_line("a")// &
+                                     "cd = 2.5e-3"//new_line("a")
       character(len=*), parameter :: CAV_DYN = &
-                                     "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-                                     "draft_depth = 300.0, draft_slope = 0.0, draft_x0 = 0.0, h_min_cavity = 10.0"
+                                     "[ocean.cavity_dyn]"//new_line("a")// &
+                                     "enable = true"//new_line("a")// &
+                                     'draft_config = "linear"'//new_line("a")// &
+                                     "draft_depth = 300.0"//new_line("a")// &
+                                     "draft_slope = 0.0"//new_line("a")// &
+                                     "draft_x0 = 0.0"//new_line("a")// &
+                                     "h_min_cavity = 10.0"//new_line("a")
       character(len=*), parameter :: CAV_MELT = &
-                                     "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
-                                     "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
-                                     "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"
-      character(len=1400), parameter :: KNOBS(6) = [character(len=1400) :: &
+                                     "[ocean.cavity_melt]"//new_line("a")// &
+                                     "enable = true"//new_line("a")// &
+                                     'exchange_law = "const_gamma"'//new_line("a")// &
+                                     "gamma_t = 2.2e-2"//new_line("a")// &
+                                     "gamma_s = -1.0"//new_line("a")// &
+                                     "cdrag_top = 2.5e-3"//new_line("a")// &
+                                     'ice_conduction = "insulating"'//new_line("a")// &
+                                     "s_ice = 0.0"//new_line("a")// &
+                                     "far_field_depth = 10.0"//new_line("a")
+      character(len=2400), parameter :: KNOBS(6) = [character(len=2400) :: &
                                                     ! cavity covering every wet column + uniform_open_ocean (global open area 0)
-                                                    CAV//CAV_DYN//" /"//new_line("a")// &
-                                                    CAV_MELT//", freshwater = 'mass', "// &
-                                                    "volume_compensation = 'uniform_open_ocean' /", &
+                                                    CAV//CAV_DYN// &
+                                                    CAV_MELT//'freshwater = "mass"'//new_line("a")// &
+                                                    'volume_compensation = "uniform_open_ocean"'//new_line("a"), &
                                                     ! cavity + a file draft
-                                                    CAV//"&ocean_cavity_dyn_nml enable = .true., "// &
-                                                    "draft_config = 'file', draft_file = 'draft.nc', "// &
-                                                    "draft_var = 'draft', h_min_cavity = 10.0 /", &
+                                                    CAV//"[ocean.cavity_dyn]"//new_line("a")// &
+                                                    "enable = true"//new_line("a")// &
+                                                    'draft_config = "file"'//new_line("a")// &
+                                                    'draft_file = "draft.nc"'//new_line("a")// &
+                                                    'draft_var = "draft"'//new_line("a")// &
+                                                    "h_min_cavity = 10.0"//new_line("a"), &
                                                     ! cavity + bulk forcing
-                                                    CAV//CAV_DYN//" /"//new_line("a")// &
-                                                  "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 0.0 /"// &
-                                                    new_line("a")// &
-                                                    "&ocean_atm_forcing_nml enable = .true., filelist_tas = 'a.txt', "// &
-                                                    "filelist_huss = 'a.txt', filelist_uas = 'a.txt', "// &
-                                                    "filelist_vas = 'a.txt', filelist_psl = 'a.txt', "// &
-                                                    "filelist_rlds = 'a.txt', filelist_rsds = 'a.txt', "// &
-                                                    "filelist_prra = 'a.txt', filelist_prsn = 'a.txt' /"// &
-                                                    new_line("a")// &
-                                                    "&ocean_bulk_flux_nml enable = .true. /", &
+                                                    CAV//CAV_DYN// &
+                                                    "[ocean.grid]"//new_line("a")// &
+                                                    'grid_config = "spherical"'//new_line("a")// &
+                                                    "lon_west = 0.0"//new_line("a")// &
+                                                    "lat_south = 0.0"//new_line("a")// &
+                                                    "[ocean.atm_forcing]"//new_line("a")// &
+                                                    "enable = true"//new_line("a")// &
+                                                    'filelist_tas = "a.txt"'//new_line("a")// &
+                                                    'filelist_huss = "a.txt"'//new_line("a")// &
+                                                    'filelist_uas = "a.txt"'//new_line("a")// &
+                                                    'filelist_vas = "a.txt"'//new_line("a")// &
+                                                    'filelist_psl = "a.txt"'//new_line("a")// &
+                                                    'filelist_rlds = "a.txt"'//new_line("a")// &
+                                                    'filelist_rsds = "a.txt"'//new_line("a")// &
+                                                    'filelist_prra = "a.txt"'//new_line("a")// &
+                                                    'filelist_prsn = "a.txt"'//new_line("a")// &
+                                                    "[ocean.bulk_flux]"//new_line("a")// &
+                                                    "enable = true"//new_line("a"), &
                                                     ! cavity + an open edge
-                                                    CAV//CAV_DYN//" /"//new_line("a")// &
-                                                    "&ocean_bc_nml east = 'open' /", &
+                                                    CAV//CAV_DYN// &
+                                                    "[ocean.bc]"//new_line("a")// &
+                                                    'east = "open"'//new_line("a"), &
                                                     ! cavity + a sponge edge
-                                                    CAV//CAV_DYN//" /"//new_line("a")// &
-                                                    "&ocean_bc_nml north = 'sponge' /", &
+                                                    CAV//CAV_DYN// &
+                                                    "[ocean.bc]"//new_line("a")// &
+                                                    'north = "sponge"'//new_line("a"), &
                                                     ! cavity + the tripolar fold
-                                                    CAV//CAV_DYN//" /"//new_line("a")// &
-                                                    "&ocean_grid_nml grid_config = 'tripolar', "// &
-                                                    "lat_south = 59.0, phi_join = 74.0, "// &
-                                                    "coriolis_scheme = 'planetary' /"//new_line("a")// &
-                                                    "&ocean_bc_nml west = 'periodic', "// &
-                                                    "east = 'periodic', north = 'tripolar_fold' /"]
+                                                    CAV//CAV_DYN// &
+                                                    "[ocean.grid]"//new_line("a")// &
+                                                    'grid_config = "tripolar"'//new_line("a")// &
+                                                    "lat_south = 59.0"//new_line("a")// &
+                                                    "phi_join = 74.0"//new_line("a")// &
+                                                    'coriolis_scheme = "planetary"'//new_line("a")// &
+                                                    "[ocean.bc]"//new_line("a")// &
+                                                    'west = "periodic"'//new_line("a")// &
+                                                    'east = "periodic"'//new_line("a")// &
+                                                    'north = "tripolar_fold"'//new_line("a")// &
+                                                    new_line("a")]
       ! One distinctive substring of the message each entry must produce, so a
       ! fence that is deleted while a LATER, more generic refusal still fires
       ! (the bulk-forcing one, the validate envelope) cannot pass unnoticed.
@@ -4182,7 +5290,7 @@ contains
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
-      character(len=1400) :: lab
+      character(len=2400) :: lab
       character(len=64) :: want
       character(len=96) :: rep
       integer :: ik, ierr, im, ie
@@ -4196,16 +5304,28 @@ contains
             lab = KNOBS(ik)
             want = WHY(ik)
             must_validate = index(KNOBS(ik), "cavity_dyn") > 0
-            nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-                  "&grid_nml nx = 26, ny = 18, nghost = 3, "// &
-                  merge("dx = 1.0, dy = 1.0        ", "dx = 20000.0, dy = 20000.0", &
-                        index(KNOBS(ik), "'spherical'") > 0)//" /"//NL// &
-                  "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '1958-01-01' /"//NL// &
-                  "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-                  "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
-                  "&ocean_diag_nml enabled = .false. /"//NL// &
-                  "&output_nml output_to_file = .false. /"//NL// &
-                  trim(KNOBS(ik))//NL
+            nml = "[sim]"//NL// &
+                  'sim_type = "ocean"'//NL// &
+                  "[grid]"//NL// &
+                  "nx = 26"//NL// &
+                  "ny = 18"//NL// &
+                  "nghost = 3"//NL// &
+                  trim(merge("dx = 1.0"//NL//"dy = 1.0"//NL//repeat(" ", 8), "dx = 20000.0"//NL//"dy = 20000.0"//NL, &
+                             index(KNOBS(ik), '"spherical"') > 0))// &
+                  "[time]"//NL// &
+                  "t_end = 86400.0"//NL// &
+                  "dt_fixed = 900.0"//NL// &
+                  'start_date = "1958-01-01"'//NL// &
+                  "[nonhydrostatic]"//NL// &
+                  "nz_layers = 4"//NL// &
+                  "[ocean.bt]"//NL// &
+                  "auto_n_inner = true"//NL// &
+                  'split_scheme = "ssp_rk2"'//NL// &
+                  "[ocean.diag]"//NL// &
+                  "enabled = false"//NL// &
+                  "[output]"//NL// &
+                  "output_to_file = false"//NL// &
+                  trim(KNOBS(ik))
          else if (ik == size(KNOBS) + 1) then
             ! Wet/dry is decomposition-safe on a wall / periodic domain, but its
             ! masks and limiter fluxes are not folded: the very tripolar-cap case
@@ -4215,8 +5335,10 @@ contains
             lab = "&ocean_wetdry_nml enable = .true. / on the tripolar-fold case"
             want = "with north = 'tripolar_fold' is unproven"
             must_validate = .true.
-            nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
-                  "&ocean_wetdry_nml enable = .true. /"//NL
+            nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"[ocean.continuity]"//NL// &
+                  "ppm_limit_pos = true"//NL// &
+                  "[ocean.wetdry]"//NL// &
+                  "enable = true"//NL
          else
             ! The shoal (valid under validate_config) with an east edge or an
             ! open-edge option that has no decomposition case: every one must be
@@ -4226,38 +5348,38 @@ contains
             case (1)
                lab = "&ocean_wetdry_nml enable = .true. / with a clamped east edge"
                want = "edge 'clamped' is unproven"
-               rep = "east = 'clamped'"
+               rep = 'east = "clamped"'
             case (2)
                lab = "&ocean_wetdry_nml enable = .true. / with a chapman east edge"
                want = "edge 'chapman' is unproven"
-               rep = "east = 'chapman'"
+               rep = 'east = "chapman"'
             case (3)
                lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and Orlanski radiation"
                want = "Orlanski radiation, full Flather"
-               rep = "east = 'open', radiation_scheme = 'orlanski'"
+               rep = 'east = "open"'//NL//'radiation_scheme = "orlanski"'
             case (4)
                lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and full Flather"
                want = "Orlanski radiation, full Flather"
-               rep = "east = 'open', flather_form = 'full'"
+               rep = 'east = "open"'//NL//'flather_form = "full"'
             case (5)
                lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and inflow nudging"
                want = "Orlanski radiation, full Flather"
-               rep = "east = 'open', nudge_tau_in = 3600.0"
+               rep = 'east = "open"'//NL//"nudge_tau_in = 3600.0"
             case default
                lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and tracer reservoirs"
                want = "reservoirs are unproven"
-               rep = "east = 'open', res_lscale_out = 20000.0"
+               rep = 'east = "open"'//NL//"res_lscale_out = 20000.0"
             end select
             nml = case_nml("wetdry_shoal", "ssp_rk2", 1, 1)
-            ie = index(nml, "east = 'wall'")
+            ie = index(nml, 'east = "wall"')
             if (ie < 1) then
                write (*, '(3a,i0)') "FAIL fence: '", trim(lab), "' substitution found no east = 'wall', rank ", rank
                n_fail = n_fail + 1
                cycle
             end if
-            nml = nml(1:ie - 1)//trim(rep)//nml(ie + len("east = 'wall'"):)
+            nml = nml(1:ie - 1)//trim(rep)//nml(ie + len('east = "wall"'):)
          end if
-         call read_config_from_string(nml, cfg, ierr=ierr)
+         call read_config_from_toml_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
          if (ierr /= OCEAN_STATUS_OK .and. must_validate) then
             write (*, '(a,i0)') "  fence entry ", ik

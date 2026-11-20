@@ -27,7 +27,7 @@ module test_ocean_ice_melt_potential
    use rdb_eos, only: eos_t, eos_freezing_point
    use rdb_ice_state, only: ocean_sea_ice_t
    use rdb_ice_melt_potential, only: ice_melt_potential
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
@@ -407,34 +407,46 @@ contains
       type(config_t) :: cfg
       integer :: ierr
       checks: block
-         call parse_case(cfg, "&ocean_ice_nml enable = .true., hfreeze = 10.0 /")
+         call parse_case(cfg, "[ocean.ice]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         "hfreeze = 10.0"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, "hfreeze = 10 with ice on accepted")
          if (allocated(error)) exit checks
-         call parse_case(cfg, "&ocean_ice_nml enable = .true., hfreeze = 0.0 /")
+         call parse_case(cfg, "[ocean.ice]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         "hfreeze = 0.0"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "hfreeze = 0 refused")
          if (allocated(error)) exit checks
-         call parse_case(cfg, "&ocean_ice_nml enable = .true., hfreeze = -5.0 /")
+         call parse_case(cfg, "[ocean.ice]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         "hfreeze = -5.0"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "hfreeze = -5 refused")
          if (allocated(error)) exit checks
-         call parse_case(cfg, "&ocean_ice_nml enable = .false., hfreeze = 10.0 /")
+         call parse_case(cfg, "[ocean.ice]"//new_line("a")// &
+                         "enable = false"//new_line("a")// &
+                         "hfreeze = 10.0"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "hfreeze > 0 without ice refused")
          if (allocated(error)) exit checks
-         call parse_case(cfg, "&ocean_ice_nml enable = .true., hfreeze = 10.0 /"//new_line("a")// &
-                         "&ocean_cavity_dyn_nml enable = .true. /")
+         call parse_case(cfg, "[ocean.ice]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         "hfreeze = 10.0"//new_line("a")// &
+                         "[ocean.cavity_dyn]"//new_line("a")// &
+                         "enable = true"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                     "hfreeze > 0 with an ice-shelf cavity refused")
          if (allocated(error)) exit checks
-         call parse_case(cfg, "&ocean_ice_nml enable = .true. /")
+         call parse_case(cfg, "[ocean.ice]"//new_line("a")// &
+                         "enable = true"//new_line("a"))
          call check(error, cfg%ocean%ice%hfreeze == -1.0_wp, "default hfreeze is -1 (off)")
       end block checks
    end subroutine test_validate
@@ -443,14 +455,24 @@ contains
       type(config_t), intent(out) :: cfg
       character(len=*), intent(in) :: extra
       character(len=:), allocatable :: nml
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
-            "&ocean_bt_nml n_inner = 8 /"//new_line("a")// &
-            extra//new_line("a")
-      call read_config_from_string(nml, cfg)
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.forcing]"//new_line("a")// &
+            "enable_components = true"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            extra
+      call read_config_from_toml_string(nml, cfg)
    end subroutine parse_case
 
    subroutine test_device_vs_host(error)
@@ -573,32 +595,62 @@ contains
 
       select case (kind)
       case (1)
-         vm = "&ocean_vmix_nml use_kpp = .false., dt_therm_ratio = 3 /"//NL
+         vm = "[ocean.vmix]"//NL// &
+              "use_kpp = false"//NL// &
+              "dt_therm_ratio = 3"//NL
       case (2)
-         vm = "&ocean_vmix_nml use_kpp = .true., dt_therm_ratio = 3 /"//NL
+         vm = "[ocean.vmix]"//NL// &
+              "use_kpp = true"//NL// &
+              "dt_therm_ratio = 3"//NL
       case default
-         vm = "&ocean_vmix_nml use_kpp = .false., dt_therm_ratio = 3 /"//NL// &
-              "&ocean_epbl_nml enable = .true. /"//NL
+         vm = "[ocean.vmix]"//NL// &
+              "use_kpp = false"//NL// &
+              "dt_therm_ratio = 3"//NL// &
+              "[ocean.epbl]"//NL// &
+              "enable = true"//NL
       end select
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&tracer_nml initial_salinity = 34.0, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
-            "&grid_nml nx = 10, ny = 8, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.435e-4 /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = 0.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&ocean_ice_nml enable = .true., hfreeze = 1000.0, air_temp = 2.0, "// &
-            "restore_lambda = 0.0, sw_down = 0.0 /"//NL// &
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = 3.0"//NL// &
+            "T_init_bottom = 1.0"//NL// &
+            "[grid]"//NL// &
+            "nx = 10"//NL// &
+            "ny = 8"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 10000.0"//NL// &
+            "dy = 10000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.435e-4"//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "q_heat = 0.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            "hfreeze = 1000.0"//NL// &
+            "air_temp = 2.0"//NL// &
+            "restore_lambda = 0.0"//NL// &
+            "sw_down = 0.0"//NL// &
             vm
       if (.not. comm_inited) then
          call comm_env_init()
          call comm_env_setup_roles(.false.)
          comm_inited = .true.
       end if
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == 0, name//": namelist parses")
       if (allocated(error)) return
       call validate_config(cfg, ierr)

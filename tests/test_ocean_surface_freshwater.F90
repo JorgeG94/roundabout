@@ -27,7 +27,7 @@ module test_ocean_surface_freshwater
    use, intrinsic :: iso_fortran_env, only: output_unit
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, &
@@ -52,7 +52,9 @@ module test_ocean_surface_freshwater
    real(wp), parameter :: H_LAYER = 10.0_wp
    real(wp), parameter :: DT = 3600.0_wp
    character(len=*), parameter :: NL = new_line("a")
-   character(len=*), parameter :: VFW = "&ocean_forcing_nml enable_components = .true., freshwater = 'virtual' /"//NL
+   character(len=*), parameter :: VFW = "[ocean.forcing]"//NL// &
+                                  "enable_components = true"//NL// &
+                                  'freshwater = "virtual"'//NL
    character(len=*), parameter :: FN_ATM = "test_fw_cice_atm.nc"
    character(len=*), parameter :: FN_LST = "test_fw_cice_atm.txt"
    real(wp), parameter :: DT_ENGINE = 600.0_wp
@@ -563,11 +565,15 @@ contains
       type(config_t) :: cfg
       integer :: ierr_read
 
-      call read_config_from_string("&sim_nml sim_type = 'ocean' /"//NL// &
-                                   "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-                                   extra//NL// &
-                                   "&ocean_diag_nml enabled = .false. /"//NL// &
-                                   "&output_nml output_to_file = .false. /"//NL, cfg, ierr=ierr_read)
+      call read_config_from_toml_string("[sim]"//NL// &
+                                        'sim_type = "ocean"'//NL// &
+                                        "[ocean.thermo]"//NL// &
+                                        "enable_thermodynamics = true"//NL// &
+                                        extra// &
+                                        "[ocean.diag]"//NL// &
+                                        "enabled = false"//NL// &
+                                        "[output]"//NL// &
+                                        "output_to_file = false"//NL, cfg, ierr=ierr_read)
       if (ierr_read /= OCEAN_STATUS_OK) then
          ierr = ierr_read
          return
@@ -583,47 +589,72 @@ contains
                  parse_surface_freshwater("mass") == SURF_FW_MASS .and. &
                  parse_surface_freshwater("bogus") == SURF_FW_INVALID, "the knob values parse")
       if (allocated(error)) return
-      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true. /") == OCEAN_STATUS_OK, &
+      call check(error, valid_ierr("[ocean.forcing]"//new_line("a")// &
+                                   "enable_components = true"//new_line("a")) == OCEAN_STATUS_OK, &
                  "baseline namelist validates (knob absent)")
       if (allocated(error)) return
-      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'none' /") &
+      call check(error, valid_ierr("[ocean.forcing]"//new_line("a")// &
+                                   "enable_components = true"//new_line("a")// &
+                                   'freshwater = "none"'//new_line("a")) &
                  == OCEAN_STATUS_OK, "freshwater = 'none' is accepted")
       if (allocated(error)) return
-      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'virtual' /") &
+      call check(error, valid_ierr("[ocean.forcing]"//new_line("a")// &
+                                   "enable_components = true"//new_line("a")// &
+                                   'freshwater = "virtual"'//new_line("a")) &
                  == OCEAN_STATUS_OK, "freshwater = 'virtual' is accepted")
       if (allocated(error)) return
       ! 'mass' ships (test_ocean_surface_fw_mass): the default sigma coordinate remaps, so it is
       ! accepted; `eulerian_z` cannot give the volume back to a remap target and stays refused.
-      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-                                   "&ocean_bt_nml auto_n_inner = .true. /") &
+      call check(error, valid_ierr("[ocean.forcing]"//NL// &
+                                   "enable_components = true"//NL// &
+                                   'freshwater = "mass"'//NL// &
+                                   "[ocean.bt]"//NL// &
+                                   "auto_n_inner = true"//NL) &
                  == OCEAN_STATUS_OK, "freshwater = 'mass' is accepted (default sigma coordinate)")
       if (allocated(error)) return
-      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /") &
+      call check(error, valid_ierr("[ocean.forcing]"//new_line("a")// &
+                                   "enable_components = true"//new_line("a")// &
+                                   'freshwater = "mass"'//new_line("a")) &
                  /= OCEAN_STATUS_OK, "freshwater = 'mass' is refused on the unsplit solver (no remap)")
       if (allocated(error)) return
-      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-                                   "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-                                   "&vcoord_nml vcoord_type = 'eulerian_z' /") /= OCEAN_STATUS_OK, &
+      call check(error, valid_ierr("[ocean.forcing]"//NL// &
+                                   "enable_components = true"//NL// &
+                                   'freshwater = "mass"'//NL// &
+                                   "[ocean.bt]"//NL// &
+                                   "auto_n_inner = true"//NL// &
+                                   "[vcoord]"//NL// &
+                                   'vcoord_type = "eulerian_z"'//NL) /= OCEAN_STATUS_OK, &
                  "freshwater = 'mass' is refused with eulerian_z")
       if (allocated(error)) return
-      call check(error, valid_ierr("&ocean_forcing_nml freshwater = 'virtual' /") /= OCEAN_STATUS_OK, &
+      call check(error, valid_ierr("[ocean.forcing]"//new_line("a")// &
+                                   'freshwater = "virtual"'//new_line("a")) /= OCEAN_STATUS_OK, &
                  "freshwater = 'virtual' without the component set is refused")
       if (allocated(error)) return
       call check(error, parse_surface_freshwater("off") == SURF_FW_INVALID .and. &
                  parse_surface_freshwater("real") == SURF_FW_INVALID, "no aliases beyond the enum")
       if (allocated(error)) return
       ! SIS2-derived ice: the lumped mode and the open-water snowfall path double count
-      call check(error, valid_ierr(VFW//"&ocean_ice_nml enable = .true., ncat = 5 /") == OCEAN_STATUS_OK, &
+      call check(error, valid_ierr(VFW//"[ocean.ice]"//new_line("a")// &
+                                   "enable = true"//new_line("a")// &
+                                   "ncat = 5"//new_line("a")) == OCEAN_STATUS_OK, &
                  "virtual with SIS2-derived ice at ncat = 5 is accepted")
       if (allocated(error)) return
-      call check(error, valid_ierr(VFW//"&ocean_ice_nml enable = .true., ncat = 1 /") /= OCEAN_STATUS_OK, &
+      call check(error, valid_ierr(VFW//"[ocean.ice]"//new_line("a")// &
+                                   "enable = true"//new_line("a")// &
+                                   "ncat = 1"//new_line("a")) /= OCEAN_STATUS_OK, &
                  "virtual with SIS2-derived ice at ncat = 1 (lumped, aice0 = 1) is refused")
       if (allocated(error)) return
-      call check(error, valid_ierr(VFW//"&ocean_ice_nml enable = .true., ncat = 5, snowfall = 2.0e-5 /") &
+      call check(error, valid_ierr(VFW//"[ocean.ice]"//new_line("a")// &
+                                   "enable = true"//new_line("a")// &
+                                   "ncat = 5"//new_line("a")// &
+                                   "snowfall = 2.0e-5"//new_line("a")) &
                  /= OCEAN_STATUS_OK, "virtual with SIS2-derived ice snowfall /= 0 (counted twice) is refused")
       if (allocated(error)) return
-      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true. /"//NL// &
-                                   "&ocean_ice_nml enable = .true., ncat = 1 /") == OCEAN_STATUS_OK, &
+      call check(error, valid_ierr("[ocean.forcing]"//NL// &
+                                   "enable_components = true"//NL// &
+                                   "[ocean.ice]"//NL// &
+                                   "enable = true"//NL// &
+                                   "ncat = 1"//NL) == OCEAN_STATUS_OK, &
                  "the same ice with the knob off is untouched")
    end subroutine test_validate
 
@@ -644,36 +675,95 @@ contains
       character(len=*), intent(in) :: freshwater
       character(len=:), allocatable :: nml
 
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
-            "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 70.0, "// &
-            "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-            "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true., freshwater = '"//freshwater//"' /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 1 /"//NL// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.6, h_snow = 0.1, t_ice = -8.0 /"//NL// &
-            "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', fluxes_regrid = 'bilinear', "// &
-            "time_mode = 'interannual', wind_relative = .false., "// &
-            "filelist_tas = '"//FN_LST//"', filelist_huss = '"//FN_LST//"', filelist_uas = '"//FN_LST//"', "// &
-            "filelist_vas = '"//FN_LST//"', filelist_psl = '"//FN_LST//"', filelist_rlds = '"//FN_LST//"', "// &
-            "filelist_rsds = '"//FN_LST//"', filelist_prra = '"//FN_LST//"', filelist_prsn = '"//FN_LST//"' /"//NL// &
-            "&ocean_bulk_flux_nml enable = .true. /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            'start_date = "2000-01-01"'//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.0"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.0"//NL// &
+            "T_init_bottom = -1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[grid]"//NL// &
+            "nx = 12"//NL// &
+            "ny = 10"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 0.25"//NL// &
+            "dy = 0.25"//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "spherical"'//NL// &
+            "lon_west = 20.0"//NL// &
+            "lat_south = 70.0"//NL// &
+            "rad_earth = 6.371e6"//NL// &
+            'coriolis_scheme = "planetary"'//NL// &
+            "[physics]"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            'freshwater = "'//freshwater//'"'//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 1"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "upwind"'//NL// &
+            "ndte = 40"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 0.6"//NL// &
+            "h_snow = 0.1"//NL// &
+            "t_ice = -8.0"//NL// &
+            "[ocean.atm_forcing]"//NL// &
+            "enable = true"//NL// &
+            'sw_interp = "linear"'//NL// &
+            'fluxes_regrid = "bilinear"'//NL// &
+            'time_mode = "interannual"'//NL// &
+            "wind_relative = false"//NL// &
+            'filelist_tas = "'//FN_LST//'"'//NL// &
+            'filelist_huss = "'//FN_LST//'"'//NL// &
+            'filelist_uas = "'//FN_LST//'"'//NL// &
+            'filelist_vas = "'//FN_LST//'"'//NL// &
+            'filelist_psl = "'//FN_LST//'"'//NL// &
+            'filelist_rlds = "'//FN_LST//'"'//NL// &
+            'filelist_rsds = "'//FN_LST//'"'//NL// &
+            'filelist_prra = "'//FN_LST//'"'//NL// &
+            'filelist_prsn = "'//FN_LST//'"'//NL// &
+            "[ocean.bulk_flux]"//NL// &
+            "enable = true"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function cice_nml
 
    subroutine run_one_step(fw, ok, salt_ice, salt_fw, q_salt, q_heat, lprec, fprec, evap, s_top, frain, aice_init, &
@@ -693,7 +783,7 @@ contains
       ok = .false.
       call write_synth_atm("mixed", FN_ATM, FN_LST)
       call ensure_comm()
-      call read_config_from_string(cice_nml(fw), cfg, ierr=ierr)
+      call read_config_from_toml_string(cice_nml(fw), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          call remove_synth_atm(FN_ATM, FN_LST)
          return
@@ -839,7 +929,7 @@ contains
       scale = 1.0_wp
       call write_synth_atm("mixed", FN_ATM, FN_LST)
       call ensure_comm()
-      call read_config_from_string(cice_nml(fw), cfg, ierr=ierr)
+      call read_config_from_toml_string(cice_nml(fw), cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call engine_setup(engine, cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          call remove_synth_atm(FN_ATM, FN_LST)

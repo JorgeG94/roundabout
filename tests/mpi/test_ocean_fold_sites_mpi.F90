@@ -41,7 +41,7 @@ program test_ocean_fold_sites_mpi
    use, intrinsic :: iso_fortran_env, only: int64
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_finite
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_exit_data, engine_teardown
@@ -138,25 +138,57 @@ contains
       character(len=*), parameter :: NL = new_line("a")
       write (spx, '(i0)') px
       write (spy, '(i0)') py
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
-            "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-            "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, "// &
-            "lat_south = 59.0, phi_join = 74.0, lon_pole = 0.0, "// &
-            "rad_earth = 6.378e6, coriolis_scheme = 'planetary' /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 1800.0 /"//NL// &
-            "&ocean_topo_nml max_depth = 1000.0 /"//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-            "north = 'tripolar_fold' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 2000.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-            "&ocean_ice_nml enable = .true., ncat = 3, nk_ice = 2, dynamics = .true., "// &
-            "transport = .true., adv_substeps = 2 /"//NL// &
-            "&ocean_diag_nml enabled = .false., reproducing_sums = .true. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 30"//NL// &
+            "ny = 24"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 12.0"//NL// &
+            "dy = 1.0"//NL// &
+            "[mpi]"//NL// &
+            "px = "//trim(spx)//NL// &
+            "py = "//trim(spy)//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "tripolar"'//NL// &
+            "lon_west = 0.0"//NL// &
+            "lat_south = 59.0"//NL// &
+            "phi_join = 74.0"//NL// &
+            "lon_pole = 0.0"//NL// &
+            "rad_earth = 6.378e6"//NL// &
+            'coriolis_scheme = "planetary"'//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 1800.0"//NL// &
+            "[ocean.topo]"//NL// &
+            "max_depth = 1000.0"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "tripolar_fold"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 2000.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 2"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            "ncat = 3"//NL// &
+            "nk_ice = 2"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "adv_substeps = 2"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "reproducing_sums = true"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function case_nml
 
    ! ----------------------------------------------------------------
@@ -324,7 +356,7 @@ contains
       integer :: ierr, it, nt
 
       ok = .false.
-      call read_config_from_string(case_nml(px, py), cfg, ierr=ierr)
+      call read_config_from_toml_string(case_nml(px, py), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return

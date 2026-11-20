@@ -9,7 +9,7 @@ module test_ocean_linear_eos_knobs
    !!
    !!   (a) **Configure path** — a namelist string carrying the full
    !!       quintet lands on `ocean_state%eos` through the PRODUCTION
-   !!       route (`read_config_from_string` -> `init_from_config`), and
+   !!       route (`read_config_from_toml_string` -> `init_from_config`), and
    !!       `eos_density_point` then reproduces a hand-computed density.
    !!       The case is the ISOMIP+ protocol reference state
    !!       (Asay-Davis et al. 2016) because it is the one that exposes
@@ -51,7 +51,7 @@ module test_ocean_linear_eos_knobs
    !! mapping to arrange.
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t
    use rdb_eos, only: eos_t, eos_density_point
@@ -126,7 +126,7 @@ contains
       character(len=*), intent(in) :: nml
       integer, intent(out) :: ierr
 
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call grid%init(NX_PHYS, NY_PHYS, NGHOST, 1000.0_wp, 1000.0_wp)
       call state%init_from_config(cfg, grid)
@@ -144,16 +144,22 @@ contains
       integer :: ierr
 
       ! DIMENSIONAL values: alpha_T = rho_0*alpha, beta_S = rho_0*beta.
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 6, ny = 5, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
-            "&ocean_eos_nml eos = 'linear' /"//new_line("a")// &
-            "&ocean_ic_nml"//new_line("a")// &
-            "   alpha_T = 3.83569483e-2"//new_line("a")// &
-            "   beta_S  = 8.05876093e-1"//new_line("a")// &
-            "   T_ref   = -1.0"//new_line("a")// &
-            "   S_ref   = 34.2"//new_line("a")// &
-            "   rho_0   = 1027.51"//new_line("a")// &
-            "/"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 6"//new_line("a")// &
+            "ny = 5"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[ocean.eos]"//new_line("a")// &
+            'eos = "linear"'//new_line("a")// &
+            "[ocean.ic]"//new_line("a")// &
+            "alpha_T = 3.83569483e-2"//new_line("a")// &
+            "beta_S = 8.05876093e-1"//new_line("a")// &
+            "T_ref = -1.0"//new_line("a")// &
+            "S_ref = 34.2"//new_line("a")// &
+            "rho_0 = 1027.51"//new_line("a")
 
       call build_state(cfg, grid, state, nml, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "ISOMIP+ namelist must parse")
@@ -214,8 +220,14 @@ contains
       character(len=:), allocatable :: nml
       integer :: ierr
 
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 6, ny = 5, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 6"//new_line("a")// &
+            "ny = 5"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")
 
       call build_state(cfg, grid, state, nml, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "bare namelist must parse")

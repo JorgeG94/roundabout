@@ -130,7 +130,7 @@ module test_ocean_zfixed_cor_ref
                             SPLIT_SCHEME_PRED_CORR
    use rdb_ocean_vcoord, only: ocean_vcoord_t, VCOORD_Z_FIXED, &
                                ocean_vcoord_z_fixed_target_uniform
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    implicit none
@@ -875,14 +875,14 @@ contains
       call expect_status(error, zfixed_nml("", ""), .true., &
                          "pred_corr + closed faces + DEFAULT (masked) walls")
       if (allocated(error)) return
-      call expect_status(error, zfixed_nml("mask_wall_velocity = .false.", ""), .false., &
+      call expect_status(error, zfixed_nml("mask_wall_velocity = false"//new_line("a"), ""), .false., &
                          "pred_corr + closed faces + UNMASKED walls")
       if (allocated(error)) return
-      call expect_status(error, zfixed_nml("mask_wall_velocity = .false.", &
-                                           "split_scheme = 'ssp_rk2'"), .true., &
+      call expect_status(error, zfixed_nml("mask_wall_velocity = false"//new_line("a"), &
+                                           'split_scheme = "ssp_rk2"'//new_line("a")), .true., &
                          "ssp_rk2 + closed faces + unmasked walls")
       if (allocated(error)) return
-      call expect_status(error, zfixed_nml("mask_wall_velocity = .false.", "", &
+      call expect_status(error, zfixed_nml("mask_wall_velocity = false"//new_line("a"), "", &
                                            closed=.false.), .true., &
                          "pred_corr + face mask OFF + unmasked walls")
    end subroutine test_unmasked_walls_refused
@@ -895,23 +895,39 @@ contains
       logical, intent(in), optional :: closed
       character(len=:), allocatable :: nml
       character(len=:), allocatable :: closed_s, bt_l
-      closed_s = ".true."
+      closed_s = "true"
       if (present(closed)) then
-         if (.not. closed) closed_s = ".false."
+         if (.not. closed) closed_s = "false"
       end if
-      bt_l = "auto_n_inner = .false., n_inner = 8"
-      if (len_trim(bt_body) > 0) bt_l = bt_l//", "//bt_body
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 400.0 /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = "//closed_s// &
-            " /"//new_line("a")// &
-            "&ocean_bt_nml "//bt_l//" /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
-      if (len_trim(bc_body) > 0) nml = nml//"&ocean_bc_nml "//bc_body//" /"//new_line("a")
+      bt_l = "auto_n_inner = false"//new_line("a")// &
+             "n_inner = 8"//new_line("a")
+      if (len_trim(bt_body) > 0) bt_l = bt_l//bt_body
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 400.0"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "z_fixed"'//new_line("a")// &
+            "zfixed_closed_faces = "//closed_s//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            bt_l// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
+      if (len_trim(bc_body) > 0) nml = nml//"[ocean.bc]"//new_line("a")// &
+                                       bc_body
    end function zfixed_nml
 
    subroutine expect_status(error, nml, valid, what)
@@ -920,7 +936,7 @@ contains
       logical, intent(in) :: valid
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "namelist must PARSE: "//what)
       if (allocated(error)) return
       ierr = -999

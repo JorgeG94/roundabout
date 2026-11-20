@@ -61,7 +61,7 @@ module test_ocean_pgf_p_top_bc
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t, &
                                        ocean_pressure_force_compute, &
                                        OPGF_VARIANT_FV_MOM6
-   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config, &
                          p_top_has_producer
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    implicit none
@@ -578,15 +578,19 @@ contains
       integer :: ierr
 
       checks: block
-         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /')
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_mom6"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, &
                     "p_top_in_bc with form='fv_mom6' must be accepted")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true., '// &
-                         'reconstruct_for_pressure = .true. /')
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_mom6"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a")// &
+                         "reconstruct_for_pressure = true"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, &
@@ -594,14 +598,18 @@ contains
                     "accepted (same pa(nz+1) seed)")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, '&ocean_pgf_nml form = "mont", p_top_in_bc = .true. /')
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "mont"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                     "p_top_in_bc with form='mont' must be refused (no pa stack)")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, '&ocean_pgf_nml form = "fv_wright", p_top_in_bc = .true. /')
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_wright"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
@@ -609,7 +617,9 @@ contains
                     "(p_edge(nz+1) = 0, not a pa stack)")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, '&ocean_pgf_nml form = "fv_lite", p_top_in_bc = .true. /')
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_lite"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
@@ -617,7 +627,8 @@ contains
          if (allocated(error)) exit checks
 
          ! Default off must still validate for every form.
-         call parse_case(cfg, '&ocean_pgf_nml form = "mont" /')
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "mont"'//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, &
@@ -671,14 +682,24 @@ contains
       character(len=:), allocatable :: nml
       character(len=1) :: snz
       snz = merge("2", "3", form == "gprime")
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = "//snz//" /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_bt_nml n_inner = 8, correction_bc_pgf = "// &
-            merge(".true. ", ".false.", on)//" /"//new_line("a")// &
-            '&ocean_pgf_nml form = "'//form//'" /'//new_line("a")
-      call read_config_from_string(nml, cfg)
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = "//snz//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            "correction_bc_pgf = "//merge("true ", "false", on)//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "'//form//'"'//new_line("a")
+      call read_config_from_toml_string(nml, cfg)
    end subroutine parse_bc_pgf
 
    subroutine test_p_top_producer(error)
@@ -701,31 +722,45 @@ contains
       type(config_t) :: cfg
 
       checks: block
-         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /')
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_mom6"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a"))
          call check(error,.not. p_top_has_producer(cfg), &
                     "with neither psurf nor a cavity, p_top really is the zero "// &
                     "array and the knob really is inert")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /'// &
-                         new_line("a")//"&ocean_psurf_nml enable = .true. /")
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_mom6"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a")// &
+                         "[ocean.psurf]"//new_line("a")// &
+                         "enable = true"//new_line("a"))
          call check(error, p_top_has_producer(cfg), &
                     "the surface-pressure seam is a producer (it fills sf%p_surf)")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /'// &
-                         new_line("a")//"&ocean_cavity_dyn_nml enable = .true., "// &
-                         "draft_config = 'flat', draft_depth = 300.0 /")
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_mom6"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a")// &
+                         "[ocean.cavity_dyn]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         'draft_config = "flat"'//new_line("a")// &
+                         "draft_depth = 300.0"//new_line("a"))
          call check(error, p_top_has_producer(cfg), &
                     "an ice-shelf cavity is a producer too — p_ice_ref = "// &
                     "rho_ref*g*z_draft is assembled into p_top by "// &
                     "configure_ocean_cavity, and p_top_in_bc is REQUIRED there")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /'// &
-                         new_line("a")//"&ocean_psurf_nml enable = .true. /"// &
-                         new_line("a")//"&ocean_cavity_dyn_nml enable = .true., "// &
-                         "draft_config = 'flat', draft_depth = 300.0 /")
+         call parse_case(cfg, "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_mom6"'//new_line("a")// &
+                         "p_top_in_bc = true"//new_line("a")// &
+                         "[ocean.psurf]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         "[ocean.cavity_dyn]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         'draft_config = "flat"'//new_line("a")// &
+                         "draft_depth = 300.0"//new_line("a"))
          call check(error, p_top_has_producer(cfg), &
                     "both at once is still a producer (p_top is their SUM)")
       end block checks
@@ -735,13 +770,22 @@ contains
       type(config_t), intent(out) :: cfg
       character(len=*), intent(in) :: extra
       character(len=:), allocatable :: nml
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_bt_nml n_inner = 8 /"//new_line("a")// &
-            extra//new_line("a")
-      call read_config_from_string(nml, cfg)
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            extra
+      call read_config_from_toml_string(nml, cfg)
    end subroutine parse_case
 
 end module test_ocean_pgf_p_top_bc

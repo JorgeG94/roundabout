@@ -33,7 +33,7 @@
 module test_ocean_vcoord_hygiene
    use rdb_constants, only: wp, VCOORD_ZSTAR_FULL
    use rdb_ocean_status, only: OCEAN_STATUS_OK
-   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config, &
                          cavity_draft_is_uniform, zfixed_cavity_nu_h_below_envelope, &
                          ZFIXED_CAVITY_NU_H_MIN
    use pic_logger, only: global_logger
@@ -79,20 +79,34 @@ contains
       !! fixture and kept plain for readability.
       character(len=*), intent(in) :: vcoord_body
       character(len=:), allocatable :: nml
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"//new_line("a")// &
-            "&vcoord_nml "//vcoord_body//" /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            vcoord_body// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function nml_with_vcoord
 
    subroutine expect_config(error, nml, want_ok, what)
-      !! Run `read_config_from_string` + `validate_config` in their
+      !! Run `read_config_from_toml_string` + `validate_config` in their
       !! `ierr` forms and assert the verdict.  Not `pure`: `check`
       !! allocates `error`.
       type(error_type), allocatable, intent(inout) :: error
@@ -100,7 +114,7 @@ contains
       logical, intent(in) :: want_ok
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          call check(error, .false., what//": the namelist itself must parse")
          return
@@ -132,9 +146,10 @@ contains
       character(len=:), allocatable :: nml
       integer :: ierr
       checks: block
-         nml = nml_with_vcoord("vcoord_type = 'zstar_full', zstar_h_surf_target = "// &
-                               "137.0, zstar_h_min = 1.25e-4")
-         call read_config_from_string(nml, cfg, ierr=ierr)
+         nml = nml_with_vcoord('vcoord_type = "zstar_full"'//new_line("a")// &
+                               "zstar_h_surf_target = 137.0"//new_line("a")// &
+                               "zstar_h_min = 1.25e-4"//new_line("a"))
+         call read_config_from_toml_string(nml, cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, "the probe namelist must parse")
          if (allocated(error)) exit checks
          call validate_config(cfg, ierr)
@@ -168,7 +183,7 @@ contains
       !! the whole column into the bed layer while keeping `Sum = H + eta`
       !! exact.  Refused until the table is filled in metres.
       type(error_type), allocatable, intent(out) :: error
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'zsigma'"), .false., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "zsigma"'//new_line("a")), .false., &
                          "vcoord_type = 'zsigma'")
       if (allocated(error)) return
       ! `parse_vcoord_type` also accepts the aliases `z-sigma` / `z_sigma`,
@@ -178,7 +193,7 @@ contains
       ! canonical spelling; if the enum ever grows the aliases, add them.
       ! ZSTAR_SIGMA consumes the same table FRACTIONALLY and is unaffected
       ! by its units, so it must stay accepted — 21 shipped namelists use it.
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'zstar_sigma'"), .true., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "zstar_sigma"'//new_line("a")), .true., &
                          "vcoord_type = 'zstar_sigma' (fractional, unaffected)")
    end subroutine test_zsigma_refused
 
@@ -186,16 +201,16 @@ contains
       !! The regression net for the refusal above: every other geometric
       !! family still configures.
       type(error_type), allocatable, intent(out) :: error
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'sigma'"), .true., "sigma")
+      call expect_config(error, nml_with_vcoord('vcoord_type = "sigma"'//new_line("a")), .true., "sigma")
       if (allocated(error)) return
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'zstar'"), .true., "zstar")
+      call expect_config(error, nml_with_vcoord('vcoord_type = "zstar"'//new_line("a")), .true., "zstar")
       if (allocated(error)) return
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'zstar_full'"), .true., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "zstar_full"'//new_line("a")), .true., &
                          "zstar_full")
       if (allocated(error)) return
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'z_fixed'"), .true., "z_fixed")
+      call expect_config(error, nml_with_vcoord('vcoord_type = "z_fixed"'//new_line("a")), .true., "z_fixed")
       if (allocated(error)) return
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'lagrangian'"), .true., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "lagrangian"'//new_line("a")), .true., &
                          "lagrangian")
    end subroutine test_zstar_full_accepted
 
@@ -207,24 +222,24 @@ contains
       !! error because a top-side filler that is not skipped participates
       !! in the pressure gradient, the melt sampler and the budgets.
       type(error_type), allocatable, intent(out) :: error
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'zstar_full', "// &
-                                                "zstar_h_min = 1.0e-3"), .false., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "zstar_full"'//new_line("a")// &
+                                                "zstar_h_min = 1.0e-3"//new_line("a")), .false., &
                          "zstar_full with zstar_h_min = 1e-3 (> H_VANISHED)")
       if (allocated(error)) return
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'z_fixed', "// &
-                                                "zstar_h_min = 1.0e-3"), .false., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "z_fixed"'//new_line("a")// &
+                                                "zstar_h_min = 1.0e-3"//new_line("a")), .false., &
                          "z_fixed with zstar_h_min = 1e-3 (> H_VANISHED)")
       if (allocated(error)) return
       ! A non-positive floor was already an error and stays one.
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'zstar_full', "// &
-                                                "zstar_h_min = 0.0"), .false., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "zstar_full"'//new_line("a")// &
+                                                "zstar_h_min = 0.0"//new_line("a")), .false., &
                          "zstar_full with zstar_h_min = 0")
       if (allocated(error)) return
       ! The DENSITY families use the knob under the opposite contract
       ! (`max(zstar_h_min, 2*H_VANISHED)` keep-alive), so a large value
       ! there is meaningful rather than wrong and must stay accepted.
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'rho', "// &
-                                                "zstar_h_min = 1.0e-3"), .true., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "rho"'//new_line("a")// &
+                                                "zstar_h_min = 1.0e-3"//new_line("a")), .true., &
                          "rho with zstar_h_min = 1e-3 (keep-alive role)")
    end subroutine test_h_min_refused
 
@@ -236,9 +251,9 @@ contains
       !! comparison to `>=`, which would refuse the canonical
       !! double-gyre reference.
       type(error_type), allocatable, intent(out) :: error
-      call expect_config(error, nml_with_vcoord("vcoord_type = 'zstar_full', "// &
-                                                "zstar_h_surf_target = 1000.0, "// &
-                                                "zstar_h_min = 1.5e-4"), .true., &
+      call expect_config(error, nml_with_vcoord('vcoord_type = "zstar_full"'//new_line("a")// &
+                                                "zstar_h_surf_target = 1000.0"//new_line("a")// &
+                                                "zstar_h_min = 1.5e-4"//new_line("a")), .true., &
                          "zstar_full with zstar_h_min exactly on H_VANISHED")
    end subroutine test_h_min_on_marker
 
@@ -255,23 +270,42 @@ contains
       character(len=*), intent(in) :: vcoord_type, draft_body, vmix_body, extra
       character(len=*), intent(in), optional :: pgf_extra
       character(len=:), allocatable :: nml, pgf_body
-      pgf_body = "form = 'fv_mom6', p_top_in_bc = .true."
-      if (present(pgf_extra)) pgf_body = pgf_body//", "//pgf_extra
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = '"//vcoord_type//"' /"//new_line("a")// &
-            "&ocean_cavity_dyn_nml enable = .true., h_min_cavity = 500.0, "// &
-            draft_body//" /"//new_line("a")// &
-            "&ocean_pgf_nml "//pgf_body//" /"//new_line("a")// &
-            "&ocean_vmix_nml "//vmix_body//" /"//new_line("a")// &
+      pgf_body = 'form = "fv_mom6"'//new_line("a")// &
+                 "p_top_in_bc = true"//new_line("a")
+      if (present(pgf_extra)) pgf_body = pgf_body//pgf_extra
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "'//vcoord_type//'"'//new_line("a")// &
+            "[ocean.cavity_dyn]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            "h_min_cavity = 500.0"//new_line("a")// &
+            draft_body// &
+            "[ocean.pgf]"//new_line("a")// &
+            pgf_body// &
+            "[ocean.vmix]"//new_line("a")// &
+            vmix_body// &
             extra// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function nml_cavity
 
    subroutine test_draft_uniform(error)
@@ -290,17 +324,18 @@ contains
       type(config_t) :: cfg
       integer :: ierr
       checks: block
-         call read_config_from_string( &
-            nml_cavity("z_fixed", "draft_config = 'none'", "use_kpp = .false.", ""), cfg, ierr=ierr)
+         call read_config_from_toml_string( &
+            nml_cavity("z_fixed", 'draft_config = "none"'//new_line("a"), "use_kpp = false"//new_line("a"), ""), cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, "the 'none' probe must parse")
          if (allocated(error)) exit checks
          call check(error, cavity_draft_is_uniform(cfg), &
                     "draft_config='none' is identically zero, hence uniform")
          if (allocated(error)) exit checks
 
-         call read_config_from_string( &
-            nml_cavity("z_fixed", "draft_config = 'flat', draft_depth = 200.0", &
-                       "use_kpp = .false.", ""), &
+         call read_config_from_toml_string( &
+            nml_cavity("z_fixed", 'draft_config = "flat"'//new_line("a")// &
+                       "draft_depth = 200.0"//new_line("a"), &
+                       "use_kpp = false"//new_line("a"), ""), &
             cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, "the 'flat' probe must parse")
          if (allocated(error)) exit checks
@@ -308,9 +343,10 @@ contains
                     "an unclipped flat draft is uniform")
          if (allocated(error)) exit checks
 
-         call read_config_from_string( &
-            nml_cavity("z_fixed", "draft_config = 'flat', draft_depth = 200.0, "// &
-                       "draft_x1 = 4000.0", "use_kpp = .false.", ""), cfg, ierr=ierr)
+         call read_config_from_toml_string( &
+            nml_cavity("z_fixed", 'draft_config = "flat"'//new_line("a")// &
+                       "draft_depth = 200.0"//new_line("a")// &
+                       "draft_x1 = 4000.0"//new_line("a"), "use_kpp = false"//new_line("a"), ""), cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, "the clipped-'flat' probe must parse")
          if (allocated(error)) exit checks
          call check(error,.not. cavity_draft_is_uniform(cfg), &
@@ -318,9 +354,10 @@ contains
                     "which is a step, so it is not uniform")
          if (allocated(error)) exit checks
 
-         call read_config_from_string( &
-            nml_cavity("z_fixed", "draft_config = 'linear', draft_depth = 200.0, "// &
-                       "draft_slope = -1.0e-3", "use_kpp = .false.", ""), cfg, ierr=ierr)
+         call read_config_from_toml_string( &
+            nml_cavity("z_fixed", 'draft_config = "linear"'//new_line("a")// &
+                       "draft_depth = 200.0"//new_line("a")// &
+                       "draft_slope = -1.0e-3"//new_line("a"), "use_kpp = false"//new_line("a"), ""), cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, "the 'linear' probe must parse")
          if (allocated(error)) exit checks
          call check(error,.not. cavity_draft_is_uniform(cfg), &
@@ -340,47 +377,63 @@ contains
       type(error_type), allocatable, intent(out) :: error
       checks: block
          call expect_config(error, &
-                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
-                                       "draft_depth = 200.0", "use_kpp = .false.", ""), &
+                            nml_cavity("z_fixed", 'draft_config = "flat"'//new_line("a")// &
+                                       "draft_depth = 200.0"//new_line("a"), "use_kpp = false"//new_line("a"), ""), &
                             .true., "z_fixed under a cavity, adiabatic")
          if (allocated(error)) exit checks
          call expect_config(error, &
-                            nml_cavity("zstar_full", "draft_config = 'flat', "// &
-                                       "draft_depth = 200.0", "use_kpp = .false.", ""), &
+                            nml_cavity("zstar_full", 'draft_config = "flat"'//new_line("a")// &
+                                       "draft_depth = 200.0"//new_line("a"), "use_kpp = false"//new_line("a"), ""), &
                             .false., "zstar_full under a cavity (P6.11)")
          if (allocated(error)) exit checks
          call expect_config(error, &
-                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
-                                       "draft_depth = 200.0", "use_kpp = .true.", ""), &
+                            nml_cavity("z_fixed", 'draft_config = "flat"'//new_line("a")// &
+                                       "draft_depth = 200.0"//new_line("a"), "use_kpp = true"//new_line("a"), ""), &
                             .false., "z_fixed x cavity x KPP")
          if (allocated(error)) exit checks
          call expect_config(error, &
-                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
-                                       "draft_depth = 200.0", "use_kpp = .false.", &
-                                       "&ocean_hdiff_nml kappa_h = 1.0 /"// &
-                                       new_line("a")), &
+                            nml_cavity("z_fixed", 'draft_config = "flat"'//new_line("a")// &
+                                       "draft_depth = 200.0"//new_line("a"), "use_kpp = false"//new_line("a"), &
+                                       "[ocean.hdiff]"//new_line("a")// &
+                                       "kappa_h = 1.0"//new_line("a")), &
                             .false., "z_fixed x cavity x kappa_h")
          if (allocated(error)) exit checks
          ! h_nominal = 1000/4 = 250 m, so 400 m is under the 500 m rule.
          call expect_config(error, &
-                            "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-                            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, "// &
-                            "dy = 1000.0 /"//new_line("a")// &
-                            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-                            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"// &
-                            new_line("a")// &
-                            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
-                            "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"// &
-                            new_line("a")// &
-                            "&vcoord_nml vcoord_type = 'z_fixed' /"//new_line("a")// &
-                            "&ocean_cavity_dyn_nml enable = .true., "// &
-                            "h_min_cavity = 400.0, draft_config = 'flat', "// &
-                            "draft_depth = 200.0 /"//new_line("a")// &
-                            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"// &
-                            new_line("a")// &
-                            "&ocean_vmix_nml use_kpp = .false. /"//new_line("a")// &
-                            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-                            "&output_nml output_to_file = .false. /"//new_line("a"), &
+                            "[sim]"//new_line("a")// &
+                            'sim_type = "ocean"'//new_line("a")// &
+                            "[grid]"//new_line("a")// &
+                            "nx = 8"//new_line("a")// &
+                            "ny = 6"//new_line("a")// &
+                            "nghost = 2"//new_line("a")// &
+                            "dx = 1000.0"//new_line("a")// &
+                            "dy = 1000.0"//new_line("a")// &
+                            "[nonhydrostatic]"//new_line("a")// &
+                            "nz_layers = 4"//new_line("a")// &
+                            "[time]"//new_line("a")// &
+                            "t_end = 3600.0"//new_line("a")// &
+                            "dt_fixed = 60.0"//new_line("a")// &
+                            "[ocean.topo]"//new_line("a")// &
+                            "max_depth = 1000.0"//new_line("a")// &
+                            "[ocean.bt]"//new_line("a")// &
+                            "auto_n_inner = false"//new_line("a")// &
+                            "n_inner = 8"//new_line("a")// &
+                            "[vcoord]"//new_line("a")// &
+                            'vcoord_type = "z_fixed"'//new_line("a")// &
+                            "[ocean.cavity_dyn]"//new_line("a")// &
+                            "enable = true"//new_line("a")// &
+                            "h_min_cavity = 400.0"//new_line("a")// &
+                            'draft_config = "flat"'//new_line("a")// &
+                            "draft_depth = 200.0"//new_line("a")// &
+                            "[ocean.pgf]"//new_line("a")// &
+                            'form = "fv_mom6"'//new_line("a")// &
+                            "p_top_in_bc = true"//new_line("a")// &
+                            "[ocean.vmix]"//new_line("a")// &
+                            "use_kpp = false"//new_line("a")// &
+                            "[ocean.diag]"//new_line("a")// &
+                            "enabled = false"//new_line("a")// &
+                            "[output]"//new_line("a")// &
+                            "output_to_file = false"//new_line("a"), &
                             .false., "z_fixed x cavity with h_min_cavity < 2*h_nominal")
       end block checks
    end subroutine test_cavity_z_fixed
@@ -404,21 +457,21 @@ contains
       type(error_type), allocatable, intent(out) :: error
       checks: block
          call expect_config(error, &
-                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
-                                       "draft_depth = 200.0", "use_kpp = .false.", "", &
-                                       pgf_extra="reconstruct_for_pressure = .true."), &
+                            nml_cavity("z_fixed", 'draft_config = "flat"'//new_line("a")// &
+                                       "draft_depth = 200.0"//new_line("a"), "use_kpp = false"//new_line("a"), "", &
+                                       pgf_extra="reconstruct_for_pressure = true"//new_line("a")), &
                             .false., "z_fixed x cavity x reconstruct_for_pressure")
          if (allocated(error)) exit checks
          call expect_config(error, &
-                            nml_cavity("sigma", "draft_config = 'flat', "// &
-                                       "draft_depth = 200.0", "use_kpp = .false.", "", &
-                                       pgf_extra="reconstruct_for_pressure = .true."), &
+                            nml_cavity("sigma", 'draft_config = "flat"'//new_line("a")// &
+                                       "draft_depth = 200.0"//new_line("a"), "use_kpp = false"//new_line("a"), "", &
+                                       pgf_extra="reconstruct_for_pressure = true"//new_line("a")), &
                             .true., "sigma x cavity x reconstruct_for_pressure")
          if (allocated(error)) exit checks
          call expect_config(error, &
-                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
-                                       "draft_depth = 200.0", "use_kpp = .false.", "", &
-                                       pgf_extra="reconstruct_for_pressure = .false."), &
+                            nml_cavity("z_fixed", 'draft_config = "flat"'//new_line("a")// &
+                                       "draft_depth = 200.0"//new_line("a"), "use_kpp = false"//new_line("a"), "", &
+                                       pgf_extra="reconstruct_for_pressure = false"//new_line("a")), &
                             .true., "z_fixed x cavity with reconstruct_for_pressure off")
       end block checks
    end subroutine test_cavity_z_fixed_pgf_reconstruct
@@ -510,14 +563,17 @@ contains
       integer, intent(out) :: ierr
       character(len=:), allocatable :: nml
       if (cavity) then
-         nml = nml_cavity(vcoord_type, "draft_config = 'flat', draft_depth = 200.0", &
-                          "use_kpp = .false.", &
-                          "&ocean_hvisc_nml nu_h = "//nu_h//" /"//new_line("a"))
+         nml = nml_cavity(vcoord_type, 'draft_config = "flat"'//new_line("a")// &
+                          "draft_depth = 200.0"//new_line("a"), &
+                          "use_kpp = false"//new_line("a"), &
+                          "[ocean.hvisc]"//new_line("a")// &
+                          "nu_h = "//nu_h//new_line("a"))
       else
-         nml = nml_with_vcoord("vcoord_type = '"//vcoord_type//"'")// &
-               "&ocean_hvisc_nml nu_h = "//nu_h//" /"//new_line("a")
+         nml = nml_with_vcoord('vcoord_type = "'//vcoord_type//'"'//new_line("a"))// &
+               "[ocean.hvisc]"//new_line("a")// &
+               "nu_h = "//nu_h//new_line("a")
       end if
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
    end subroutine parse_nu_h
 
    function log_contains(fname, marker) result(found)

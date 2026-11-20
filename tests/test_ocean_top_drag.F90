@@ -43,7 +43,7 @@ module test_ocean_top_drag
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t, BDRAG_QUADRATIC, &
                                     ocean_bottom_drag_compute_tendencies
@@ -951,7 +951,8 @@ contains
       type(error_type), allocatable, intent(out) :: error
 
       call expect_refused("top drag without the cavity geometry group", &
-                          tdrag_nml("enable = .true., cd = 2.5e-3", .false., ""), error)
+                          tdrag_nml("enable = true"//new_line("a")// &
+                                    "cd = 2.5e-3"//new_line("a"), .false., ""), error)
       if (allocated(error)) return
       ! A typo in `form` is caught EARLIER, by the strict schema's
       ! `allowed=` set, so it never reaches `validate_config`.  Asserted
@@ -960,49 +961,65 @@ contains
       ! programmatically built `config_t`, and `parse_and_gate` above
       ! pins that gate directly.
       call expect_parse_refused("an unrecognised top-drag form", &
-                                tdrag_nml("enable = .true., form = 'quadratci', "// &
-                                          "cd = 2.5e-3", .true., ""), error)
+                                tdrag_nml("enable = true"//new_line("a")// &
+                                          'form = "quadratci"'//new_line("a")// &
+                                          "cd = 2.5e-3"//new_line("a"), .true., ""), error)
       if (allocated(error)) return
       call expect_refused("quadratic top drag with cd = 0", &
-                          tdrag_nml("enable = .true.", .true., ""), error)
+                          tdrag_nml("enable = true"//new_line("a"), .true., ""), error)
       if (allocated(error)) return
       call expect_refused("linear top drag with r = 0", &
-                          tdrag_nml("enable = .true., form = 'linear'", .true., ""), error)
+                          tdrag_nml("enable = true"//new_line("a")// &
+                                    'form = "linear"'//new_line("a"), .true., ""), error)
       if (allocated(error)) return
       call expect_refused("a top-drag cd that disagrees with the melt cdrag_top", &
-                          tdrag_nml("enable = .true., cd = 1.0e-3", .true., &
-                                    melt_group("cdrag_top = 2.5e-3")), error)
+                          tdrag_nml("enable = true"//new_line("a")// &
+                                    "cd = 1.0e-3"//new_line("a"), .true., &
+                                    melt_group("cdrag_top = 2.5e-3"//new_line("a"))), error)
       if (allocated(error)) return
 
       call expect_refused("the vdiff top-drag fold without a top drag", &
                           tdrag_nml("", .true., &
-                                    "&ocean_vdiff_nml implicit_top_drag = .true. /"), error)
+                                    "[ocean.vdiff]"//new_line("a")// &
+                                    "implicit_top_drag = true"//new_line("a")), error)
       if (allocated(error)) return
       call expect_refused("BOTH implicit top-drag forms (a double count)", &
-                          tdrag_nml("enable = .true., cd = 2.5e-3, implicit = .true.", &
+                          tdrag_nml("enable = true"//new_line("a")// &
+                                    "cd = 2.5e-3"//new_line("a")// &
+                                    "implicit = true"//new_line("a"), &
                                     .true., &
-                                    "&ocean_vdiff_nml implicit_top_drag = .true. /"), error)
+                                    "[ocean.vdiff]"//new_line("a")// &
+                                    "implicit_top_drag = true"//new_line("a")), error)
       if (allocated(error)) return
       call expect_refused("the vdiff fold with a DISTRIBUTED top drag", &
-                          tdrag_nml("enable = .true., cd = 2.5e-3, htbl = 10.0", &
+                          tdrag_nml("enable = true"//new_line("a")// &
+                                    "cd = 2.5e-3"//new_line("a")// &
+                                    "htbl = 10.0"//new_line("a"), &
                                     .true., &
-                                    "&ocean_vdiff_nml implicit_top_drag = .true. /"), error)
+                                    "[ocean.vdiff]"//new_line("a")// &
+                                    "implicit_top_drag = true"//new_line("a")), error)
       if (allocated(error)) return
 
       call expect_accepted("top drag alongside the cavity geometry", &
-                           tdrag_nml("enable = .true., cd = 2.5e-3", .true., ""), error)
+                           tdrag_nml("enable = true"//new_line("a")// &
+                                     "cd = 2.5e-3"//new_line("a"), .true., ""), error)
       if (allocated(error)) return
       call expect_accepted("linear top drag with r > 0", &
-                           tdrag_nml("enable = .true., form = 'linear', r = 1.0e-4", &
+                           tdrag_nml("enable = true"//new_line("a")// &
+                                     'form = "linear"'//new_line("a")// &
+                                     "r = 1.0e-4"//new_line("a"), &
                                      .true., ""), error)
       if (allocated(error)) return
       call expect_accepted("top drag and melt sharing ONE cd", &
-                           tdrag_nml("enable = .true., cd = 2.5e-3", .true., &
-                                     melt_group("cdrag_top = 2.5e-3")), error)
+                           tdrag_nml("enable = true"//new_line("a")// &
+                                     "cd = 2.5e-3"//new_line("a"), .true., &
+                                     melt_group("cdrag_top = 2.5e-3"//new_line("a"))), error)
       if (allocated(error)) return
       call expect_accepted("the layer-only vdiff top-drag fold", &
-                           tdrag_nml("enable = .true., cd = 2.5e-3", .true., &
-                                     "&ocean_vdiff_nml implicit_top_drag = .true. /"), error)
+                           tdrag_nml("enable = true"//new_line("a")// &
+                                     "cd = 2.5e-3"//new_line("a"), .true., &
+                                     "[ocean.vdiff]"//new_line("a")// &
+                                     "implicit_top_drag = true"//new_line("a")), error)
       if (allocated(error)) return
       call expect_accepted("the default (top drag off)", &
                            tdrag_nml("", .true., ""), error)
@@ -1013,7 +1030,9 @@ contains
       !! whatever the caller wants to override.
       character(len=*), intent(in) :: body
       character(len=:), allocatable :: g
-      g = "&ocean_cavity_melt_nml enable = .true., "//body//" /"
+      g = "[ocean.cavity_melt]"//new_line("a")// &
+          "enable = true"//new_line("a")// &
+          body
    end function melt_group
 
    function tdrag_nml(tdrag_body, with_geometry, extra) result(nml)
@@ -1029,25 +1048,45 @@ contains
          !! One extra complete group (with name and `/`), or empty.
       character(len=:), allocatable :: nml
 
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6' /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")// &
-            "&ocean_eos_nml tfreeze_set = 'isomip' /"//new_line("a")// &
-            "&ocean_forcing_nml enable_components = .true. /"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "fv_mom6"'//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")// &
+            "[ocean.eos]"//new_line("a")// &
+            'tfreeze_set = "isomip"'//new_line("a")// &
+            "[ocean.forcing]"//new_line("a")// &
+            "enable_components = true"//new_line("a")
       if (with_geometry) then
-         nml = nml//"&ocean_cavity_dyn_nml enable = .true., draft_config = 'flat', "// &
-               "draft_depth = 300.0 /"//new_line("a")
+         nml = nml//"[ocean.cavity_dyn]"//new_line("a")// &
+               "enable = true"//new_line("a")// &
+               'draft_config = "flat"'//new_line("a")// &
+               "draft_depth = 300.0"//new_line("a")
       end if
       if (len_trim(tdrag_body) > 0) then
-         nml = nml//"&ocean_tdrag_nml "//tdrag_body//" /"//new_line("a")
+         nml = nml//"[ocean.tdrag]"//new_line("a")// &
+               tdrag_body
       end if
       if (len_trim(extra) > 0) nml = nml//extra//new_line("a")
    end function tdrag_nml
@@ -1059,7 +1098,7 @@ contains
       type(config_t) :: cfg
       integer :: ierr
 
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "the refusal case must PARSE cleanly (else it tests the schema, "// &
                  "not the rule): "//what)
@@ -1077,7 +1116,7 @@ contains
       type(config_t) :: cfg
       integer :: ierr
 
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
                  "the strict schema must refuse: "//what)
    end subroutine expect_parse_refused
@@ -1087,7 +1126,7 @@ contains
       type(error_type), allocatable, intent(inout) :: error
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "must parse: "//what)
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)

@@ -5,6 +5,7 @@ module test_config_schema
    use rdb_config, only: config_t
    use rdb_config_schema, only: build_rdb_schema
    use rdb_nml_schema, only: nml_schema_t
+   use rdb_toml_read, only: toml_schema_parse_file
    implicit none
    private
 
@@ -97,16 +98,16 @@ contains
       type(nml_schema_t) :: schema
       integer :: stat
       character(len=:), allocatable :: errs(:)
-      character(len=*), parameter :: fn = "scratch_cs_happy.nml"
+      character(len=*), parameter :: fn = "scratch_cs_happy.toml"
 
       call build_rdb_schema(cfg, schema)
       call write_file(fn, &
-                      "&ocean_kappa_shear_nml"//achar(10)// &
-                      "  enable = .true."//achar(10)// &
-                      "  ri_crit = 0.3"//achar(10)// &
-                      "/"//achar(10)// &
-                      "&ocean_epbl_nml  mstar_scheme = 'RH18' /")
-      call schema%parse(fn, status=stat, errors=errs)
+                      "[ocean.kappa_shear]"//achar(10)// &
+                      "enable = true"//achar(10)// &
+                      "ri_crit = 0.3"//achar(10)// &
+                      "[ocean.epbl]"//achar(10)// &
+                      'mstar_scheme = "RH18"')
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
 
       call check(error, stat == 0, "expected no errors")
@@ -126,11 +127,11 @@ contains
       type(nml_schema_t) :: schema
       integer :: stat
       character(len=:), allocatable :: errs(:)
-      character(len=*), parameter :: fn = "scratch_cs_typo.nml"
+      character(len=*), parameter :: fn = "scratch_cs_typo.toml"
 
       call build_rdb_schema(cfg, schema)
-      call write_file(fn, "&ocean_kappa_shear_nml  ri_crt = 0.3 /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.kappa_shear]"//achar(10)//"ri_crt = 0.3")
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
 
       call check(error, stat >= 1, "expected an error")
@@ -147,11 +148,11 @@ contains
       type(nml_schema_t) :: schema
       integer :: stat
       character(len=:), allocatable :: errs(:)
-      character(len=*), parameter :: fn = "scratch_cs_range.nml"
+      character(len=*), parameter :: fn = "scratch_cs_range.toml"
 
       call build_rdb_schema(cfg, schema)
-      call write_file(fn, "&ocean_kappa_shear_nml  max_inner_it = 0 /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.kappa_shear]"//achar(10)//"max_inner_it = 0")
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
 
       call check(error, stat >= 1, "expected an error")
@@ -170,7 +171,7 @@ contains
       !! telling them what it is now called.
       type(error_type), allocatable, intent(out) :: error
 
-      call check_retired_split_scheme(error, "mom6_pc", "scratch_cs_retired_mp.nml")
+      call check_retired_split_scheme(error, "mom6_pc", "scratch_cs_retired_mp.toml")
    end subroutine test_retired_mom6_pc
 
    subroutine test_retired_split_rk2(error)
@@ -183,7 +184,7 @@ contains
       !! to the default.
       type(error_type), allocatable, intent(out) :: error
 
-      call check_retired_split_scheme(error, "split_rk2", "scratch_cs_retired_sr.nml")
+      call check_retired_split_scheme(error, "split_rk2", "scratch_cs_retired_sr.toml")
    end subroutine test_retired_split_rk2
 
    subroutine check_retired_split_scheme(error, spelling, fn)
@@ -198,8 +199,8 @@ contains
       character(len=:), allocatable :: errs(:)
 
       call build_rdb_schema(cfg, schema)
-      call write_file(fn, "&ocean_bt_nml  split_scheme = '"//spelling//"' /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.bt]"//achar(10)//'split_scheme = "'//spelling//'"')
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
 
       call check(error, stat >= 1, "retired split_scheme value must be an error")
@@ -239,12 +240,12 @@ contains
       type(nml_schema_t) :: schema
       integer :: stat
       character(len=:), allocatable :: errs(:)
-      character(len=*), parameter :: fn = "scratch_cs_ds.nml"
-      character(len=*), parameter :: sf = "scratch_cs_short.nml"
+      character(len=*), parameter :: fn = "scratch_cs_ds.toml"
+      character(len=*), parameter :: sf = "scratch_cs_short.toml"
 
       call build_rdb_schema(cfg, schema)
-      call write_file(fn, "&ocean_kappa_shear_nml  shearmix_rate = 0.5 /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.kappa_shear]"//achar(10)//"shearmix_rate = 0.5")
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat == 0, "parse ok")
       if (allocated(error)) return
@@ -269,7 +270,7 @@ contains
       type(nml_schema_t) :: schema
       integer :: stat, n_ext
       character(len=:), allocatable :: errs(:)
-      character(len=*), parameter :: fn = "scratch_cs_ext.nml"
+      character(len=*), parameter :: fn = "scratch_cs_ext.toml"
 
       call build_rdb_schema(cfg, schema)
 
@@ -280,29 +281,29 @@ contains
       if (allocated(error)) return
 
       ! A clean ocean_topo_nml validates and applies.
-      call write_file(fn, "&ocean_topo_nml  max_depth = 4000.0  topo_config = 'spoon' /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.topo]"//achar(10)//"max_depth = 4000.0"//achar(10)//'topo_config = "spoon"')
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat == 0, "clean ocean_topo_nml validates")
       if (allocated(error)) return
 
       ! ocean_topo_nml is now strict — an unknown key must error.
-      call write_file(fn, "&ocean_topo_nml  max_depth = 4000.0  some_garbage = 3 /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.topo]"//achar(10)//"max_depth = 4000.0"//achar(10)//"some_garbage = 3")
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat == 1, "migrated ocean_topo_nml rejects unknown key")
       if (allocated(error)) return
 
       ! A bad enum value (topo_config) must error too.
-      call write_file(fn, "&ocean_topo_nml  topo_config = 'nonsense' /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.topo]"//achar(10)//'topo_config = "nonsense"')
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat == 1, "ocean_topo_nml rejects bad topo_config enum")
       if (allocated(error)) return
 
       ! physics_nml is a strict group — an unknown key must error.
-      call write_file(fn, "&physics_nml  manning_n = 0.025  some_garbage = 3 /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[physics]"//achar(10)//"manning_n = 0.025"//achar(10)//"some_garbage = 3")
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat == 1, "migrated physics_nml rejects unknown key")
    end subroutine test_external
@@ -318,7 +319,7 @@ contains
       type(nml_schema_t) :: schema
       integer :: stat
       character(len=:), allocatable :: errs(:)
-      character(len=*), parameter :: fn = "scratch_cs_bc.nml"
+      character(len=*), parameter :: fn = "scratch_cs_bc.toml"
 
       ! Pristine defaults reproduce a closed-wall run.
       call build_rdb_schema(cfg, schema)
@@ -328,8 +329,8 @@ contains
       if (allocated(error)) return
 
       ! A clean block applies and canonicalises.
-      call write_file(fn, "&ocean_bc_nml  west = 'PERIODIC'  east = 'periodic' /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.bc]"//achar(10)//'west = "PERIODIC"'//achar(10)//'east = "periodic"')
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat == 0, "clean ocean_bc_nml validates")
       if (allocated(error)) return
@@ -341,8 +342,8 @@ contains
       ! An unknown key must error (was silently ignored by the native
       ! namelist reader before P4.5).
       call build_rdb_schema(cfg, schema)
-      call write_file(fn, "&ocean_bc_nml  west = 'wall'  some_garbage = 3 /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.bc]"//achar(10)//'west = "wall"'//achar(10)//"some_garbage = 3")
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat >= 1, "migrated ocean_bc_nml rejects unknown key")
       if (allocated(error)) return
@@ -351,8 +352,8 @@ contains
       ! silent fall-back to 'wall' before P4.5 — the NVHPC in-memory bug
       ! this migration fixes).
       call build_rdb_schema(cfg, schema)
-      call write_file(fn, "&ocean_bc_nml  west = 'not-a-real-bc' /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.bc]"//achar(10)//'west = "not-a-real-bc"')
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat >= 1, "bad west enum value errors")
       if (allocated(error)) return
@@ -361,8 +362,8 @@ contains
 
       ! Tidal-constituent array knob (fixed-size real_array).
       call build_rdb_schema(cfg, schema)
-      call write_file(fn, "&ocean_bc_nml  west_n_tidal = 1  west_tidal_amp = 1.5 /")
-      call schema%parse(fn, status=stat, errors=errs)
+      call write_file(fn, "[ocean.bc]"//achar(10)//"west_n_tidal = 1"//achar(10)//"west_tidal_amp = [1.5]")
+      call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat == 0, "tidal array block validates")
       if (allocated(error)) return

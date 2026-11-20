@@ -35,7 +35,7 @@ program test_cice_remap_decomp_mpi
    use, intrinsic :: iso_fortran_env, only: int32, int64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, engine_exit_data, engine_teardown
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, comm_env_rank, comm_env_size, &
@@ -126,43 +126,122 @@ contains
       write (spy, '(i0)') py
       select case (label)
       case ("fold", "fold_upwind", "fold_smallbuf", "fold_odd", "fold_odd_smallbuf", "fold_nan")
-         grid = "&grid_nml nx = "//merge("29", "30", index(label, "odd") > 0)//", ny = 24, nghost = 3, dx = "// &
-                merge("12.413793", "12.0     ", index(label, "odd") > 0)//", dy = 1.0 /"//NL// &
-                "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
-                "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, coriolis_scheme = 'planetary' /"//NL
-         topo = "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, slope_scale = 0.2 /"//NL
-         bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = 'tripolar_fold' /"//NL
+         grid = "[grid]"//NL// &
+                "nx = "//merge("29", "30", index(label, "odd") > 0)//NL// &
+                "ny = 24"//NL// &
+                "nghost = 3"//NL// &
+                "dx = "//merge("12.413793", "12.0     ", index(label, "odd") > 0)//NL// &
+                "dy = 1.0"//NL// &
+                "[ocean.grid]"//NL// &
+                'grid_config = "tripolar"'//NL// &
+                "lon_west = 0.0"//NL// &
+                "lat_south = 59.0"//NL// &
+                "phi_join = 74.0"//NL// &
+                "lon_pole = 0.0"//NL// &
+                "rad_earth = 6.378e6"//NL// &
+                'coriolis_scheme = "planetary"'//NL
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "double_drake"'//NL// &
+                "max_depth = 1000.0"//NL// &
+                "slope_scale = 0.2"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "periodic"'//NL// &
+              'east = "periodic"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "tripolar_fold"'//NL
       case ("island")
-         grid = "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
-         topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
-         bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         grid = "[grid]"//NL// &
+                "nx = 26"//NL// &
+                "ny = 18"//NL// &
+                "nghost = 3"//NL// &
+                "dx = 20000.0"//NL// &
+                "dy = 20000.0"//NL
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "island"'//NL// &
+                "max_depth = 1000.0"//NL// &
+                "slope_scale = 0.15"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "wall"'//NL// &
+              'east = "wall"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "wall"'//NL
       case default   ! channel, channel_nan, channel_cfl
-         grid = "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
-         topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
-                "slope_scale = 60000.0 /"//NL
-         bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = 'wall' /"//NL
+         grid = "[grid]"//NL// &
+                "nx = 26"//NL// &
+                "ny = 18"//NL// &
+                "nghost = 3"//NL// &
+                "dx = 20000.0"//NL// &
+                "dy = 20000.0"//NL
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "seamount"'//NL// &
+                "max_depth = 1000.0"//NL// &
+                "edge_depth = 800.0"//NL// &
+                "slope_scale = 60000.0"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "periodic"'//NL// &
+              'east = "periodic"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "wall"'//NL
       end select
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[mpi]"//NL// &
+            "px = "//trim(spx)//NL// &
+            "py = "//trim(spy)//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.83"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.82"//NL// &
+            "T_init_bottom = -1.835"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            'split_scheme = "pred_corr"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
             grid// &
-            "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.4e-4"//NL// &
+            "wind_stress_x = 0.1"//NL// &
+            "wind_stress_y = 0.04"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
             topo// &
-            "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-            "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, restore_lambda = 20.0, "// &
-            "sw_down = 0.0, dynamics = .true., evp_sub_steps = 30, cfl_trunc = 0.01, project_ci = .true., "// &
-            "transport = .true., adv_substeps = 2 /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
-            "&ocean_ice_ridge_nml kstrength = 0 /"//NL// &
-            "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 10 /"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "q_heat = -100.0"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 2"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            "ncat = 5"//NL// &
+            "nk_ice = 2"//NL// &
+            "air_temp = -20.0"//NL// &
+            "restore_lambda = 20.0"//NL// &
+            "sw_down = 0.0"//NL// &
+            "dynamics = true"//NL// &
+            "evp_sub_steps = 30"//NL// &
+            "cfl_trunc = 0.01"//NL// &
+            "project_ci = true"//NL// &
+            "transport = true"//NL// &
+            "adv_substeps = 2"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 0.7"//NL// &
+            "[ocean.ice_ridge]"//NL// &
+            "kstrength = 0"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'dyn_scheme = "cice_c"'//NL// &
+            "ndte = 10"//NL// &
             bc
    end function case_nml
 
@@ -276,7 +355,7 @@ contains
       vscale = 1.0_wp
       if (index(label, "_nan") > 0) inj = 1
       if (index(label, "_cfl") > 0) inj = 2
-      call read_config_from_string(case_nml(label, px, py), cfg, ierr=ierr)
+      call read_config_from_toml_string(case_nml(label, px, py), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return

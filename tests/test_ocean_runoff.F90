@@ -22,7 +22,7 @@ module test_ocean_runoff
    use, intrinsic :: iso_fortran_env, only: int64
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, RHO_WATER
-   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config, &
                          ocean_dataovr_config_t, atm_forcing_prereq_code, &
                          ATM_PREREQ_DATAOVR, ATM_PREREQ_BULK_FLUX
    use rdb_grid, only: hgrid_t
@@ -494,23 +494,57 @@ contains
       character(len=*), intent(in) :: freshwater, extra, tail
       character(len=:), allocatable :: nml
 
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 12, ny = 8, nghost = 3, dx = 4000.0, dy = 4000.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 300.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 400.0, wind_config = 'constant', "// &
-            "taux_magnitude = 0.0 /"//NL// &
-            "&tracer_nml initial_salinity = 34.5, T_init_bottom = 6.0, T_init_surface = 8.0 /"//NL// &
-            "&ocean_eos_nml eos = 'linear' /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&ocean_bt_nml split_scheme = 'ssp_rk2', auto_n_inner = .true. /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true., freshwater = '"//freshwater//"' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 100.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL//extra//tail
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 12"//NL// &
+            "ny = 8"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 4000.0"//NL// &
+            "dy = 4000.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[time]"//NL// &
+            "t_end = 1.0e9"//NL// &
+            "dt_fixed = 300.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 400.0"//NL// &
+            'wind_config = "constant"'//NL// &
+            "taux_magnitude = 0.0"//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.5"//NL// &
+            "T_init_bottom = 6.0"//NL// &
+            "T_init_surface = 8.0"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "linear"'//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[ocean.bt]"//NL// &
+            'split_scheme = "ssp_rk2"'//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            'freshwater = "'//freshwater//'"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 100.0"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            extra// &
+            tail
    end function basin_nml
 
    function nml_ierr(nml) result(ierr)
@@ -519,7 +553,7 @@ contains
       type(config_t) :: cfg
       integer :: ierr_read
 
-      call read_config_from_string(nml, cfg, ierr=ierr_read)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr_read)
       if (ierr_read /= OCEAN_STATUS_OK) then
          ierr = -ierr_read - 1000
          return
@@ -531,10 +565,16 @@ contains
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: REFUSED = OCEAN_STATUS_ERR_CONFIG_VALIDATE
       character(len=*), parameter :: FN = "fwb_runoff_cfg.nc"
-      character(len=*), parameter :: LR = "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
-                                     "lrunoff_file = '"//FN//"', lrunoff_var = 'field' /"//NL
-      character(len=*), parameter :: FR = "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
-                                     "frunoff_file = '"//FN//"', frunoff_var = 'field' /"//NL
+      character(len=*), parameter :: LR = "[ocean.dataovr]"//NL// &
+                                     "enable = true"//NL// &
+                                     'time_mode = "static"'//NL// &
+                                     'lrunoff_file = "'//FN//'"'//NL// &
+                                     'lrunoff_var = "field"'//NL
+      character(len=*), parameter :: FR = "[ocean.dataovr]"//NL// &
+                                     "enable = true"//NL// &
+                                     'time_mode = "static"'//NL// &
+                                     'frunoff_file = "'//FN//'"'//NL// &
+                                     'frunoff_var = "field"'//NL
       type(config_t) :: cfg
 
       call ensure_comm()
@@ -551,19 +591,28 @@ contains
       call check(error, nml_ierr(basin_nml("none", FR, "")) == REFUSED, "refused: frunoff under freshwater = 'none' (inert)")
       if (allocated(error)) return
       call check(error, nml_ierr(basin_nml("mass", &
-                                           "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
-                                           "lrunoff_file = '"//FN//"' /"//NL, "")) == REFUSED, &
+                                           "[ocean.dataovr]"//NL// &
+                                           "enable = true"//NL// &
+                                           'time_mode = "static"'//NL// &
+                                           'lrunoff_file = "'//FN//'"'//NL, "")) == REFUSED, &
                  "refused: a runoff file with no variable name")
       if (allocated(error)) return
       call check(error, nml_ierr(basin_nml("mass", &
-                                           "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
-                                           "lrunoff_file = 'fwb_no_such_file.nc', lrunoff_var = 'field' /"//NL, "")) == REFUSED, &
+                                           "[ocean.dataovr]"//NL// &
+                                           "enable = true"//NL// &
+                                           'time_mode = "static"'//NL// &
+                                           'lrunoff_file = "fwb_no_such_file.nc"'//NL// &
+                                           'lrunoff_var = "field"'//NL, "")) == REFUSED, &
                  "refused: a runoff file that does not exist")
       if (allocated(error)) return
       call check(error, nml_ierr(basin_nml("virtual", LR, &
-                                           "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-                                           "draft_depth = 100.0, draft_slope = -1.0e-3, draft_x0 = 0.0, "// &
-                                           "h_min_cavity = 50.0 /"//NL)) == REFUSED, &
+                                           "[ocean.cavity_dyn]"//NL// &
+                                           "enable = true"//NL// &
+                                           'draft_config = "linear"'//NL// &
+                                           "draft_depth = 100.0"//NL// &
+                                           "draft_slope = -1.0e-3"//NL// &
+                                           "draft_x0 = 0.0"//NL// &
+                                           "h_min_cavity = 50.0"//NL)) == REFUSED, &
                  "refused: runoff with an ice-shelf cavity under 'virtual' (the cover twin would drop it)")
       if (allocated(error)) return
 
@@ -613,8 +662,11 @@ contains
 
       call ensure_comm()
       call write_point_file(FN, 12, 8, IP, JP, RATE)
-      call read_config_from_string(basin_nml("mass", "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
-                                             "lrunoff_file = '"//FN//"', lrunoff_var = 'field' /"//NL, ""), cfg, ierr=ierr)
+      call read_config_from_toml_string(basin_nml("mass", "[ocean.dataovr]"//NL// &
+                                                  "enable = true"//NL// &
+                                                  'time_mode = "static"'//NL// &
+                                                  'lrunoff_file = "'//FN//'"'//NL// &
+                                                  'lrunoff_var = "field"'//NL, ""), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "the namelist parses")
       if (allocated(error)) return
       call validate_config(cfg, ierr)

@@ -52,7 +52,7 @@ module test_ocean_vmix_no_pp81
    use rdb_ocean_hdiff_tracer, only: ocean_hdiff_tracer_t
    use rdb_ocean_vdiff, only: ocean_vdiff_t
    use rdb_ocean_dyn, only: ocean_dyn_t, ocean_dyn_step
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    implicit none
    private
@@ -576,10 +576,17 @@ contains
       integer :: ierr
       type(config_t) :: cfg
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')//"&ocean_vmix_nml bkgnd_prandtl = "//value//" /"//new_line('a'), &
+      call read_config_from_toml_string( &
+         "[sim]"//new_line('a')// &
+         'sim_type = "ocean"'//new_line('a')// &
+         "[grid]"//new_line('a')// &
+         "nx = 24"//new_line('a')// &
+         "ny = 16"//new_line('a')// &
+         "nghost = 3"//new_line('a')// &
+         "dx = 20000.0"//new_line('a')// &
+         "dy = 20000.0"//new_line('a')// &
+         "[ocean.vmix]"//new_line('a')// &
+         "bkgnd_prandtl = "//value//new_line('a'), &
          cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr=ierr)

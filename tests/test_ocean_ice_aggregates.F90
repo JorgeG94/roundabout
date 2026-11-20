@@ -23,7 +23,7 @@ module test_ocean_ice_aggregates
    use rdb_ocean_console_stats, only: compute_ice_totals, compute_ice_totals_efp
    use rdb_efp, only: efp_t, efp_to_real
    use rdb_ice_state, only: ice_aggregates_fill
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -337,28 +337,64 @@ contains
       real(wp), allocatable :: ref_a(:, :), ref_v(:, :), ref_s(:, :)
       real(wp) :: t, dtl, amax
       integer :: n, ierr, nbad
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 20, ny = 16, dx = 10000.0, dy = 10000.0, nghost = 3 /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.435e-4 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-            "&tracer_nml initial_salinity = 34.0, initial_temperature = -1.80 /"//NL// &
-            "&ocean_ic_nml alpha_T = 1.7e-4, rho_0 = 1027.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 50.0 /"//NL// &
-            "&ocean_hvisc_nml nu_h = 500.0 /"//NL// &
-            "&ocean_vmix_nml kv_ml_invz2 = 0.01, hmix_fixed = 20.0, dt_therm_ratio = 3 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
-            "restore_lambda = 20.0, sw_down = 0.0, transport = .true., dynamics = .false. /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 20"//NL// &
+            "ny = 16"//NL// &
+            "dx = 10000.0"//NL// &
+            "dy = 10000.0"//NL// &
+            "nghost = 3"//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.435e-4"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 4"//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "initial_temperature = -1.80"//NL// &
+            "[ocean.ic]"//NL// &
+            "alpha_T = 1.7e-4"//NL// &
+            "rho_0 = 1027.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "q_heat = -60.0"//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 50.0"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 500.0"//NL// &
+            "[ocean.vmix]"//NL// &
+            "kv_ml_invz2 = 0.01"//NL// &
+            "hmix_fixed = 20.0"//NL// &
+            "dt_therm_ratio = 3"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            "ncat = 5"//NL// &
+            "nk_ice = 2"//NL// &
+            "air_temp = -20.0"//NL// &
+            "restore_lambda = 20.0"//NL// &
+            "sw_down = 0.0"//NL// &
+            "transport = true"//NL// &
+            "dynamics = false"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 0.7"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
       checks: block
          call comm_env_init()
          call comm_env_setup_roles(.false.)
-         call read_config_from_string(nml, cfg, ierr=ierr)
+         call read_config_from_toml_string(nml, cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, "config parse")
          if (allocated(error)) exit checks
          call validate_config(cfg, ierr)

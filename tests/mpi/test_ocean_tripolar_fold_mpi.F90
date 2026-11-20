@@ -49,7 +49,7 @@ program test_ocean_tripolar_fold_mpi
    use, intrinsic :: iso_fortran_env, only: int64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_finalize, engine_exit_data, &
@@ -143,31 +143,53 @@ contains
       write (sdlat, '(f8.3)') dlat
       write (spx, '(i0)') px
       write (spy, '(i0)') py
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml "//trim(grid_x())//", ny = "//trim(sny)//", nghost = 3, "// &
-            "dy = "//trim(adjustl(sdlat))//" /"//NL// &
-            "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-            "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, "// &
-            "lat_south = "//trim(adjustl(slat))//", phi_join = "//trim(adjustl(sphi))//", lon_pole = 0.0, "// &
-            "rad_earth = 6.378e6, coriolis_scheme = '"//trim(cor_scheme())//"' /"//NL// &
-            physics_line()//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 1800.0 /"//NL// &
-            topo_line()//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
-            "north = 'tripolar_fold' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 2000.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false., reproducing_sums = .true. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            trim(grid_x())// &
+            "ny = "//trim(sny)//NL// &
+            "nghost = 3"//NL// &
+            "dy = "//trim(adjustl(sdlat))//NL// &
+            "[mpi]"//NL// &
+            "px = "//trim(spx)//NL// &
+            "py = "//trim(spy)//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "tripolar"'//NL// &
+            "lon_west = 0.0"//NL// &
+            "lat_south = "//trim(adjustl(slat))//NL// &
+            "phi_join = "//trim(adjustl(sphi))//NL// &
+            "lon_pole = 0.0"//NL// &
+            "rad_earth = 6.378e6"//NL// &
+            'coriolis_scheme = "'//trim(cor_scheme())//'"'//NL// &
+            physics_line()// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 1800.0"//NL// &
+            topo_line()// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "tripolar_fold"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 2000.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "reproducing_sums = true"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function case_nml
 
    function grid_x() result(gx)
       !! x extent: 32 columns of 11.25 deg; "narrow" = 6 columns of 60 deg
       !! (2 ranks in x give tiles of 3 < nghost+1 columns).
       character(len=:), allocatable :: gx
-      gx = "nx = 32, dx = 11.25"
-      if (variant == "narrow") gx = "nx = 6, dx = 60.0"
+      gx = "nx = 32"//new_line("a")//"dx = 11.25"//new_line("a")
+      if (variant == "narrow") gx = "nx = 6"//new_line("a")//"dx = 60.0"//new_line("a")
    end function grid_x
 
    function cor_scheme() result(sch)
@@ -178,17 +200,22 @@ contains
 
    function topo_line() result(line)
       character(len=:), allocatable :: line
-      line = "&ocean_topo_nml max_depth = 1000.0 /"
+      line = "[ocean.topo]"//new_line("a")// &
+             "max_depth = 1000.0"//new_line("a")
       if (variant == "beta_drake") then
-         line = "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
-                "slope_scale = 0.2, coriolis_beta = 2.0e-11 /"
+         line = "[ocean.topo]"//new_line("a")// &
+                'topo_config = "double_drake"'//new_line("a")// &
+                "max_depth = 1000.0"//new_line("a")// &
+                "slope_scale = 0.2"//new_line("a")// &
+                "coriolis_beta = 2.0e-11"//new_line("a")
       end if
    end function topo_line
 
    function physics_line() result(line)
       character(len=:), allocatable :: line
       line = ""
-      if (variant == "beta_drake") line = "&physics_nml coriolis_f = 1.2e-4 /"
+      if (variant == "beta_drake") line = "[physics]"//new_line("a")// &
+                                          "coriolis_f = 1.2e-4"//new_line("a")
    end function physics_line
 
    subroutine setup_engine(engine, nml, csize, crank, ierr)
@@ -198,7 +225,7 @@ contains
       integer, intent(in) :: csize, crank
       integer, intent(out) :: ierr
       type(config_t) :: cfg
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
@@ -217,7 +244,7 @@ contains
       real(wp) :: t
 
       ok = .false.
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
