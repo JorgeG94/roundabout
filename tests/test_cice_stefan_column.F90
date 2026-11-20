@@ -58,7 +58,7 @@ module test_cice_stefan_column
 
    public :: collect_cice_stefan_column_tests
 
-   ! ---- the experiment (the example namelist `cice_stefan_column.nml` carries the same numbers) ----
+   ! ---- the experiment (the example namelist `cice_stefan_column.toml` carries the same numbers) ----
    real(wp), parameter :: DT = 900.0_wp
    integer, parameter :: NDAYS = 60
    integer, parameter :: NSTEPS = NDAYS*96

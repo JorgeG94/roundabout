@@ -398,7 +398,7 @@ contains
       !! poison` came back a nonzero, run-invariant garbage value and the
       !! console printed "Ice: conc 0.0000 thick 0.0000" on a 100%
       !! ice-covered run (`validation_examples/ocean/sea_ice_pack/
-      !! sea_ice_pack.nml`, `&ocean_ice_nml ncat = 5`). This test is
+      !! sea_ice_pack.toml`, `&ocean_ice_nml ncat = 5`). This test is
       !! CPU-portable (the defect is GPU-codegen-specific and does not
       !! reproduce on a host/multicore build -- see the GPU ctest gate for
       !! the actual device regression check) but pins the two invariants

@@ -297,7 +297,7 @@ contains
          ! "neverworld2" profiles above; the constant path reads
          ! `&physics_nml wind_stress_x/y`. Setting the former under
          ! `wind_config="constant"` is silently inert — which is exactly how
-         ! `coriolis_coast.nml` shipped a case whose header promises a
+         ! `coriolis_coast.toml` shipped a case whose header promises a
          ! "wind-spun-up gyre" that it has never generated: it ran its full
          ! 10 days at En = 0.000E+00.
          if (abs(cfg%ocean%topo%taux_magnitude) > 0.0_wp .and. &

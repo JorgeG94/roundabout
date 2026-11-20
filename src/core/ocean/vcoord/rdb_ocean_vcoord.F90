@@ -153,7 +153,7 @@ module rdb_ocean_vcoord
       !! T/S, the remap reads its concentration as zero, `k_top`-style
       !! scans walk past it.  A millimetre of `η` is enough to flip a bed
       !! remainder across it, and on
-      !! `validation_examples/ocean/isomip_plus/ocean0_idealised_zfixed.nml`
+      !! `validation_examples/ocean/isomip_plus/ocean0_idealised_zfixed.toml`
       !! five columns did so 165 times in five days.  With this floor the
       !! bed partial cell is either a live layer strictly ABOVE the marker
       !! or an inert filler at exactly `h_min`; nothing lands in between.

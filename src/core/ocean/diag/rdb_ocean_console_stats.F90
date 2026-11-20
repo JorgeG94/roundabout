@@ -1301,7 +1301,7 @@ contains
       !! extra category-sum pass for `ci`/`hi` is free.
       !!
       !! **GPU bug this works around** (reproduced on a V100, NVHPC 25.5,
-      !! `validation_examples/ocean/sea_ice_pack/sea_ice_pack.nml`, the
+      !! `validation_examples/ocean/sea_ice_pack/sea_ice_pack.toml`, the
       !! default `&ocean_diag_nml reproducing_sums = .true.` path): the
       !! original implementation ran ONE `!$acc parallel loop
       !! reduction(...)` combining all 21 scalar accumulators

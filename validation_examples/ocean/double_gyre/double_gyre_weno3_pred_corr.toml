@@ -1,0 +1,114 @@
+# Double-gyre (NK=10 linear) with WENO3 PV reconstruction (F1) under the
+# pred_corr split scheme.
+#
+# Sibling of double_gyre_weno3.toml (see it for the full rationale): the
+# IDENTICAL WENO3-on-Sadourny-enstrophy wind-driven gyre, but with
+# &ocean_bt_nml split_scheme="pred_corr" PINNED rather than left to the
+# default (which has been that same scheme since 2026-09-14).  The
+# Coriolis-advection kernel (and
+# hence the weno3 branch) runs every stage of BOTH split integrators, so
+# this proves the reconstruction fires clean under the predictor-corrector
+# loop too.
+
+[sim]
+sim_type = "ocean"
+
+[grid]
+nx     = 44
+ny     = 40
+nghost = 2
+
+[ocean.grid]
+axis_units = "degrees"
+len_lon    = 22.0
+len_lat    = 20.0
+rad_earth  = 6.378e6
+
+[time]
+t_end        = 10.0
+time_unit    = "day"
+dt_fixed     = 1200.0
+cfl_interval = 1
+
+[physics]
+coriolis_f    = 9.4e-5
+wind_stress_x = 0.0
+wind_stress_y = 0.0
+
+[nonhydrostatic]
+nz_layers = 10
+
+[tracer]
+initial_temperature = 15.0
+initial_salinity    = 35.0
+
+[ocean.ic]
+rho_lightest = 1035.0
+rho_range    = 2.0
+
+[ocean.coriolis]
+form          = "sadourny"
+pv_adv_scheme = "weno3"
+
+[ocean.thermo]
+enable_thermodynamics = false
+
+[ocean.topo]
+topo_config       = "spoon"
+max_depth   = 2000.0
+edge_depth  = 100.0
+slope_scale = 400000.0
+wind_config       = "2gyre"
+taux_magnitude    = 0.1
+coriolis_beta     = 1.76e-11
+coriolis_y_ref    = 1113200.0
+
+[ocean.pgf]
+form    = "fv_lite"
+maxvel  = 6.0
+
+[ocean.bdrag]
+form  = "linear"
+r     = 2.5e-5
+hbbl  = 10.0
+bg_vel = 0.1
+bbl_thick_min = 0.1
+
+[ocean.hvisc]
+nu_h        = 10000.0
+nu_4        = 0.0
+smag_ah      = true
+smag_bi_const = 0.06
+nu_4_bg      = 0.0
+nu_4_max     = 1.0e12
+lateral_closure = "smagorinsky"
+c_smag      = 0.15
+kh_vel_scale = 3.0e-3
+ah_max      = 1.0e4
+
+[ocean.vmix]
+kv_ml_invz2 = 0.01
+hmix_fixed  = 20.0
+harmonic_visc = true
+dt_therm_ratio = 2
+
+[ocean.bt]
+auto_n_inner      = true
+cfl_bt_safety     = 0.65
+bebt               = 0.2
+split_scheme      = "pred_corr"
+
+[vcoord]
+vcoord_type = "zstar"
+
+[ocean.diag]
+enabled  = false
+filename = "double_gyre_weno3_pred_corr"
+dt_out   = 1.0
+
+[output]
+output_dir     = "./out_double_gyre_weno3_pred_corr"
+output_to_file = false
+
+[logging]
+status_interval = 1.0

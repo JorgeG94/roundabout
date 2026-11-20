@@ -1085,7 +1085,7 @@ contains
       ! of that density class, and the `1/(h_L + h_R + h_neglect)` divisor
       ! does NOT suppress it — the deep side keeps the thickness up while the
       ! grounded side contributes the whole `e_bot` offset.  Measured on
-      ! `seamount_conservative_floor.nml` (form='fv_mom6'): En 2.17e-03 →
+      ! `seamount_conservative_floor.toml` (form='fv_mom6'): En 2.17e-03 →
       ! 1.39e-26 at day 2.
       !
       ! MONT is gated by the same test for the same reason.  Its face

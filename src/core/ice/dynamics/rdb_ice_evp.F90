@@ -85,7 +85,7 @@ module rdb_ice_evp
    !!       no `MAXTRUNC`; (iv) SIS2 defaults `CFL_TRUNCATE=0.5` /
    !!       `PROJECT_ICE_CONCENTRATION=.true.`, Roundabout defaults both off
    !!       (house bit-identity rule) — the shipped
-   !!       `polar_freezeup_dynamics.nml` example carries SIS2's defaults
+   !!       `polar_freezeup_dynamics.toml` example carries SIS2's defaults
    !!       instead.  Landfast/`drag_max`/underflows/`weak_low_shear`/
    !!       `DT_RHEOLOGY`/diagnostics remain unported.
    !!   D4  v-momentum reads `u_tmp` (the PRE-update u), per SIS2

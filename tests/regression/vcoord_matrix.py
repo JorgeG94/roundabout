@@ -28,7 +28,7 @@ product.
 
 How it works
 ============
-ONE canonical template (`vcoord_templates/rest_matrix.nml.in`) plus one
+ONE canonical template (`vcoord_templates/rest_matrix.toml.in`) plus one
 parameter dict per PROBLEM and one per FAMILY.  `build_matrix()` emits a
 namelist per cell into `tmp_local_artifacts/vcoord_matrix/` at import time
 and returns manifest rows built through `stability_manifest._case`.  The
@@ -150,7 +150,7 @@ import os
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(THIS_DIR, os.pardir, os.pardir))
-TEMPLATE = os.path.join(THIS_DIR, "vcoord_templates", "rest_matrix.nml.in")
+TEMPLATE = os.path.join(THIS_DIR, "vcoord_templates", "rest_matrix.toml.in")
 OUT_REL = os.path.join("tmp_local_artifacts", "vcoord_matrix")
 OUT_DIR = os.path.join(REPO_ROOT, OUT_REL)
 
@@ -281,7 +281,7 @@ FAMILIES = [
      "terrain-following. The reference leg: every sigma PGF-error result in "
      "the literature (Haney 1991; Beckmann & Haidvogel 1993; Mellor, Ezer & "
      "Oey 1994) is a statement about this row."),
-    ("zstar", "zstar", "run", None, "   zfixed_closed_faces = .true.",
+    ("zstar", "zstar", "run", None, "zfixed_closed_faces = true",
      "MOM6 z* (`ocean_vcoord_zstar_target`): the z_fixed nominal profile "
      "(max_depth/nz) DILATED per column by (H + eta)/H, with z_fixed's "
      "partial bed cells and inert fillers decided at eta = 0 -- so its "
@@ -297,11 +297,11 @@ FAMILIES = [
      "here to make visible: 21 shipped namelists select it believing "
      "otherwise."),
     ("zstar_full", "zstar_full", "run", None,
-     "   zstar_h_surf_target = 20.0\n   zstar_n_surf = 3",
+     "zstar_h_surf_target = 20.0\nzstar_n_surf = 3",
      "per-column z_ref table from the local bathymetry, with a genuinely "
      "NON-UNIFORM stack (a 3 x 20 m fine surface band). The uniform default "
      "would make this row a duplicate of sigma and prove nothing."),
-    ("z_fixed", "z_fixed", "run", None, "   zfixed_closed_faces = .true.",
+    ("z_fixed", "z_fixed", "run", None, "zfixed_closed_faces = true",
      "quasi-geopotential: fixed-z interfaces with bed-side layers vanishing "
      "to the inert filler. `z_fixed_h_ref` is taken from "
      "`&ocean_topo_nml max_depth`, so the nominal spacing is max_depth/nz. "
@@ -309,8 +309,8 @@ FAMILIES = [
      "barotropic mode open), which is how v0.1.0 recommends z_fixed be "
      "run and without which the staircase PGF residual is not bounded."),
     ("rho", "rho", "run", None,
-     "   rho_target_light = 1027.20\n   rho_target_dense = 1027.90\n"
-     "   rho_ref_pressure = 0.0",
+     "rho_target_light = 1027.20\nrho_target_dense = 1027.90\n"
+     "rho_ref_pressure = 0.0",
      "isopycnal: interfaces placed on prescribed potential densities by "
      "inverting a PPM reconstruction of the column density. The target band "
      "brackets the ISOMIP+ profile's actual range (1027.22..1027.83 kg/m^3 "
@@ -318,8 +318,8 @@ FAMILIES = [
      "Validation-grade: weakly-stratified columns collapse, which is why "
      "the `unstrat` cell of this row is expected to be degenerate."),
     ("hycom", "hycom", "run", None,
-     "   rho_target_light = 1027.20\n   rho_target_dense = 1027.90\n"
-     "   rho_ref_pressure = 0.0",
+     "rho_target_light = 1027.20\nrho_target_dense = 1027.90\n"
+     "rho_ref_pressure = 0.0",
      "hybrid z*/isopycnal (Bleck 2002, MOM6 coord_hycom): the same density "
      "inversion plus a bottom-up monotonize before it and a z* nominal-floor "
      "sweep after. The production GVC coordinate."),
@@ -442,7 +442,7 @@ PROBLEMS["lid_slope"] = {
                # rho_ref*g*z_draft outweighs the lighter ISOMIP+ COLD water
                # it displaces, a depth-uniform force the MOM6 barotropic
                # split (bc_pgf_forcing) acts on. Same trim as the shipped
-               # cavity_sloping_lid_rest.nml (MOM6 TRIM_IC_FOR_P_SURF).
+               # cavity_sloping_lid_rest.toml (MOM6 TRIM_IC_FOR_P_SURF).
                "trim_ic_for_p_surf": True},
     "doc": "a linearly SLOPING ice lid with a calving front. The headline "
            "cavity geometry, and the one the Phase-6 PGF corrections (Yung, "
@@ -774,7 +774,7 @@ def problem_truncation_estimate(prob, n2):
 # ---------------------------------------------------------------------------
 def _fmt(v):
     if isinstance(v, bool):
-        return ".true." if v else ".false."
+        return "true" if v else "false"
     if isinstance(v, float):
         return repr(v)
     return str(v)
@@ -793,38 +793,37 @@ def render(name, prob, fam, strat, eos, remap="ppm", leg="inviscid"):
         # `bathymetry_file` lives in `&output_nml`; the path is RELATIVE so it
         # resolves against the scratch dir the setup hook writes it into,
         # which is also the binary's cwd.
-        bathy_block = '   bathymetry_file = "bathy.nc"'
+        bathy_block = 'bathymetry_file = "bathy.nc"'
 
     cavity_block = ""
     if cav:
-        lines = ["&ocean_cavity_dyn_nml", "   enable = .true."]
+        lines = ["[ocean.cavity_dyn]", "enable = true"]
         for k, v in sorted(cav.items()):
-            lines.append("   {} = {}".format(
+            lines.append("{} = {}".format(
                 k, '"{}"'.format(v) if isinstance(v, str) else _fmt(v)))
         # 96 m = 2*h_nominal (720/15), the ISOMIP+ minimum-column rule
         # (Asay-Davis et al. 2016 3.1.5) that `z_fixed` x cavity fails
         # loud on. Applied to EVERY family so the grounding line is in
         # the same place on every leg -- nothing is grounded at either
         # 40 or 96 in this geometry, so it changes no other row.
-        lines.append("   h_min_cavity = 96.0")
-        lines.append("/")
+        lines.append("h_min_cavity = 96.0")
         cavity_block = "\n".join(lines)
 
     # Every cell runs the FIXED configuration's exact FV pressure gradient
     # (`form="fv_mom6"` + `reconstruct_for_pressure`, set in the template);
     # the sloping lid additionally injects the ice load as the stack's top
     # boundary condition.
-    p_top = ".true." if (cav and cav.get("draft_config") == "linear") else ".false."
+    p_top = "true" if (cav and cav.get("draft_config") == "linear") else "false"
     # `z_fixed` under a cavity runs the layer-mean (PCM) density, as the
     # shipped z_fixed cavity configurations do: `validate_config` refuses the
     # in-layer PLM/PPM reconstruction there (it reads the inert top-side
     # fillers as water at the partial top cell) until the filler-aware
     # reconstruction lands.  Every other cell keeps the reconstruction.
-    recon_p = ".false." if (cav and fam_id == "z_fixed") else ".true."
+    recon_p = "false" if (cav and fam_id == "z_fixed") else "true"
 
     bt_extra = ""
     if pin:
-        bt_extra = '   split_scheme = "{}"\n'.format(pin)
+        bt_extra = 'split_scheme = "{}"\n'.format(pin)
 
     subs = {
         "NAME": name, "NX": NX, "NY": NY, "NZ": NZ, "DX": DX, "DY": DY,
@@ -976,7 +975,7 @@ def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
 
     refused = (status == "refused") or (is_cavity and fam_id not in CAVITY_ACCEPTED)
     text = render(name, prob, fam, strat, eos, leg=leg)
-    path = os.path.join(out, name + ".nml")
+    path = os.path.join(out, name + ".toml")
     with open(path, "w") as fh:
         fh.write(_header(name, pid, prob, fam, strat, eos, refused, fam_note,
                          leg))
@@ -1042,7 +1041,7 @@ def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
     t2 = prob.get("tier2_" + leg, prob.get("tier2"))
     t1_steps = (T1_STEPS_SEAMOUNT if prob["class"] in T1_SEAMOUNT_CLASSES
                 else T1_STEPS)
-    entry = _case(name, os.path.join(OUT_REL, name + ".nml"), "rest",
+    entry = _case(name, os.path.join(OUT_REL, name + ".toml"), "rest",
                   t1_steps, T2_STEPS if t2 else 0, **kw)
     if not t2:
         entry["tier2"] = {"skip": True, "reason":
@@ -1103,15 +1102,15 @@ def _row_note(pid, prob, fam, strat, eos, a_peak, en_est, strat_note,
 def _header(name, pid, prob, fam, strat, eos, refused, fam_note,
             leg="inviscid"):
     return (
-        "! GENERATED by tests/regression/vcoord_matrix.py -- DO NOT EDIT.\n"
-        "! Matrix cell: leg={}  problem={}  family={}  stratification={}  "
+        "# GENERATED by tests/regression/vcoord_matrix.py -- DO NOT EDIT.\n"
+        "# Matrix cell: leg={}  problem={}  family={}  stratification={}  "
         "eos={}\n"
-        "! Expectation: {}\n"
-        "! Geometry: {}\n"
-        "! Family:   {}\n"
-        "! Reproduce by hand:  ./rdb tmp_local_artifacts/vcoord_matrix/{}.nml\n"
-        "! Regenerate:         python3 tests/regression/stability.py --self-test\n"
-        "!\n".format(
+        "# Expectation: {}\n"
+        "# Geometry: {}\n"
+        "# Family:   {}\n"
+        "# Reproduce by hand:  ./rdb tmp_local_artifacts/vcoord_matrix/{}.toml\n"
+        "# Regenerate:         python3 tests/regression/stability.py --self-test\n"
+        "#\n".format(
             leg, pid, fam[0], strat, eos,
             "REFUSED at configure" if refused else "runs, and is gated",
             " ".join(prob["doc"].split()),

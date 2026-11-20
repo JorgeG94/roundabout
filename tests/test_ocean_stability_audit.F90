@@ -128,7 +128,7 @@ contains
    end subroutine test_diffusive_number
 
    subroutine test_munk_delta_m(error)
-      !! delta_M = (nu_h/beta)^(1/3); matches the acc_channel.nml
+      !! delta_M = (nu_h/beta)^(1/3); matches the acc_channel.toml
       !! hand-derived numbers (nu_h=22000, beta~1.62e-11 -> ~119.6 km,
       !! well above the acc_channel dy=55.5km*2=111km 2-cell floor).
       type(error_type), allocatable, intent(out) :: error
@@ -137,7 +137,7 @@ contains
       delta_m = ocean_munk_delta_m(22000.0_wp, 1.62e-11_wp)
       ! (22000/1.62e-11)^(1/3) = 110739.499... m.
       call check(error, abs(delta_m - 110739.4992680662_wp) < 1.0e-6_wp, &
-                 "acc_channel.nml Munk width ~110.7 km")
+                 "acc_channel.toml Munk width ~110.7 km")
       if (allocated(error)) return
       ! f-plane (beta<=0): no Munk boundary layer -> no constraint (huge).
       call check(error, ocean_munk_delta_m(22000.0_wp, 0.0_wp) == huge(1.0_wp), &
@@ -148,14 +148,14 @@ contains
    end subroutine test_munk_delta_m
 
    subroutine test_munk_required_nu_h(error)
-      !! acc_channel.nml's own hand-derived number: nu_h >= beta*(2*dy)^3
+      !! acc_channel.toml's own hand-derived number: nu_h >= beta*(2*dy)^3
       !! at beta=1.62e-11, dy=55.5km -> ~2.2e4 (the file's own nu_h).
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: nu_h_req
 
       nu_h_req = ocean_munk_required_nu_h(1.62e-11_wp, 55500.0_wp, 2.0_wp)
       call check(error, nu_h_req > 2.0e4_wp .and. nu_h_req < 2.4e4_wp, &
-                 "required nu_h matches acc_channel.nml's own derivation (~2.2e4)")
+                 "required nu_h matches acc_channel.toml's own derivation (~2.2e4)")
    end subroutine test_munk_required_nu_h
 
    ! -----------------------------------------------------------------
@@ -372,7 +372,7 @@ contains
    ! Terrain-following stiffness (rx0) — Check 5
    !
    ! Motivating failure: ISOMIP+ Ocean0 on the idealised draft
-   ! (`validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`)
+   ! (`validation_examples/ocean/isomip_plus/ocean0_idealised_draft.toml`)
    ! runs clean for 3 days and then drives the barotropic free surface
    ! below the bed at the trough sidewall, where the ISOMIP+ bathymetry
    ! drops ~122 m across ONE 2 km cell and a 23 m water column sits

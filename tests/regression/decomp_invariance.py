@@ -40,25 +40,28 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import toml_util  # noqa: E402
+
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# name -> (namelist, n_steps).  One row per ic_config / topo_config so the
+# name -> (TOML input, n_steps).  One row per ic_config / topo_config so the
 # sweep covers every seeder.  `n_steps` is small on purpose: a
 # decomposition bug shows up in ONE step (both bugs above did), so a long
 # run only buys chaotic divergence that muddies the comparison.
 CASES = [
     # --- ic_config coverage ---
-    ("ic_eady",        "validation_examples/ocean/eady/eady.nml", 3),
+    ("ic_eady",        "validation_examples/ocean/eady/eady.toml", 3),
     ("ic_geoadj",      "validation_examples/ocean/geostrophic_adjustment/"
-                       "geostrophic_adjustment.nml", 3),
-    ("ic_bcjet",       "validation_examples/ocean/bc_inst/bc_inst_tuned_512.nml", 3),
+                       "geostrophic_adjustment.toml", 3),
+    ("ic_bcjet",       "validation_examples/ocean/bc_inst/bc_inst_tuned_512.toml", 3),
     # --- topo_config coverage (ic_config = "" default) ---
-    ("topo_spoon",     "validation_examples/ocean/double_gyre/double_gyre_mom6.nml", 3),
-    ("topo_seamount",  "validation_examples/ocean/seamount/seamount_pred_corr.nml", 3),
-    ("topo_island",    "validation_examples/ocean/island_at_rest/island_at_rest.nml", 3),
-    ("topo_ddrake",    "validation_examples/ocean/double_drake/double_drake.nml", 3),
-    ("topo_nw2",       "validation_examples/ocean/neverworld2/neverworld2.nml", 3),
-    ("topo_flat",      "validation_examples/ocean/epbl_mld/epbl_basin.nml", 3),
+    ("topo_spoon",     "validation_examples/ocean/double_gyre/double_gyre_mom6.toml", 3),
+    ("topo_seamount",  "validation_examples/ocean/seamount/seamount_pred_corr.toml", 3),
+    ("topo_island",    "validation_examples/ocean/island_at_rest/island_at_rest.toml", 3),
+    ("topo_ddrake",    "validation_examples/ocean/double_drake/double_drake.toml", 3),
+    ("topo_nw2",       "validation_examples/ocean/neverworld2/neverworld2.toml", 3),
+    ("topo_flat",      "validation_examples/ocean/epbl_mld/epbl_basin.toml", 3),
 ]
 
 STATS = re.compile(
@@ -66,7 +69,7 @@ STATS = re.compile(
 
 
 def patch(text, n_steps, px, py, outdir):
-    """Rewrite the namelist for a short, output-isolated, decomposed run.
+    """Rewrite the TOML input for a short, output-isolated, decomposed run.
 
     Two settings are forced, on BOTH legs so the comparison stays valid:
 
@@ -78,50 +81,24 @@ def patch(text, n_steps, px, py, outdir):
     Both are legitimate CONFIGURATION limits rather than the property
     under test; letting either fire would silently skip ranks.
     """
-    out, group, saw_bt = [], None, False
-    for line in text.splitlines():
-        st = line.strip()
-        if st.startswith("&"):
-            group = st[1:].split()[0].lower()
-            if group == "ocean_bt_nml":
-                # Emit on ENTERING the group, not after `auto_n_inner`:
-                # `island_at_rest` and `double_drake` never set that key, so
-                # an anchored insert silently never fired and the auto
-                # bt_halo tripped `ng_wide > min(nx_phys, ny_phys)`.
-                out.append(line)
-                out.append("   bt_halo = 0")
-                saw_bt = True
-                continue
-        elif st == "/":
-            group = None
-        key = st.split("=")[0].strip().lower() if "=" in st else None
-        if group == "time_nml" and key in ("t_end", "time_unit"):
-            continue                       # both rewritten below
-        if group == "ocean_bt_nml" and key == "bt_halo":
-            continue
-        if group == "grid_nml" and key == "nghost":
-            ng = int(st.split("=")[1].split("!")[0].strip())
-            out.append("   nghost = %d" % max(ng, 3))
-            continue
-        if group == "output_nml" and key == "output_dir":
-            out.append('   output_dir = "%s"' % outdir)
-            continue
-        if group == "ocean_diag_nml" and key == "enabled":
-            out.append("   enabled = .false.")   # no NetCDF churn
-            continue
-        out.append(line)
-        if group == "time_nml" and key == "dt_fixed":
-            dt = float(st.split("=")[1].split("!")[0].strip())
-            out.append("   t_end = %.10g" % (n_steps * dt))
-            out.append('   time_unit = "second"')
-    if not saw_bt:
-        out += ["", "&ocean_bt_nml", "   bt_halo = 0", "/"]
-    out += ["", "&mpi_nml", "  px = %d" % px, "  py = %d" % py, "/", ""]
-    return "\n".join(out) + "\n"
+    dt = toml_util.get_float(text, "time_nml", "dt_fixed")
+    over = {"ocean_bt_nml": {"bt_halo": 0},
+            "mpi_nml": {"px": px, "py": py}}
+    if dt is not None:
+        over["time_nml"] = {"t_end": float("%.10g" % (n_steps * dt)),
+                            "time_unit": "second"}
+    ng = toml_util.get_float(text, "grid_nml", "nghost")
+    if ng is not None:
+        over["grid_nml"] = {"nghost": max(int(ng), 3)}
+    if toml_util.get(text, "output_nml", "output_dir") is not None:
+        over["output_nml"] = {"output_dir": outdir}
+    if toml_util.get(text, "ocean_diag_nml", "enabled") is not None:
+        over["ocean_diag_nml"] = {"enabled": False}   # no NetCDF churn
+    return toml_util.patch(text, over)
 
 
 def run(binary, nml_text, workdir, nranks):
-    path = os.path.join(workdir, "case.nml")
+    path = os.path.join(workdir, "case.toml")
     with open(path, "w") as fh:
         fh.write(nml_text)
     env = dict(os.environ, OMP_NUM_THREADS="1")

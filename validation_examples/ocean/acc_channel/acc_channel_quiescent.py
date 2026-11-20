@@ -1,6 +1,6 @@
 """Quiescent ACC channel -- the SPHERICAL tier-1.5 trap, Python-API port.
 
-Adapted from ``acc_channel_quiescent.nml``'s own header comment:
+Adapted from ``acc_channel_quiescent.toml``'s own header comment:
 
 SAME grid / seamount bathymetry / periodic-x BCs / closures (EPBL +
 kappa-shear ON) as ``acc_channel.py``, but ZERO wind, ZERO surface heat

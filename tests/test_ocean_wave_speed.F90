@@ -524,7 +524,7 @@ contains
          ! --- (b) same physics, but grid%dx left at a DEGREES value
          ! (0.18) while metrics%dxT is still the real 20000 m — the
          ! units mismatch the spherical path actually produces (dx in
-         ! degrees, e.g. acc_channel_kitchensink.nml dx=0.2). ---
+         ! degrees, e.g. acc_channel_kitchensink.toml dx=0.2). ---
          call grid%init(NX, NY, NGHOST, 0.18_wp, 0.18_wp)
          call metrics%init(grid)
          call metrics_fill_cartesian(metrics, grid, DXT_M, DXT_M)

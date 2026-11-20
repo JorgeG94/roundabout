@@ -128,7 +128,7 @@ module rdb_ocean_stability_audit
       !! The three `ice_shelf_cavity/` files are QUIET (`rx0 ≈ 0.015`:
       !! flat bed, and the only tilted boundary is a 13.8 m lid step).
       !! Motivating failure:
-      !! `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`
+      !! `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.toml`
       !! carries `rx0 = 0.73` at the ISOMIP+ trough sidewall (a 23 m water
       !! column beside a 146 m one across one 2 km face) and goes
       !! non-finite at day 3.2 with nothing in the log at configure time.
@@ -137,7 +137,7 @@ module rdb_ocean_stability_audit
       !! `delta_M = (nu_h/beta)^(1/3)` must span; below this the wall
       !! carries grid-scale (2-delta) noise instead of a resolved
       !! boundary-layer profile (see
-      !! `validation_examples/ocean/acc_channel/acc_channel.nml`, where
+      !! `validation_examples/ocean/acc_channel/acc_channel.toml`, where
       !! this exact criterion is documented and was hand-derived).
 
 contains

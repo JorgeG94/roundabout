@@ -1,0 +1,113 @@
+# Lagrangian (isopycnal) seamount — conservative min-thickness coverage case.
+#
+# Purpose (regression coverage, NOT validation): exercise the conservative
+# minimum-thickness "borrow" that replaces the injecting angstrom_h floor on
+# the Lagrangian continuity h-update            -> rdb_ocean_min_thickness
+#
+# conservative_floor is fail-loud: it requires vcoord_type="lagrangian" AND
+# angstrom_h > 0.  On a seamount the uniform-z isopycnal seed grounds the
+# bottom layers against the bump; the sub-floor deficit is borrowed from
+# surplus layers in the same column (mass/momentum/tracer conserving) instead
+# of being injected, which is precisely the min_thickness kernel's job.
+#
+# Coarse + short by design: 48x48 @ 8 km, 20 layers.  Coarse dx keeps the
+# effective lateral viscosity (nu_h/dx^2) high enough that the rim layers do
+# not over-drain -- the grounding blow-up is a FINE-resolution phenomenon
+# (see double_gyre_lagrangian_nk50.nml), so a coarse seamount is the stable,
+# cheap way to keep the borrow firing every step without a NaN.
+#
+# Bleck (2002) Ocean Modelling 4:55 (isopycnal/hybrid coordinate);
+# Hallberg & Adcroft (2009) Ocean Modelling 29:15 (Angstrom min-thickness).
+
+[sim]
+sim_type = "ocean"
+
+[grid]
+nx     = 48
+ny     = 48
+dx     = 8000.0
+dy     = 8000.0
+nghost = 3
+
+[time]
+t_end        = 2.0
+time_unit    = "day"
+dt_fixed     = 300.0
+cfl_interval = 1
+
+[physics]
+coriolis_f    = 1.0e-4
+wind_stress_x = 0.0
+wind_stress_y = 0.0
+
+[nonhydrostatic]
+nz_layers = 20
+
+[tracer]
+initial_temperature = 15.0
+initial_salinity    = 35.0
+
+[ocean.ic]
+rho_lightest = 1035.0
+rho_range    = 2.0
+
+[ocean.thermo]
+enable_thermodynamics = false
+
+[ocean.coriolis]
+form = "sadourny"
+
+[ocean.topo]
+topo_config    = "seamount"
+max_depth      = 2000.0
+edge_depth     = 100.0
+slope_scale    = 60000.0
+wind_config    = "constant"
+taux_magnitude = 0.0
+coriolis_beta  = 0.0
+coriolis_y_ref = 0.0
+
+[ocean.pgf]
+form   = "fv_lite"
+maxvel = 6.0
+
+[ocean.hvisc]
+nu_h       = 1.0e4     # per-face harmonic clamp (grounding stability)
+nu_4       = 0.0
+bound_kh   = true
+bound_coef = 0.15
+
+[ocean.vmix]
+use_closure = false
+use_kpp     = false
+
+[ocean.bdrag]
+form = "linear"
+r    = 2.5e-5
+
+[ocean.bt]
+auto_n_inner  = true
+cfl_bt_safety = 0.65
+bebt          = 0.2
+
+[vcoord]
+vcoord_type      = "lagrangian"
+thickness_config = "uniform_z"  # flat resting isopycnals (no shelf APE)
+
+# --- conservative minimum-thickness borrow (the coverage target) ---------
+[ocean.isopycnal]
+angstrom_h          = 1.0e-2   # min-thickness floor (m); required > 0
+reset_vanished_u    = true
+cfl_ignore_vanished = true
+conservative_floor  = true   # per-column borrow -> rdb_ocean_min_thickness
+
+[ocean.diag]
+enabled = false
+
+[output]
+output_dir     = "./out_seamount_conservative_floor"
+output_to_file = false
+
+[logging]
+log_level       = "info"
+status_interval = 1.0

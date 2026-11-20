@@ -66,7 +66,7 @@ program rdb
       else if (arg(1:1) == "-") then
          if (mpi_rank == 0) then
             call logger%error("FATAL: unknown option: "//trim(arg))
-            call logger%error("Usage: rdb [--validate-only] <input_file.nml>")
+            call logger%error("Usage: rdb [--validate-only] <input_file.toml>")
          end if
          call comm_env_abort(2)
       else
@@ -81,7 +81,7 @@ program rdb
          else
             call logger%error("FATAL: more than one input file given.")
          end if
-         call logger%error("Usage: rdb [--validate-only] <input_file.nml>")
+         call logger%error("Usage: rdb [--validate-only] <input_file.toml>")
       end if
       call comm_env_abort(2)
    end if

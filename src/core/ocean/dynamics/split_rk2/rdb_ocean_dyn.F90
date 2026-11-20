@@ -203,7 +203,7 @@ module rdb_ocean_dyn
       !! **What it costs you, measured.**  The two-stage average amplifies
       !! an internal gravity wave by `√(1 + (ω·dt)⁴/4)` per step, so it
       !! MANUFACTURES energy from a motionless stratified state.  On
-      !! `validation_examples/ocean/eady/resting_stratified_channel.nml`
+      !! `validation_examples/ocean/eady/resting_stratified_channel.toml`
       !! — a flat-bottomed periodic channel at rest, stably stratified,
       !! seeded with ±0.5 mK of noise and then left alone, with NO energy
       !! source of any kind — En reaches **2.992E-05 m²/s² by day 25**
@@ -266,7 +266,7 @@ module rdb_ocean_dyn
          !! **Why the default moved (2026-09-14).**  `ssp_rk2` grows
          !! internal gravity waves out of a stratified REST state — En
          !! 2.992E-05 against pred_corr's 1.739E-09 at day 25 on
-         !! `resting_stratified_channel.nml`, 17 000× — and the three
+         !! `resting_stratified_channel.toml`, 17 000× — and the three
          !! things that kept the predictor-corrector off the default are
          !! all closed: the land-mask NaN (the fast-loop Coriolis
          !! reference was evaluated on the stage-entry `u^n` while the

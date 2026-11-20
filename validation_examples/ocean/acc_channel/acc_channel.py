@@ -1,6 +1,6 @@
 """Idealized ACC -- the all-features ocean showcase, Python-API port.
 
-Adapted from ``acc_channel.nml``'s own header comment (the physics is
+Adapted from ``acc_channel.toml``'s own header comment (the physics is
 identical; only the front door changed):
 
 A RE-ENTRANT (periodic-x) SPHERICAL channel in the Southern Ocean (~45 S)
@@ -22,7 +22,7 @@ is depth-uniform "constant" (there is no kernel for a meridional
 tau_x(y) ramp on the ocean path beyond the closed-basin 2gyre cosine --
 see ``README.md``'s caveats section; do not invent one here).
 
-GRID SIZE -- READ THIS FIRST.  ``acc_channel.nml``'s own header comment
+GRID SIZE -- READ THIS FIRST.  ``acc_channel.toml``'s own header comment
 says "24 deg lon x 14 deg lat ... 0.5 deg resolution => 48 x 28 cells
 ... nz=16 over H=3000 m", but the file's actual ``&grid_nml``/
 ``&nonhydrostatic_nml`` values are ``nx=480, ny=280, nz_layers=75`` --

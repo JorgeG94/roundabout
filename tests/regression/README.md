@@ -190,7 +190,7 @@ For every manifest case the runner:
    `time_unit` to `"second"`. The committed nml is never mutated.
 3. Redirects `&output_nml output_dir` to the scratch dir **and** runs the
    process with `cwd=<scratch>`, so no run ever writes into the repo tree.
-4. Runs `rdb <temp.nml>` with the per-case `timeout_s`, capturing exit code
+4. Runs `rdb <temp.toml>` with the per-case `timeout_s`, capturing exit code
    + combined stdout/stderr.
 
 **Gate (P0):** PASS iff exit code `0` **and** no bad markers appear in the
@@ -233,8 +233,8 @@ bytes each; committed).
 
 **Guaranteeing a final-state print** — the committed nmls emit diags/stats on an
 hours-or-days cadence, so a short regression run would otherwise only print at
-`t=0`. The runner's `patch_namelist` (`force_emit=True`, default) rewrites
-`&logging_nml status_interval` and `&ocean_diag_nml dt_out` down to half an
+`t=0`. The runner's `patch_input` (`force_emit=True`, default) rewrites
+`[logging] status_interval` and `[ocean.diag] dt_out` down to half an
 outer step (seconds, after the `time_unit` normalization) so **both fire every
 step** — the final step always emits a usable summary. (Harmless to the P0 gate:
 it only adds log lines / more NaN sampling.)
@@ -499,7 +499,7 @@ family × geometry table. **The table is the product.**
 
 ## How it is built
 
-One canonical template — [`vcoord_templates/rest_matrix.nml.in`](vcoord_templates/rest_matrix.nml.in)
+One canonical template — [`vcoord_templates/rest_matrix.toml.in`](vcoord_templates/rest_matrix.toml.in)
 — plus one parameter dict per **problem** and one per **family**, in
 [`vcoord_matrix.py`](vcoord_matrix.py). `build_matrix()` emits one namelist per
 cell into `tmp_local_artifacts/vcoord_matrix/` at manifest-import time and
@@ -509,7 +509,7 @@ reader cannot tell which cell of the matrix a given file is, and a change to
 the shared problem then has to be applied by hand N times. The emitted files
 are plain text, carry a generated header naming their cell, and are left on
 disk — any cell reproduces by hand with
-`./rdb tmp_local_artifacts/vcoord_matrix/<cell>.nml`.
+`./rdb tmp_local_artifacts/vcoord_matrix/<cell>.toml`.
 
 ```bash
 # Just the matrix, tier 2 (CPU):
@@ -1182,7 +1182,7 @@ gap. Thirteen cases are in that position:
 
 ## Gate E6 — ISOMIP+ Ocean0 melt-off under `z_fixed`, 180 days (tier 1 only)
 
-Two tier-1 rows run `isomip_plus/ocean0_idealised_zfixed.nml` with basal melt
+Two tier-1 rows run `isomip_plus/ocean0_idealised_zfixed.toml` with basal melt
 and top drag OFF (run-time `t1_overrides`, the committed file is untouched)
 for 180 simulated days — the horizon is load-bearing, because the numerical
 calving-front regime does not appear until day ~105:
@@ -1269,7 +1269,7 @@ are the same basin and decayed identically.
 
 Re-baselined to the front the header always described — `dT_dy = -2e-5`,
 `nu_h = 20`, 60 days — after a `nu_h × dT_dy` sweep with modal spectra
-(`validation_examples/ocean/eady/eady.nml` header carries the table). Two
+(`validation_examples/ocean/eady/eady.toml` header carries the table). Two
 things the sweep overturned:
 
 * the earlier "`nu_h = 10` recovers Eady growth for the weak front to within
@@ -1416,7 +1416,7 @@ clean (design: `python_prototypes/design/compat_matrix_plan.md`).
 The matrix asks the model, not a Python copy of its rules, what it refuses:
 
 ```bash
-./rdb --validate-only case.nml     # exit 0 = accepted, 3 = refused
+./rdb --validate-only case.toml     # exit 0 = accepted, 3 = refused
 ```
 
 parses the namelist, runs `validate_config` (logging EVERY failed check, not

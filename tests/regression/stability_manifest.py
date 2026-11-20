@@ -259,24 +259,24 @@ STABILITY_CASES = [
     # ===================== double gyre (wind-forced, closed basin) =========
     # 44x40, dt=1200. The canonical MOM6 reference and the dyn-core smoke.
     # Cheap enough that both tiers run the full shipped 10-day integration.
-    _case("double_gyre_mom6", V + "double_gyre/double_gyre_mom6.nml",
+    _case("double_gyre_mom6", V + "double_gyre/double_gyre_mom6.toml",
           "forced", 720, 400,
           tags=["pgf_gprime", "coriolis_sadourny", "vcoord_zstar_full"]),
-    _case("double_gyre_linear_nk10", V + "double_gyre/double_gyre_linear_nk10.nml",
+    _case("double_gyre_linear_nk10", V + "double_gyre/double_gyre_linear_nk10.toml",
           "forced", 720, 300, tags=["pgf_fv_lite", "nk10"]),
-    _case("double_gyre_pred_corr", V + "double_gyre/double_gyre_pred_corr.nml",
+    _case("double_gyre_pred_corr", V + "double_gyre/double_gyre_pred_corr.toml",
           "forced", 720, 300, tags=["pred_corr"]),
-    _case("double_gyre_weno3", V + "double_gyre/double_gyre_weno3.nml",
+    _case("double_gyre_weno3", V + "double_gyre/double_gyre_weno3.toml",
           "forced", 720, 300, tags=["pv_adv_weno3"]),
-    _case("double_gyre_weno3_pred_corr", V + "double_gyre/double_gyre_weno3_pred_corr.nml",
+    _case("double_gyre_weno3_pred_corr", V + "double_gyre/double_gyre_weno3_pred_corr.toml",
           "forced", 720, 300, tags=["pv_adv_weno3", "pred_corr"]),
-    _case("double_gyre_weno5", V + "double_gyre/double_gyre_weno5.nml",
+    _case("double_gyre_weno5", V + "double_gyre/double_gyre_weno5.toml",
           "forced", 720, 300, tags=["pv_adv_weno5"],
           t2_dimensionless={"nghost": 4, "schemes": ["pv_weno5"]}),
-    _case("double_gyre_weno7", V + "double_gyre/double_gyre_weno7.nml",
+    _case("double_gyre_weno7", V + "double_gyre/double_gyre_weno7.toml",
           "forced", 720, 300, tags=["pv_adv_weno7"],
           t2_dimensionless={"nghost": 5, "schemes": ["pv_weno7"]}),
-    _case("double_gyre_dataovr", V + "data_forcing/double_gyre_dataovr.nml",
+    _case("double_gyre_dataovr", V + "data_forcing/double_gyre_dataovr.toml",
           "forced", 720, 300,
           setup=["{python}", "{repo}/tools/make_forcing_nc.py", "wind.nc",
                  "--nx", "44", "--ny", "40", "--nt", "2", "--steady"],
@@ -288,15 +288,15 @@ STABILITY_CASES = [
     # often the spurious pressure gradient a terrain-following coordinate
     # generates over a slope. So the gate is a VELOCITY BAR, not a golden:
     # a resting ocean must not develop a current above 1 mm/s.
-    _case("seamount", V + "seamount/seamount.nml", "rest", 8640, 200,
+    _case("seamount", V + "seamount/seamount.toml", "rest", 8640, 200,
           en_rest_max=REST_SEAMOUNT, tags=["seamount_topo", "eos_nonlinear"]),
-    _case("seamount_auto", V + "seamount/seamount_auto.nml", "rest", 8640, 200,
+    _case("seamount_auto", V + "seamount/seamount_auto.toml", "rest", 8640, 200,
           en_rest_max=REST_SEAMOUNT, tags=["auto_n_inner"]),
-    _case("seamount_flat", V + "seamount/seamount_flat.nml", "rest", 8640, 200,
+    _case("seamount_flat", V + "seamount/seamount_flat.toml", "rest", 8640, 200,
           # Flat bottom AND no forcing: with no slope there is no spurious
           # PGF to generate, so this one must be bit-zero, not merely small.
           en_rest_max=REST_1UM_S, tags=["flat_bottom", "rest_exact"]),
-    _case("seamount_pred_corr", V + "seamount/seamount_pred_corr.nml", "rest", 4000, 200,
+    _case("seamount_pred_corr", V + "seamount/seamount_pred_corr.toml", "rest", 4000, 200,
           en_rest_max=REST_SEAMOUNT, tags=["pred_corr", "vcoord_zstar_sigma"]),
     # Was a known failure: peak En 2.24e-3 => 6.7 cm/s of spurious current on a
     # motionless ocean, 45x over the seamount bar and still growing at the end
@@ -312,39 +312,39 @@ STABILITY_CASES = [
     # the REST_1UM_S "must be bit-zero" bar rather than the 1 cm/s seamount
     # tolerance: with the grounded-layer gradient gone there is nothing left
     # for this configuration to generate.
-    _case("seamount_conservative_floor", V + "seamount/seamount_conservative_floor.nml",
+    _case("seamount_conservative_floor", V + "seamount/seamount_conservative_floor.toml",
           "rest", 576, 200, en_rest_max=REST_1UM_S,
           tags=["lagrangian", "bound_kh", "conservative_floor",
                 "pgf_skip_nonoverlap", "rest_exact"]),
-    _case("seamount_pgf_ppm", V + "seamount/seamount_pgf_ppm.nml", "rest", 576, 130,
+    _case("seamount_pgf_ppm", V + "seamount/seamount_pgf_ppm.toml", "rest", 576, 130,
           en_rest_max=REST_SEAMOUNT, tags=["pgf_ppm"], **SEAMOUNT_96_TO_48),
-    _case("seamount_pgf_reconstruct", V + "seamount/seamount_pgf_reconstruct.nml",
+    _case("seamount_pgf_reconstruct", V + "seamount/seamount_pgf_reconstruct.toml",
           "rest", 576, 130, en_rest_max=REST_SEAMOUNT, tags=["pgf_reconstruct"],
           **SEAMOUNT_96_TO_48),
-    _case("seamount_ddiff", V + "seamount/seamount_ddiff.nml", "rest", 576, 130,
+    _case("seamount_ddiff", V + "seamount/seamount_ddiff.toml", "rest", 576, 130,
           en_rest_max=REST_SEAMOUNT, tags=["double_diffusion"], **SEAMOUNT_96_TO_48),
-    _case("seamount_ddiff_pred_corr", V + "seamount/seamount_ddiff_pred_corr.nml",
+    _case("seamount_ddiff_pred_corr", V + "seamount/seamount_ddiff_pred_corr.toml",
           "rest", 576, 130, en_rest_max=REST_SEAMOUNT,
           tags=["double_diffusion", "pred_corr"], **SEAMOUNT_96_TO_48),
-    _case("seamount_gm_redi_meke", V + "seamount/seamount_gm_redi_meke.nml",
+    _case("seamount_gm_redi_meke", V + "seamount/seamount_gm_redi_meke.toml",
           "rest", 576, 130, en_rest_max=REST_SEAMOUNT,
           tags=["gm", "redi", "meke"], **SEAMOUNT_96_TO_48),
-    _case("seamount_meke_backscatter", V + "seamount/seamount_meke_backscatter.nml",
+    _case("seamount_meke_backscatter", V + "seamount/seamount_meke_backscatter.toml",
           "rest", 576, 130, en_rest_max=REST_SEAMOUNT,
           tags=["meke_backscatter"], **SEAMOUNT_96_TO_48),
-    _case("seamount_tidal_mixing", V + "seamount/seamount_tidal_mixing.nml",
+    _case("seamount_tidal_mixing", V + "seamount/seamount_tidal_mixing.toml",
           "rest", 576, 130, en_rest_max=REST_SEAMOUNT,
           tags=["tidal_mixing"], **SEAMOUNT_96_TO_48),
 
     # Seamount variants that ARE driven (open / tidal boundaries), so "rest"
     # would be the wrong assertion for them.
-    _case("seamount_obc_baroclinic", V + "seamount/seamount_obc_baroclinic.nml",
+    _case("seamount_obc_baroclinic", V + "seamount/seamount_obc_baroclinic.toml",
           "forced", 1152, 200, budget_tol=BUDGET_OPEN,
           tags=["obc", "flather", "tidal_bc"]),
-    _case("seamount_tidal_obc", V + "tides/seamount_tidal_obc.nml",
+    _case("seamount_tidal_obc", V + "tides/seamount_tidal_obc.toml",
           "forced", 1152, 160, budget_tol=BUDGET_OPEN,
           tags=["obc", "tides", "nodal"]),
-    _case("seamount_bench_full", V + "seamount/seamount_bench_full.nml",
+    _case("seamount_bench_full", V + "seamount/seamount_bench_full.toml",
           "rest", 300, 0, en_rest_max=REST_SEAMOUNT,
           t1_timeout=900, t2_skip=True, t2_reason=_BENCH_REASON,
           tags=["benchmark"]),
@@ -366,7 +366,7 @@ STABILITY_CASES = [
     # the 125 km mode holds ~50% of max|v| (measured on the NetCDF modal
     # amplitudes); earlier the extrema are still the decaying noise seed.
     # `t1_diag_samples` makes the [diag] series dense enough to fit.
-    _case("eady", V + "eady/eady.nml", "baroclinic", 8640, 240,
+    _case("eady", V + "eady/eady.toml", "baroclinic", 8640, 240,
           en_max=EN_CEIL, t1_diag_samples=120, t1_timeout=1200,
           # Calibrated against the 2026-09-11 thermo-cadence instability
           # (sigma ~ 1.0e-5): 6e-6 catches it with 1.7x margin and leaves the
@@ -391,7 +391,7 @@ STABILITY_CASES = [
                   "zonal wavenumber, means a spurious source (the "
                   "resting-state growth documented in the nml header, an "
                   "EOS sign error, Coriolis-adv KE non-conservation).",
-              "ref": "validation_examples/ocean/eady/eady.nml header; "
+              "ref": "validation_examples/ocean/eady/eady.toml header; "
                      "tmp_local_artifacts/eady_hunt/p3"},
           claims=[{
               "kind": "field_ratio", "name": "header-1500x", "field": "v",
@@ -406,9 +406,9 @@ STABILITY_CASES = [
                   "of the measurement and still 100x more than the old "
                   "over-damped file could ever show. Above 1e4 the run has "
                   "left the linear window (the header's day-60 limit).",
-              "ref": "validation_examples/ocean/eady/eady.nml header"}],
+              "ref": "validation_examples/ocean/eady/eady.toml header"}],
           tags=["eady", "baroclinic"]),
-    _case("eady_weno5", V + "eady/eady_weno5.nml", "baroclinic", 8640, 240,
+    _case("eady_weno5", V + "eady/eady_weno5.toml", "baroclinic", 8640, 240,
           en_max=EN_CEIL, t1_diag_samples=120, t1_timeout=1200,
           sigma_fast_max=6.0e-6,
           t2_dimensionless={"nghost": 3, "schemes": ["weno5", "periodic"]},
@@ -422,13 +422,13 @@ STABILITY_CASES = [
                          "the windowed tracer-advect path (dt_tracer_advect_"
                          "ratio = 2, dt_therm_ratio = 2, weno5) acting on the "
                          "mode, which it must not.",
-              "ref": "validation_examples/ocean/eady/eady.nml header"},
+              "ref": "validation_examples/ocean/eady/eady.toml header"},
           claims=[{
               "kind": "field_ratio", "name": "header-1500x", "field": "v",
               "from_day": 1.0, "min": 300.0, "max": 1.0e4, "tiers": [1],
               "text": "max|v| ~1500x over 60 days, as eady",
               "meaning": "as eady.",
-              "ref": "validation_examples/ocean/eady/eady.nml header"}],
+              "ref": "validation_examples/ocean/eady/eady.toml header"}],
           note=
               "reads as a weno5 reconstruction test but changes THREE knobs at once: "
               "tracer_recon=weno5 AND dt_tracer_advect_ratio=2 AND dt_therm_ratio=2. "
@@ -440,7 +440,7 @@ STABILITY_CASES = [
               "window), which is what makes this case a regression guard for those "
               "two commits -- the energy:no-fast-growth bar is the one that sees it.",
           tags=["tracer_weno5", "windowed_advect", "dt_therm_ratio"]),
-    _case("eady_weno7", V + "eady/eady_weno7.nml", "baroclinic", 8640, 240,
+    _case("eady_weno7", V + "eady/eady_weno7.toml", "baroclinic", 8640, 240,
           en_max=EN_CEIL, t1_diag_samples=120, t1_timeout=1200,
           sigma_fast_max=6.0e-6,
           t2_dimensionless={"nghost": 4, "schemes": ["weno7", "periodic"]},
@@ -449,13 +449,13 @@ STABILITY_CASES = [
               "min": 1.5e-6, "max": 2.5e-6, "field": "v", "fit_from_day": 30.0,
               "basis": "as eady: kx = 2 channel mode, sigma = 1.98e-6 1/s",
               "meaning": "as eady_weno5, for the weno7 rung.",
-              "ref": "validation_examples/ocean/eady/eady.nml header"},
+              "ref": "validation_examples/ocean/eady/eady.toml header"},
           claims=[{
               "kind": "field_ratio", "name": "header-1500x", "field": "v",
               "from_day": 1.0, "min": 300.0, "max": 1.0e4, "tiers": [1],
               "text": "max|v| ~1000-1500x over 60 days, as eady",
               "meaning": "as eady.",
-              "ref": "validation_examples/ocean/eady/eady.nml header"}],
+              "ref": "validation_examples/ocean/eady/eady.toml header"}],
           note=
               "reads as a weno7 reconstruction test but changes THREE knobs at once: "
               "tracer_recon=weno7 AND dt_tracer_advect_ratio=2 AND dt_therm_ratio=2. "
@@ -468,7 +468,7 @@ STABILITY_CASES = [
               "two commits -- the energy:no-fast-growth bar is the one that sees it.",
           tags=["tracer_weno7", "windowed_advect", "dt_therm_ratio"]),
     # ---- the OUTER-SPLIT rest-preservation gate --------------------------
-    # `eady.nml` with the front off and nu_h = 0: a motionless, stably
+    # `eady.toml` with the front off and nu_h = 0: a motionless, stably
     # stratified, flat-bottomed periodic channel seeded with +-0.5 mK of
     # white noise. No forcing, no slope, no front -- so it has NO energy
     # source and every joule of En it develops is manufactured by the
@@ -489,7 +489,7 @@ STABILITY_CASES = [
     # deleted case: ssp_rk2 is still shipped and still supported, and this is
     # what "experimental" on it means, stated as a number.
     _case("resting_stratified_channel",
-          V + "eady/resting_stratified_channel.nml", "rest", 3600, 1440,
+          V + "eady/resting_stratified_channel.toml", "rest", 3600, 1440,
           en_rest_max=REST_100UM_S, t1_timeout=900,
           # 0.1 mm/s. The pred_corr answer is 59 um/s and reproduces to 1%
           # across gfortran and nvfortran despite a DIFFERENT RNG
@@ -538,7 +538,7 @@ STABILITY_CASES = [
                   "raising en_rest_max or en_rest_trend_floor -- the fix is "
                   "whatever still feeds the internal-wave field.",
               "ref": "validation_examples/ocean/eady/"
-                     "resting_stratified_channel.nml",
+                     "resting_stratified_channel.toml",
           },
           note="the regression test for the class of bug the 2026-09-13 "
                "split-scheme flip fixed: a spurious internal-gravity-wave "
@@ -548,7 +548,7 @@ STABILITY_CASES = [
                "dropped En 119x; removing the seed made the run bit-zero.",
           tags=["rest", "outer_split", "internal_waves", "vcoord_zstar"]),
 
-    _case("baroclinic_2layer", V + "baroclinic_channel/baroclinic_2layer.nml",
+    _case("baroclinic_2layer", V + "baroclinic_channel/baroclinic_2layer.toml",
           "baroclinic", 17280, 300, en_max=EN_CEIL,
           # Re-entrant channel: SHORTEN the box, keep dx -- every dimensionless
           # number is preserved exactly (see the recipe note above).
@@ -558,7 +558,7 @@ STABILITY_CASES = [
                             "schemes": ["periodic"],
                             "has_western_boundary": False, "eddying": False},
           tags=["baroclinic_channel", "nk2"]),
-    _case("baroclinic_15layer", V + "baroclinic_channel/baroclinic_15layer.nml",
+    _case("baroclinic_15layer", V + "baroclinic_channel/baroclinic_15layer.toml",
           # The FULL shipped 50-day integration, and it has to be: this case's
           # instability does not appear until day ~30. En decays for 28 days
           # (1.72e-2 -> 1.62e-2), turns at day 30 and then runs away to 3.44e-1
@@ -575,7 +575,7 @@ STABILITY_CASES = [
                             "schemes": ["periodic"],
                             "has_western_boundary": False, "eddying": False},
           tags=["baroclinic_channel", "nk15"]),
-    _case("bc_inst_tuned_512", V + "bc_inst/bc_inst_tuned_512.nml",
+    _case("bc_inst_tuned_512", V + "bc_inst/bc_inst_tuned_512.toml",
           "baroclinic", 10000, 200, en_max=EN_CEIL,
           t2_overrides={"grid_nml": {"nx": 128, "ny": 128}},
           t2_dimensionless={"dx": 0.0439453125 * 111320.0,
@@ -591,7 +591,7 @@ STABILITY_CASES = [
     # eddy kinetic energy, so they are NOT eddy-resolving tests however long
     # they run -- they are gated as forced, bounded flows, which is what they
     # actually are.
-    _case("acc_channel", V + "acc_channel/acc_channel.nml", "forced", 288, 120,
+    _case("acc_channel", V + "acc_channel/acc_channel.toml", "forced", 288, 120,
           en_max=EN_CEIL_HI, budget_tol=BUDGET_OPEN,
           # nu_h was raised to 22000 on 2026-09-11 to satisfy the Munk
           # criterion, and ah_max with it (R2) -- raising one without the
@@ -602,7 +602,7 @@ STABILITY_CASES = [
                             "schemes": ["periodic"],
                             "has_western_boundary": False},
           tags=["acc", "channel", "munk_sized"]),
-    _case("acc_channel_quiescent", V + "acc_channel/acc_channel_quiescent.nml",
+    _case("acc_channel_quiescent", V + "acc_channel/acc_channel_quiescent.toml",
           "rest", 360, 200, en_rest_max=REST_1UM_S, budget_tol=BUDGET_OPEN,
           note="q_heat = 0 and no other driver: a zero-forcing channel must "
                "stay bit-zero. Weak by construction (see the aquaplanet "
@@ -610,21 +610,21 @@ STABILITY_CASES = [
                "whether the numerics are right or wrong) -- kept because it "
                "is nearly free and catches a spurious source.",
           tags=["acc", "quiescent"]),
-    _case("acc_channel_weno5", V + "acc_channel/acc_channel_weno5.nml",
+    _case("acc_channel_weno5", V + "acc_channel/acc_channel_weno5.toml",
           "forced", 288, 140, en_max=EN_CEIL_HI, budget_tol=BUDGET_OPEN,
           t2_overrides=dict(ACC_HALF_RES["t2_overrides"]),
           t2_dimensionless=dict(ACC_HALF_RES["t2_dimensionless"],
                                 dt=300.0, schemes=["weno5", "periodic"]),
           tags=["acc", "tracer_weno5", "windowed_advect"]),
-    _case("acc_channel_kitchensink", V + "acc_channel/acc_channel_kitchensink.nml",
+    _case("acc_channel_kitchensink", V + "acc_channel/acc_channel_kitchensink.toml",
           "forced", 144, 100, en_max=EN_CEIL_HI, budget_tol=BUDGET_OPEN,
           **{k: dict(v) for k, v in ACC_HALF_RES.items()},
           tags=["acc", "kitchensink", "all_closures"]),
-    _case("acc_channel_sw_penetration", V + "acc_channel/acc_channel_sw_penetration.nml",
+    _case("acc_channel_sw_penetration", V + "acc_channel/acc_channel_sw_penetration.toml",
           "forced", 144, 100, en_max=EN_CEIL_HI, budget_tol=BUDGET_OPEN,
           **{k: dict(v) for k, v in ACC_HALF_RES.items()},
           tags=["acc", "shortwave_penetration"]),
-    _case("acc_channel_eddy", V + "acc_channel/acc_channel_eddy.nml",
+    _case("acc_channel_eddy", V + "acc_channel/acc_channel_eddy.toml",
           "forced", 144, 0, en_max=EN_CEIL_HI, budget_tol=BUDGET_OPEN,
           t1_timeout=900, t2_skip=True,
           t2_reason="eddy-resolving at 0.1 deg: the only affordable downscale "
@@ -633,7 +633,7 @@ STABILITY_CASES = [
                     "eddies form at ANY run length, so the twin would not be "
                     "the same test. Tier 1 only.",
           tags=["acc", "eddying"]),
-    _case("acc_channel_kitchensink_xl", V + "acc_channel/acc_channel_kitchensink_xl.nml",
+    _case("acc_channel_kitchensink_xl", V + "acc_channel/acc_channel_kitchensink_xl.toml",
           "forced", 144, 0, en_max=EN_CEIL_HI, budget_tol=BUDGET_OPEN,
           t1_timeout=900, t2_skip=True,
           t2_reason="this IS the XL twin of acc_channel_kitchensink, which is "
@@ -642,11 +642,11 @@ STABILITY_CASES = [
           tags=["acc", "kitchensink", "xl"]),
 
     # ===================== boundary-layer mixing ===========================
-    _case("epbl_basin", V + "epbl_mld/epbl_basin.nml", "forced", 2160, 300,
+    _case("epbl_basin", V + "epbl_mld/epbl_basin.toml", "forced", 2160, 300,
           budget_tol=BUDGET_OPEN, tags=["epbl", "mld"]),
-    _case("epbl_lt_basin", V + "epbl_mld/epbl_lt_basin.nml", "forced", 2160, 300,
+    _case("epbl_lt_basin", V + "epbl_mld/epbl_lt_basin.toml", "forced", 2160, 300,
           budget_tol=BUDGET_OPEN, tags=["epbl", "langmuir"]),
-    _case("kpp_basin", V + "epbl_mld/kpp_basin.nml", "forced", 2160, 300,
+    _case("kpp_basin", V + "epbl_mld/kpp_basin.toml", "forced", 2160, 300,
           budget_tol=BUDGET_OPEN, tags=["kpp", "mld"]),
 
     # ============ ice-shelf cavity at rest (the sloping-lid PGF) ===========
@@ -658,7 +658,7 @@ STABILITY_CASES = [
     # Full derivation, the substitution table and the Yung et al. (2026)
     # comparison live in validation_examples/ocean/ice_shelf_cavity/README.md.
     _case("cavity_flat_lid_rest",
-          V + "ice_shelf_cavity/cavity_flat_lid_rest.nml",
+          V + "ice_shelf_cavity/cavity_flat_lid_rest.toml",
           "rest", 4320, 1440, en_rest_max=REST_1UM_S,
           t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 600.0,
                             "nu_h": 0.0, "nghost": 2,
@@ -676,7 +676,7 @@ STABILITY_CASES = [
           tags=["cavity", "ice_shelf", "rest_exact", "vcoord_sigma",
                 "pgf_fv_mom6", "zinit_linear"]),
     _case("cavity_flat_lid_rest_zfixed",
-          V + "ice_shelf_cavity/cavity_flat_lid_rest_zfixed.nml",
+          V + "ice_shelf_cavity/cavity_flat_lid_rest_zfixed.toml",
           "rest", 4320, 1440, en_rest_max=REST_1UM_S,
           t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 600.0,
                             "nu_h": 0.0, "nghost": 2,
@@ -706,11 +706,11 @@ STABILITY_CASES = [
                "needs Yung et al. (2026) 3.3.1/3.3.2/3.2, none of which are "
                "in this build. See "
                "validation_examples/ocean/ice_shelf_cavity/"
-               "cavity_sloping_lid_rest_zfixed.nml for that measurement.",
+               "cavity_sloping_lid_rest_zfixed.toml for that measurement.",
           tags=["cavity", "ice_shelf", "rest_exact", "vcoord_z_fixed",
                 "pgf_fv_mom6", "zinit_linear"]),
     _case("cavity_uniform_rho_rest",
-          V + "ice_shelf_cavity/cavity_uniform_rho_rest.nml",
+          V + "ice_shelf_cavity/cavity_uniform_rho_rest.toml",
           "rest", 4320, 1440, en_rest_max=REST_1UM_S,
           t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 600.0,
                             "nu_h": 0.0, "nghost": 2,
@@ -733,7 +733,7 @@ STABILITY_CASES = [
           tags=["cavity", "ice_shelf", "rest_exact", "uniform_density",
                 "pgf_fv_mom6"]),
     _case("cavity_sloping_lid_rest",
-          V + "ice_shelf_cavity/cavity_sloping_lid_rest.nml",
+          V + "ice_shelf_cavity/cavity_sloping_lid_rest.toml",
           "rest", 4320, 2880, en_rest_max=REST_1MM_S, t1_timeout=900,
           # THE BAR. REST_1MM_S is the sloped-rest family's existing bar and
           # the velocity a resting sub-shelf cavity has no excuse to exceed
@@ -826,7 +826,7 @@ STABILITY_CASES = [
                 "vcoord_sigma", "pgf_fv_mom6", "zinit_linear", "rest"]),
 
     _case("isomip_plus_ice_free_zfixed",
-          V + "isomip_plus/ocean0_ice_free_zfixed.nml",
+          V + "isomip_plus/ocean0_ice_free_zfixed.toml",
           "rest", 576, 144, en_rest_max=1.0e-05, t1_timeout=1200,
           t2_timeout=300, t2_skip=False,
           t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 300.0,
@@ -868,7 +868,7 @@ STABILITY_CASES = [
           tags=["isomip_plus", "vcoord_z_fixed", "closed_faces",
                 "partial_steps", "rest", "pgf_fv_mom6", "zinit_linear"]),
     _case("isomip_plus_ocean0_idealised",
-          V + "isomip_plus/ocean0_idealised_draft.nml",
+          V + "isomip_plus/ocean0_idealised_draft.toml",
           "forced", 1000, 100, t1_timeout=1200, t2_timeout=300,
           # THE GROUNDED-CAVITY CONSERVATION GATE, at case scale.
           #
@@ -962,7 +962,7 @@ STABILITY_CASES = [
     # ============ ISOMIP+ Ocean0 melt OFF under z_fixed: gate E6 ============
     # The v0.1.0 stability gate for the z_fixed x cavity envelope
     # (python_prototypes design/cavity_rest_growth_diagnosis.md section Q).
-    # The shipped `ocean0_idealised_zfixed.nml` with basal melt and top drag
+    # The shipped `ocean0_idealised_zfixed.toml` with basal melt and top drag
     # OFF, carried to 180 days -- the length is load-bearing: the numerical
     # regime (a one-row calving-front partial-cell jet) does not appear until
     # day ~105 and saturates by ~165, so a 30- or 90-day leg sees only the
@@ -982,14 +982,14 @@ STABILITY_CASES = [
     # resolution the grounding line and the calving-front cut are resolved
     # at, and 180 days is ~50x a tier-2 budget.
     _case("isomip_plus_ocean0_zfixed_meltoff",
-          V + "isomip_plus/ocean0_idealised_zfixed.nml",
+          V + "isomip_plus/ocean0_idealised_zfixed.toml",
           "rest", 51840, 0, en_rest_max=1.0e-05, budget_tol=BUDGET_OPEN,
           t1_timeout=3000, t1_samples=360,
           t1_overrides={"ocean_cavity_melt_nml": {"enable": False},
                         "ocean_tdrag_nml": {"enable": False},
                         # the shipped melt diagnostics refuse to register
                         # with melt off (a plane of missing values).
-                        "ocean_diag_nml": {"diags": '""'}},
+                        "ocean_diag_nml": {"diags": ""}},
           t2_skip=True,
           t2_reason="the numerical regime needs ~105 days to appear and "
                     "~150 to saturate, and 240x40x36 @ 2 km is the "
@@ -1004,7 +1004,7 @@ STABILITY_CASES = [
                "meaning": "Above 1E-07 at day 30 the inviscid mode (nu_h = 0: "
                           "1.44E-06) or a new amplifier is back.",
                "ref": "validation_examples/ocean/isomip_plus/"
-                      "ocean0_idealised_zfixed.nml header"},
+                      "ocean0_idealised_zfixed.toml header"},
               {"kind": "en_rate_decel", "name": "decelerates-by-d30",
                "early": [15.0, 20.0], "late": [25.0, 30.0],
                "text": "section Q.6 gate (a): regime 1 is a power law, so its "
@@ -1038,13 +1038,13 @@ STABILITY_CASES = [
                 "closed_faces", "partial_steps", "sponge", "pgf_fv_mom6",
                 "zinit_linear", "rest", "long_run"]),
     _case("isomip_plus_ocean0_zfixed_meltoff_nu30",
-          V + "isomip_plus/ocean0_idealised_zfixed.nml",
+          V + "isomip_plus/ocean0_idealised_zfixed.toml",
           "rest", 51840, 0, en_rest_max=REST_1MM_S, budget_tol=BUDGET_OPEN,
           t1_timeout=3000, t1_samples=360,
           t1_overrides={"ocean_cavity_melt_nml": {"enable": False},
                         "ocean_tdrag_nml": {"enable": False},
                         "ocean_hvisc_nml": {"nu_h": 30.0},
-                        "ocean_diag_nml": {"diags": '""'}},
+                        "ocean_diag_nml": {"diags": ""}},
           t2_skip=True,
           t2_reason="twin of isomip_plus_ocean0_zfixed_meltoff; the same "
                     "180-day horizon and COM grid. Tier 1 only.",
@@ -1074,20 +1074,20 @@ STABILITY_CASES = [
                 "zinit_linear", "rest", "long_run"]),
 
     # ===================== geometry / masking ==============================
-    _case("island_at_rest", V + "island_at_rest/island_at_rest.nml",
+    _case("island_at_rest", V + "island_at_rest/island_at_rest.toml",
           "rest", 2880, 300, en_rest_max=REST_1UM_S,
           note="interior land masking with a motionless start: the free-slip "
                "metric-zeroed walls must not leak a wall-normal velocity.",
           tags=["land_mask", "rest_exact"]),
-    _case("coriolis_coast", V + "coriolis_coast/coriolis_coast.nml",
+    _case("coriolis_coast", V + "coriolis_coast/coriolis_coast.toml",
           "forced", 2880, 300, tags=["coriolis", "wall_bc"],
           ),
-    _case("flow_past_island", V + "flow_past_island/flow_past_island.nml",
+    _case("flow_past_island", V + "flow_past_island/flow_past_island.toml",
           "forced", 1440, 300, tags=["island", "wake"]),
-    _case("double_drake", V + "double_drake/double_drake.nml",
+    _case("double_drake", V + "double_drake/double_drake.toml",
           "forced", 1440, 250, tags=["double_drake", "spherical"]),
     _case("geostrophic_adjustment",
-          V + "geostrophic_adjustment/geostrophic_adjustment.nml",
+          V + "geostrophic_adjustment/geostrophic_adjustment.toml",
           "adiabatic", 4320, 400, en_growth_max=1.5,
           note="NK=1 barotropic adjustment from an initial SSH bump: the "
                "front radiates gravity waves and settles into geostrophic "
@@ -1095,26 +1095,26 @@ STABILITY_CASES = [
           tags=["barotropic", "nk1", "geostrophic"]),
 
     # ===================== tracers / sponges / tides =======================
-    _case("ideal_age_demo", V + "ideal_age/ideal_age_demo.nml",
+    _case("ideal_age_demo", V + "ideal_age/ideal_age_demo.toml",
           "forced", 864, 250, tags=["ideal_age", "passive_tracer"]),
-    _case("sponge_real_demo", V + "sponge_demo/sponge_real_demo.nml",
+    _case("sponge_real_demo", V + "sponge_demo/sponge_real_demo.toml",
           "forced", 864, 250, budget_tol=BUDGET_OPEN,
           tags=["sponge", "nudging"]),
-    _case("body_tide_basin", V + "tides/body_tide_basin.nml",
+    _case("body_tide_basin", V + "tides/body_tide_basin.toml",
           "forced", 2880, 400, tags=["tides", "body_forcing", "sal"]),
-    _case("neverworld2", V + "neverworld2/neverworld2.nml",
+    _case("neverworld2", V + "neverworld2/neverworld2.toml",
           "forced", 192, 150, en_max=EN_CEIL_HI, budget_tol=BUDGET_OPEN,
           tags=["neverworld2", "idealised_global"]),
 
     # ===================== eddying gyres ===================================
-    _case("eddy_test", V + "eddy_test/eddy_test.nml", "forced", 400, 0,
+    _case("eddy_test", V + "eddy_test/eddy_test.toml", "forced", 400, 0,
           t1_timeout=900, t2_skip=True,
           t2_reason="eddy-resolving closed basin at 5 km. A closed basin "
                     "cannot be shortened (the basin IS the case), so the only "
                     "downscale is to coarsen to 10 km, which halves Rd/dx and "
                     "violates rule R4. Tier 1 only.",
           tags=["eddying", "gyre"]),
-    _case("eddy_test_quick", V + "eddy_test/eddy_test_quick.nml", "forced", 100, 0,
+    _case("eddy_test_quick", V + "eddy_test/eddy_test_quick.toml", "forced", 100, 0,
           t1_timeout=900, t2_skip=True,
           t2_reason="1024x1024x15 closed basin -- 15.7M cells. Too large for a "
                     "hosted runner even at 20 steps, and coarsening breaks "
@@ -1130,16 +1130,16 @@ STABILITY_CASES = [
     #
     # Cross-form invariant: on a flat bed mont / fv_wright / fv_lite must agree.
     # Measured on this config, all three give En = 1.220E-05.
-    _case("pgf_mont", V + "pgf_forms/pgf_mont.nml", "forced", 720, 60,
+    _case("pgf_mont", V + "pgf_forms/pgf_mont.toml", "forced", 720, 60,
           t1_timeout=1200,
           tags=["pgf", "pgf_form_coverage", "flat_bed", "mont"]),
 
-    _case("pgf_fv_wright", V + "pgf_forms/pgf_fv_wright.nml", "forced", 720, 60,
+    _case("pgf_fv_wright", V + "pgf_forms/pgf_fv_wright.toml", "forced", 720, 60,
           t1_timeout=1200,
           tags=["pgf", "pgf_form_coverage", "flat_bed", "fv_wright"]),
 
     # ===================== ALE benchmark ===================================
-    _case("benchmark_ale", V + "benchmark_ale/benchmark_ale.nml",
+    _case("benchmark_ale", V + "benchmark_ale/benchmark_ale.toml",
           "forced", 240, 50, budget_tol=BUDGET_OPEN,
           t2_overrides={"grid_nml": {"nx": 60, "ny": 30,
                                      "dx": 1.66666, "dy": 1.66666}},
@@ -1150,15 +1150,15 @@ STABILITY_CASES = [
           tags=["ale_remap", "zstar_sigma"]),
 
     # ===================== sea ice =========================================
-    _case("polar_freezeup_thermo", V + "sea_ice/polar_freezeup_thermo.nml",
+    _case("polar_freezeup_thermo", V + "sea_ice/polar_freezeup_thermo.toml",
           "rest", 2000, 300, en_rest_max=REST_1UM_S, budget_tol=BUDGET_OPEN,
           note="no wind: the ocean stays motionless while the ice thermo "
                "runs. Any current is spurious.",
           tags=["sea_ice", "thermo"]),
-    _case("polar_freezeup_dynamics", V + "sea_ice/polar_freezeup_dynamics.nml",
+    _case("polar_freezeup_dynamics", V + "sea_ice/polar_freezeup_dynamics.toml",
           "forced", 72, 72, budget_tol=BUDGET_OPEN,
           tags=["sea_ice", "evp", "dynamics"]),
-    _case("sea_ice_pack", V + "sea_ice_pack/sea_ice_pack.nml",
+    _case("sea_ice_pack", V + "sea_ice_pack/sea_ice_pack.toml",
           "forced", 288, 288, budget_tol=BUDGET_OPEN,
           tags=["sea_ice", "itd", "transport"]),
 
@@ -1166,28 +1166,28 @@ STABILITY_CASES = [
     # These live in bench_scaling/ and exist to measure throughput at size.
     # They still must not NaN, so they are gated at tier 1; a downscaled twin
     # of a scaling benchmark measures nothing.
-    _case("bench_benchmark_ale_big", V + "bench_scaling/benchmark_ale_big.nml",
+    _case("bench_benchmark_ale_big", V + "bench_scaling/benchmark_ale_big.toml",
           "forced", 192, 0, budget_tol=BUDGET_OPEN, t1_timeout=900,
           t2_skip=True, t2_reason=_BENCH_REASON, tags=["benchmark"]),
-    _case("bench_double_gyre_big", V + "bench_scaling/double_gyre_big.nml",
+    _case("bench_double_gyre_big", V + "bench_scaling/double_gyre_big.toml",
           "forced", 150, 0, t1_timeout=900, t2_skip=True,
           t2_reason=_BENCH_REASON, tags=["benchmark"]),
-    _case("bench_dg50_bt0", V + "bench_scaling/dg50_bt0.nml", "forced", 144, 0,
+    _case("bench_dg50_bt0", V + "bench_scaling/dg50_bt0.toml", "forced", 144, 0,
           t1_timeout=900, t2_skip=True, t2_reason=_BENCH_REASON,
           tags=["benchmark", "bt0"]),
-    _case("bench_dg50_bt8", V + "bench_scaling/dg50_bt8.nml", "forced", 144, 0,
+    _case("bench_dg50_bt8", V + "bench_scaling/dg50_bt8.toml", "forced", 144, 0,
           t1_timeout=900, t2_skip=True, t2_reason=_BENCH_REASON,
           tags=["benchmark", "bt_halo"]),
-    _case("bench_dg50_bt8_fv", V + "bench_scaling/dg50_bt8_fv.nml", "forced", 144, 0,
+    _case("bench_dg50_bt8_fv", V + "bench_scaling/dg50_bt8_fv.toml", "forced", 144, 0,
           t1_timeout=900, t2_skip=True, t2_reason=_BENCH_REASON,
           tags=["benchmark", "bt_halo", "pgf_fv"]),
-    _case("bench_seamount_bt0", V + "bench_scaling/seamount_bt0.nml", "rest", 300, 0,
+    _case("bench_seamount_bt0", V + "bench_scaling/seamount_bt0.toml", "rest", 300, 0,
           en_rest_max=REST_SEAMOUNT, t1_timeout=900, t2_skip=True,
           t2_reason=_BENCH_REASON, tags=["benchmark", "bt0"]),
-    _case("bench_seamount_bt8", V + "bench_scaling/seamount_bt8.nml", "rest", 300, 0,
+    _case("bench_seamount_bt8", V + "bench_scaling/seamount_bt8.toml", "rest", 300, 0,
           en_rest_max=REST_SEAMOUNT, t1_timeout=900, t2_skip=True,
           t2_reason=_BENCH_REASON, tags=["benchmark", "bt_halo"]),
-    _case("bench_seamount_extreme_bt8", V + "bench_scaling/seamount_extreme_bt8.nml",
+    _case("bench_seamount_extreme_bt8", V + "bench_scaling/seamount_extreme_bt8.toml",
           "rest", 150, 0, en_rest_max=REST_SEAMOUNT, t1_timeout=900, t2_skip=True,
           t2_reason=_BENCH_REASON, tags=["benchmark", "extreme"]),
 ]
@@ -1326,7 +1326,7 @@ SCHEME_AXIS_KNOWN_FAILURE = {
             "(nu_h = 100 hides it at En 1.6e-11 without touching its rate). "
             "ssp_rk2 stays supported and stays on this axis.",
         "ref": "validation_examples/ocean/eady/"
-               "resting_stratified_channel.nml",
+               "resting_stratified_channel.toml",
     },
     "cavity_sloping_lid_rest": {
         "assertions": ["energy:rest", "energy:rest-settles"],
@@ -1381,23 +1381,20 @@ SCHEME_AXIS_TIER1 = [
 
 
 def _nml_pins_scheme(path):
-    """True iff the COMMITTED namelist sets `split_scheme` itself.
+    """True iff the COMMITTED input sets `[ocean.bt] split_scheme` itself.
 
-    Read from the file rather than listed here: a namelist that gains or
+    Read from the file rather than listed here: an input that gains or
     loses the pin must fall in or out of the axis on its own.
     """
     import os
+    import toml_util
     full = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, path)
     try:
         with open(full) as fh:
-            for line in fh:
-                bare = line.split("!", 1)[0].strip().lower()
-                if bare.startswith("split_scheme"):
-                    return True
+            return toml_util.get(fh.read(), "ocean_bt_nml", "split_scheme") is not None
     except OSError:
         return False
-    return False
 
 
 def _scheme_twin(case, scheme):
@@ -1412,7 +1409,7 @@ def _scheme_twin(case, scheme):
         if not spec or spec.get("skip"):
             continue
         spec.setdefault("overrides", {}).setdefault(
-            "ocean_bt_nml", {})["split_scheme"] = '"{}"'.format(scheme)
+            "ocean_bt_nml", {})["split_scheme"] = scheme
     # tier 1 is curated; drop the twin's tier-1 spec when not selected.
     if case["name"] not in SCHEME_AXIS_TIER1:
         twin["tier1"] = {"skip": True,
@@ -1505,29 +1502,19 @@ _REMAP_VCOORDS = ("sigma", "zsigma", "z-sigma", "z_sigma", "zstar", "z-star",
 
 
 def _nml_vcoord_type(path):
-    """`&vcoord_nml vcoord_type` of the COMMITTED namelist, lower-cased.
+    """`[vcoord] vcoord_type` of the COMMITTED input, lower-cased.
 
     Absent => "sigma", the `config_t` default (`rdb_config`).
     """
     import os
+    import toml_util
     full = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, path)
-    group = None
     with open(full) as fh:
-        for line in fh:
-            bare = line.split("!", 1)[0].strip()
-            if bare.startswith("&"):
-                group = bare[1:].split()[0].lower() if len(bare) > 1 else None
-                continue
-            if bare.startswith("/"):
-                group = None
-                continue
-            if group == "vcoord_nml" and "=" in bare:
-                key, val = bare.split("=", 1)
-                if key.strip().lower() == "vcoord_type":
-                    return val.strip().rstrip(",").rstrip("/").strip() \
-                              .strip("'\"").strip().lower()
-    return "sigma"
+        raw = toml_util.get(fh.read(), "vcoord_nml", "vcoord_type")
+    if raw is None:
+        return "sigma"
+    return raw.strip("'\"").strip().lower()
 
 
 def _case_remaps(case, spec):

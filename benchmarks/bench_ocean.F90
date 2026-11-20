@@ -20,7 +20,7 @@
 !!
 !! Usage:
 !!   ./build/benchmarks/bench_ocean [namelist] [max_steps]
-!!   (default: validation_examples/ocean/double_gyre/double_gyre_mom6.nml;
+!!   (default: validation_examples/ocean/double_gyre/double_gyre_mom6.toml;
 !!    `max_steps` > 0 truncates the run to that many outer steps — the CTest
 !!    smoke guard uses it.)
 program bench_ocean
@@ -38,7 +38,7 @@ program bench_ocean
    implicit none
 
    character(len=*), parameter :: DEFAULT_NML = &
-                                  "validation_examples/ocean/double_gyre/double_gyre_mom6.nml"
+                                  "validation_examples/ocean/double_gyre/double_gyre_mom6.toml"
    real(wp), parameter :: MAXVEL_BLOWN_FRAC = 0.9_wp
       !! Fraction of the `maxvel` clamp above which the run counts as blown.
 

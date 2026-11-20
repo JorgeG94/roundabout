@@ -1164,7 +1164,7 @@ module rdb_config
          !! amplifies an internal gravity wave by `√(1 + (ω·dt)⁴/4)` per
          !! step, so it MANUFACTURES energy from a motionless stratified
          !! state.  On
-         !! `validation_examples/ocean/eady/resting_stratified_channel.nml`
+         !! `validation_examples/ocean/eady/resting_stratified_channel.toml`
          !! (flat bed, periodic, stably stratified, at rest, seeded with
          !! ±0.5 mK of noise, NO energy source of any kind) En reaches
          !! **2.992E-05 m²/s² by day 25** — 7.7 mm/s of current out of

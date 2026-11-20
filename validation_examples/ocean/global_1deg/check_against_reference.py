@@ -4,7 +4,7 @@
     python3 check_against_reference.py RUN.log [--reference reference_daily.csv]
                                                [--days N] [--quick]
 
-``RUN.log`` is the console output of a run of ``global_1deg_unforced.nml``:
+``RUN.log`` is the console output of a run of ``global_1deg_unforced.toml``:
 
 * the ``rdb`` executable prints, every simulated day, the
   ``[stats] Day ... En ... MaxCFL ...`` line and the ``Mass`` / ``Salt`` /

@@ -10,7 +10,7 @@ and make its movie on the fly — standard library only.
 What it shows:
 
 1. The configuration is built with the typed ``rdb.Config`` API, knob by
-   knob — the same knobs ``global_1deg_unforced.nml`` sets.  Before the run
+   knob — the same knobs ``global_1deg_unforced.toml`` sets.  Before the run
    the script checks that against the namelist file (``--no-check`` skips
    it), so the two cannot drift.
 2. ``rdb.Model(config)`` creates the solver; ``model.step(n)`` advances it.
@@ -23,7 +23,7 @@ What it shows:
    extreme of the daily-mean surface current (``--max-velocity`` adds the
    3-D max |u|, |v| of the instantaneous state and where it sits).
 
-The ``rdb`` executable reading ``global_1deg_unforced.nml`` is the reference
+The ``rdb`` executable reading ``global_1deg_unforced.toml`` is the reference
 run (its console carries the mass / salt / heat budget residuals); this
 script drives the SAME configuration through the C ABI, and its diagnostic
 file is bit-identical to the executable's.
@@ -43,7 +43,7 @@ sys.path.insert(0, HERE)
 import rdb  # noqa: E402
 from global_movie import FrameRenderer, encode, model_tpoints, speed_from_uv  # noqa: E402
 
-NAMELIST = os.path.join(HERE, "global_1deg_unforced.nml")
+NAMELIST = os.path.join(HERE, "global_1deg_unforced.toml")
 RHO0_API = 1025.0  # rdb_ocean_get_total_mass's reference density (RHO0_DIAG)
 
 
@@ -138,7 +138,7 @@ def check_against_namelist(cfg):
     diff = sorted(k for k in set(mine) | set(theirs)
                   if k not in skip and mine.get(k) != theirs.get(k))
     if diff:
-        raise SystemExit("Config API and global_1deg_unforced.nml disagree on: " +
+        raise SystemExit("Config API and global_1deg_unforced.toml disagree on: " +
                          ", ".join(f"&{g}_nml {k} ({mine.get((g, k))!r} vs "
                                    f"{theirs.get((g, k))!r})" for g, k in diff))
     print(f"config: {len(mine)} knobs, identical to {os.path.basename(NAMELIST)}")

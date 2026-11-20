@@ -78,6 +78,7 @@ sys.path.insert(0, THIS_DIR)
 import downscale  # noqa: E402
 import manifest  # noqa: E402
 import stability_manifest as _stab_manifest  # noqa: E402
+import toml_util  # noqa: E402
 
 # The scheme a BASE case runs, i.e. the `&ocean_bt_nml split_scheme` default in
 # `rdb_config.F90`.  Printed in the run header so a result file can never be
@@ -976,7 +977,7 @@ def assert_energy(series, phys, tier):
                 "Lengthening the run is the first thing to rule out -- and "
                 "check the [diag] extrema of a perturbation field, because "
                 "En can be all basic-state jet.",
-                "validation_examples/ocean/eady/eady.nml header"))
+                "validation_examples/ocean/eady/eady.toml header"))
         fast = phys.get("sigma_fast_max")
         if fast is None and phys.get("sigma_expected"):
             # 5x the physical band's upper edge. Calibrated against the
@@ -1347,57 +1348,35 @@ def assert_claims(series, phys, tier=1):
 
 
 # ---------------------------------------------------------------------------
-# Namelist patching (time window + arbitrary group overrides)
+# Input patching (time window + arbitrary group overrides)
 # ---------------------------------------------------------------------------
-def _fmt_value(v):
-    if isinstance(v, bool):
-        return ".true." if v else ".false."
-    if isinstance(v, float):
-        return repr(v)
-    if isinstance(v, int):
-        return str(v)
-    return str(v)
+def patch_input(src_text, spec, scratch_dir):
+    """Return the TOML input `src_text` patched for one stability run.
 
-
-def patch_namelist(src_text, spec, scratch_dir):
-    """Return `src_text` patched for one stability run.
-
-    * `&<group> key = value` for every entry of `spec["overrides"]`, injecting
-      the key (or the whole group) when the source omits it.
-    * `&time_nml`: `time_unit="second"`, `dt_fixed` from the override if given,
+    * `[<table>] key = value` for every entry of `spec["overrides"]` (keyed by
+      the group name, e.g. `ocean_bt_nml` -> `[ocean.bt]`; values are Python
+      values), adding the key -- or the whole table -- when the source omits
+      it.
+    * `[time]`: `time_unit="second"`, `dt_fixed` from the override if given,
       `t_end = n_steps * dt`.
-    * `&output_nml output_dir` -> scratch.
-    * `&logging_nml status_interval` / `&ocean_diag_nml dt_out` -> a cadence
+    * `[output] output_dir` -> scratch.
+    * `[logging] status_interval` / `[ocean.diag] dt_out` -> a cadence
       that yields ~`spec["samples"]` [stats]/[diag] emissions across the run.
       A TIME SERIES is the whole point here -- unlike compare.py, which only
       needs the final state -- but emitting every step on a multi-thousand-step
       tier-1 run is both slow and unreadable, so the cadence is derived from a
       target sample count instead.
+
+    The edits are line-level (`toml_util.patch`), so the committed file's
+    comments and layout survive.
     """
     over = {g.lower(): dict(kv) for g, kv in (spec.get("overrides") or {}).items()}
 
-    lines = src_text.splitlines()
-
-    def scan(group, key):
-        g = None
-        for line in lines:
-            s = line.split("!", 1)[0].strip()
-            if s.startswith("&"):
-                g = s[1:].split()[0].lower()
-                continue
-            if s.startswith("/"):
-                g = None
-                continue
-            if g == group and "=" in s and s.split("=", 1)[0].strip().lower() == key:
-                return s.split("=", 1)[1].strip().rstrip(",").rstrip("/").strip()
-        return None
-
     dt = over.get("time_nml", {}).get("dt_fixed")
     if dt is None:
-        raw = scan("time_nml", "dt_fixed")
-        if raw is None:
-            raise ValueError("no dt_fixed in &time_nml")
-        dt = float(raw.replace("d", "e").replace("D", "e"))
+        dt = toml_util.get_float(src_text, "time_nml", "dt_fixed")
+        if dt is None:
+            raise ValueError("no dt_fixed in [time]")
     dt = float(dt)
     n_steps = int(spec["n_steps"])
     t_end = n_steps * dt
@@ -1413,10 +1392,10 @@ def patch_namelist(src_text, spec, scratch_dir):
 
     time_over = over.setdefault("time_nml", {})
     time_over["t_end"] = t_end
-    time_over["time_unit"] = '"second"'
+    time_over["time_unit"] = "second"
     time_over["dt_fixed"] = dt
     out_nml = over.setdefault("output_nml", {})
-    out_nml["output_dir"] = '"{}"'.format(scratch_dir)
+    out_nml["output_dir"] = scratch_dir
     # This suite asserts on the model's CONSOLE time series and never reads a
     # NetCDF file, so writing them is pure cost -- and at tier 1 (tens of
     # samples across grids up to 600x600x50) it is enough cost to fill a disk,
@@ -1434,46 +1413,10 @@ def patch_namelist(src_text, spec, scratch_dir):
     #     twice on the first sweeps. Four frames is bounded and sufficient.
     diag_samples = max(1, int(spec.get("diag_samples", 4)))
     diag_stride = max(stride, (n_steps // diag_samples) or 1)
-    if any(l.split("!", 1)[0].strip().lower().startswith("&ocean_diag_nml")
-           for l in lines):
+    if toml_util.has_group(src_text, "ocean_diag_nml"):
         over.setdefault("ocean_diag_nml", {})["dt_out"] = diag_stride * dt
 
-    out, group, seen = [], None, {}
-    for line in lines:
-        s = line.split("!", 1)[0].strip()
-        if s.startswith("&"):
-            group = s[1:].split()[0].lower()
-            seen[group] = set()
-            out.append(line)
-            continue
-        if s.startswith("/"):
-            for k, v in sorted(over.get(group, {}).items()):
-                if k not in seen.get(group, ()):
-                    out.append("   {} = {}".format(k, _fmt_value(v)))
-            out.append(line)
-            group = None
-            continue
-        if group and "=" in s:
-            key = s.split("=", 1)[0].strip().lower()
-            if key in over.get(group, {}):
-                seen[group].add(key)
-                out.append("   {} = {}".format(
-                    key, _fmt_value(over[group][key])))
-                continue
-        out.append(line)
-
-    # Any group the source omits entirely gets appended.
-    present = {l.split("!", 1)[0].strip()[1:].split()[0].lower()
-               for l in lines if l.split("!", 1)[0].strip().startswith("&")}
-    for g, kv in sorted(over.items()):
-        if g in present:
-            continue
-        out.append("")
-        out.append("&" + g)
-        for k, v in sorted(kv.items()):
-            out.append("   {} = {}".format(k, _fmt_value(v)))
-        out.append("/")
-    return "\n".join(out) + "\n"
+    return toml_util.patch(src_text, over)
 
 
 # ---------------------------------------------------------------------------
@@ -1492,12 +1435,12 @@ def run_case(case, tier, binary, scratch_root, gpu_id=None, keep=False):
 
     try:
         src = open(os.path.join(REPO_ROOT, case["nml"])).read()
-        patched = patch_namelist(src, spec, scratch)
+        patched = patch_input(src, spec, scratch)
     except (OSError, ValueError) as exc:
-        res["fatal"] = "namelist patch failed: {}".format(exc)
+        res["fatal"] = "input patch failed: {}".format(exc)
         return res, {"stats": [], "budget": {}, "diag": {}, "crash": None}
 
-    nml_path = os.path.join(scratch, name + ".nml")
+    nml_path = os.path.join(scratch, name + ".toml")
     open(nml_path, "w").write(patched)
 
     setup = case.get("setup")
@@ -1584,16 +1527,15 @@ def _force_scheme(case, scheme):
     if case.get("split_scheme"):
         return case
     src = open(os.path.join(REPO_ROOT, case["nml"])).read()
-    for line in src.splitlines():
-        if line.split("!", 1)[0].strip().lower().startswith("split_scheme"):
-            return case
+    if toml_util.get(src, "ocean_bt_nml", "split_scheme") is not None:
+        return case
     out = copy.deepcopy(case)
     for t in ("tier1", "tier2"):
         spec = out.get(t)
         if not spec or spec.get("skip"):
             continue
         spec.setdefault("overrides", {}).setdefault(
-            "ocean_bt_nml", {})["split_scheme"] = '"{}"'.format(scheme)
+            "ocean_bt_nml", {})["split_scheme"] = scheme
     out["split_scheme"] = scheme
     return out
 
@@ -1969,19 +1911,15 @@ def self_test():
     # changed. Checked on the emitted files, which are what actually runs.
     import vcoord_matrix as _vcm
 
-    def _groups(path, drop=("ocean_hvisc_nml", "ocean_bdrag_nml")):
-        keep, g = [], None
+    def _groups(path, drop=("[ocean.hvisc]", "[ocean.bdrag]")):
+        keep, tbl = [], None
         for line in open(os.path.join(REPO_ROOT, path)):
-            bare = line.split("!", 1)[0].strip()
-            if bare.startswith("&"):
-                g = bare[1:].lower()
-            if g in drop or not bare or "filename" in bare:
-                if bare.startswith("/"):
-                    g = None
+            bare = line.split("#", 1)[0].strip()
+            if bare.startswith("["):
+                tbl = bare
+            if tbl in drop or not bare or "filename" in bare:
                 continue
             keep.append(bare)
-            if bare.startswith("/"):
-                g = None
         return keep
     pairs = [(c, next((i for i in inv if i["matrix"]["problem"] == c["matrix"]["problem"]
                        and i["matrix"]["family"] == c["matrix"]["family"]
@@ -2000,12 +1938,12 @@ def self_test():
     # The one exception is z_fixed under a cavity, which runs the layer-mean
     # (PCM) density that `validate_config` requires there until the
     # filler-aware reconstruction lands.
-    fixed = ("remap_boundary_extrap     = .true.",
-             "remap_nonuniform_weights  = .true.", "remap_check_preconditions = .true.")
+    fixed = ("remap_boundary_extrap     = true",
+             "remap_nonuniform_weights  = true", "remap_check_preconditions = true")
 
     def _recon(c):
-        want = ".false." if (c["matrix"]["class"] == "cavity"
-                             and c["matrix"]["family"] == "z_fixed") else ".true."
+        want = "false" if (c["matrix"]["class"] == "cavity"
+                           and c["matrix"]["family"] == "z_fixed") else "true"
         return "reconstruct_for_pressure = " + want
     check("every matrix cell runs the fixed configuration (exact FV PGF -- "
           "PCM for z_fixed under a cavity --, linear-exact remap, precondition "
@@ -2013,7 +1951,7 @@ def self_test():
           all(all(f in open(os.path.join(REPO_ROOT, c["nml"])).read()
                   for f in fixed + (_recon(c),))
               and (c["matrix"]["family"] != "z_fixed"
-                   or "zfixed_closed_faces = .true." in open(
+                   or "zfixed_closed_faces = true" in open(
                        os.path.join(REPO_ROOT, c["nml"])).read())
               for c in vcm))
     # A viscous cell INSIDE its family's documented envelope may not carry a
@@ -2080,7 +2018,7 @@ def self_test():
           len(twins) >= 40)
     check("...every twin forces split_scheme on the tier it runs",
           all(t[tier]["overrides"]["ocean_bt_nml"]["split_scheme"]
-              == '"{}"'.format(_stab_manifest.SCHEME_AXIS_SCHEME)
+              == _stab_manifest.SCHEME_AXIS_SCHEME
               for t in twins for tier in ("tier1", "tier2")
               if not t[tier].get("skip")))
     # A scoped known_failure must not silently cover an assertion that the

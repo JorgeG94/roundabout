@@ -67,7 +67,7 @@ CASES = [
         # gprime reduced-gravity PGF, Sadourny PV Coriolis, linear bottom
         # drag, z* vcoord. The core dyn-core smoke.
         "name": "double_gyre_mom6",
-        "nml": "validation_examples/ocean/double_gyre/double_gyre_mom6.nml",
+        "nml": "validation_examples/ocean/double_gyre/double_gyre_mom6.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -79,7 +79,7 @@ CASES = [
         # Sadourny-energy Coriolis, Smagorinsky lateral viscosity, linear
         # density-range IC. Exercises the multi-layer FV pressure path.
         "name": "double_gyre_linear_nk10",
-        "nml": "validation_examples/ocean/double_gyre/double_gyre_linear_nk10.nml",
+        "nml": "validation_examples/ocean/double_gyre/double_gyre_linear_nk10.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -99,7 +99,7 @@ CASES = [
         # case's answer must track double_gyre_mom6: it is a same-suite A/B on
         # the forcing PATH with the forcing VALUES held fixed.
         "name": "double_gyre_dataovr",
-        "nml": "validation_examples/ocean/data_forcing/double_gyre_dataovr.nml",
+        "nml": "validation_examples/ocean/data_forcing/double_gyre_dataovr.toml",
         "setup": ["{python}", "{repo}/tools/make_forcing_nc.py", "wind.nc",
                   "--nx", "44", "--ny", "40", "--nt", "2", "--steady"],
         "n_steps": 10,
@@ -112,7 +112,7 @@ CASES = [
         # Stratified seamount: seamount topography, nonlinear EOS, quiescent
         # start -> spurious-pressure-gradient / z*-full remap stress test.
         "name": "seamount",
-        "nml": "validation_examples/ocean/seamount/seamount.nml",
+        "nml": "validation_examples/ocean/seamount/seamount.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -131,7 +131,7 @@ CASES = [
         # Barotropic geostrophic adjustment (NK=1): fast-mode / free-surface
         # + Coriolis geostrophic balance. Single-layer barotropic path.
         "name": "geostrophic_adjustment",
-        "nml": "validation_examples/ocean/geostrophic_adjustment/geostrophic_adjustment.nml",
+        "nml": "validation_examples/ocean/geostrophic_adjustment/geostrophic_adjustment.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -141,7 +141,7 @@ CASES = [
         # Island at rest: interior land masking (free-slip walls via
         # metric-zeroing) with a quiescent start -> should stay motionless.
         "name": "island_at_rest",
-        "nml": "validation_examples/ocean/island_at_rest/island_at_rest.nml",
+        "nml": "validation_examples/ocean/island_at_rest/island_at_rest.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -158,7 +158,7 @@ CASES = [
         # Coriolis + coastline wall: rotation against a solid boundary, wall BC
         # + Coriolis interaction.
         "name": "coriolis_coast",
-        "nml": "validation_examples/ocean/coriolis_coast/coriolis_coast.nml",
+        "nml": "validation_examples/ocean/coriolis_coast/coriolis_coast.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -168,7 +168,7 @@ CASES = [
         # EPBL energetics boundary-layer mixing (Reichl-Hallberg) on a small
         # basin -> the EPBL vertical-mixing path.
         "name": "epbl_basin",
-        "nml": "validation_examples/ocean/epbl_mld/epbl_basin.nml",
+        "nml": "validation_examples/ocean/epbl_mld/epbl_basin.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -178,7 +178,7 @@ CASES = [
         # KPP boundary-layer mixing on the same basin -> the KPP vmix path
         # (mutually exclusive with EPBL; both worth exercising).
         "name": "kpp_basin",
-        "nml": "validation_examples/ocean/epbl_mld/kpp_basin.nml",
+        "nml": "validation_examples/ocean/epbl_mld/kpp_basin.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -188,7 +188,7 @@ CASES = [
         # Ideal-age passive tracer: the tracer registry + passive-transport
         # path (advection / remap / vertical exchange over a registered tracer).
         "name": "ideal_age_demo",
-        "nml": "validation_examples/ocean/ideal_age/ideal_age_demo.nml",
+        "nml": "validation_examples/ocean/ideal_age/ideal_age_demo.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -198,7 +198,7 @@ CASES = [
         # Equilibrium body-tide forcing + scalar SAL in a basin -> the tidal
         # body-forcing path off the astronomical generator.
         "name": "body_tide_basin",
-        "nml": "validation_examples/ocean/tides/body_tide_basin.nml",
+        "nml": "validation_examples/ocean/tides/body_tide_basin.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -208,7 +208,7 @@ CASES = [
         # Mesoscale eddy spin-down (NK=15). Larger grid (300x300) -> kept to a
         # small step count to stay fast; exercises baroclinic eddy dynamics.
         "name": "eddy_test",
-        "nml": "validation_examples/ocean/eddy_test/eddy_test.nml",
+        "nml": "validation_examples/ocean/eddy_test/eddy_test.toml",
         "n_steps": 6,
         "timeout_s": 240,
         "backends": ALL_BACKENDS,
@@ -218,7 +218,7 @@ CASES = [
         # Baroclinic-instability channel (NK=2): the classic re-entrant
         # channel baroclinic-instability setup.
         "name": "baroclinic_2layer",
-        "nml": "validation_examples/ocean/baroclinic_channel/baroclinic_2layer.nml",
+        "nml": "validation_examples/ocean/baroclinic_channel/baroclinic_2layer.toml",
         "n_steps": 10,
         "timeout_s": 180,
         "backends": ALL_BACKENDS,
@@ -240,7 +240,7 @@ CASES = [
         # Eady problem: linear baroclinic (Eady) growth in a small box ->
         # stratified shear / thermal-wind balance.
         "name": "eady",
-        "nml": "validation_examples/ocean/eady/eady.nml",
+        "nml": "validation_examples/ocean/eady/eady.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -256,7 +256,7 @@ CASES = [
     {
         # Sponge-boundary relaxation demo -> the SPONGE BC nudging kernel.
         "name": "sponge_real_demo",
-        "nml": "validation_examples/ocean/sponge_demo/sponge_real_demo.nml",
+        "nml": "validation_examples/ocean/sponge_demo/sponge_real_demo.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -266,7 +266,7 @@ CASES = [
         # ALE benchmark (NK=75): the PPM ALE remap path exercised across many
         # layers (MOM6 benchmark analogue).
         "name": "benchmark_ale",
-        "nml": "validation_examples/ocean/benchmark_ale/benchmark_ale.nml",
+        "nml": "validation_examples/ocean/benchmark_ale/benchmark_ale.toml",
         "n_steps": 8,
         "timeout_s": 240,
         "backends": ALL_BACKENDS,
@@ -276,7 +276,7 @@ CASES = [
         # Flow past an island: wake formation around an interior land mass ->
         # land masking under a driven flow.
         "name": "flow_past_island",
-        "nml": "validation_examples/ocean/flow_past_island/flow_past_island.nml",
+        "nml": "validation_examples/ocean/flow_past_island/flow_past_island.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -286,7 +286,7 @@ CASES = [
         # Polar freeze-up (dynamics): the sea-ice EVP dynamics + coupling path
         # -> exercises the ice model, not just the ocean dyn-core.
         "name": "polar_freezeup_dynamics",
-        "nml": "validation_examples/ocean/sea_ice/polar_freezeup_dynamics.nml",
+        "nml": "validation_examples/ocean/sea_ice/polar_freezeup_dynamics.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -305,7 +305,7 @@ CASES = [
         # (MEKE requires GM requires slopes). One case lights up all four
         # mesoscale files that the base corpus never touched.
         "name": "seamount_gm_redi_meke",
-        "nml": "validation_examples/ocean/seamount/seamount_gm_redi_meke.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_gm_redi_meke.toml",
         "n_steps": 8,
         "timeout_s": 180,
         "backends": ALL_BACKENDS,
@@ -317,7 +317,7 @@ CASES = [
         # mixing on a stratified seamount (e_uniform > 0 -> non-zero Kd every
         # step). Exercises rdb_ocean_tidal_mixing (interior-closure path).
         "name": "seamount_tidal_mixing",
-        "nml": "validation_examples/ocean/seamount/seamount_tidal_mixing.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_tidal_mixing.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -328,7 +328,7 @@ CASES = [
         # the density integral (reconstruct_for_pressure). Exercises
         # rdb_ocean_pgf_reconstruct over the seamount's vertical density gradient.
         "name": "seamount_pgf_reconstruct",
-        "nml": "validation_examples/ocean/seamount/seamount_pgf_reconstruct.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_pgf_reconstruct.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -340,7 +340,7 @@ CASES = [
         # bump; conservative_floor borrows the sub-floor deficit from surplus
         # layers instead of injecting mass. Exercises rdb_ocean_min_thickness.
         "name": "seamount_conservative_floor",
-        "nml": "validation_examples/ocean/seamount/seamount_conservative_floor.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_conservative_floor.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -359,7 +359,7 @@ CASES = [
         # solve. Exercises rdb_ocean_vmix vmix_split_ddiff_impl in a real
         # integration (the unit test covers the exact kernel math).
         "name": "seamount_ddiff",
-        "nml": "validation_examples/ocean/seamount/seamount_ddiff.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_ddiff.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -374,7 +374,7 @@ CASES = [
         # that the pin and the default agree -- and the pin is what holds
         # this golden still if the default ever moves again.
         "name": "seamount_ddiff_pred_corr",
-        "nml": "validation_examples/ocean/seamount/seamount_ddiff_pred_corr.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_ddiff_pred_corr.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -399,7 +399,7 @@ CASES = [
         # ah_face the hvisc consumes (lateral_closure="smagorinsky") AND a
         # non-zero biharmonic backstop (smag_ah + default smag_bi_const=0.06).
         "name": "seamount_meke_backscatter",
-        "nml": "validation_examples/ocean/seamount/seamount_meke_backscatter.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_meke_backscatter.toml",
         "n_steps": 8,
         "timeout_s": 180,
         "backends": ALL_BACKENDS,
@@ -413,7 +413,7 @@ CASES = [
         # the module's largest uncovered block) and the parabolic branch of
         # the Boole density-integral quadrature (boole_dpa_intz_layer).
         "name": "seamount_pgf_ppm",
-        "nml": "validation_examples/ocean/seamount/seamount_pgf_ppm.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_pgf_ppm.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -427,7 +427,7 @@ CASES = [
         # rdb_ocean_obc_baroclinic paths (~6% before) are unreachable in a
         # closed basin -- an OPEN boundary + NK>1 stratification is required.
         "name": "seamount_obc_baroclinic",
-        "nml": "validation_examples/ocean/seamount/seamount_obc_baroclinic.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_obc_baroclinic.toml",
         "n_steps": 10,
         "timeout_s": 180,
         "backends": ALL_BACKENDS,
@@ -441,7 +441,7 @@ CASES = [
     # weno5/7/9 + WENO-Z swept-average face helpers) completely uncovered. The
     # ocean windowed tracer-advect drain reuses those face helpers, so turning
     # it on with a WENO face reconstruction lights the module up. Both cases
-    # are built on the Eady front (eady.nml) — its IC gives temperature a REAL
+    # are built on the Eady front (eady.toml) — its IC gives temperature a REAL
     # horizontal gradient (dT/dy) from step 0, so WENO reconstructs a non-flat
     # field and does genuine work (NOT a quiescent/uniform-tracer flat recon).
     {
@@ -453,7 +453,7 @@ CASES = [
         # nghost=3 already satisfies weno5. dt_therm_ratio=2 keeps the ALE
         # remap cadence an integer multiple of the advect window (required).
         "name": "eady_weno5",
-        "nml": "validation_examples/ocean/eady/eady_weno5.nml",
+        "nml": "validation_examples/ocean/eady/eady_weno5.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -472,7 +472,7 @@ CASES = [
         # weno7 cubic-candidate branch (weno7_face_swept) that weno5 cannot,
         # covering the higher-order stencil the weno5 case leaves cold.
         "name": "eady_weno7",
-        "nml": "validation_examples/ocean/eady/eady_weno7.nml",
+        "nml": "validation_examples/ocean/eady/eady_weno7.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -506,7 +506,7 @@ CASES = [
         # pc outer loop holds the rest state to machine precision (En~2.5e-21,
         # MaxCFL 0) on a non-Lagrangian ALE coord, exactly as ssp_rk2 does.
         "name": "seamount_pred_corr",
-        "nml": "validation_examples/ocean/seamount/seamount_pred_corr.nml",
+        "nml": "validation_examples/ocean/seamount/seamount_pred_corr.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -527,7 +527,7 @@ CASES = [
         # tendencies, so its golden is a meaningful drift target for the
         # corrector-on-time-means path — unlike the quiescent seamount guard.
         "name": "double_gyre_pred_corr",
-        "nml": "validation_examples/ocean/double_gyre/double_gyre_pred_corr.nml",
+        "nml": "validation_examples/ocean/double_gyre/double_gyre_pred_corr.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -541,7 +541,7 @@ CASES = [
         # work every stage. Exercises rdb_coriolis_adv weno3_recon in a live
         # integration (the unit tests cover the exact reconstruction math).
         "name": "double_gyre_weno3",
-        "nml": "validation_examples/ocean/double_gyre/double_gyre_weno3.nml",
+        "nml": "validation_examples/ocean/double_gyre/double_gyre_weno3.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -553,7 +553,7 @@ CASES = [
         # the Coriolis-adv kernel runs every stage of both integrators, so this
         # confirms the weno3 branch fires clean under the predictor-corrector.
         "name": "double_gyre_weno3_pred_corr",
-        "nml": "validation_examples/ocean/double_gyre/double_gyre_weno3_pred_corr.nml",
+        "nml": "validation_examples/ocean/double_gyre/double_gyre_weno3_pred_corr.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -564,7 +564,7 @@ CASES = [
         # weno5 PV reconstruction (radius-3 stencil, nghost=4): exercises the
         # weno5_recon path of the Coriolis kernel on the wind-driven gyre.
         "name": "double_gyre_weno5",
-        "nml": "validation_examples/ocean/double_gyre/double_gyre_weno5.nml",
+        "nml": "validation_examples/ocean/double_gyre/double_gyre_weno5.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
@@ -575,7 +575,7 @@ CASES = [
         # weno7 PV reconstruction (radius-4 stencil, nghost=5): exercises the
         # weno7_recon path (Balsara-Shu smoothness) on the wind-driven gyre.
         "name": "double_gyre_weno7",
-        "nml": "validation_examples/ocean/double_gyre/double_gyre_weno7.nml",
+        "nml": "validation_examples/ocean/double_gyre/double_gyre_weno7.toml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,

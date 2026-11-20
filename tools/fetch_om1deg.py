@@ -25,7 +25,7 @@ size, and every extracted file against its recorded SHA-256.
 
 ``--jra-wind [--year 1958]`` instead fetches one year of JRA55-do v1.4.0
 near-surface wind (``uas``, ``vas``; 3-hourly point values on the TL319
-640x320 grid) for ``global_1deg_wind.nml``: ``reanalysis.tgz`` (~12.4 GB, the
+640x320 grid) for ``global_1deg_wind.toml``: ``reanalysis.tgz`` (~12.4 GB, the
 OM_1deg forcing set) is STREAMED from the same GFDL tree and only the two wind
 files are written (~3.4 GB), to ``--jra-dest DIR`` or
 ``$RDB_DATA_DIR/JRA55do``. GFDL's tarball holds the year 1958 only (the

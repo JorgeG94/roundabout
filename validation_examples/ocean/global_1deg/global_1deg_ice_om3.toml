@@ -1,0 +1,283 @@
+# Global 1-degree tripolar ocean + CICE-port sea ice with the ACCESS-OM3
+# vertical-mixing settings: global_1deg_ice_fwmass.toml (real fresh-water mass,
+# scheme = "cice", ice surface load, runoff files) plus
+#
+#   &ocean_epbl_nml: the energetics-based boundary layer (Reichl & Hallberg
+#       2018) in place of KPP, with OM3's values of the OM4 mstar scheme
+#       (MSTAR_CAP, MSTAR2_COEF1/2, MSTAR_CONV_ADJ), NSTAR, TKE_DECAY,
+#       ML_OMEGA_FRAC, MIX_LEN_EXPONENT, EPBL_TRANSITION_SCALE, the additive
+#       Langmuir enhancement (Li et al. 2016 wind-only Langmuir number;
+#       LT_ENHANCE_COEF / LT_ENHANCE_EXP), and not additive to the interior
+#       shear mixing (EPBL_IS_ADDITIVE = False -> combine = "max_shear");
+#   rivermix_depth = 40 (DO_RIVERMIX / RIVERMIX_DEPTH): runoff stirs the top
+#       40 m through the EPBL energy budget;
+#   &ocean_kappa_shear_nml: Jackson, Hallberg & Legg (2008) interior shear
+#       mixing (USE_JACKSON_PARAM) in place of the PP81 interior closure;
+#   background diffusivity 1.5e-5 m2/s with unit Prandtl number (KD,
+#       PRANDTL_BKGND; KV = 0).
+#
+#   dt_therm_ratio = 4 with diabatic_first = .false.: the OM3 interval order
+#       (the thermodynamic step and the ALE remap close each interval) at
+#       OM3's interval, 7200 s (DT_THERM).  The ocean's surface flux is the mean
+#       of the four per-step fluxes of the interval (below); the cosine-zenith
+#       shortwave (sw_interp = "coszen") is evaluated per 1800 s step, so a step
+#       that straddles the 3-hourly rsds interval edge takes its flux from both
+#       records.
+#
+# NOT yet OM3's: the shortwave (the
+# parent's two-band scheme; OM3: three bands, chlorophyll dependent), and
+# tidal mixing (INT_TIDE_DISSIPATION), which is off.
+#
+# MEASURED (one V100, 30 days, SYNTHETIC runoff files, 2026-11-18): finite,
+# En 7-10E-04 m2/s2, MaxCFL <= 0.1, Mass/Salt/Heat budget errors ~1E-12,
+# ocean-area-mean ice concentration 0.035; ~8 minutes of wall time.  Ratio 1
+# and ratio 6 give the same printed global-mean temperature and salinity.
+#
+# SURFACE FLUX AT dt_therm_ratio > 1: the thermodynamic step spends the flux
+# over N*dt, so the atmosphere-driven components (shortwave, longwave, latent
+# and sensible heat, snow fusion, precipitation, evaporation, runoff and the
+# enthalpy of the rain and snow) are averaged over the N dynamic steps of the
+# interval and the net heat, salt and fresh-water mass fluxes are built from
+# those means; the penetrating shortwave is the same mean.  (Until 2026-11-19
+# one dynamic step's sample was spent over the whole interval: single
+# intervals were off by 6-18 % in the afternoon and 100 % at dusk, the daily
+# mean within 0.05 %.)  Wind stress and the sea ice are per step, as before.
+# With this interval order (diabatic_first = .false.) the mean of the steps
+# 0..N-2 is spent at step N-1, a lag of about one step; the first interval has
+# N-1 samples.  (With diabatic_first = .true. the mean lags the interval it is
+# spent over by a whole interval: energy conserved, diurnal phase shifted.)
+#
+# INPUTS: as global_1deg_ice_fwmass.toml (grid, bathymetry, IC, JRA55-do
+# filelists, model-grid runoff files).
+#
+# Run:  rdb --validate-only validation_examples/ocean/global_1deg/global_1deg_ice_om3.toml
+#
+[sim]
+sim_type = "ocean"
+
+[grid]
+nx     = 360
+ny     = 320
+nghost = 3
+
+[ocean.grid]
+grid_config     = "supergrid"
+supergrid_file  = "INPUT/ocean_hgrid.nc"
+coriolis_scheme = "planetary"
+rad_earth       = 6.371e6
+
+[time]
+start_date   = "1958-01-01"
+t_end        = 365.0
+time_unit    = "day"
+dt_fixed     = 1800.0
+cfl_interval = 1
+
+[physics]
+wind_stress_x = 0.0
+wind_stress_y = 0.0
+
+[ocean.forcing]
+freshwater        = "mass"
+# Required by `&ocean_atm_forcing_nml enable` (PLAN_C2c.md S3) --
+# this run's surface fluxes are the bulk-flux components, not the
+# legacy scalar wind/heat knobs.
+enable_components = true
+
+[ocean.dataovr]
+# Runoff on the model grid (kg m-2 s-1), wet cells only; monthly records
+# repeated every 365 days.
+enable        = true
+time_mode     = "cyclic"
+cycle_period  = 3.1536e7
+lrunoff_file  = "INPUT/runoff_liquid_om1deg.nc"
+lrunoff_var   = "runoff"
+frunoff_file  = "INPUT/runoff_frozen_om1deg.nc"
+frunoff_var   = "runoff"
+
+[ocean.psurf]
+enable              = true
+ice_load            = true
+ice_load_balance_ic = true
+
+[ocean.atm_forcing]
+# JRA55-do-style prescribed atmospheric state -> bulk-flux ocean/ice
+# surface forcing (OM3 forcing wave-3). RYF 1990-05-01 (the OMIP/
+# JRA55-do spin-up convention): the reader wraps the single 1990-05-
+# 01 .. 1991-04-30 year forever, independent of `&time_nml
+# start_date` above (which only sets the model's own calendar/
+# coszen epoch).
+enable          = true
+time_mode       = "repeat_year"
+ryf_start_date  = "1958-01-01"
+ryf_period_days = 365.0
+filelist_tas    = "INPUT/filelists/tas.txt"
+filelist_huss   = "INPUT/filelists/huss.txt"
+filelist_uas    = "INPUT/filelists/uas.txt"
+filelist_vas    = "INPUT/filelists/vas.txt"
+filelist_psl    = "INPUT/filelists/psl.txt"
+filelist_rlds   = "INPUT/filelists/rlds.txt"
+filelist_rsds   = "INPUT/filelists/rsds.txt"
+filelist_prra   = "INPUT/filelists/prra.txt"
+filelist_prsn   = "INPUT/filelists/prsn.txt"
+states_regrid   = "bilinear"
+fluxes_regrid   = "conservative"
+sw_interp       = "coszen"
+wind_relative   = true
+ocean_albedo    = 0.066
+
+[ocean.bulk_flux]
+# Large & Yeager (2004/2009) Monin-Obukhov bulk-flux kernel. JRA55-do
+# measures BOTH wind and air temperature/humidity at 10 m (unlike the
+# CORE/OMIP convention of 2 m for the latter pair) -- set z_ta = 10
+# to match (PLAN_C2c.md S3 "z_ta=2 ... JRA: both 10 m => ship
+# namelists set z_ta=10").
+enable      = true
+n_iter      = 5
+z_wind      = 10.0
+z_ta        = 10.0
+# LY09's net-longwave formula uses emissivity = 1 (see the C3 flag in
+# PLAN_C2c.md S3); this run keeps the seawater default (0.97, Konda
+# et al. 1994) explicit so the choice is visible, and the first real
+# run compares the resulting q_lw against OM3's own rlds - sigma*SST^4
+# to decide between them (PLAN_C2c.md S7 risk 3).
+emissivity  = 0.97
+
+[nonhydrostatic]
+nz_layers = 50
+
+[vcoord]
+# MOM6 z* (PLAN_C2c.md S6), not the global_1deg_ice.toml base's
+# z_fixed -- the nominal-depth table (`z_fixed_profile`) is shared by
+# both families (CLAUDE.md "Vertical Coordinates" S VCOORD_ZSTAR).
+vcoord_type            = "zstar"
+z_fixed_profile        = "tanh"
+z_fixed_dz_top         = 2.0
+z_fixed_tanh_center    = 0.5
+z_fixed_tanh_width     = 0.25
+
+[ocean.topo]
+topo_config    = "file"
+max_depth      = 6500.0
+wind_config    = "constant"
+taux_magnitude = 0.0
+
+[output]
+bathymetry_file = "INPUT/bathy_om1deg.nc"
+output_dir      = "./output"
+output_to_file  = false
+
+[ocean.bc]
+west  = "periodic"
+east  = "periodic"
+south = "wall"
+north = "tripolar_fold"
+
+[ocean.zinit]
+enable = true
+source = "file"
+file   = "INPUT/ic_woa13_jan.nc"
+
+[ocean.pgf]
+form   = "fv_mom6"
+maxvel = 6.0
+
+[ocean.coriolis]
+form = "sadourny_energy"
+
+[ocean.hvisc]
+nu_h            = 2000.0
+lateral_closure = "smagorinsky"
+c_smag          = 0.15
+smag_ah         = true
+smag_bi_const   = 0.06
+bound_kh        = true
+
+[ocean.bdrag]
+form   = "quadratic"
+cd     = 3.0e-3
+hbbl   = 10.0
+bg_vel = 0.1
+
+[ocean.bt]
+split_scheme = "pred_corr"
+auto_n_inner = true
+
+[ocean.eos]
+eos = "wright"
+
+[ocean.thermo]
+# The bulk-flux SW component (`sf%q_sw`) is the real per-cell
+# `(1-albedo)*rsds`, not the legacy uniform `q_heat` -- `sw_source =
+# "q_sw"` tells the shortwave-penetration deposition kernel + both
+# boundary-layer schemes to read it (PLAN_C2c.md S6). Two-band
+# Paulson & Simpson (1977) transmission, open-ocean defaults.
+sw_source      = "q_sw"
+sw_pen_frac    = 0.42
+sw_band_ratio  = 0.58
+sw_zeta1       = 0.35
+sw_zeta2       = 23.0
+
+[ocean.vmix]
+use_closure      = true
+interior_closure = "none"
+use_kpp          = false
+dt_therm_ratio   = 4
+diabatic_first   = false
+pp81_kappa_bg    = 1.5e-5
+pp81_nu_bg       = 0.0
+bkgnd_prandtl    = 1.0
+
+[ocean.epbl]
+enable          = true
+mstar_scheme    = "om4"
+mstar_cap       = 1.25
+mstar_coef1     = 0.29
+c_ek            = 0.152
+mstar_conv_adj  = 0.667
+nstar           = 0.06
+tke_decay       = 0.01
+omega_frac      = 0.001
+mixlen_exponent = 1.0
+translay_scale  = 0.01
+use_lt          = true
+lt_scheme       = "additive"
+lt_enhance_coef = 0.044
+lt_enhance_exp  = -1.5
+combine         = "max_shear"
+rivermix_depth  = 40.0
+
+[ocean.kappa_shear]
+enable = true
+
+[ocean.ice]
+# The CICE6/Icepack port (scheme = "cice"): Bitz-Lipscomb thermodynamics,
+# 5-category ITD, EVP rheology + category transport, and the melt-potential
+# provider (hfreeze, OM3's 10 m) that scheme needs.  The SIS2 restoring
+# knobs (air_temp/restore_lambda/sw_down/snowfall) are inert: the ice
+# atmospheric seam is dispatched to `ice_atm_forcing_from_atm` whenever
+# `&ocean_atm_forcing_nml enable` holds.
+enable    = true
+scheme    = "cice"
+ncat      = 5
+nilyr     = 4
+hfreeze   = 10.0
+transport = true
+dynamics  = true
+
+[ocean.ice_thermo]
+update_ocn_f = true
+
+[ocean.diag]
+enabled          = true
+filename         = "global_1deg_ice_om3"
+dt_out           = 30.0
+output_precision = "single"
+# NOTE: `bulk_cd`/`bulk_ch`/`bulk_ce` (the driver's own transfer
+# coefficients) are not yet a registered diag -- `bulk_flux_column`
+# computes them per cell but `bulk_forcing_core_impl` does not keep
+# them, so they are left off this list pending that follow-up.
+diags            = "SSH  temperature:off  salinity:off  u:off  v:off  KE:off  ice_conc  ice_thick  atm_tas  atm_huss  atm_uas  atm_vas  atm_psl  atm_rsds  atm_rlds  atm_prra  atm_prsn  atm_cosz"
+
+[logging]
+status_interval = 1.0

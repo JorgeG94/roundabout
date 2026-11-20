@@ -13,7 +13,7 @@ Three real defects found on 2026-09-11 all hid behind exactly this:
   * `acc_channel` shipped a domain 10x too large for its `nu_h`, so the Munk
     layer was under one cell and the western boundary was grid-scale noise
     (`tmp_local_artifacts/global_run/FINDINGS.md`).
-  * `eady.nml` shipped a front 4x weaker than its header described under
+  * `eady.toml` shipped a front 4x weaker than its header described under
     `nu_h = 100`, and decayed where theory says it grows (re-baselined
     2026-09-13; the nml header carries the sweep).
   * A thermo-cadence instability was survivable only by viscosity margin --

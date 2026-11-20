@@ -1,0 +1,102 @@
+# Stratified seamount — double-diffusion (salt fingering) coverage case.
+#
+# Purpose (regression coverage, NOT validation): exercise the CVMix-style
+# double-diffusion closure                             -> rdb_ocean_vmix
+#                                       (vmix_split_ddiff_impl)
+# in a real time-stepped integration coupled to vdiff/ALE/continuity, so
+# the closure is proven to run clean (no NaN/blow-up) with the divergent
+# `ks` actually driving salinity — beyond the analytical unit test
+# (`test_ocean_double_diffusion`).
+#
+# The column is set warm+salty over cool+fresh (T 20->4 C, S 36.75->34):
+# statically STABLE (temperature-dominated) but salt-finger-unstable, with
+# interface density ratio R_rho = (alpha*dT)/(beta*dS) ~= 1.30 (using the
+# ddiff v1 constant linear-EOS alpha_T/beta_S = 1.7e-4 / 7.6e-4) — inside
+# (1, strat_param_max=2.55), so the fingering branch fires at every
+# interior interface every step (K_S > K_T > 0).
+#
+# Requires use_closure + thermodynamics (validated at configure).  This is
+# the DEFAULT split (pred_corr); the sibling seamount_ddiff_pred_corr.toml
+# runs the identical column with split_scheme="pred_corr" PINNED, to prove the
+# closure fires under both integrators (ddiff lives in the shared
+# vmix_apply_in_stage, applied in the pred_corr corrector).
+#
+# Small + short for the regression budget: 96x96 @ 4 km, 20 layers.
+#
+# Large, McWilliams & Doney (1994); Schmitt (1981); Radko (2013).
+
+[sim]
+sim_type = "ocean"
+
+[grid]
+nx     = 96
+ny     = 96
+dx     = 4000.0
+dy     = 4000.0
+nghost = 3
+
+[time]
+t_end        = 2.0
+time_unit    = "day"
+dt_fixed     = 300.0
+cfl_interval = 1
+
+[physics]
+coriolis_f    = 1.0e-4
+wind_stress_x = 0.0
+wind_stress_y = 0.0
+
+[nonhydrostatic]
+nz_layers = 20
+
+[vcoord]
+vcoord_type = "zstar_sigma"
+
+# Warm+salty over cool+fresh: fingering-favorable, R_rho ~= 1.30.
+[tracer]
+initial_temperature = 12.5
+initial_salinity    = 35.0
+T_init_surface      = 20.0
+T_init_bottom       = 4.0
+S_init_surface      = 36.75
+S_init_bottom       = 34.0
+
+[ocean.coriolis]
+form = "sadourny"
+
+[ocean.topo]
+topo_config    = "seamount"
+max_depth      = 4000.0
+edge_depth     = 200.0
+slope_scale    = 40000.0
+wind_config    = "constant"
+taux_magnitude = 0.0
+coriolis_beta  = 0.0
+coriolis_y_ref = 0.0
+
+[ocean.hvisc]
+nu_h = 5.0e2
+nu_4 = 0.0
+
+[ocean.vmix]
+use_closure = true  # interior closure path (double diffusion needs it)
+use_kpp     = true
+
+# --- double diffusion (the coverage target) ------------------------------
+[ocean.ddiff]
+enable = true       # requires use_closure + thermodynamics; CVMix defaults
+
+[ocean.bt]
+auto_n_inner  = true
+cfl_bt_safety = 0.65
+
+[ocean.diag]
+enabled = false
+
+[output]
+output_dir     = "./out_seamount_ddiff"
+output_to_file = false
+
+[logging]
+log_level       = "info"
+status_interval = 1.0

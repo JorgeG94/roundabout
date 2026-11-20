@@ -44,7 +44,7 @@ module test_ocean_cavity_grounded_budget
    !! false and it writes `hTr = 0`), and the whole thing showed up as a
    !! step change in `Error` between step 0 and step 1.
    !!
-   !! On `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`
+   !! On `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.toml`
    !! (39.4 % of interior columns grounded) that step change was **0.609
    !! of the initial salt content** and `-0.080` of the heat, while mass
    !! closed at `-5.0e-14`.  It scaled with the grounded columns' summed

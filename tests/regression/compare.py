@@ -18,7 +18,7 @@ own console output -- we parse the LAST occurrence of each field.
 Guaranteeing a final-state print
 --------------------------------
 The committed nmls print diags/stats on an hours-or-days cadence, so a short
-regression run would otherwise only emit at t=0. run_regression.patch_namelist
+regression run would otherwise only emit at t=0. run_regression.patch_input
 (force_emit=True, the default) rewrites `&logging_nml status_interval` and
 `&ocean_diag_nml dt_out` down to half an outer step (in seconds, after the
 time_unit normalization) so BOTH fire every step -- the final step therefore

@@ -6,7 +6,7 @@ module test_ocean_salinity_ic
    !! (`T_init_surface`/`T_init_bottom`) had a seed path and salinity did
    !! not, so a namelist asking for a haline-stratified column silently
    !! got a uniform one.  (Two shipped double-diffusion cases,
-   !! `validation_examples/ocean/seamount/seamount_ddiff*.nml`, ask for
+   !! `validation_examples/ocean/seamount/seamount_ddiff*.toml`, ask for
    !! exactly that.)  This suite pins the seed that closes the gap:
    !!
    !!   * **Endpoints** — `S_init_bottom` lands at `k = 1` (the BED) and

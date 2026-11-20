@@ -15,7 +15,7 @@ Used two ways:
 * offline on the ``rdb`` executable's diagnostic file
   (``python3 global_movie.py DIAG.nc OUTDIR``; the NetCDF-4 file is first
   flattened to NetCDF-3 with ``nccopy -u -k 64-bit-offset``).  This is how
-  the wind-forced case (``global_1deg_wind.nml``) is rendered:
+  the wind-forced case (``global_1deg_wind.toml``) is rendered:
 
       python3 global_movie.py RUN/output/global_1deg_wind_rank_000000.nc OUT \\
           --interp bilinear --speed-max 1.0 --stem global_1deg_wind \\

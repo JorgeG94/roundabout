@@ -716,7 +716,7 @@ contains
 
    function polar_ice_nml(ratio, dfirst) result(nml)
       !! The polar freeze-up case (validation_examples/ocean/sea_ice/
-      !! polar_freezeup_thermo.nml, shrunk): frazil nucleates in the first
+      !! polar_freezeup_thermo.toml, shrunk): frazil nucleates in the first
       !! steps, so the ice state is live across the checkpoint.
       integer, intent(in) :: ratio
       logical, intent(in) :: dfirst

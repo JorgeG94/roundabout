@@ -13,7 +13,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
-NML=global_1deg_unforced.nml
+NML=global_1deg_unforced.toml
 QUICK_DAYS=10
 
 usage() {

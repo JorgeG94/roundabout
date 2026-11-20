@@ -1,0 +1,398 @@
+# ISOMIP+ Ocean0, IDEALISED draft, on the QUASI-GEOPOTENTIAL coordinate
+# with basal melt and ice-shelf top drag ON.
+#
+# This is `ocean0_idealised_draft.toml` with `vcoord_type = "z_fixed"` +
+# `zfixed_closed_faces`, and nothing else changed except what that
+# coordinate forces (`h_min_cavity >= 2*h_nominal`) and the measurement
+# horizon.  It is the payoff case of the shared first-live-layer index
+# `k_top`: under a z-like coordinate the layers inside the ice draft are
+# inert fillers, so `k = nz` is NOT the ice-adjacent layer, and until
+# `k_top` landed `validate_config` refused `&ocean_cavity_melt_nml
+# enable`, `&ocean_tdrag_nml enable` and `&ocean_hdiff_nml kappa_h /= 0`
+# here -- the melt deposit would have been frozen on a massless filler by
+# the vdiff decoupling gate, then deleted by the ALE remap drain, with
+# the console budget still counting it.
+#
+# ================ THE MELT-OFF BASELINE (180 days) ===============
+#
+# The melt-OFF twin (this file with `&ocean_cavity_melt_nml enable` and
+# `&ocean_tdrag_nml enable` off) is NOT at rest, and it carries no
+# unbounded mode.  Diagnosed in `cavity_rest_growth_diagnosis.md`
+# section Q; the numbers below are the tier-1 stability rows
+# `isomip_plus_ocean0_zfixed_meltoff*` on one V100, on the v0.1.0
+# defaults (`bebt = 0.1`, `renorm_consistent_flux`; measured with the earlier
+# content-form filler rule), 180 days each:
+#
+#  * REGIME 1, day 0 to ~100, PHYSICAL.  ISOMIP+ prescribes
+#    kappa_v = 5E-05 m2/s against INSULATING boundaries (bed, ice base
+#    with melt off, open surface).  A linear rho(z) is not a steady state
+#    there: the boundary cell accumulates the flux it cannot pass on,
+#    rho' ~ kappa (drho/dz) t / h, then ~ sqrt(kappa t).  Where the
+#    boundary is SLOPED (trough sidewalls, tilted ice base) that anomaly
+#    sits at different z in neighbouring columns and drives an
+#    along-slope geostrophic current of a few mm/s (Phillips 1970;
+#    Wunsch 1970).  En ~ t^2 -> t: 6.8E-09 (d1), 5.6E-08 (d30), 2.2E-07
+#    (d90), with the 5-day log-rate FALLING the whole way (0.073 /day at
+#    d5-10, 0.012 /day at d85-90).  Protocol physics, present in any
+#    model that runs Ocean0 with kappa_v /= 0 from a linear profile.
+#  * REGIME 2, day ~105 to ~165, NUMERICAL.  One row of 7.3 m partial top
+#    cells at the calving front (x_calve, column i = 160; the western
+#    neighbour's cut was merged, so the pocket's west face is closed)
+#    accumulates a tracer error and grows a ONE-CELL jet along the front
+#    (grid Reynolds number ~7) on a 15-18-day e-folding, which SATURATES
+#    by day ~165: En 2.3E-06 (d150), peak 3.8E-06 (d173.5), 3.1E-06
+#    (d180); max|u| ~ 2 cm/s, MaxCFL < 0.01, budgets <= 9E-12 over the
+#    180 days, zero `[nan-catch]`.  Read the melt-ON energy below against
+#    THAT level, not against zero: it sits ~60x above it.
+#
+# The viscosity envelope on this 2 km grid: nu_h >= 2 m2/s is REQUIRED
+# (nu_h = 0 carries an inviscid mode growing exponentially at 0.18 /day
+# and accelerating, 1.4E-06 at day 30; validate_config WARNS below 2);
+# nu_h >= 30 removes the calving-front jet outright (En stays on the
+# regime-1 power law, 2.1E-07 at day 180); the ISOMIP+ Table-4 value 6,
+# shipped here, keeps it, saturated.
+#
+#
+# ================ MEASURED, 30 days, melt ON =====================
+#
+# nvfortran 26.5 `-stdpar=gpu` cc70, one V100, on the v0.1.0 defaults
+# (`bebt = 0.1`, `renorm_consistent_flux`): 30 days in 185 s
+# (6.2 s / simulated day).
+# Zero `[nan-catch]` lines, zero CFL truncations, `MaxCFL <= 0.061`.
+# `melt` columns: 2584 covered, the same count `configure_ocean_k_top`
+# reports as carrying top-side fillers.
+#
+#  day | En (m2/s2) | MaxCFL | max|u| | melt mean / max / min (m/yr) | Mass Err | Salt Err | Heat Err
+#  ----|------------|--------|--------|------------------------------|----------|----------|---------
+#    1 |  7.755E-08 | 0.0014 | 2.2e-3 |   3.78 /   8.54 /  +1.01     | -1.9E-14 |  4.6E-14 |  4.9E-14
+#    5 |  3.430E-06 | 0.0137 | 6.6e-2 |   5.18 /  25.13 /  +0.84     | -9.7E-14 |  2.3E-13 |  2.4E-13
+#   10 |  3.104E-05 | 0.0389 | 2.1e-1 |   5.70 /  23.85 /  +0.69     | -1.9E-13 |  4.5E-13 |  4.9E-13
+#   20 |  1.329E-04 | 0.0449 | 2.3e-1 |   5.42 /  25.36 /  +0.28     | -3.9E-13 |  9.1E-13 |  9.8E-13
+#   30 |  2.304E-04 | 0.0520 | 2.5e-1 |   5.62 /  29.10 /  +0.12     | -5.8E-13 |  1.4E-12 |  1.5E-12
+#
+# (melt statistics are over the COVERED columns only — every cavity
+# diagnostic is NaN outside the cover — and are sampled when the daily
+# diagnostic fires; max|u| is the zonal face velocity at the half-day
+# before.  A NEGATIVE melt rate is refreezing; it first appears on day
+# 18, down to -0.21 m/yr by day 21.)
+#
+# STALE as of the v0.1.0 release (hvel_mom6+bbl_glue+visc_rem_chain,
+# frhat_scheme=hybrid gated to closed faces, and the frhat-matrix /
+# compute_gtot_faces fixes all post-date this table).  Re-measured
+# numbers + an A/B isolating the new defaults' own effect (-13% En,
+# -2% melt at day 30 -- most of the gap to the table above is the age
+# of the code, not the new defaults) are in this directory's
+# README.md, "v0.1.0 release validation".
+#
+# THE BUDGETS ARE CLOSED.  All three residuals grow LINEARLY at
+# 2-5E-14/day, round-off accumulation and nothing else, all the way to
+# day 30.  They were not always: an earlier table showed the salt and heat
+# residuals JUMPING by orders of magnitude mid-run.  That jump was
+# localised to the ALE tracer remap's ONE-SIDED vanishing-layer guard: the
+# read side floored (`h_old <= H_VANISHED ⇒ c_old = 0`) while the write
+# side did not, so the remap parked content in an inert filler and deleted
+# it one step later with no budget contributor, in columns whose bed
+# partial cell sat in the band `(zstar_h_min, H_VANISHED]`.  The tracer is stored as a concentration now, so a
+# filler layer simply keeps its last c, carries no content, and a uniform
+# tracer stays uniform by construction.
+#
+# The ENERGY is the melt-driven circulation, not a spurious mode: the
+# melt-OFF twin of this configuration sits at En = 5.6E-08 at day 30 and
+# saturates near 3.5E-06 by day ~165 (the baseline above); this run is
+# ~4100x the first and ~60x the second, with max|u| ~ 25 cm/s plume
+# velocities in the right places.
+#
+# The sigma twin of THIS case (same namelist, `vcoord_type = "sigma"`,
+# `zfixed_closed_faces` off -- it is refused on sigma -- and
+# `h_min_cavity = 20`) does not survive: it blows the barotropic loop up
+# on day 15.9 (outer step 4591, 5358 non-finite BT-correction faces),
+# with En already 5.1E-04 and climbing.  That contrast is the point of
+# the coordinate.
+#
+# The IDEALISED draft (analytic, no external data) is the same one
+# `ocean0_idealised_draft.toml` uses; its derivation follows.
+#
+# Asay-Davis, Cornford, Durand, Galton-Fenzi, Gladstone, Gudmundsson,
+# Hattermann, Holland, Holland, Holland, Martin, Mathiot, Pattyn and
+# Seroussi (2016), "Experimental design for three interrelated marine ice
+# sheet and ocean model intercomparison projects", Geosci. Model Dev. 9,
+# 2471-2497, doi:10.5194/gmd-9-2471-2016.  Ocean0: WARM initial
+# condition, WARM far-field restoring, static topography (their Table 2 +
+# Sect. 3.2.1).
+#
+# WHAT IS IDEALISED, AND WHY THIS FILE EXISTS.  The protocol's ice draft
+# is NOT analytic — Sect. 3.1.1 says so outright ("Because the ice-draft
+# topography is derived from ice-sheet model results, it cannot be
+# described by an analytic function") and ships it as BISICLES NetCDF
+# (Cornford and Asay-Davis 2016).  `ocean0.toml` reads that file.  THIS
+# file replaces it with a linear-in-x draft anchored on the two numbers
+# the paper does print, so the configuration can be exercised end to end
+# with nothing to download:
+#
+#   * the steady-state GROUNDING LINE crosses the centreline of the
+#     trough at x = 450 +/- 10 km (their Sect. 2.1);
+#   * the CALVING FRONT is at x_calve = 640 km, where ice thinner than
+#     H_calve = 100 m -- "equivalent to an ice draft above ~ -90 m"
+#     (Sect. 3.1.2) -- has been removed.
+#
+# Fitting a straight line through (450 km, 600 m) and (640 km, 90 m)
+# gives d(draft)/dx = -2.6842e-3, and anchoring it at x0 = -10 km of
+# MODEL x (i.e. 310 km of paper x, outside the domain) puts 975.79 m
+# there.  West of the grounding line the formula is deeper than the bed,
+# so those columns ground through the ordinary `h_min_cavity` path and
+# become land -- which is what "grounded ice sheet" means here.  Measured
+# at configure: the trough-centre grounding line lands at x = 449 km, the
+# draft at the calving front is exactly 90.0 m, and 3778 of 9600 interior
+# columns (39.4 %) ground.
+#
+# EVERYTHING ELSE follows the protocol.  See ../isomip_plus/README.md for
+# the full parameter-by-parameter mapping, including the rows this build
+# cannot honour (no-slip walls, real freshwater mass flux, under-ice u*
+# in the boundary-layer scheme).
+#
+# t_end below is the PROTOCOL duration (Sect. 3.2.1: quasi-equilibrium
+# plus 6 months, expected 1-2 years).  For a smoke test, override it:
+#     ./build/rdb <this file>            # the real thing
+#   with `&time_nml t_end = 86400.0 /` appended, one simulated day.
+
+[sim]
+sim_type = "ocean"
+
+[grid]
+# 480 km x 80 km at the COM resolution (Table 3 Lx/Ly, Table 4 dx=dy).
+nx     = 240
+ny     = 40
+dx     = 2000.0
+dy     = 2000.0
+nghost = 2
+
+[time]
+t_end        = 2592000.0  # 30 days -- the horizon of the z_fixed
+                            # measurement (the protocol's own duration
+                            # is 1 year; see the header)
+dt_fixed     = 300.0
+cfl_interval = 1
+
+[physics]
+# f-plane at 75 S (Sect. 3.1.1): f = -2*Omega*sin(75 deg).
+coriolis_f    = -1.409e-4
+wind_stress_x = 0.0      # "There is no forcing at the surface of the
+wind_stress_y = 0.0      #  open ocean" (Sect. 3.1.3)
+
+[nonhydrostatic]
+nz_layers = 36           # Sect. 3.1.5: "all models should have 36
+                            # vertical layers", distribution at the
+                            # modeller's discretion
+
+[vcoord]
+# THE CASE UNDER TEST: quasi-geopotential layers under the shelf.
+# h_nominal = &ocean_topo_nml max_depth / nz = 720/36 = 20 m, which is
+# the protocol's own 36 x 20 m stack with no second spelling.  The
+# layers whose nominal range lies inside the ice draft become inert
+# fillers at zstar_h_min; `k_top` is what keeps every top-side
+# consumer off them (P6.3/P6.4).
+vcoord_type         = "z_fixed"
+zfixed_closed_faces = true  # partial steps: a face whose layer is a
+                               # filler on either side is a z-level WALL
+                               # (Adcroft, Hill & Marshall 1997; Losch
+                               # 2008 section 2.1).  Also what makes
+                               # kappa_h legal here — every face
+                               # touching a filler carries zero flux.
+
+[ocean.topo]
+topo_config    = "isomip_plus"  # Eqs. (1)-(4) + Table 1
+max_depth      = 720.0        # = -z_b,deep, the Eq. (1) deep clip
+x_origin       = 320000.0     # Table 3 x0: the ocean box starts at
+                                 # x = 320 km on the MISMIP+ axis
+wind_config    = "constant"
+taux_magnitude = 0.0
+coriolis_beta  = 0.0
+coriolis_y_ref = 0.0
+
+[ocean.cavity_dyn]
+enable       = true
+draft_config = "linear"  # the idealised stand-in; ocean0.toml reads the file
+draft_depth  = 975.79    # draft AT draft_x0
+draft_slope  = -2.6842e-3  # (90 - 600)/(640 - 450) km, shallowing seaward
+draft_x0     = -10000.0  # anchor OUTSIDE the domain so the ghosts are iced
+draft_x1     = 320000.0  # x_calve = 640 km in model x; open ocean beyond
+h_min_cavity = 40.0      # = 2*h_nominal, which validate_config
+                            # REQUIRES under z_fixed and which is
+                            # ISOMIP+ Sect. 3.1.5's own rule
+                            # ("approximately two grid cells, ~40 m if
+                            # z levels are equally spaced").  NOTE it
+                            # moves the grounding line relative to the
+                            # sigma leg -- 3912 of 9600 interior
+                            # columns ground here vs 3778 -- a confound
+                            # the coordinate study must control for.
+
+[ocean.cavity_melt]
+enable          = true
+exchange_law    = "const_gamma"  # Sect. 3.1.8: three-equation, constant
+                                  # Gamma_T/Gamma_S
+gamma_t         = 2.2e-2       # Sect. 3.2.1 starting guess
+                                  # (St = sqrt(C_D)*Gamma_T = 1.1e-3)
+gamma_s         = -1.0         # < 0 => derived as Gamma_T/35 (Table 4)
+cdrag_top       = 2.5e-3       # Table 4 C_D,top; must match &ocean_tdrag_nml cd
+u_tide          = 1.0e-2       # Table 4 u_tidal (melt u* only, never the drag)
+ice_conduction  = "insulating"  # Table 4 kappa_i = 0
+s_ice           = 0.0          # Table 4 / Sect. 3.1.8
+far_field_depth = 10.0         # METRES below the ice base; the protocol
+                                  # leaves the method to the modeller
+                                  # (Sect. 3.1.8) and asks it be documented
+
+[ocean.tdrag]
+enable = true
+form   = "quadratic"
+cd     = 2.5e-3          # Table 4 C_D,top
+
+[ocean.bdrag]
+form = "quadratic"
+cd   = 2.5e-3            # Table 4 C_D,bot
+
+[ocean.forcing]
+enable_components = true  # required by the melt path (it owns two
+                            # surface-flux components)
+
+[ocean.pgf]
+form        = "fv_mom6"  # the only form with an injectable top BC
+p_top_in_bc = true     # REQUIRED for a varying draft
+maxvel      = 5.0
+
+[ocean.eos]
+eos          = "linear"  # Sect. 3.1.7 / Eq. (23)
+tfreeze_set  = "isomip"  # Table 4 lambda1/2/3, used by Eq. (25)
+
+[ocean.ic]
+# Roundabout's alpha_T/beta_S are DIMENSIONAL (kg/m3 per unit) whereas
+# the protocol's alpha_lin/beta_lin are FRACTIONAL (they multiply
+# rho_ref inside the bracket of Eq. 23).  Feeding the fractional
+# numbers straight in under-states the density response ~1000x and
+# looks like a plausible weak run.
+alpha_T = 3.8356948e-2   # rho_ref * 3.733e-5 /degC   (Table 4)
+beta_S  = 8.0587609e-1   # rho_ref * 7.843e-4 /PSU    (Table 4)
+T_ref   = -1.0           # Table 4 T_ref
+S_ref   = 34.2           # Table 4 S_ref
+rho_0   = 1027.51        # Table 4 rho_ref
+
+[ocean.zinit]
+# WARM initial condition, Eqs. (21)-(22) + Table 6, written in the
+# z-positive-UP convention.  NOTE the printed Eq. (22) has a typo
+# (`S0 + (S_bot - T0)*z/z_b,deep`); it must be `(S_bot - S0)`.
+#   T: -1.9 degC at z = 0  ->  +1.0 degC at z = -720 m
+#      dT/dz = -(1.0 - (-1.9))/720 = -4.0277778e-3  (WARM is thermally
+#      UNSTABLE -- CDW at depth -- stabilised by the salinity gradient)
+#   S: 33.8 PSU at z = 0   ->  34.7 PSU at z = -720 m
+#      dS/dz = -(34.7 - 33.8)/720 = -1.25e-3
+enable    = true
+source    = "linear"     # analytic T(z)/S(z) at the TRUE geopotential
+                            # depth (column top at z = -z_draft), so the
+                            # isopycnals are flat in z under a tilted lid
+lin_t_ref = -1.9
+lin_dt_dz = -4.0277778e-3
+lin_s_ref = 33.8
+lin_ds_dz = -1.25e-3
+
+[tracer]
+# Overwritten everywhere by the zinit overlay; kept consistent so a
+# reader is not misled about what is seeded.
+initial_temperature = -0.45
+initial_salinity    = 34.25
+
+[ocean.bc]
+# "the only forcing is via 3-D restoring within 10 km of the northern
+#  boundary" (Sect. 3.1.3).  The paper's +x is north; in model terms
+#  that is the EAST edge.  OBC_SPONGE leaves the edge itself a WALL
+#  (it is not a tracer-open type) and adds the interior relaxation
+#  band -- which is exactly the protocol's "northern wall adjacent to
+#  the restoring region" (Sect. 3.1.4).
+west  = "wall"
+east  = "sponge"
+south = "wall"
+north = "wall"
+sponge_width    = 5        # (x_r1 - x_r0)/dx = 10 km / 2 km, Table 3
+sponge_strength = 1.1574074e-4  # gamma0 = 10 day^-1 = 10/86400 s^-1
+
+[ocean.sponge]
+# Ocean0 restores to the WARM profile it was initialised with, so
+# target_source="ic" would give the same answer here -- linear_z is
+# used anyway so Ocean0/1/2 differ by their profile numbers ALONE and
+# nothing else in the file has to change.
+enable        = true
+damp_source   = "band"
+ramp          = "linear"   # Eq. (20): gamma rises linearly from 0 at
+                              # x_r0 = 790 km to gamma0 at x_r1 = 800 km
+target_source = "linear_z"
+relax_uv      = false    # Eqs. (18)-(19) restore T and S only
+relax_tracers = true
+lin_t_ref     = -1.9       # WARM restoring (Table 6), as above
+lin_dt_dz     = -4.0277778e-3
+lin_s_ref     = 33.8
+lin_ds_dz     = -1.25e-3
+
+[ocean.coriolis]
+form = "sadourny"
+
+[ocean.hvisc]
+nu_h = 6.0               # Table 4 nu_H (harmonic, constant).  The
+                            # z_fixed x cavity envelope on this grid is
+                            # nu_h >= 2 (validate_config warns below);
+                            # nu_h >= 30 removes the calving-front jet
+                            # of the melt-OFF baseline (see header).
+nu_4 = 0.0
+
+[ocean.hdiff]
+# Table 4 kappa_H is 1.0, and with zfixed_closed_faces on it is legal
+# here.  It is set to ZERO anyway so this run is directly comparable
+# with the melt-OFF z_fixed baseline (sections Y.1 and Q of
+# cavity_rest_growth_diagnosis.md), which ran at 0 because kappa_h was
+# once refused outright.  Restore 1.0 to run the protocol: the
+# kappa_h = 1 melt-off twin carries the same two regimes to within 15 %
+# (V100, v0.1.0 defaults: 4.8E-08 at day 30, peak 3.7E-06 at day 162.5,
+# 2.8E-06 at day 180).
+kappa_h = 0.0
+
+[ocean.vmix]
+# Sect. 3.1.6 asks for CONSTANT vertical viscosity/diffusivity.  PP81
+# with nu0 = 0 degenerates to exactly that: kv == pp81_nu_bg and
+# kt == ks == pp81_kappa_bg at every interface, with no Richardson
+# dependence left.  KPP is off for the same reason -- the protocol
+# prescribes harmonic diffusion with fixed coefficients, and a
+# boundary-layer scheme would be a different experiment.
+use_closure   = true
+use_kpp       = false
+pp81_nu0      = 0.0
+pp81_nu_bg    = 1.0e-3   # Table 4 nu_stab
+pp81_kappa_bg = 5.0e-5   # Table 4 kappa_stab
+
+[ocean.conv]
+# Table 4 nu_unstab = kappa_unstab = 0.1 m2/s, applied "when the local
+# stratification is unstable" (Sect. 3.1.6).
+enable       = true
+kd_conv      = 0.1
+prandtl_conv = 1.0       # Kv_conv = Kd_conv
+n2_thresh    = 0.0       # trigger on N^2 < 0
+
+[ocean.bt]
+auto_n_inner = true
+# split_scheme left at the default pred_corr (the protocol says nothing
+# about the outer time split).
+
+[ocean.diag]
+enabled  = true
+filename = "isomip_ocean0_idealised_zfixed"
+dt_out   = 86400.0       # daily
+# The cavity melt fields are derived-catalog entries (opt-in).  Named
+# here so the payoff run reports the mean and max melt rate in the
+# ISOMIP+ convention (m/yr of ice) alongside the energy and the
+# budgets.  Every one is NaN outside the cover, so a domain mean over
+# the output is a mean over the CAVITY.
+diags    = "melt_m_per_yr  melt  thermal_driving"
+
+[output]
+output_dir     = "./out_isomip_ocean0_idealised_zfixed"
+output_to_file = false
+
+[logging]
+log_level       = "info"
+status_interval = 86400.0

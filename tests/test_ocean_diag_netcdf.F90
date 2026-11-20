@@ -225,7 +225,7 @@ contains
       !! six (SSH, temperature, salinity, u, v, KE) on a default state (ice
       !! / EPBL / kappa-shear / ideal-age all off). Order matters: it is
       !! the NetCDF variable write order. This is the unit-level proxy for
-      !! "every shipped validation_examples/ocean/*.nml registers the same
+      !! "every shipped validation_examples/ocean/*.toml registers the same
       !! set before and after this PR" — the warn only fires on a path
       !! that today registers nothing at all, so it cannot perturb this.
       type(error_type), allocatable, intent(out) :: error

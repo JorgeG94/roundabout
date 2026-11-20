@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write bathy.nc + ic.nc for coastal_noise_box.nml (stdlib only, NetCDF-3).
+"""Write bathy.nc + ic.nc for coastal_noise_box.toml (stdlib only, NetCDF-3).
 
 Geometry (1/4 degree, 160 x 80 cells, lon 0..40 E, lat 66..46 S):
   * south coast: land south of lat_c(lon) = -62.5 + 2.5 sin(2 pi lon / 40),

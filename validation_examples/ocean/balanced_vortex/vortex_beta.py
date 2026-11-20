@@ -1,9 +1,9 @@
 """Isolated balanced vortex on a beta-plane -- Python-API port of the
 three namelists in this directory.
 
-    python3 vortex_beta.py             # vortex_beta.nml (warm core, anticyclone)
-    python3 vortex_beta.py cyclone     # vortex_beta_cyclone.nml (cold core)
-    python3 vortex_beta.py fplane      # vortex_fplane.nml (beta = 0 control)
+    python3 vortex_beta.py             # vortex_beta.toml (warm core, anticyclone)
+    python3 vortex_beta.py cyclone     # vortex_beta_cyclone.toml (cold core)
+    python3 vortex_beta.py fplane      # vortex_fplane.toml (beta = 0 control)
 
 A single mesoscale eddy starts in geostrophic / thermal-wind balance and
 drifts on beta: anticyclones SW, cyclones NW (McWilliams & Flierl 1979).

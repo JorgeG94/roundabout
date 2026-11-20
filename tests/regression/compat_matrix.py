@@ -86,6 +86,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "tools"))
 
 import compat_expect  # noqa: E402
 import compat_legs  # noqa: E402
+import toml_util  # noqa: E402
 
 DEFAULT_SCRATCH = os.path.join(REPO_ROOT, "tmp_local_artifacts", "compat_matrix")
 SEED = 20261002
@@ -545,31 +546,9 @@ def merged_namelist(cell):
     return nml
 
 
-def _fortran_value(v):
-    if isinstance(v, bool):
-        return ".true." if v else ".false."
-    if isinstance(v, int):
-        return str(v)
-    if isinstance(v, float):
-        return repr(v)
-    if isinstance(v, str):
-        return '"{}"'.format(v)
-    if isinstance(v, (list, tuple)):
-        return ", ".join(_fortran_value(x) for x in v)
-    raise TypeError("cannot render {!r}".format(v))
-
-
-def render_namelist(nml, header=""):
-    out = []
-    for line in header.splitlines():
-        out.append("! " + line if line else "!")
-    for grp in sorted(nml):
-        out.append("&" + grp)
-        for k in sorted(nml[grp]):
-            out.append("   {} = {}".format(k, _fortran_value(nml[grp][k])))
-        out.append("/")
-        out.append("")
-    return "\n".join(out)
+def render_input(nml, header=""):
+    """The merged `{group: {key: value}}` of a cell as a TOML document."""
+    return toml_util.render(nml, header)
 
 
 def cell_key(cell):
@@ -849,9 +828,9 @@ def prepare_cell_dir(cell, cid, root, nml_patch=None, header_extra=""):
     nml = merged_namelist(cell)
     for grp, kv in (nml_patch or {}).items():
         nml.setdefault(grp, {}).update(kv)
-    path = os.path.join(d, "cell.nml")
+    path = os.path.join(d, "cell.toml")
     with open(path, "w") as fh:
-        fh.write(render_namelist(nml, cell_header(cell, cid, header_extra)))
+        fh.write(render_input(nml, cell_header(cell, cid, header_extra)))
     return path
 
 
@@ -1365,14 +1344,14 @@ def restart_leg(ctx, cell, cid, main_dir):
     first = os.path.dirname(prepare_cell_dir(cell, cid + "_r12", root, nml_patch=_merge(
         CHECKPOINT_PATCH, {"time_nml": {"t_end": RESTART_AT * DT}}),
         header_extra="restart leg: steps 1..{} + checkpoint".format(RESTART_AT)))
-    rc, out, err, _ = _run_retry_oom(ctx.binary, ["cell.nml"], first, ctx.timeout)
+    rc, out, err, _ = _run_retry_oom(ctx.binary, ["cell.toml"], first, ctx.timeout)
     ck = os.path.join(first, "restart_rank_000000.nc")
     if rc != 0 or not os.path.isfile(ck):
         return False, "the {}-step run failed (rc {}): {}".format(RESTART_AT, rc, _tail(out + err))
     second = os.path.dirname(prepare_cell_dir(cell, cid + "_resume", root, nml_patch=_merge(
         CHECKPOINT_PATCH, {"output_nml": {"restart_file": ck}}),
         header_extra="restart leg: warm restart at step {} -> {}".format(RESTART_AT, N_STEPS)))
-    rc, out, err, _ = _run_retry_oom(ctx.binary, ["cell.nml"], second, ctx.timeout)
+    rc, out, err, _ = _run_retry_oom(ctx.binary, ["cell.toml"], second, ctx.timeout)
     ck2 = os.path.join(second, "restart_rank_000000.nc")
     if rc != 0 or not os.path.isfile(ck2):
         return False, "the warm restart failed (rc {}): {}".format(rc, _tail(out + err))
@@ -1402,7 +1381,7 @@ def decomp_leg(ctx, cell, cid, main_dir):
     else:
         d = os.path.dirname(prepare_cell_dir(cell, cid + "_1x1", root, nml_patch=CHECKPOINT_PATCH,
                                              header_extra="decomp leg: 1-rank reference"))
-        rc, out, _ = _mpi_run(ctx, 1, ["cell.nml"], d)
+        rc, out, _ = _mpi_run(ctx, 1, ["cell.toml"], d)
         ref = os.path.join(d, "restart_rank_000000.nc")
         if rc != 0 or not os.path.isfile(ref):
             return "FAIL", "the 1-rank MPI reference failed (rc {}): {}".format(rc, _tail(out)), []
@@ -1420,7 +1399,7 @@ def decomp_leg(ctx, cell, cid, main_dir):
             cell, "{}_{}".format(cid, tag), root,
             nml_patch=_merge(patch, {"logging_nml": {"log_level": "error"}}),
             header_extra="decomp leg: {} ranks".format(tag)))
-        rc, out, _ = _mpi_run(ctx, px * py, ["--validate-only", "cell.nml"], d)
+        rc, out, _ = _mpi_run(ctx, px * py, ["--validate-only", "cell.toml"], d)
         if rc != 0:
             msgs = [ln.strip() for ln in out.splitlines() if ln.strip()
                     and not _NOISE_RE.search(ln.strip()) and not ln.strip().startswith(("#", "at "))
@@ -1440,7 +1419,7 @@ def decomp_leg(ctx, cell, cid, main_dir):
             if not msgs:
                 unexplained.append("{}: refused (rc {}) with no reason".format(tag, rc))
             continue
-        rc, out, _ = _mpi_run(ctx, px * py, ["cell.nml"], d)
+        rc, out, _ = _mpi_run(ctx, px * py, ["cell.toml"], d)
         files = [os.path.join(d, "restart_rank_{:06d}.nc".format(r)) for r in range(px * py)]
         if rc != 0 or not all(os.path.isfile(f) for f in files):
             bad.append("{}: the decomposed run failed (rc {}): {}".format(tag, rc, _tail(out)))
@@ -2103,7 +2082,7 @@ def cmd_validate_smoke(args):
         "output_nml": {"output_dir": "out"}}))
     before = set(os.listdir(d))
     t0 = time.time()
-    rc, out, err, _ = _run(binary, ["--validate-only", "cell.nml"], d, 60)
+    rc, out, err, _ = _run(binary, ["--validate-only", "cell.toml"], d, 60)
     _check(rc == 0 and "VALIDATE-ONLY: ACCEPTED" in out,
            "the base cell is accepted (rc {})".format(rc), fails)
     _check(set(os.listdir(d)) == before, "an accepted validation writes no file ({})".format(
@@ -2115,7 +2094,7 @@ def cmd_validate_smoke(args):
     d1 = os.path.dirname(prepare_cell_dir(cell, "control", root, nml_patch={
         "ocean_diag_nml": {"enabled": True, "filename": "smoke", "dt_out": DT},
         "output_nml": {"output_dir": "out"}, "time_nml": {"t_end": DT}}))
-    rc, out, err, _ = _run(binary, ["cell.nml"], d1, 120)
+    rc, out, err, _ = _run(binary, ["cell.toml"], d1, 120)
     _check(rc == 0 and os.path.isdir(os.path.join(d1, "out")) and any(
         n.endswith(".nc") for n in os.listdir(os.path.join(d1, "out"))),
         "control: the same namelist WITHOUT --validate-only writes out/*.nc (rc {})".format(rc),
@@ -2131,7 +2110,7 @@ def cmd_validate_smoke(args):
     # PHYSICAL bound, so this contract does not move when a gap closes).
     d2 = os.path.dirname(prepare_cell_dir(cell, "refuse_engine", root, nml_patch={
         "ocean_hvisc_nml": {"nu_h": 1.0e8}, "logging_nml": {"log_level": "error"}}))
-    rc, out, err, _ = _run(binary, ["--validate-only", "cell.nml"], d2, 60)
+    rc, out, err, _ = _run(binary, ["--validate-only", "cell.toml"], d2, 60)
     _check(rc == 3 and "REFUSED by engine_setup" in out and "nu_h" in out,
            "engine_setup (configure-stage) refusal -> rc 3, reason logged (rc {})".format(rc), fails)
     _check(not any(n.endswith(".nc") and n not in (BATHY_FILE, BATHY_CLIFF_FILE, TS_FILE, FW_FILE)

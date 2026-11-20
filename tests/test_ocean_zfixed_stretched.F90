@@ -25,7 +25,7 @@
 !!   * `flat_lid_rest_is_exact_zero` — the full model: a resting stratified
 !!     cavity under a FLAT ice shelf on a tanh profile keeps every face
 !!     velocity at exactly 0.0 (the uniform-profile gate
-!!     `cavity_flat_lid_rest_zfixed.nml`, on a stretched stack).
+!!     `cavity_flat_lid_rest_zfixed.toml`, on a stretched stack).
 !!   * `refuses_*` — `validate_config` fails loud on a list of the wrong
 !!     length and on a profile set on another coordinate.
 !!
@@ -304,7 +304,7 @@ contains
    end subroutine test_list_matches_uniform
 
    function nml_flat_lid(extra) result(nml)
-      !! `cavity_flat_lid_rest_zfixed.nml`, reduced (24 x 6), on a tanh
+      !! `cavity_flat_lid_rest_zfixed.toml`, reduced (24 x 6), on a tanh
       !! profile from a 10 m surface layer over 720 m / 15 levels.
       character(len=*), intent(in) :: extra
          !! Appended `&vcoord_nml` keys.

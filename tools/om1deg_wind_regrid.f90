@@ -1,7 +1,7 @@
 !! JRA55-do near-surface wind -> OM_1deg C-grid wind stress (offline helper).
 program om1deg_wind_regrid
    !! Offline preprocessing helper for
-   !! `validation_examples/ocean/global_1deg/global_1deg_wind.nml`, driven by
+   !! `validation_examples/ocean/global_1deg/global_1deg_wind.toml`, driven by
    !! `tools/om1deg_prepare_wind.py` (which builds it with the system Fortran
    !! compiler + `nf-config` and passes the arguments).  Not part of the model.
    !!

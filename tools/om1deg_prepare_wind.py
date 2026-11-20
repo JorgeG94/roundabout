@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""JRA55-do 10 m wind -> OM_1deg C-grid wind-stress file for ``global_1deg_wind.nml``.
+"""JRA55-do 10 m wind -> OM_1deg C-grid wind-stress file for ``global_1deg_wind.toml``.
 
 Writes ``wind_jra55do_<year>_<avg>h.nc`` (default: daily means,
 ``$RDB_DATA_DIR/OM_1deg/wind_jra55do_1958_24h.nc``) in the layout the

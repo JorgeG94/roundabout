@@ -3,7 +3,7 @@
 
 Renders daily frames on a south-polar stereographic projection centred on
 Antarctica and extending out to the domain's open north edge (``--lat-edge``,
-default -30 deg, matching ``southern_ocean_1deg_wind.nml``'s sponge edge).
+default -30 deg, matching ``southern_ocean_1deg_wind.toml``'s sponge edge).
 Two panels are drawn, each independently selectable from
 ``{vorticity, speed, ssh}`` via ``--main``/``--inset`` (default
 ``main=speed``, ``inset=ssh``; the vorticity view from earlier versions of

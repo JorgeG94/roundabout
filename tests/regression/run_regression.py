@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """P0 ocean regression runner -- run-clean / NaN gate (no golden compare yet).
 
-Runs each curated ocean namelist case (see manifest.py) for a short number of
+Runs each curated ocean input case (TOML) (see manifest.py) for a short number of
 outer timesteps and asserts it RUNS CLEAN: exit code 0 and no non-finite /
 crash markers in the captured output. This is the P0 bar. Golden-summary
 comparison is P1; gcov coverage is P2.
@@ -10,14 +10,14 @@ Stdlib only (the repo forbids `pip install`); no third-party imports.
 
 Per-case execution
 ------------------
-1. Copy the committed nml into a per-case scratch dir.
-2. Patch `&time_nml` so the run is `n_steps` outer steps:
+1. Copy the committed TOML input into a per-case scratch dir.
+2. Patch `[time]` so the run is `n_steps` outer steps:
      t_end     = n_steps * dt_fixed   (seconds)
      time_unit = "second"             (normalized; so t_end is read in seconds)
-   The committed nml is never mutated.
-3. Redirect `&output_nml output_dir` to the scratch dir AND run the process with
+   The committed input is never mutated.
+3. Redirect `[output] output_dir` to the scratch dir AND run the process with
    cwd=<scratch>, so no run ever writes into the repo tree.
-4. Run `rdb <temp.nml>` with the per-case timeout; capture rc + stdout+stderr.
+4. Run `rdb <temp.toml>` with the per-case timeout; capture rc + stdout+stderr.
 5. PASS iff rc == 0 AND no bad markers (nan / inf / error stop / not finite /
    abort / panic / segmentation) appear in the output (case-insensitive).
 
@@ -62,6 +62,7 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(THIS_DIR, os.pardir, os.pardir))
 sys.path.insert(0, THIS_DIR)
 import manifest  # noqa: E402  (local, after sys.path tweak)
+import toml_util  # noqa: E402
 
 # Output markers that signal a broken / non-finite / crashed run, as
 # case-insensitive regexes scanned against combined stdout+stderr.
@@ -87,46 +88,18 @@ DEFAULT_BUDGET_MIN = 30.0
 
 
 # ---------------------------------------------------------------------------
-# Namelist patching
+# Input patching
 # ---------------------------------------------------------------------------
-def _split_key(line):
-    """Return the lower-cased namelist key on a line, or None.
+def patch_input(src_text, n_steps, scratch_dir, force_emit=True):
+    """Return a patched copy of the TOML input `src_text` for a short,
+    output-isolated run.
 
-    A namelist assignment looks like `   key = value   ! comment`. Group
-    headers (`&time_nml`) and terminators (`/`) return None.
-    """
-    stripped = line.strip()
-    if not stripped or stripped.startswith("!"):
-        return None
-    if stripped.startswith("&") or stripped.startswith("/"):
-        return None
-    if "=" not in stripped:
-        return None
-    return stripped.split("=", 1)[0].strip().lower()
-
-
-def _numeric_value(line):
-    """Extract the numeric value from a namelist assignment line.
-
-    Strips an inline `!` comment and a trailing `,`/`/`. Returns a float.
-    """
-    rhs = line.split("=", 1)[1]
-    rhs = rhs.split("!", 1)[0]  # drop inline comment
-    rhs = rhs.strip().rstrip(",").rstrip("/").strip()
-    # Fortran allows d-exponents (1.0d3); Python wants e.
-    rhs = rhs.replace("d", "e").replace("D", "e")
-    return float(rhs)
-
-
-def patch_namelist(src_text, n_steps, scratch_dir, force_emit=True):
-    """Return a patched copy of `src_text` for a short, output-isolated run.
-
-    - Within &time_nml: dt_fixed is read, t_end is set to n_steps*dt_fixed
-      seconds and time_unit is forced to "second".
-    - Within &output_nml: output_dir is redirected to `scratch_dir`.
+    - `[time]`: dt_fixed is read, t_end is set to n_steps*dt_fixed seconds
+      and time_unit is forced to "second".
+    - `[output]`: output_dir is redirected to `scratch_dir`.
     - When `force_emit` (default True): the console-status cadence
-      (`&logging_nml status_interval`) and the ocean diag-manager cadence
-      (`&ocean_diag_nml dt_out`) are forced to a value strictly below one
+      (`[logging] status_interval`) and the ocean diag-manager cadence
+      (`[ocean.diag] dt_out`) are forced to a value strictly below one
       outer step (`0.5*dt_fixed` seconds, once time_unit is normalized to
       seconds) so BOTH fire every step -- guaranteeing a final-state
       `[stats]` line and a final-state `[diag]` summary for every field.
@@ -134,76 +107,28 @@ def patch_namelist(src_text, n_steps, scratch_dir, force_emit=True):
       hours/days), leaving the P1 golden-summary compare (compare.py) with no
       usable final state. Harmless to the P0 run-clean gate (it only adds log
       lines / more NaN sampling). If the source omits `status_interval` /
-      `dt_out` inside a group that IS present, the key is injected before the
-      group terminator; groups that are entirely absent are left untouched.
+      `dt_out` inside a table that IS present, the key is added to that
+      table; tables that are entirely absent are left untouched.
 
     Raises ValueError if dt_fixed cannot be found (we cannot bound the run).
+    The edits go through `toml_util.patch` (line-level, stdlib only).
     """
-    lines = src_text.splitlines()
-
-    # Pass 1: locate dt_fixed inside &time_nml.
-    group = None
-    dt_fixed = None
-    for line in lines:
-        s = line.strip()
-        if s.startswith("&"):
-            group = s[1:].split()[0].lower()
-            continue
-        if s.startswith("/"):
-            group = None
-            continue
-        if group == "time_nml" and _split_key(line) == "dt_fixed":
-            dt_fixed = _numeric_value(line)
+    dt_fixed = toml_util.get_float(src_text, "time_nml", "dt_fixed")
     if dt_fixed is None:
-        raise ValueError("could not find dt_fixed in &time_nml")
+        raise ValueError("could not find dt_fixed in [time]")
 
-    t_end = n_steps * dt_fixed
-    # A cadence strictly below one outer step => the diag/status probes fire
-    # on every step, so the last step is guaranteed to emit a final summary.
-    emit_cadence = 0.5 * dt_fixed
-
-    # Pass 2: rewrite lines.
-    out = []
-    group = None
-    seen_time_unit = False
-    seen_status_interval = False
-    seen_dt_out = False
-    for line in lines:
-        s = line.strip()
-        if s.startswith("&"):
-            group = s[1:].split()[0].lower()
-            out.append(line)
-            continue
-        if s.startswith("/"):
-            if group == "time_nml" and not seen_time_unit:
-                # Ensure time_unit is normalized even if the source omitted it.
-                out.append('   time_unit = "second"')
-            if force_emit and group == "logging_nml" and not seen_status_interval:
-                out.append("   status_interval = {:.6f}".format(emit_cadence))
-            if force_emit and group == "ocean_diag_nml" and not seen_dt_out:
-                out.append("   dt_out = {:.6f}".format(emit_cadence))
-            group = None
-            out.append(line)
-            continue
-
-        key = _split_key(line)
-        if group == "time_nml" and key == "t_end":
-            out.append("   t_end = {:.6f}".format(t_end))
-        elif group == "time_nml" and key == "time_unit":
-            out.append('   time_unit = "second"')
-            seen_time_unit = True
-        elif group == "output_nml" and key == "output_dir":
-            out.append('   output_dir = "{}"'.format(scratch_dir))
-        elif force_emit and group == "logging_nml" and key == "status_interval":
-            out.append("   status_interval = {:.6f}".format(emit_cadence))
-            seen_status_interval = True
-        elif force_emit and group == "ocean_diag_nml" and key == "dt_out":
-            out.append("   dt_out = {:.6f}".format(emit_cadence))
-            seen_dt_out = True
-        else:
-            out.append(line)
-
-    return "\n".join(out) + "\n"
+    over = {"time_nml": {"t_end": n_steps * dt_fixed, "time_unit": "second"}}
+    if toml_util.has_group(src_text, "output_nml"):
+        over["output_nml"] = {"output_dir": scratch_dir}
+    if force_emit:
+        # A cadence strictly below one outer step => the diag/status probes
+        # fire on every step, so the last step always emits a final summary.
+        emit_cadence = 0.5 * dt_fixed
+        if toml_util.has_group(src_text, "logging_nml"):
+            over["logging_nml"] = {"status_interval": emit_cadence}
+        if toml_util.has_group(src_text, "ocean_diag_nml"):
+            over["ocean_diag_nml"] = {"dt_out": emit_cadence}
+    return toml_util.patch(src_text, over)
 
 
 # ---------------------------------------------------------------------------
@@ -317,24 +242,24 @@ def run_case(case, binary, scratch_root, gpu_id=None, keep_scratch=False,
         with open(src_path, "r") as fh:
             src_text = fh.read()
     except OSError as exc:
-        result["reason"] = "cannot read nml: {}".format(exc)
+        result["reason"] = "cannot read input: {}".format(exc)
         return result
 
     try:
-        patched = patch_namelist(src_text, case["n_steps"], scratch)
+        patched = patch_input(src_text, case["n_steps"], scratch)
     except ValueError as exc:
-        result["reason"] = "nml patch failed: {}".format(exc)
+        result["reason"] = "input patch failed: {}".format(exc)
         return result
 
-    temp_nml = os.path.join(scratch, name + ".nml")
-    with open(temp_nml, "w") as fh:
+    temp_input = os.path.join(scratch, name + ".toml")
+    with open(temp_input, "w") as fh:
         fh.write(patched)
 
     # Optional per-case setup command, run INSIDE the scratch dir before the
-    # model. This exists for cases whose namelist names an input file the repo
+    # model. This exists for cases whose input names an input file the repo
     # deliberately does not commit -- e.g. the PR-15 file-forcing case, whose
     # wind NetCDF is generated data. The model runs with cwd=scratch, so a
-    # bare filename in the nml resolves to whatever setup dropped there.
+    # bare filename in the input resolves to whatever setup dropped there.
     # argv is taken verbatim except for "{python}", which becomes the
     # interpreter running this script, and "{repo}", the repo root.
     setup = case.get("setup")
@@ -364,7 +289,7 @@ def run_case(case, binary, scratch_root, gpu_id=None, keep_scratch=False,
     timed_out = False
     try:
         proc = subprocess.run(
-            [binary, temp_nml],
+            [binary, temp_input],
             cwd=scratch,
             env=env,
             stdout=subprocess.PIPE,

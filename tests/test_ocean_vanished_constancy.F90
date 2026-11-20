@@ -58,7 +58,7 @@ contains
    end subroutine collect_ocean_vanished_constancy_tests
 
    function nml_zstar_full() result(nml)
-      !! `double_gyre_mom6.nml`, reduced to 22 x 20 cells: spoon bed
+      !! `double_gyre_mom6.toml`, reduced to 22 x 20 cells: spoon bed
       !! (100–2000 m), two-gyre wind, 2 layers with a 1000 m surface target,
       !! so layer 1 vanishes to the filler over the shelf.  `dt_therm_ratio =
       !! 2` is the configuration that exposed the defect: the coordinate is

@@ -13,7 +13,7 @@ else()
 endif()
 
 # Full ocean dyn-core throughput bench — reads an ocean namelist (default
-# double_gyre_mom6.nml) and drives the engine (`engine_setup` / `engine_step`)
+# double_gyre_mom6.toml) and drives the engine (`engine_setup` / `engine_step`)
 # -- the SAME lifecycle the driver runs (rdb_ocean_engine) -- but NetCDF-free,
 # so it builds with -DRDB_ENABLE_NETCDF=OFF for Intel/AMD portability +
 # profiling.
@@ -31,7 +31,7 @@ add_test(
   NAME rdb_bench_ocean_smoke
   COMMAND
     bench_ocean
-    "${CMAKE_SOURCE_DIR}/validation_examples/ocean/double_gyre/double_gyre_mom6.nml"
+    "${CMAKE_SOURCE_DIR}/validation_examples/ocean/double_gyre/double_gyre_mom6.toml"
     150)
 set_tests_properties(
   rdb_bench_ocean_smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300

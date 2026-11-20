@@ -2349,7 +2349,7 @@ contains
                ! cuts at the same depth, so every interface offset is
                ! identically zero) and is validated bit-zero to 30 days;
                ! a VARYING draft is not validated at all, and measured on
-               ! `cavity_sloping_lid_rest_zfixed.nml` it is 47x the sigma
+               ! `cavity_sloping_lid_rest_zfixed.toml` it is 47x the sigma
                ! leg's resting pressure-gradient residual at step 1 and
                ! ends in a non-finite state on day 18 (gfortran) or a
                ! saturated En = 3.8E-04 (nvfortran GPU).  That is the

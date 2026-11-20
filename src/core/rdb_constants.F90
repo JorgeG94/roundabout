@@ -126,7 +126,7 @@ module rdb_constants
       !! ~2x larger than any consumer needed and cost ~4 GB of CUDA
       !! per-thread local memory, which the driver reserves at each
       !! kernel's first launch and never returns.  128 covers the largest
-      !! shipped case (nz=90, `acc_channel_kitchensink_xl.nml`) and the
+      !! shipped case (nz=90, `acc_channel_kitchensink_xl.toml`) and the
       !! largest test (nz=100) with headroom.
       !!
       !! Heap-allocated workspace arrays (PPM snapshots, remap snapshots)

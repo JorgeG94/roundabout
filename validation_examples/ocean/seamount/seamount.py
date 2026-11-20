@@ -1,7 +1,7 @@
 """Idealised seamount -- Tier-1.5 sigma-coord bathymetry bridge test,
 Python-API port.
 
-Adapted from ``seamount.nml``'s own header comment:
+Adapted from ``seamount.toml``'s own header comment:
 
 Goal: validate the ocean dyn-core operators (BPG, Coriolis-adv,
 continuity, vmix) over a varying-h_layer bathymetry WITHOUT the
@@ -28,7 +28,7 @@ sigma-coord numerical artefact in the BPG, Coriolis-adv, or continuity
 kernels -- this is the cleanest possible test of those operators'
 behaviour under varying h_layer. (This is the run picked as "the most
 canonical resting-state seamount case" among the variants in this
-directory -- the README explicitly labels ``seamount.nml`` "Canonical
+directory -- the README explicitly labels ``seamount.toml`` "Canonical
 setup".)
 
 Run:

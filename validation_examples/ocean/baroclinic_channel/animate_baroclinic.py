@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Surface relative-vorticity (zeta/f) movie for the baroclinic channel.
 
-Works for both baroclinic_2layer.nml and baroclinic_15layer.nml output
+Works for both baroclinic_2layer.toml and baroclinic_15layer.toml output
 (reads dx, f, nghost from args; surface = top z-level of the diag file).
 
 Usage:

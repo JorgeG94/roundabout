@@ -20,7 +20,7 @@
 !!
 !! of pressure-gradient acceleration on a MOTIONLESS ocean.  Nothing bounds it,
 !! so it spins a basin-scale current up out of nothing — the shipped quiescent
-!! case `validation_examples/ocean/seamount/seamount_conservative_floor.nml`
+!! case `validation_examples/ocean/seamount/seamount_conservative_floor.toml`
 !! reached 6.7 cm/s (En 2.24e-3) and was still growing when the run stopped.
 !!
 !! The fix asserted here: where the layer's z-extents in the two abutting
@@ -78,7 +78,7 @@ module test_ocean_pgf_grounded
    real(wp), parameter :: RHO_LIGHTEST = 1035.0_wp
    real(wp), parameter :: RHO_RANGE = 2.0_wp
    real(wp), parameter :: ANGSTROM_H = 1.0e-2_wp
-      !! Same floor the shipped `seamount_conservative_floor.nml` uses.
+      !! Same floor the shipped `seamount_conservative_floor.toml` uses.
 
 contains
 

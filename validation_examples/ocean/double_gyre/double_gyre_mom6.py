@@ -1,7 +1,7 @@
 """Roundabout ocean-path double-gyre -- MOM6 reference reproduction,
 Python-API port.
 
-Adapted from ``double_gyre_mom6.nml``'s own header comment:
+Adapted from ``double_gyre_mom6.toml``'s own header comment:
 
 Mirrors NOAA-GFDL/MOM6-examples/ocean_only/double_gyre exactly up to the
 limits of the current ocean stack:
