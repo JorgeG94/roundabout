@@ -265,7 +265,7 @@ program test_ocean_decomp_bitid_mpi
    use, intrinsic :: iso_fortran_env, only: int64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_string, validate_config, BT_HALO_AUTO_SENTINEL
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_error_ring, only: error_ring_clear, error_ring_count, error_ring_get
    use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_format, oh_counters_get, &
@@ -347,6 +347,8 @@ program test_ocean_decomp_bitid_mpi
       integer :: n = 0
       type(field_t) :: f(MAXF)
       integer :: io = 0, jo = 0, nxl = 0, nyl = 0, ng = 0
+      integer :: bt_halo = 0
+         !! `&ocean_bt_nml bt_halo` as `engine_setup` resolved it (AUTO included).
       integer :: ngrow = 0
          !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       integer :: drain_iter = 0
@@ -381,6 +383,7 @@ program test_ocean_decomp_bitid_mpi
    end type snap_t
 
    integer :: rank, nprocs, n_fail, total_fail, ic
+   character(len=40) :: base
    logical :: wd_edge_e = .false., wd_edge_s = .false.
       !! The wet/dry case under way has an open east / south edge (open-edge flip bands).
    integer :: n_steps_cur = N_STEPS
@@ -398,7 +401,23 @@ program test_ocean_decomp_bitid_mpi
       !! instead of running the same namelist twice.
    integer :: bth_nochain_env = 0, bth_steps_env = 0, bth_poison_env = 0, &
               bth_ring_env = 0
+   logical :: psurf_pattern = .false.
+      !! Set per case (`bthx_psurfv_*`): `run_one` writes a spatially varying surface
+      !! pressure into the engine after setup (no file-free namelist path makes one).
+   integer :: case_force = -1
+      !! Per-case pinned width: a CASES entry `<label>+w<W>` runs `<label>` with `bt_halo = W` on
+      !! every decomposed leg (the 1-rank reference stays AUTO = 0).
+   integer :: bt_halo_force = -1
+      !! `RDB_BITID_BT_HALO=<w>` (w >= 0): every DECOMPOSED run of a case that leaves
+      !! `bt_halo` unset gets `bt_halo = w` instead of AUTO (the 1-rank reference stays
+      !! AUTO = 0).  `=0` keeps the per-substep decomposed march covered for the whole
+      !! case list now that AUTO runs most cases wide.
       !! `RDB_BITID_BTH_NOCHAIN=1`: the `bth_*` cases run with `visc_rem_chain = .false.`.
+   integer :: n_forced_runs = 0, n_forced_ok = 0
+      !! Forced-width tally (decomposed runs checked / of those, with steps, that proved the width).
+   integer :: n_auto_runs = 0, n_auto_wide = 0, n_auto_cases = 0, n_auto_wide_cases = 0
+      !! AUTO tally (decomposed runs of cases that leave `bt_halo` unset):
+      !! runs / runs that resolved to a wide halo, then the same per case.
    logical :: where_report = .false.
       !! Set per case (the `bth_*` family): `compare` also prints the `[where]` lines.
    integer :: cur_n_inner = 0
@@ -409,7 +428,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(146) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(172) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -459,7 +478,13 @@ program test_ocean_decomp_bitid_mpi
                                                  "bthx_ffull_w4", "bthx_ffull_w8", &
                                                  "bthx_tidal_w4", "bthx_tidal_w8", &
                                                  "bthx_tides_w4", "bthx_tides_w8", &
-                                                 "bthx_psurf_w4", &
+                                                 "bthx_psurf_w4", "bthx_psurfv_w4", "bthx_psurfv_w8", &
+                                                 "bthx_nochain_w4", "bthx_nochain_w8", "bthx_chain_w4", "bthx_chain_w8", &
+                                                 "bthx_subdrag_w4", "bthx_subdrag_w8", &
+                                                 "bthx_drgwave_w4", "bthx_drgwave_w8", &
+                                                 "bthx_sal_w4", "bthx_sal_w8", &
+                                                 "bthx_dtbtinit_w4", "bthx_dtbtinit_w8", &
+                                                 "bthx_nomaskwall_w4", "bthx_nozeta_w4", &
                                                  "bthx_super_w4", "bthx_super_w8", &
                                                  "bthx_porous_w4", "bthx_porous_w8", &
                                                  "bthx_zfixed_w4", "bthx_zfixed_w8", &
@@ -475,7 +500,12 @@ program test_ocean_decomp_bitid_mpi
                                                  "bthx_tripsea_w4_b0", &
                                                  "bthx_trip_tides_w4", "bthx_trip_porous_w4", &
                                                  "bthx_trip_zfixed_w4", &
-                                                 "wave_drag_rough", "wave_drag_rough_periodic"]
+                                                 "wave_drag_rough", "wave_drag_rough_periodic", &
+                                                 "sea_ice+w2", "sea_ice+w4", "sea_ice_transport+w2", &
+                                                 "sea_ice_transport+w4", "sea_ice_transport+w8", &
+                                                 "sea_ice_fold+w2", "sea_ice_fold+w4", &
+                                                 "sea_ice_fold_nodyn+w2", "sea_ice_fold_nodyn+w4", &
+                                                 "bulk_flux_ice+w4"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -495,6 +525,7 @@ program test_ocean_decomp_bitid_mpi
    call env_int("RDB_BITID_NINNER", ninner_env)
    call env_int("RDB_BITID_BTH_NOCHAIN", bth_nochain_env)
    call env_int("RDB_BITID_BTH_STEPS", bth_steps_env)
+   call env_int("RDB_BITID_BT_HALO", bt_halo_force)
    call env_int("RDB_BT_INHALO_POISON", bth_poison_env)
    call env_int("RDB_BT_RING_POISON", bth_ring_env)
    block
@@ -507,30 +538,44 @@ program test_ocean_decomp_bitid_mpi
       if (len_trim(case_filter) > 0) then
          if (.not. case_selected(trim(CASES(ic)), trim(case_filter))) cycle
       end if
+      ! `<label>+w<W>`: the same case with a pinned width (see `case_force`).
+      block
+         integer :: pw
+         character(len=1) :: wch
+         pw = index(CASES(ic), "+w")
+         case_force = -1
+         base = trim(CASES(ic))
+         if (pw > 0) then
+            wch = CASES(ic) (pw + 2:pw + 2)
+            read (wch, '(i1)') case_force
+            base = CASES(ic) (1:pw - 1)
+         end if
+      end block
 #ifdef RDB_NO_NETCDF
-      if (trim(CASES(ic)) == "file_readers" .or. &
-          trim(CASES(ic)) == "file_readers_zstar_full" .or. &
-          trim(CASES(ic)) == "sss_restore" .or. &
-          trim(CASES(ic)) == "wetdry_file" .or. &
-          trim(CASES(ic)) == "manizza" .or. &
-          trim(CASES(ic)) == "wetdry_tidal_flat" .or. &
-          trim(CASES(ic)) == "wetdry_open_flat" .or. &
-          trim(CASES(ic)) == "tidal_files" .or. &
-          trim(CASES(ic)) == "tidal_polzin" .or. &
-          index(trim(CASES(ic)), "bulk_flux") == 1 .or. &
-          trim(CASES(ic)) == "file_readers_zstar") cycle
+      if (base == "file_readers" .or. &
+          base == "file_readers_zstar_full" .or. &
+          base == "sss_restore" .or. &
+          base == "wetdry_file" .or. &
+          base == "manizza" .or. &
+          base == "wetdry_tidal_flat" .or. &
+          base == "wetdry_open_flat" .or. &
+          base == "tidal_files" .or. &
+          base == "tidal_polzin" .or. &
+          index(base, "bulk_flux") == 1 .or. &
+          base == "file_readers_zstar") cycle
 #endif
       ! Dynamic wet/dry and eulerian_z refuse pred_corr (validate_config): ssp_rk2 only.
-      if (.not. is_wetdry_case(trim(CASES(ic))) .and. CASES(ic) (1:4) /= "eulz") &
-         call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
+      if (.not. is_wetdry_case(base) .and. base(1:4) /= "eulz") &
+         call run_case(base, trim(SCHEMES(1)))
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
-      if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
-          trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. &
-          trim(CASES(ic)) == "drain_ratio_fold_h3") cycle
-      call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
+      if (base == "diabatic_end" .or. base == "drain_ratio_h3" .or. &
+          base == "bulk_flux_bl_ratio2" .or. &
+          base == "drain_ratio_fold_h3") cycle
+      call run_case(base, trim(SCHEMES(2)))
    end do
 
+   case_force = -1   ! the case-independent fences below run at AUTO
    ! The WILL_FAIL poison legs (cycle-break `RDB_BT_INHALO_POISON >= 2000`,
    ! north-ring liveness `RDB_BT_RING_POISON /= 0` on `bth_trip_w4`) must fail
    ! through their own case's mismatch, not through an unrelated fence check:
@@ -542,6 +587,20 @@ program test_ocean_decomp_bitid_mpi
    if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
       call check_cavity_grounded_refusal()
 
+   if (nprocs > 1 .and. n_auto_runs > 0 .and. rank == 0) then
+      write (*, '(a,i0,a,i0,a,i0,a,i0,a)') "AUTO bt_halo: ", n_auto_wide, " of ", n_auto_runs, &
+         " decomposed runs resolved to a wide halo (", n_auto_wide_cases, " of ", n_auto_cases, " cases)"
+   end if
+   if (nprocs > 1 .and. bt_halo_force >= 0 .and. rank == 0) &
+      write (*, '(a,i0,a,i0,a,i0)') "forced bt_halo = ", bt_halo_force, ": ", n_forced_ok, " of ", n_forced_runs
+   if (nprocs > 1 .and. bt_halo_force >= 0 .and. len_trim(case_filter) == 0 .and. n_forced_ok < 100) then
+      if (rank == 0) write (*, '(a,i0)') "FAIL: the forced-width gate is vacuous, runs = ", n_forced_ok
+      n_fail = n_fail + 1
+   end if
+   if (nprocs > 1 .and. bt_halo_force < 0 .and. len_trim(case_filter) == 0 .and. n_auto_wide_cases < 10) then
+      if (rank == 0) write (*, '(a,i0)') "FAIL: the AUTO gate is vacuous, wide-halo cases = ", n_auto_wide_cases
+      n_fail = n_fail + 1
+   end if
    call comm%barrier()
    total_fail = n_fail
    call allreduce(comm, total_fail, MPI_SUM)
@@ -632,6 +691,22 @@ contains
       if (bth_b0) bth_b0 = label(len(label) - 2:) == "_b0"
    end function bth_b0
 
+   pure integer function case_nx(label)
+      !! Global x extent of the cases that take a pinned width (tile-fit skip only).
+      character(len=*), intent(in) :: label
+      case_nx = merge(30, NX_G, index(label, "fold") > 0 .or. index(label, "tripolar") > 0)
+   end function case_nx
+
+   pure integer function case_ny(label)
+      character(len=*), intent(in) :: label
+      case_ny = merge(24, NY_G, index(label, "fold") > 0 .or. index(label, "tripolar") > 0)
+   end function case_ny
+
+   pure integer function forced_width()
+      !! The width the decomposed legs of the case under way are pinned to, or -1 for AUTO.
+      forced_width = merge(case_force, bt_halo_force, case_force >= 0)
+   end function forced_width
+
    pure function itoa(i) result(r)
       integer, intent(in) :: i
       character(len=:), allocatable :: r
@@ -652,6 +727,7 @@ contains
       character(len=40) :: vortex_balance
       character(len=8) :: sponge_w, sponge_e
       character(len=64) :: wl
+      character(len=40) :: sal_s
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -666,6 +742,8 @@ contains
                 "project_ci = .true., "
       if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
       bt_extra = ""
+      sal_s = ""
+      if (index(label, "bthx_sal") == 1) sal_s = ", use_sal = .true., beta_sal = 0.1"
       bt_head = "auto_n_inner = .true., "
       ! Per-step (period 0) / hourly (period 3600 s) re-derivation of n_inner from
       ! the live thicknesses; the fraction sits at an n_inner threshold (see case).
@@ -682,6 +760,19 @@ contains
          if (.not. bth_ref_leg) bt_extra = bt_extra//", bt_halo = "//itoa(bth_width(label))
          if (bth_b0(label)) bt_extra = bt_extra//", bebt = 0.0"
          if (bth_nochain_env /= 0) bt_extra = bt_extra//", visc_rem_chain = .false."
+         ! Feature cases (`bthx_<feature>_w<W>`): one bt-fast-loop feature each, on
+         ! the closed seamount unless its branch below says otherwise.
+         if (index(label, "bthx_nochain") == 1) bt_extra = bt_extra//", visc_rem_chain = .false."
+         if (index(label, "bthx_subdrag") == 1) &
+            bt_extra = bt_extra//", visc_rem_chain = .false., substep_drag = .true."
+         if (index(label, "bthx_drgwave") == 1) &
+            bt_extra = bt_extra//", wave_drag = .true., wave_drag_form = 'roughness_proxy', "// &
+                       "wave_drag_scale = 1.0e4"
+         if (index(label, "bthx_nozeta") == 1) bt_extra = bt_extra//", substep_zeta_ke = .false."
+         ! init-only dtbt (a fraction of the gravity-wave limit): n_inner is derived
+         ! once at configure (about 45 on this grid), never re-derived.
+         if (index(label, "bthx_dtbtinit") == 1) &
+            bt_head = "dtbt = -0.2, dtbt_reset_period = -1.0, "
       end if
       ! The periodic-edge cases need more than two substeps per solve: the
       ! corner they pin reaches the owned cells from the third substep on.
@@ -691,6 +782,9 @@ contains
       if (label == "visc_rem_chain") then
          bt_extra = ", visc_rem_chain = .true., frhat_scheme = 'hybrid'"
       end if
+      ! Forced width on the decomposed legs of every case that leaves bt_halo to AUTO.
+      if (forced_width() >= 0 .and. .not. is_bth_case(label) .and. .not. bth_ref_leg) &
+         bt_extra = bt_extra//", bt_halo = "//itoa(forced_width())
       hv_extra = ""
       ! dx = 250 m puts the fixed nu_h = 200 far past the viscous CFL: clamp it.
       if (index(label, "drain") == 1) hv_extra = ", bound_kh = .true."
@@ -930,7 +1024,10 @@ contains
       case ("bth_seamount_w2", "bth_seamount_w4", "bth_seamount_w8", &
             "bth_seamount_w2_b0", "bth_seamount_w4_b0", "bth_seamount_w8_b0", &
             "bth_channel_w2", "bth_channel_w4", "bth_channel_w8", &
-            "bth_channel_w2_b0", "bth_channel_w4_b0", "bth_channel_w8_b0")
+            "bth_channel_w2_b0", "bth_channel_w4_b0", "bth_channel_w8_b0", &
+            "bthx_nochain_w4", "bthx_nochain_w8", "bthx_chain_w4", "bthx_chain_w8", "bthx_subdrag_w4", "bthx_subdrag_w8", &
+            "bthx_drgwave_w4", "bthx_drgwave_w8", "bthx_dtbtinit_w4", "bthx_dtbtinit_w8", &
+            "bthx_nomaskwall_w4", "bthx_nozeta_w4")
          ! Wide-halo march-in geometries: a seamount over variable bathymetry,
          ! closed on four walls (`seamount`) or re-entrant west/east (`channel`).
          nml = common// &
@@ -943,9 +1040,21 @@ contains
          if (index(label, "bth_channel") == 1) then
             nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                   "north = 'wall' /"//NL
+         else if (index(label, "bthx_nomaskwall") == 1) then
+            nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall', "// &
+                  "mask_wall_velocity = .false. /"//NL
          else
             nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
          end if
+         if (index(label, "bthx_subdrag") == 1) &
+            nml = nml//"&ocean_bdrag_nml form = 'linear', r = 2.0e-3, hbbl = 10.0, bg_vel = 0.1 /"//NL
+         ! A LIVE bottom drag, so the viscous-remnant chain (hvel_mom6 + bbl_glue are on by
+         ! default) produces a non-trivial `av_rem` / `bt_rem` / `wt_u`: `bthx_chain` with
+         ! the chain on, `bthx_nochain` with it off (the plain `bth_*` cases leave the drag
+         ! at zero, which switches the glue off and the chain with it).
+         if (index(label, "bthx_chain") == 1 .or. index(label, "bthx_nochain") == 1 .or. &
+             index(label, "bthx_drgwave") == 1) &
+            nml = nml//"&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0 /"//NL
       case ("bth_spherical_w2", "bth_spherical_w4", "bth_spherical_w8", &
             "bth_spherical_w2_b0", "bth_spherical_w4_b0", "bth_spherical_w8_b0")
          ! Wide-halo march-in on a lon-lat sector (seamount, Wright EOS).
@@ -1082,7 +1191,7 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 2, west_tidal_amp = 0.5, 0.2, west_tidal_phase = 0.0, 1.0, "// &
                "west_tidal_omega = 1.4051890e-4, 1.4544410e-4 /"//NL
-      case ("bthx_tides_w4", "bthx_tides_w8")
+      case ("bthx_tides_w4", "bthx_tides_w8", "bthx_sal_w4", "bthx_sal_w8")
          ! Equilibrium body tide (the `eta_forcing` seam) on a lon-lat sector,
          ! with a tidal west edge: the wide solve copies in and exchanges
          ! `eta_forcing` once per solve and receives the model time.
@@ -1103,13 +1212,16 @@ contains
                "west_tidal_omega = 1.4051890e-4, 1.4544410e-4, 0.7292117e-4, 0.6759774e-4, "// &
                "obc_tidal_nodal = .true. /"//NL// &
                "&ocean_tides_nml enable = .true., constituents = 'M2,S2,K1,O1', "// &
-               "ref_date = '2020-03-15', add_nodal = .true. /"//NL
-      case ("bthx_psurf_w4")
+               "ref_date = '2020-03-15', add_nodal = .true."// &
+               trim(sal_s)//" /"//NL
+      case ("bthx_psurf_w4", "bthx_psurfv_w4", "bthx_psurfv_w8")
          ! Surface-pressure loading rides the same `eta_forcing` seam.  The load
          ! here is UNIFORM (no file-free non-uniform path exists), and the kernel
          ! reads only differences of eta_forcing, so this case CANNOT fail on the
          ! wide eta_forcing VALUES: it only runs the path.  `bthx_tides_*` (a
          ! body tide varying in space and time) is the case that tests them.
+         ! `bthx_psurfv_*` is the same namelist with a spatially varying load
+         ! written into `sf%p_surf` / `p_surf_atm` after setup (`apply_psurf_pattern`).
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 20000.0, dy = 20000.0 /"//NL// &
@@ -1438,7 +1550,7 @@ contains
                "&tracer_nml initial_temperature = 9.0, initial_salinity = 34.8, "// &
                "T_init_surface = 16.0, T_init_bottom = 3.0, "// &
                "S_init_surface = 34.6, S_init_bottom = 35.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"//bt_extra//" /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, nu_4 = 1.0e11 /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
                "&ocean_eos_nml eos = 'linear' /"//NL// &
@@ -1719,7 +1831,7 @@ contains
                "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
                "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
                "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"//bt_extra//" /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
@@ -1751,7 +1863,7 @@ contains
                "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
                "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
                "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"//bt_extra//" /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
@@ -1807,7 +1919,7 @@ contains
                "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
                "&nonhydrostatic_nml nz_layers = "//merge("10", "4 ", &
                                                          index(label, "bulk_flux_bl") == 1)//" /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"//bt_extra//" /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
@@ -2070,6 +2182,7 @@ contains
       call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize)
       if (ierr /= OCEAN_STATUS_OK) return
 
+      if (psurf_pattern) call apply_psurf_pattern(engine)
       call engine_enter_data(engine, cfg)
       if (len_trim(balance_ref) > 0) then
          call poison_velocity_ghosts(engine, crank)
@@ -2110,6 +2223,7 @@ contains
          snap%fold_wide_active = ocean_fold_ctx_is_distributed(FOLD_CTX_WIDE)
       end block
       cur_n_inner = cfg%ocean%bt%n_inner
+      snap%bt_halo = cfg%ocean%bt%bt_halo
       if (print_counts .and. csize > 1 .and. crank == 0) then
          write (*, '(a,i0,a,i0,a,i0,a,l1,a,a)') "COUNTS n_inner=", cfg%ocean%bt%n_inner, &
             " steps=", n_steps_cur, " stride=", engine%state%dyn%bt_work%inhalo_stride, &
@@ -2389,7 +2503,7 @@ contains
    end subroutine take_snapshot
 
 #ifndef RDB_NO_NETCDF
-   subroutine check_resume_leg(nml, straight, tag)
+   subroutine check_resume_leg(nml, straight, tag, ref, bth1, bth2)
       !! The write/resume leg: the same decomposed run, checkpointed at
       !! N_CKPT to per-rank files (the driver's `<dir>/restart_rank_NNNNNN.nc`
       !! convention, through `ocean_state_restart_write`), torn down, and
@@ -2398,13 +2512,22 @@ contains
       !! steps.  Every registry field (and the BT end-of-step eta) must
       !! equal the STRAIGHT decomposed run's bitwise over the FULL local
       !! array, ghosts included.  Counts into `n_fail` (rank-summed).
+      !! With `ref`, `bth1` / `bth2` the two legs may use DIFFERENT `bt_halo`
+      !! settings (the value overrides the namelist's; -1 = AUTO): a restart
+      !! written with one march-in must resume under the other, so the run does
+      !! not depend on what the previous leg used.  The ghosts then legitimately
+      !! differ (a wide march leaves other ghost rows than the per-substep one),
+      !! so the owned cells of the resumed run are compared against the
+      !! one-rank reference `ref` instead.
       character(len=*), intent(in) :: nml, tag
       type(snap_t), intent(in) :: straight
+      type(snap_t), intent(in), optional :: ref
+      integer, intent(in), optional :: bth1, bth2
       type(snap_t) :: res
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       character(len=512) :: fname
-      integer :: ierr, step0, glob(2), nb
+      integer :: ierr, step0, glob(2), nb, nfin_r
       real(wp) :: t
       logical :: ok
 
@@ -2416,6 +2539,7 @@ contains
 
       ! ---- leg 1: N_CKPT steps, checkpoint ----
       call read_config_from_string(nml, cfg, ierr=ierr)
+      if (present(bth1)) cfg%ocean%bt%bt_halo = bth1
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr == OCEAN_STATUS_OK) &
          call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
@@ -2434,6 +2558,7 @@ contains
       ! ---- leg 2: warm restart from the per-rank files, finish ----
       if (ierr == OCEAN_STATUS_OK) then
          call read_config_from_string(nml, cfg, ierr=ierr)
+         if (present(bth2)) cfg%ocean%bt%bt_halo = bth2
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
          if (ierr == OCEAN_STATUS_OK) &
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs, &
@@ -2453,13 +2578,19 @@ contains
       end if
       call delete_file(trim(fname))
 
-      if (ok) call compare_full(res, straight, nb, tag)
+      if (ok .and. present(ref)) then
+         call compare(res, ref, nb, nfin_r, tag)
+         nb = nb + nfin_r
+      else if (ok) then
+         call compare_full(res, straight, nb, tag)
+      end if
       glob = [nb, merge(0, 1, ok)]
       call allreduce(comm, glob, op=MPI_SUM)
       if (rank == 0) then
          if (sum(glob) == 0) then
-            write (*, '(3a,i0,a)') "case ", tag, " write/resume: IDENTICAL (", &
-               straight%n, " fields, ghosts included)"
+            write (*, '(3a,i0,2a)') "case ", tag, " write/resume: IDENTICAL (", &
+               straight%n, " fields, ", merge("owned cells vs the one-rank reference)", &
+                                              "ghosts included                      )", present(ref))
          else
             write (*, '(3a,i0,a,i0)') "FAIL ", tag, " write/resume: mismatches=", glob(1), &
                " leg_failures=", glob(2)
@@ -2467,6 +2598,29 @@ contains
       end if
       if (sum(glob) > 0) n_fail = n_fail + 1
    end subroutine check_resume_leg
+
+   subroutine apply_psurf_pattern(engine)
+      !! A smooth, spatially varying atmospheric load (Pa) as a function of the GLOBAL
+      !! cell index, ghosts included, written host-side before `engine_enter_data` (the
+      !! copy-in maps it).  Amplitude 1500 Pa is about 15 cm of inverse barometer; a
+      !! uniform load is inert (only its gradient is physical), this one has a
+      !! gradient in both directions across every rank seam.
+      type(ocean_engine_t), intent(inout) :: engine
+      integer :: i, j, gi, gj, ng
+      real(wp) :: x, y
+      real(wp), parameter :: TWO_PI = 6.283185307179586_wp
+      ng = engine%grid%nghost
+      do j = 1, size(engine%state%surface_flux%p_surf, 2)
+         do i = 1, size(engine%state%surface_flux%p_surf, 1)
+            gi = i - ng + engine%grid%i_offset_global
+            gj = j - ng + engine%grid%j_offset_global
+            x = TWO_PI*real(gi, wp)/real(BTH_NX, wp)
+            y = TWO_PI*real(gj, wp)/real(BTH_NY, wp)
+            engine%state%surface_flux%p_surf(i, j) = 1500.0_wp*sin(x + 0.5_wp*y) + 700.0_wp*cos(2.0_wp*y)
+         end do
+      end do
+      engine%state%surface_flux%p_surf_atm = engine%state%surface_flux%p_surf
+   end subroutine apply_psurf_pattern
 
    subroutine advance(engine, cfg, t, nsteps, ierr)
       !! The driver's step sequence, `nsteps` times from `t`.
@@ -2785,12 +2939,17 @@ contains
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
       integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img, n_layouts_run
+      logical :: case_wide
       character(len=96) :: tag
+      character(len=8) :: wtag
       type(conservation_budget_t) :: buds(8)
 
+      wtag = ""
+      if (case_force >= 0) wtag = "+w"//itoa(case_force)
       n_steps_cur = N_STEPS
       where_report = is_bth_case(label)
       if (where_report .and. bth_steps_env > 0) n_steps_cur = bth_steps_env
+      psurf_pattern = index(label, "bthx_psurfv") == 1
       balance_ref = ""
       if (index(label, "balance_rest") == 1) balance_ref = "bottom_rest"
       if (index(label, "balance_keep") == 1) balance_ref = "keep_h"
@@ -2827,9 +2986,10 @@ contains
 
       nbud = 0
       n_layouts_run = 0
+      case_wide = .false.
       do px = nprocs, 1, -1
          if (mod(nprocs, px) /= 0) cycle
-         write (tag, '(4a,i0,a,i0)') label, "/", scheme, " ", px, "x", nprocs/px
+         write (tag, '(5a,i0,a,i0)') label, trim(wtag), "/", scheme, " ", px, "x", nprocs/px
          if (is_bth_case(label) .and. nprocs > 1) then
             ! The wide band (nghost + W) must fit the smallest tile.
             if (3 + bth_width_eff(label) + bth_fold_extra(label) > &
@@ -2837,6 +2997,14 @@ contains
                if (rank == 0) write (*, '(3a,i0,a)') "SKIP ", trim(tag), &
                   ": bt_halo does not fit the smallest tile (nghost + W [+ 1 under the fold] = ", &
                   3 + bth_width_eff(label) + bth_fold_extra(label), ")"
+               cycle
+            end if
+         end if
+         if (forced_width() > 0 .and. .not. is_bth_case(label) .and. nprocs > 1) then
+            if (3 + forced_width() - mod(forced_width(), 2) + merge(1, 0, index(label, "tripolar") > 0 .or. &
+                                                                    index(label, "fold") > 0) > &
+                min(case_nx(label)/px, case_ny(label)/(nprocs/px))) then
+               if (rank == 0) write (*, '(3a)') "SKIP ", trim(tag), ": forced bt_halo does not fit the smallest tile"
                cycle
             end if
          end if
@@ -2848,6 +3016,7 @@ contains
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
             if (is_bth_case(label)) call check_bth_counters(dec, label, tag, nbad, px)
+            if (.not. is_bth_case(label)) call check_auto_resolution(dec, label, tag, nbad, px, case_wide)
             if (is_wetdry_case(label)) then
                call compare_ghosts(dec, ref, nghost_bad, trim(tag))
                nbad = nbad + nghost_bad
@@ -2894,13 +3063,34 @@ contains
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
                  label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
                  label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label) .or. &
-                 label == "bthx_tripsea_w4") .and. &
+                 label == "bthx_tripsea_w4" .or. &
+                 ! AUTO-resolved cases: the checkpoint is written and resumed with the
+                 ! wide march (both legs AUTO), plain walls / spherical / the fold.
+                 (label == "island_basin" .or. label == "spherical" .or. label == "tripolar")) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
                  label == "cavity_mass_comp")) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
                                      trim(tag))
+               ! A restart is independent of the march-in the previous leg used:
+               ! written per-substep (bt_halo = 0) and resumed AUTO (wide), and
+               ! the other way round, owned cells against the one-rank reference.
+               if (case_force > 0) then
+                  ! Sea ice with a pinned width: a restart written per-substep resumes wide
+                  ! and the other way round (the two marches leave different ghosts, which
+                  ! the ice state must not depend on), owned cells against the one-rank run.
+                  call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                        trim(tag)//" [0 -> wide]", ref, bth1=0, bth2=case_force)
+                  call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                        trim(tag)//" [wide -> 0]", ref, bth1=case_force, bth2=0)
+               end if
+               if (label == "island_basin" .or. label == "tripolar") then
+                  call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                        trim(tag)//" [0 -> auto]", ref, bth1=0, bth2=BT_HALO_AUTO_SENTINEL)
+                  call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                        trim(tag)//" [auto -> 0]", ref, bth1=BT_HALO_AUTO_SENTINEL, bth2=0)
+               end if
             end if
 #endif
             if (nbud < size(buds)) then
@@ -2925,6 +3115,10 @@ contains
       ! subroutine's own docstring.
       ! A `bth*` case whose every layout was skipped by the tile-fit rule proved
       ! nothing: that is a failure, not a pass.
+      if (.not. is_bth_case(label) .and. nprocs > 1 .and. forced_width() < 0) then
+         n_auto_cases = n_auto_cases + 1
+         if (case_wide) n_auto_wide_cases = n_auto_wide_cases + 1
+      end if
       if (is_bth_case(label) .and. n_layouts_run == 0) then
          if (rank == 0) write (*, '(6a)') "FAIL ", label, "/", scheme, &
             ": every layout was skipped by the tile-fit rule at np = ", itoa(nprocs), &
@@ -2944,7 +3138,7 @@ contains
       !! `eta_forcing` is exchanged once per solve).
       character(len=*), intent(in) :: label
       has_eta_forcing = index(label, "bthx_tides") == 1 .or. index(label, "bthx_psurf") == 1 .or. &
-                        index(label, "bthx_trip_tides") == 1
+                        index(label, "bthx_trip_tides") == 1 .or. index(label, "bthx_sal") == 1
    end function has_eta_forcing
 
    pure logical function refreshes_widths(label)
@@ -2954,6 +3148,99 @@ contains
       refreshes_widths = index(label, "bthx_porous") == 1 .or. index(label, "bthx_zfixed") == 1 .or. &
                          index(label, "bthx_trip_porous") == 1 .or. index(label, "bthx_trip_zfixed") == 1
    end function refreshes_widths
+
+   pure logical function auto_must_stay_zero(label)
+      !! Cases whose configuration `bt_halo_auto_exclusion` must keep at AUTO = 0
+      !! (no passing `bth*` case proves them): the feature is on, so a wide
+      !! halo here means the exclusion leaked.
+      character(len=*), intent(in) :: label
+      auto_must_stay_zero = index(label, "wetdry_") == 1 .or. &
+                            index(label, "cavity_") == 1 .or. index(label, "dtbt_reset") == 1 .or. &
+                            label == "chapman_obc" .or. &
+                            label == "obc_sponge_east" .or. label == "obc_radiation_sponge" .or. &
+                            label == "periodic_sponge"
+   end function auto_must_stay_zero
+
+   pure logical function auto_must_be_wide(label)
+      !! The plain wall / periodic / spherical / tripolar / island cases that
+      !! MUST resolve to a wide halo wherever the tile fits (nghost + 2 [+ 1
+      !! under the fold]); the AUTO gate is vacuous without them.
+      character(len=*), intent(in) :: label
+      auto_must_be_wide = label == "island_basin" .or. label == "spherical" .or. label == "tripolar" .or. &
+                          label == "periodic_channel_zstar" .or. label == "closures" .or. &
+                          label == "eulz_periodic"
+   end function auto_must_be_wide
+
+   subroutine check_auto_resolution(dec, label, tag, nbad, px, case_wide)
+      !! A case that leaves `bt_halo` unset runs AUTO on every decomposed leg.
+      !! Reports the resolved width, tallies it, and asserts (i) the packed
+      !! exchange counter agrees with the resolved width (the wide march ran iff
+      !! `bt_halo > 0`), (ii) an excluded configuration resolved to 0, (iii) the
+      !! plain must-be-wide cases resolved wide wherever the smallest tile holds
+      !! `nghost + 2` (`+ 1` under the fold).  One rank is always 0.
+      type(snap_t), intent(in) :: dec
+      character(len=*), intent(in) :: label, tag
+      integer, intent(inout) :: nbad
+      integer, intent(in) :: px
+      logical, intent(inout) :: case_wide
+      integer :: tile, need, bad
+      logical :: fits
+
+      if (nprocs == 1) return
+      if (forced_width() >= 0) then
+         ! Forced width (RDB_BITID_BT_HALO or a `+w<W>` case): not AUTO.  Assert the march that ran is
+         ! the forced one, so the leg cannot pass vacuously: at width 0 the per-substep
+         ! exchanges (grouped / mid-substep u) must have fired (the packed count says
+         ! nothing here: the narrow path packs its exchanges too); at width > 0 the
+         ! packed ones.
+         bad = 0
+         if (dec%bt_halo /= forced_width()) bad = bad + 1
+         if (n_steps_cur > 0) then
+            if (forced_width() == 0) then
+               if (dec%cnt_bt_group + dec%cnt_bt_u <= 0_int64) bad = bad + 1
+            else
+               if (dec%cnt_pk <= 0_int64) bad = bad + 1
+            end if
+         end if
+         n_forced_runs = n_forced_runs + 1
+         if (bad > 0) then
+            write (*, '(3a,i0,a,i0,a,i0,a,i0)') "FAIL ", trim(tag), ": forced bt_halo resolved to ", dec%bt_halo, &
+               " pk=", dec%cnt_pk, " bt_group=", dec%cnt_bt_group, " bt_u=", dec%cnt_bt_u
+            nbad = nbad + bad
+         else
+            if (n_steps_cur > 0) n_forced_ok = n_forced_ok + 1
+            if (rank == 0) write (*, '(3a,i0,a,i0,a,i0,a,i0)') "case ", trim(tag), ": forced bt_halo = ", dec%bt_halo, &
+               " (pk=", dec%cnt_pk, " bt_group=", dec%cnt_bt_group, " bt_u=", dec%cnt_bt_u
+         end if
+         return
+      end if
+      n_auto_runs = n_auto_runs + 1
+      if (dec%bt_halo > 0) then
+         n_auto_wide = n_auto_wide + 1
+         case_wide = .true.
+      end if
+      bad = 0
+      ! (a zero-step `_t0` case never marches: no packed exchange to count)
+      ! With the packed per-substep exchange the `bt_halo = 0` path packs too,
+      ! so the count only says a marching run exchanged at all.
+      if (n_steps_cur > 0) then
+         if (dec%bt_halo > 0 .and. dec%cnt_pk <= 0_int64) bad = bad + 1
+      end if
+      if (auto_must_stay_zero(label) .and. dec%bt_halo /= 0) bad = bad + 1
+      tile = min(NX_G/px, NY_G/(nprocs/px))
+      need = 3 + 2 + merge(1, 0, index(label, "tripolar") > 0)
+      fits = tile >= need
+      ! (the in-halo legs, RDB_BITID_INHALO = 1 / 2, switch inhalo_march on: an AUTO exclusion)
+      if (auto_must_be_wide(label) .and. fits .and. dec%bt_halo == 0 .and. &
+          inhalo_mode /= 1 .and. inhalo_mode /= 2) bad = bad + 1
+      if (bad > 0) then
+         write (*, '(3a,i0,a,i0,a,l1,a)') "FAIL ", trim(tag), ": AUTO bt_halo resolved to ", dec%bt_halo, &
+            " pk=", dec%cnt_pk, " (wide expected: ", auto_must_be_wide(label) .and. fits, ")"
+         nbad = nbad + bad
+      else if (rank == 0) then
+         write (*, '(3a,i0,a,i0,a)') "case ", trim(tag), ": AUTO bt_halo = ", dec%bt_halo, " (pk=", dec%cnt_pk, ")"
+      end if
+   end subroutine check_auto_resolution
 
    subroutine check_bth_counters(dec, label, tag, nbad, px)
       !! Non-vacuity AND message-count check of a `bth_*` case.  Per BT solve
@@ -2971,13 +3258,15 @@ contains
       integer, intent(inout) :: nbad
       integer, intent(in) :: px
          !! East-west process count of this layout.
-      integer :: w, cycles, cad, solves
+      integer :: w, cycles, cad, solves, ninn
       logical :: fold_expected
       integer(int64) :: expect, exp_c2d, exp_fx, exp_fw
 
       w = bth_width(label)
       cad = bt_wide_cycle_len(3 + bth_width_eff(label)) + bth_poison_env/1000
-      cycles = (BTH_NINNER - 1)/cad
+      ninn = BTH_NINNER
+      if (index(label, "bthx_dtbtinit") == 1) ninn = cur_n_inner
+      cycles = (ninn - 1)/cad
       solves = 2*n_steps_cur
       expect = int(solves, int64)*int(2 + cycles, int64)
       ! Centre-2D exchanges: `H_ref` once, plus the wide `eta_forcing` once per
@@ -3009,7 +3298,7 @@ contains
             " active=", dec%fold_wide_active, " expected=", fold_expected
          nbad = nbad + 1
       end if
-      if (dec%fold_wide_active) exp_fw = int(solves, int64)*2_int64*int(BTH_NINNER, int64)
+      if (dec%fold_wide_active) exp_fw = int(solves, int64)*2_int64*int(ninn, int64)
       if (dec%cnt_fold_wide /= exp_fw) then
          write (*, '(3a,i0,a,i0,a,i0)') "FAIL ", trim(tag), &
             ": wide fold groups on rank ", rank, " = ", dec%cnt_fold_wide, " expected=", exp_fw

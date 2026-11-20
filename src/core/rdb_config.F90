@@ -136,18 +136,26 @@ module rdb_config
    public :: MAX_ICE_HLIM_VALS
    public :: BT_HALO_AUTO_SENTINEL
    public :: BT_HALO_AUTO_WIDTH
+   public :: BT_HALO_AUTO_MIN_NINNER
+   public :: BT_HALO_AUTO_LADDER
    public :: ice_hlim_count
    public :: ice_hlim_spec_is_valid
 
    integer, parameter :: BT_HALO_AUTO_SENTINEL = -1
       !! `&ocean_bt_nml bt_halo` default: AUTO.  Resolved at configure (in the
-      !! driver, where `compute_size` is known).  AUTO resolves to 0 — the
-      !! march-in is OPT-IN (set `bt_halo` explicitly) until the performance
-      !! stage lands (it is verified bitwise equal to the one-rank run on the
-      !! configurations the `bth*` / `bthx*` cases cover).  See `resolve_bt_halo`.
+      !! engine, where `compute_size` and the feature flags are known): one
+      !! rank => 0; any configuration the `bth*` / `bthx*` cases of
+      !! `test_ocean_decomp_bitid_mpi` do not prove bitwise => 0; else
+      !! `BT_HALO_AUTO_WIDTH` capped by `n_inner` and the tile.  See
+      !! `resolve_bt_halo`.
    integer, parameter :: BT_HALO_AUTO_WIDTH = 8
-      !! The recommended EXPLICIT march-in width (the validated production
-      !! width).  AUTO no longer selects it — see `resolve_bt_halo`.
+      !! The width AUTO aims for (before the `n_inner` and tile caps).
+   integer, parameter :: BT_HALO_AUTO_LADDER(3) = [8, 4, 2]
+      !! The widths AUTO may pick (each has a `bth*` case in
+      !! `test_ocean_decomp_bitid_mpi`): the widest not above the target, the
+      !! `n_inner` cap and the tile.
+   integer, parameter :: BT_HALO_AUTO_MIN_NINNER = 4
+      !! AUTO stays at 0 when the barotropic solve has fewer substeps than this.
 
    real(wp), parameter :: ZFIXED_CAVITY_NU_H_MIN = 2.0_wp
       !! Lower envelope of `&ocean_hvisc_nml nu_h` (m²/s) under
@@ -1077,12 +1085,17 @@ module rdb_config
       character(len=64) :: wave_drag_var = "rH"
          !! Reserved for PR-14 (MOM6 `BT_WAVE_DRAG_VAR`); unused today.
       integer :: bt_halo = BT_HALO_AUTO_SENTINEL
-         !! Wide-halo march-in width.  `-1` (default) = AUTO, which resolves
-         !! to 0: the march-in is OPT-IN.  It is verified bitwise equal to the
-         !! one-rank `bt_halo = 0` run on the configurations tested
-         !! (`test_ocean_decomp_bitid_mpi`, cases `bth_*` / `bthx_*`); AUTO
-         !! stays at 0 until the performance stage lands.  `8`
-         !! (`BT_HALO_AUTO_WIDTH`) is the recommended explicit width.
+         !! Wide-halo march-in width.  `-1` (default) = AUTO: on more than one
+         !! rank, the widest of 8 / 4 / 2 not above `BT_HALO_AUTO_WIDTH`
+         !! and `n_inner - nghost + 2` that fits the smallest tile (one more
+         !! cell across the tripolar fold); 0 on one rank, when nothing fits,
+         !! when `n_inner` is below `BT_HALO_AUTO_MIN_NINNER`, and for every
+         !! configuration `bt_halo_auto_exclusion` lists (no bitwise `bth*`
+         !! case).  The march-in is verified bitwise equal to the one-rank
+         !! `bt_halo = 0` run on the configurations tested
+         !! (`test_ocean_decomp_bitid_mpi`, cases `bth_*` / `bthx_*`), and the
+         !! whole test now runs AUTO on every decomposed leg of the cases that
+         !! leave it unset.
          !! `0` = explicit off (per-substep packed exchange, v1 bit-identical).
          !! Even positive value: widen the BT ghost band to `nghost + bt_halo`
          !! and fire one grouped exchange every `bt_halo/2` substeps.  Odd
@@ -4698,12 +4711,17 @@ module rdb_config
          character(len=:), allocatable, intent(out) :: reason
       end subroutine ice_hlim_spec_is_valid
 
-      pure module function resolve_bt_halo(requested, compute_size, exclusion_active) result(width)
+      pure module function resolve_bt_halo(requested, compute_size, exclusion_active, nghost, min_tile, &
+                                           n_inner, fold) result(width)
             !! See submodule [[rdb_config_validate]].
          implicit none
          integer, intent(in) :: requested
          integer, intent(in) :: compute_size
          logical, intent(in) :: exclusion_active
+         integer, intent(in) :: nghost
+         integer, intent(in) :: min_tile
+         integer, intent(in) :: n_inner
+         logical, intent(in) :: fold
          integer :: width
       end function resolve_bt_halo
 

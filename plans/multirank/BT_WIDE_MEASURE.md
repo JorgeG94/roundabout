@@ -517,6 +517,176 @@ were measured without the fold); `bt_halo` odd values across the fold beyond the
 fold stays accepted with every tested combination; AUTO still resolves to 0.
 
 
+## Stage 7: AUTO resolves to a wide halo (`feat/bt-wide-halo-auto`)
+
+`&ocean_bt_nml bt_halo = -1` (the default) now resolves on more than one rank to a wide halo wherever a
+bitwise `bth*` case proves it, and to 0 everywhere else.
+
+### Measurement behind the width
+
+V100 x 2 (GPUs 2 and 3, one rank each, HPC-X CUDA-aware, nvfortran 26.5), binary built from this branch, explicit
+`bt_halo = W`.  SINGLE runs for the W scan (not medians), and the host was busy (1-min load 5 to 21: my own builds and
+a CPU MPI test run, plus other projects) with the locks held and `nvidia-smi` clean on 2 and 3.  Read the
+wall column with +-10 % in mind, and the `ocean_barotropic_solver` column (a profiler bucket, steadier) as the signal.
+Benches: `seamount_bt8` (512 x 256 x 30, 2 d, `n_inner` = 65), `dg50` (300 x 300 x 50, 2 d, `n_inner` = 48), and the
+same `dg50` with `dt_fixed` cut so that `n_inner` is small: `dgm` (dt 400, `n_inner` = 16, 0.67 d) and `dgs` (dt 150,
+`n_inner` = 6, 0.25 d; these two runs are only 6 to 8 s long, setup is a visible part of them).
+
+| bench (`n_inner`) | W | wall s | `ocean_barotropic_solver` s | `ocean_comms_bt` s |
+|---|---|---|---|---|
+| seamount (65) | 0 | 46.3 | 27.1 | 16.7 |
+| | 2 | 34.9 | 15.6 | 4.7 |
+| | 4 | 36.2 | 16.2 | 4.3 |
+| | 8 | 37.5 | 16.9 | 3.3 |
+| | 16 | 38.8 | 17.8 | 2.0 |
+| dg50 (48) | 0 | 13.6 | 7.5 | 4.0 |
+| | 2 | 8.5 | 3.1 | 1.0 |
+| | 4 | 8.0 | 2.6 | 0.52 |
+| | 8 | 7.9 | 2.5 | 0.41 |
+| | 16 | 9.5 | 3.6 | 0.28 |
+| dgm (16) | 0 | 6.9 | 1.68 | 0.96 |
+| | 2 | 7.7 | 1.86 | 1.05 |
+| | 4 | 7.6 | 1.73 | 0.91 |
+| | 8 | 7.3 | 1.56 | 0.76 |
+| | 16 | 7.2 | 1.46 | 0.66 |
+| dgs (6) | 0 | 5.9 | 0.71 | 0.39 |
+| | 2 | 5.8 | 0.59 | 0.16 |
+| | 4 | 5.8 | 0.58 | 0.16 |
+| | 8 | 5.8 | 0.56 | 0.14 |
+| | 16 | 5.7 | 0.55 | 0.12 |
+
+Reading.  The first wide step (W = 2) takes most of the gain wherever the solve has many substeps (the in-loop
+exchange count drops from 3 + 1 rounds per substep to one packed one per cycle, and the mid-substep u exchange goes
+away).  Past W = 4 the curve is flat to rising: the redundant band compute eats what the saved exchanges win (seamount:
++4 % solver per doubling; dg50 at 16: worse than 8).  W = 2 LOSES to `bt_halo = 0` on the mid case (`dgm`, 16 substeps,
+cycle of 3 substeps), so a narrow cycle only pays when the solve is long or the tile forces it.  W = 8 is within noise
+of the best on every bench, so the target is 8.  Wider than a solve is useless (the cycle `nghost + W - 2` past
+`n_inner` buys no further exchange), so AUTO caps W at `n_inner - nghost + 2`; at `n_inner` = 6 that is 5, so 4 (the
+rung below), which measured the same as 8.  `n_inner` below `BT_HALO_AUTO_MIN_NINNER = 4` resolves to 0: the cap leaves
+no rung above 2 and nothing below `n_inner` = 6 was measured, so the guard is conservative, not measured.
+
+The rule (`resolve_bt_halo`): one rank 0; excluded 0; else the widest rung of {8, 4, 2} not above the `n_inner` cap
+that fits the smallest tile (`nghost + W <= min(nx/px, ny/py)`, one more across the tripolar fold), shrinking and never
+refusing; 0 if none fits.  AUTO is resolved after `configure_ocean_bt_split` because `auto_n_inner` derives `n_inner`
+there; every input is rank-uniform.  Rungs are only widths a `bth*` case proves (2, 4, 8): W = 16 has no case and is not
+selected.
+
+### AUTO vs `bt_halo = 0` on the same binary, 2 GPUs (two runs each, interleaved, load 10 to 20)
+
+| bench | resolved | `bt_halo = 0` wall s | AUTO wall s | solver s (0 / AUTO) |
+|---|---|---|---|---|
+| seamount (`n_inner` 65) | 8 | 46.9, 47.2 | 32.0, 32.9 | 27.6 / 12.7, 13.4 |
+| dg50 (48) | 8 | 10.1, 10.2 | 7.9, 7.9 | 4.7 / 2.5 |
+| dgm (16) | 8 (cap 15 -> 8) | 6.9, 7.1 | 6.2, 6.3 | 1.7 / 1.0 |
+| dgs (6) | 4 | 5.9, 5.9 | 5.8, 5.8 | 0.70 / 0.57 |
+
+So AUTO buys 30 % of wall on the long-solve seamount bench, 22 % on `dg50`, 10 % on `dgm`, 2 % on the 6-substep case
+where the run is short and dominated by everything but the barotropic solve.  On a realistic case with a 3D
+mixing-heavy step (extreme, `nk100`: ML-comm bound) the stage-5 measurements stand: -5 % to ~0 %.  All of this is np 2;
+np 1 is unchanged by construction (AUTO = 0 there).
+
+### Review follow-up: what was proven (stage 7b)
+
+An independent review of stage 7 found a coverage regression and several features that AUTO ran wide with no case
+behind them.  All of it is gated by `test_ocean_decomp_bitid_mpi` now; gfortran 15.1 + OpenMPI 5.0.5 at np 2 and 4, both
+split schemes, every layout where the tile fits.
+
+**Width 0 on several ranks.**  Every unset case runs AUTO, so the per-substep decomposed march was exercised only on
+excluded cases and on layouts too small for a wide halo.  `RDB_BITID_BT_HALO=<w>` pins `bt_halo = w` on the decomposed
+legs of every case that leaves it unset (the one-rank reference stays AUTO = 0), and the test asserts per run that the
+march it asked for is the one that ran: at 0 the grouped / mid-substep exchanges fire and no packed wide exchange does.
+ctest legs `rdb_test_ocean_decomp_bitid_mpi_{2,4}rank_bt0` run the whole case list that way, each in its own working
+directory (the resume legs write `bitid_resume_rst/` relative to it).  Whole list at np 2: 1076 IDENTICAL, 0 FAIL; at
+np 4: 1364 IDENTICAL, 0 FAIL.
+
+**Features AUTO ran wide with no case.**  Each now has a `bthx_<feature>_w4` case (w8 where the tile fits), all bitwise:
+
+| feature | case | result |
+|---|---|---|
+| viscous-remnant chain, live (quadratic bottom drag so `av_rem`, `bt_rem`, `wt_u` are not trivially 1) | `bthx_chain` | bitwise |
+| chain off (`visc_rem_chain = .false.`), same live drag | `bthx_nochain` | bitwise |
+| `substep_drag` (chain off, linear drag) | `bthx_subdrag` | bitwise |
+| barotropic wave drag, roughness proxy, live drag | `bthx_drgwave` | bitwise: exclusion lifted |
+| scalar SAL (`beta_sal`) | `bthx_sal` | bitwise |
+| spatially varying surface pressure (a smooth load written into `sf%p_surf` after setup) | `bthx_psurfv` | bitwise |
+| init-only `dtbt` (`dtbt_reset_period < 0`, `n_inner` 49 derived once) | `bthx_dtbtinit` | bitwise |
+| `mask_wall_velocity = .false.` | `bthx_nomaskwall_w4` | bitwise |
+| `substep_zeta_ke = .false.` | `bthx_nozeta_w4` | bitwise |
+
+Two findings about the existing cases rather than the code: the plain `bth_*` cases leave the bottom drag at zero, which
+switches `bbl_glue` off and the whole viscous-remnant chain with it (the log says `glue OFF`), so they never exercised a
+live chain; `bthx_chain` does.  And `bthx_psurf` is a uniform load, which the kernel cannot see; `bthx_psurfv` is the one
+that tests the wide `eta_forcing` values for a load.
+
+**Sea ice.**  The `sea_ice`, `sea_ice_transport`, `sea_ice_fold`, `sea_ice_fold_nodyn` and `bulk_flux_ice` cases (thermo,
+ITD, EVP, the stress blend, category transport, the tripolar fold with `px = 1` and `px > 1`) now also run with an
+explicit `bt_halo` of 2 / 4 / 8 (`+w<W>` suffix on the `CASES` entry; the width that fits the smallest tile).  Every
+field is bitwise against the one-rank run, including the checkpoint / resume legs with ghosts included, and the mixed
+legs (written at `bt_halo = 0` and resumed wide, and the reverse; owned cells against the one-rank run).  No case found a
+stale-ghost reader: the evidence is the bitwise equality above (ice fields, blended stress and every registry field),
+not a code audit of each ice-side read.  Sea ice is off the exclusion list, so AUTO
+resolves it wide (np 2: `sea_ice` 8 / 4, `sea_ice_fold` 4, `bulk_flux_ice` 2).
+
+Whole-suite counts on the final tree: AUTO np 2 1076 IDENTICAL 0 FAIL (210 of 314 decomposed runs wide), np 4 1364
+IDENTICAL 0 FAIL (222 of 471 wide); forced `bt_halo = 0` np 2 1076 / np 4 1364, 0 FAIL.
+
+Gate counts at `c9a620cbb`-equivalent code (gfortran 15.1 + OpenMPI 5.0.5 unless stated):
+
+| leg | result |
+|---|---|
+| serial `ctest -R rdb -j 6` (gfortran) | 290 / 290 |
+| serial `ctest -R rdb -j 6` (nvfortran CPU) | 289 / 289 |
+| serial `ctest -R rdb` (V100, GPU 2, no `-j`) | 289 / 289 |
+| `ctest -R 'bitid_mpi_[24]rank_bt0'` | 2 / 2 (1006 s, 1035 s) |
+| GPU + MPI np 2 (V100 2 + 3, CUDA-aware), the new `bthx_*` cases and every `+w` ice case | all checks PASSED, 212 IDENTICAL, 0 FAIL |
+| compat matrix with the MPI DECOMP leg | 50 PASS, 34 XFAIL, 0 XPASS, 0 FAIL; leg decomp PASS 59 |
+
+Not run on the GPU: the cycle-break / poison legs, np 4.
+
+### Exclusions (AUTO = 0), by choice (b) unless stated
+
+Single list `bt_halo_auto_exclusion` (`src/core/config/rdb_config_validate.F90`); an explicit `bt_halo` is honoured.
+The first five also refuse an explicit `bt_halo > 0` as before.
+
+| feature | choice | why |
+|---|---|---|
+| wet/dry, `use_cont_type`, `upstream_h_face`, Chapman edge, cavity dynamics | refused today (a) n/a | not widened |
+| `inhalo_march`, `dtbt_reset_period >= 0` | refused today | exclusive / `n_inner` re-derived mid-run |
+| sea ice | lifted | proven bitwise at 2 / 4 / 8, see stage 7b |
+| edges clamped, sponge, nested, inflow, discharge | (b) | only wall, open (Flather), tidal, periodic and the fold have cases (`bthx_perxc` pairs a clamped south edge with periodic x only) |
+| Orlanski radiation, open-edge nudging, tracer reservoirs | (b) | the wide band evolves under array-edge closures the OBC target does not see |
+| wave drag | lifted | `bthx_drgwave`, bitwise, see stage 7b |
+| map-driven sponge (`&ocean_sponge_nml`) | (b) | no case |
+| ice-shelf cavity melt | (b) | cavity dyn is already refused; melt without it is not exercised |
+
+Each is a candidate for (a) later: add a `bth`/`bthx` case at np 2 and 4, then drop its line from the exclusion list;
+the unset-`bt_halo` cases of the test already assert that the excluded ones resolve to 0.
+
+### Test gate
+
+Every case of `test_ocean_decomp_bitid_mpi` that leaves `bt_halo` unset runs AUTO on its decomposed legs against the
+one-rank (AUTO = 0) reference.  The test records the resolved width per layout (`case ...: AUTO bt_halo = N`), checks
+the packed-exchange counter against it, asserts that wet/dry / cavity / dtbt / chapman / sponge
+cases resolved to 0 and that island, spherical, tripolar, periodic channel, closures and eulz_periodic resolved wide
+wherever the tile holds `nghost + 2` (+1 under the fold), prints the totals and fails below 10 wide cases.  Restart:
+`island_basin`, `spherical` and `tripolar` write/resume under AUTO on both legs; `island_basin` and `tripolar` also write
+at `bt_halo = 0` and resume under AUTO and the reverse (owned cells against the one-rank reference: the ghosts of the
+two marches legitimately differ).  The non-trivial widths this exercises include 6 / 4 / 2 shrunk by the odd 26 x 18 tiles.
+
+### Gate counts on the final tree (gfortran 15.1 + OpenMPI 5.0.5 CPU unless stated)
+
+| leg | result |
+|---|---|
+| whole unfiltered `test_ocean_decomp_bitid_mpi`, np 2 | all checks PASSED; 864 IDENTICAL lines, 0 FAIL; AUTO wide on 182 of 314 decomposed runs (91 of 157 cases) |
+| same, np 4 | all checks PASSED; 1134 IDENTICAL lines, 0 FAIL; AUTO wide on 190 of 471 runs (91 of 157 cases) |
+| serial `ctest -R rdb -j 6` | 290 / 290 (the python test needs the netcdf-fortran `LD_LIBRARY_PATH` of the gfortran toolchain) |
+| `ctest -R mpi`, minus the three plain whole-suite legs (run by hand above) | 61 / 61 (the two `*_inhalo` legs failed once on a test-assertion bug, fixed, re-run: pass) |
+| compat matrix (`--mpi-build-dir`, DECOMP leg through AUTO) | 50 PASS, 34 XFAIL, 0 XPASS, 0 FAIL; leg decomp PASS 59 |
+| GPU np 2 (V100, GPUs 2 + 3), filter `bth,island,periodic,spherical,tripolar,sea_ice,open_obc,_t0` | all checks PASSED, 478 IDENTICAL, 0 FAIL; 36 of 66 decomposed runs AUTO wide |
+
+An earlier first run of the whole test failed only on my own new assertion (zero-step `_t0` cases have no packed exchange
+to count; then an operator-precedence slip in the fix); no bitwise mismatch appeared in any run.
+
 ## Stage 7: the `bt_halo = 0` loop on the packed machinery (`perf/bt-substep-packed`)
 
 Before: the ordinary fast loop ended every substep with `ocean_halo_bt_group_2d(eta, ubt, vbt)` (three

@@ -4451,35 +4451,70 @@ contains
       reason = "ok"
    end subroutine ice_hlim_spec_is_valid
 
-   pure module function resolve_bt_halo(requested, compute_size, exclusion_active) result(width)
+   pure module function resolve_bt_halo(requested, compute_size, exclusion_active, nghost, min_tile, n_inner, &
+                                        fold) result(width)
       !! Resolve the `&ocean_bt_nml bt_halo` sentinel to a concrete march-in
       !! width.
-      !!   requested == BT_HALO_AUTO_SENTINEL (-1, the default) => AUTO: 0.
-      !!     The march-in used to switch itself on (BT_HALO_AUTO_WIDTH) on
-      !!     every compatible multi-rank run.  It is bitwise equal to the
-      !!     one-rank run on the configurations `validate_config` accepts
-      !!     (`bth_*` cases of `test_ocean_decomp_bitid_mpi`), but it stays
-      !!     opt-in until the remaining exclusions are lifted and the
-      !!     default is flipped on its own: AUTO is off, serial or not.
       !!   requested >= 0 (user set it explicitly) => returned UNCHANGED; the
-      !!     fail-loud exclusion checks in validate_config police an explicit
-      !!     bt_halo > 0 against an incompatible feature (user asked for the
-      !!     impossible), so the auto-resolution never overrides an explicit 0
-      !!     or an explicit width.
-      !! `compute_size` / `exclusion_active` no longer change the answer; they
-      !! stay so the call site (and its exclusion log) keeps its shape for the
-      !! day the march-in is exact again.
+      !!     fail-loud checks in the engine / `validate_config` police an
+      !!     explicit `bt_halo > 0` against an incompatible feature, so the
+      !!     auto-resolution never overrides an explicit 0 or an explicit width.
+      !!   requested == BT_HALO_AUTO_SENTINEL (-1, the default) => AUTO:
+      !!     * one rank (`compute_size <= 1`)                       => 0;
+      !!     * any feature the `bth*` cases of
+      !!       `test_ocean_decomp_bitid_mpi` do not prove bitwise
+      !!       (`exclusion_active`, see `bt_halo_auto_exclusion`)  => 0;
+      !!     * otherwise the widest rung of `BT_HALO_AUTO_LADDER` (widths a
+      !!       `bth*` case proves) not above `BT_HALO_AUTO_WIDTH` and the two
+      !!       caps below, shrunk (never refused) until it fits:
+      !!         - n_inner cap: a cycle is `nghost + W - 2` substeps, so a
+      !!           width past `n_inner - nghost + 2` buys no further exchange
+      !!           saving and only widens the redundant band;
+      !!         - tile fit: `nghost + W <= min_tile`, one more across the
+      !!           tripolar fold (`fold`), as `engine_setup` enforces for an
+      !!           explicit width;
+      !!       and 0 when no rung fits or when `n_inner` is known and below `BT_HALO_AUTO_MIN_NINNER`
+      !!       (too few substeps for the entry / exit exchanges to pay).
+      !! `n_inner <= 0` means "not known yet" (`auto_n_inner`: derived later,
+      !! the engine narrows the result with the derived value).  The result
+      !! depends on rank-uniform inputs only, so every rank resolves it alike.
       integer, intent(in) :: requested
          !! The namelist value: BT_HALO_AUTO_SENTINEL (-1) for auto, else >= 0.
       integer, intent(in) :: compute_size
-         !! Number of compute ranks (1 = serial).  Unused by AUTO (see above).
+         !! Number of compute ranks (1 = serial).
       logical, intent(in) :: exclusion_active
          !! .true. iff any march-in exclusion feature is on (see
-         !! `bt_halo_auto_exclusion`).  Unused by AUTO (see above).
+         !! `bt_halo_auto_exclusion`).
+      integer, intent(in) :: nghost
+         !! Model ghost width.
+      integer, intent(in) :: min_tile
+         !! Smallest tile extent, `min(nx/px, ny/py)` cells.
+      integer, intent(in) :: n_inner
+         !! Barotropic substeps per solve; <= 0 if not known yet.
+      logical, intent(in) :: fold
+         !! .true. across a tripolar north fold (tile must be one cell larger).
       integer :: width
+      integer :: w, cap, c
       width = 0
-      if (requested >= 0) width = requested
-      if (compute_size < 0 .and. exclusion_active) width = 0   ! never taken; keeps the dummies referenced
+      if (requested >= 0) then
+         width = requested
+         return
+      end if
+      if (compute_size <= 1 .or. exclusion_active) return
+      if (n_inner > 0) then
+         if (n_inner < BT_HALO_AUTO_MIN_NINNER) return
+      end if
+      ! Only widths a `bth*` case proves: 2, 4, 8 (and 16 once a case does);
+      ! take the widest candidate not above the target / n_inner cap that fits.
+      cap = BT_HALO_AUTO_WIDTH
+      if (n_inner > 0) cap = min(cap, n_inner - nghost + 2)
+      do c = 1, size(BT_HALO_AUTO_LADDER)
+         w = BT_HALO_AUTO_LADDER(c)
+         if (w > cap) cycle
+         if (nghost + w + merge(1, 0, fold) > min_tile) cycle
+         width = w
+         exit
+      end do
    end function resolve_bt_halo
 
    pure function any_chapman_edge(cfg) result(any_ch)
@@ -4494,13 +4529,21 @@ contains
    end function any_chapman_edge
 
    pure module subroutine bt_halo_auto_exclusion(cfg, excluded, reason)
-      !! Single source of truth for the BT march-in exclusion set (mirrors the
-      !! explicit-`bt_halo > 0` fail-loud checks in `validate_config`).  Reports
-      !! whether ANY exclusion is active and names the first one (for the AUTO
-      !! resolution log).  When none is active, `reason` is "".
+      !! Single source of truth for the AUTO exclusion set: every configuration
+      !! NOT covered by a passing bitwise `bth*` / `bthx*` case of
+      !! `test_ocean_decomp_bitid_mpi` resolves AUTO to 0.  Reports whether ANY
+      !! exclusion is active and names the first one (for the AUTO resolution
+      !! log).  When none is active, `reason` is "".  The first five also
+      !! refuse an EXPLICIT `bt_halo > 0` in `validate_config`; the rest are
+      !! only "unproven", so an explicit width is honoured there.
+      use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_WALL, OBC_OPEN, OBC_TIDAL, &
+                                          OBC_PERIODIC, OBC_TRIPOLAR_FOLD
       type(config_t), intent(in) :: cfg
       logical, intent(out) :: excluded
       character(len=:), allocatable, intent(out) :: reason
+      integer :: e
+      integer :: et(4)
+      character(len=16), parameter :: EDGE_NAME(4) = [character(len=16) :: "west", "east", "south", "north"]
       reason = ""
       if (cfg%ocean%wetdry%enable) then
          reason = "wetdry enable"
@@ -4512,6 +4555,37 @@ contains
          reason = "chapman &ocean_bc_nml edge"
       else if (cfg%ocean%cavity_dyn%enable) then
          reason = "cavity_dyn enable"
+      else if (cfg%ocean%bt%inhalo_march) then
+         reason = "inhalo_march"
+      else if (bt_dtbt_is_set(cfg%ocean%bt) .and. cfg%ocean%bt%dtbt_reset_period >= 0.0_wp) then
+         reason = "dtbt_reset_period >= 0 (n_inner re-derived mid-run)"
+      else if (cfg%ocean%cavity_melt%enable) then
+         reason = "cavity_melt enable"
+      else if (cfg%ocean%sponge%enable) then
+         reason = "&ocean_sponge_nml enable"
+      end if
+      if (len_trim(reason) == 0) then
+         ! Edges: only the types a `bth*` case proves (wall, Flather / open,
+         ! tidal, periodic, the tripolar fold).  Clamped, sponge, nested,
+         ! inflow and discharge edges have none.
+         et = [ocean_bc_type_from_string(cfg%ocean%bc%west), ocean_bc_type_from_string(cfg%ocean%bc%east), &
+               ocean_bc_type_from_string(cfg%ocean%bc%south), ocean_bc_type_from_string(cfg%ocean%bc%north)]
+         do e = 1, 4
+            if (et(e) /= OBC_WALL .and. et(e) /= OBC_OPEN .and. et(e) /= OBC_TIDAL .and. &
+                et(e) /= OBC_PERIODIC .and. et(e) /= OBC_TRIPOLAR_FOLD) then
+               reason = trim(EDGE_NAME(e))//" &ocean_bc_nml edge type (clamped / sponge / nested / inflow / discharge)"
+               exit
+            end if
+         end do
+      end if
+      if (len_trim(reason) == 0) then
+         if (cfg%ocean%bc%radiation_scheme /= "anomaly") then
+            reason = "&ocean_bc_nml radiation_scheme /= anomaly (Orlanski)"
+         else if (cfg%ocean%bc%nudge_tau_in /= 0.0_wp .or. cfg%ocean%bc%nudge_tau_out /= 0.0_wp) then
+            reason = "&ocean_bc_nml open-edge nudging"
+         else if (cfg%ocean%bc%res_lscale_out /= 0.0_wp .or. cfg%ocean%bc%res_lscale_in /= 0.0_wp) then
+            reason = "&ocean_bc_nml open-edge tracer reservoir"
+         end if
       end if
       excluded = len_trim(reason) > 0
    end subroutine bt_halo_auto_exclusion

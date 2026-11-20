@@ -564,15 +564,24 @@ contains
       pi => cfg%ocean%bt%bt_halo
       call g%add(nml_int("bt_halo", pi, &
                          "Wide-halo BT march-in width "// &
-                         "(-1 = auto: resolves to 0, the march-in is opt-in; "// &
+                         "(-1 = auto, the default: on more than one rank the widest of 8 / 4 / 2 "// &
+                         "that the tile and n_inner allow, 0 on one rank, on a tile too small, "// &
+                         "when n_inner is too small to gain, and for every configuration with no "// &
+                         "bitwise-proven wide-halo case: sponge / clamped / nested / inflow / "// &
+                         "discharge edges, Orlanski radiation, open-edge nudging or reservoirs, "// &
+                         "map-driven sponge, ice-shelf cavity (dyn or melt), wet/dry, Chapman edges, "// &
+                         "use_cont_type, upstream_h_face, inhalo_march, "// &
+                         "dtbt_reset_period >= 0; one rank-0 log line names the reason; "// &
                          "0 = explicit off). > 0: verified bitwise equal to the one-rank "// &
                          "bt_halo = 0 run on walls, periodic, Flather (legacy and full) "// &
                          "and tidal edges, land (incl. land meeting an open edge), "// &
                          "lon-lat and supergrid metrics, porous barriers, z-level closed "// &
-                         "faces, body tides, surface-pressure loading and the tripolar "// &
+                         "faces, body tides, scalar SAL, surface-pressure loading, wave and "// &
+                         "substep drag, the viscous-remnant chain, sea ice and the tripolar "// &
                          "north fold (px = 1 and the owner-routed px > 1 fold); the wide "// &
                          "exchanges are packed (one message per neighbour per direction "// &
-                         "pass, cadence nghost + W - 2 substeps, W = bt_halo rounded down to even). Refused with "// &
+                         "pass, cadence nghost + W - 2 substeps, W = bt_halo rounded down to even). An explicit "// &
+                         "value is always honoured; it is refused with "// &
                          "wet/dry, use_cont_type, upstream_h_face, Chapman edges, the "// &
                          "ice-shelf cavity, inhalo_march, dtbt_reset_period >= 0 and a "// &
                          "tile narrower than nghost + W (one cell more across the fold)", &
