@@ -23,7 +23,7 @@ program cfg_dump
    logical :: exists
 
    if (command_argument_count() < 2) then
-      call logger%error("usage: rdb_cfg_dump <input.nml|input.toml> <out>")
+      call logger%error("usage: rdb_cfg_dump <input.toml> <out>")
       stop 2
    end if
    call get_command_argument(1, in_path)

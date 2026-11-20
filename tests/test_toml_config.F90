@@ -1,16 +1,16 @@
-!! Unit tests for the TOML configuration front end (rdb_toml_read).
+!! Unit tests for the TOML configuration reader (rdb_toml_read).
 module test_toml_config
-   !! The TOML reader is a second front end on the strict namelist schema.  These
-   !! tests pin (1) that a configuration spelled in TOML resolves to EXACTLY the
-   !! configuration the namelist spells -- compared through the schema's
-   !! resolved dumps, including a full-precision one -- (2) every refusal class
-   !! of the TOML syntax, with the file/line and key in the message, and (3) the
-   !! group <-> table mapping.
+   !! These tests pin (1) that a configuration spelled in TOML resolves to the
+   !! values it states -- exactly, bit for bit for reals -- (2) every refusal
+   !! class of the TOML syntax, with the file/line and key in the message, and
+   !! (3) the group <-> table mapping.  The resolved dumps (`write_doc_all`,
+   !! `write_resolved`) serve as the oracle where a whole configuration is
+   !! compared.
    use, intrinsic :: iso_fortran_env, only: int64, real64
-   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
    use testdrive, only: new_unittest, unittest_type, error_type, check
-   use rdb_config, only: config_t, read_config, read_config_from_string, &
-                         read_config_from_toml_string, build_rdb_schema
+   use rdb_constants, only: DEG2RAD
+   use rdb_config, only: config_t, read_config, read_config_from_toml_string, build_rdb_schema
    use rdb_nml_schema, only: nml_schema_t
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_PARSE
    use rdb_toml_read, only: group_to_table, table_to_group, toml_schema_parse_string, &
@@ -27,9 +27,9 @@ contains
    subroutine collect_toml_config_tests(testsuite)
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
       testsuite = [ &
-                  new_unittest("equivalent_all_key_types", test_equivalent_all_types), &
-                  new_unittest("equivalent_double_gyre", test_equivalent_double_gyre), &
-                  new_unittest("equivalent_file_entry", test_equivalent_file), &
+                  new_unittest("all_key_types_resolve", test_all_key_types), &
+                  new_unittest("double_gyre_resolves", test_double_gyre), &
+                  new_unittest("file_entry_and_non_toml_refused", test_file_entry), &
                   new_unittest("oracle_sees_one_ulp", test_oracle_sensitivity), &
                   new_unittest("real_stringify_is_exact", test_real_exact), &
                   new_unittest("empty_and_missing_input", test_empty_missing), &
@@ -45,7 +45,7 @@ contains
                   new_unittest("integer_overflow_not_wrapped", test_int_overflow), &
                   new_unittest("number_spellings", test_number_spellings), &
                   new_unittest("nonfinite_and_ranges", test_nonfinite), &
-                  new_unittest("float_overflow_agrees", test_float_overflow), &
+                  new_unittest("float_overflow_is_deterministic", test_float_overflow), &
                   new_unittest("duplicate_group_routes", test_duplicate_group), &
                   new_unittest("dotted_keys_and_inline_tables", test_dotted_inline), &
                   new_unittest("refuse_exotic_values", test_exotic_values), &
@@ -74,21 +74,15 @@ contains
       close (u, status="delete")
    end subroutine slurp
 
-   subroutine dumps_of(text, as_toml, dump_all, dump_exact, ierr)
-      !! Resolved dumps (doc + full-precision) of a config held in `text`,
-      !! read as TOML or as namelist.
+   subroutine dumps_of(text, dump_all, dump_exact, ierr)
+      !! Resolved dumps (doc + full-precision) of a config held in `text`.
       character(len=*), intent(in) :: text
-      logical, intent(in) :: as_toml
       character(len=:), allocatable, intent(out) :: dump_all, dump_exact
       integer, intent(out) :: ierr
       type(config_t), target :: cfg
       type(nml_schema_t) :: schema
 
-      if (as_toml) then
-         call read_config_from_toml_string(text, cfg, schema, ierr)
-      else
-         call read_config_from_string(text, cfg, schema, ierr)
-      end if
+      call read_config_from_toml_string(text, cfg, schema, ierr)
       dump_all = ""
       dump_exact = ""
       if (ierr /= OCEAN_STATUS_OK) return
@@ -98,39 +92,33 @@ contains
       call slurp("test_toml_dump.exact", dump_exact)
    end subroutine dumps_of
 
-   subroutine check_equivalent(error, nml_text, toml_text)
-      !! Both texts must resolve to byte-identical dumps.
+   subroutine check_real_value(error, token, expected)
+      !! `[physics] coriolis_f = <token>` reads as exactly `expected`.
       type(error_type), allocatable, intent(out) :: error
-      character(len=*), intent(in) :: nml_text, toml_text
-      character(len=:), allocatable :: a1, e1, a2, e2
-      integer :: i1, i2
+      character(len=*), intent(in) :: token
+      real(real64), intent(in) :: expected
+      type(config_t), target :: cfg
+      integer :: ierr
 
-      call dumps_of(nml_text, .false., a1, e1, i1)
-      call dumps_of(toml_text, .true., a2, e2, i2)
-      call check(error, i1, OCEAN_STATUS_OK, "namelist text accepted")
+      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = "//token//NL, cfg, ierr=ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, "coriolis_f = "//token//" accepted")
       if (allocated(error)) return
-      call check(error, i2, OCEAN_STATUS_OK, "toml text accepted")
-      if (allocated(error)) return
-      call check(error, len(a1) > 0 .and. len(e1) > 0, "dumps are non-empty")
-      if (allocated(error)) return
-      call check(error, a2 == a1, "doc dumps identical")
-      if (allocated(error)) return
-      call check(error, e2 == e1, "full-precision dumps identical")
-   end subroutine check_equivalent
+      call check(error, real(cfg%coriolis_f, real64) == expected, "coriolis_f = "//token//" reads exactly")
+   end subroutine check_real_value
 
-   subroutine check_agree(error, nml_text, toml_text)
-      !! Same verdict from both front ends and, when accepted, the same dumps.
+   subroutine check_int_value(error, token, expected)
+      !! `[grid] nx = <token>` reads as exactly `expected`.
       type(error_type), allocatable, intent(out) :: error
-      character(len=*), intent(in) :: nml_text, toml_text
-      character(len=:), allocatable :: a1, e1, a2, e2
-      integer :: i1, i2
+      character(len=*), intent(in) :: token
+      integer, intent(in) :: expected
+      type(config_t), target :: cfg
+      integer :: ierr
 
-      call dumps_of(nml_text, .false., a1, e1, i1)
-      call dumps_of(toml_text, .true., a2, e2, i2)
-      call check(error, i1 == i2, "same accept/refuse verdict for: "//toml_text)
+      call read_config_from_toml_string("[grid]"//NL//"nx = "//token//NL, cfg, ierr=ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, "nx = "//token//" accepted")
       if (allocated(error)) return
-      if (i1 == OCEAN_STATUS_OK) call check(error, e1 == e2 .and. a1 == a2, "same value for: "//toml_text)
-   end subroutine check_agree
+      call check(error, cfg%nx, expected, "nx = "//token//" reads exactly")
+   end subroutine check_int_value
 
    subroutine errors_of(text, status, errors)
       !! The schema's own error list for a TOML text, against a fresh schema.
@@ -176,69 +164,61 @@ contains
 
    ! ---- equivalence ----------------------------------------------------
 
-   subroutine test_equivalent_all_types(error)
+   subroutine test_all_key_types(error)
       !! Every key type, a real array, an integer for a real, an enum in
       !! non-canonical case, nested `ocean.*` tables and non-ocean tables.
       type(error_type), allocatable, intent(out) :: error
-      character(len=:), allocatable :: n, t
+      type(config_t), target :: cfg
+      integer :: ierr
 
-      n = "&sim_nml"//NL//' sim_type = "ocean"'//NL//"/"//NL// &
-          "&grid_nml"//NL//" nx = 24"//NL//" ny = 16"//NL//" nghost = 3"//NL//"/"//NL// &
-          "&time_nml"//NL//" t_end = 2.5"//NL//' time_unit = "day"'//NL// &
-          " dt_fixed = 600"//NL//"/"//NL// &
-          "&physics_nml"//NL//" coriolis_f = 9.4e-5"//NL//" wind_stress_x = 0.1"//NL//"/"//NL// &
-          "&ocean_hvisc_nml"//NL//" nu_h = 10000"//NL//" smag_ah = .true."//NL// &
-          ' lateral_closure = "Smagorinsky"'//NL//" c_smag = 0.15"//NL//"/"//NL// &
-          "&ocean_ic_nml"//NL//" layer_rho_init = 1036.0, 1035.0"//NL//"/"//NL// &
-          "&ocean_vmix_nml"//NL//" dt_therm_ratio = 2"//NL//"/"//NL// &
-          "&ocean_diag_nml"//NL//' filename = "run_a"'//NL//" enabled = .false."//NL//"/"//NL// &
-          "&ocean_ice_sw_nml"//NL//"/"//NL
-      t = "[sim]"//NL//'sim_type = "ocean"'//NL// &
-          "[grid]"//NL//"nx = 24"//NL//"ny = 16"//NL//"nghost = 3"//NL// &
-          "[time]"//NL//"t_end = 2.5"//NL//'time_unit = "day"'//NL//"dt_fixed = 600"//NL// &
-          "[physics]"//NL//"coriolis_f = 9.4e-5"//NL//"wind_stress_x = 0.1"//NL// &
-          "[ocean.hvisc]"//NL//"nu_h = 10000"//NL//"smag_ah = true"//NL// &
-          'lateral_closure = "Smagorinsky"'//NL//"c_smag = 0.15"//NL// &
-          "[ocean.ic]"//NL//"layer_rho_init = [1036.0, 1035.0]"//NL// &
-          "[ocean.vmix]"//NL//"dt_therm_ratio = 2"//NL// &
-          "[ocean.diag]"//NL//'filename = "run_a"'//NL//"enabled = false"//NL// &
-          "[ocean.ice_sw]"//NL
-      call check_equivalent(error, n, t)
-   end subroutine test_equivalent_all_types
+      call read_config_from_toml_string( &
+         "[sim]"//NL//'sim_type = "ocean"'//NL// &
+         "[grid]"//NL//"nx = 24"//NL//"ny = 16"//NL//"nghost = 3"//NL// &
+         "[time]"//NL//"t_end = 2.5"//NL//'time_unit = "day"'//NL//"dt_fixed = 600"//NL// &
+         "[physics]"//NL//"coriolis_f = 9.4e-5"//NL//"wind_stress_x = 0.1"//NL// &
+         "[ocean.hvisc]"//NL//"nu_h = 10000"//NL//"smag_ah = true"//NL// &
+         'lateral_closure = "Smagorinsky"'//NL//"c_smag = 0.15"//NL// &
+         "[ocean.ic]"//NL//"layer_rho_init = [1036.0, 1035.0]"//NL// &
+         "[ocean.vmix]"//NL//"dt_therm_ratio = 2"//NL// &
+         "[ocean.diag]"//NL//'filename = "run_a"'//NL//"enabled = false"//NL// &
+         "[ocean.ice_sw]"//NL, cfg, ierr=ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, "accepted")
+      if (allocated(error)) return
+      call check(error, trim(cfg%sim_type) == "ocean", "string")
+      if (allocated(error)) return
+      call check(error, cfg%nx == 24 .and. cfg%ny == 16 .and. cfg%nghost == 3, "integers")
+      if (allocated(error)) return
+      call check(error, real(cfg%t_end, real64) == 2.5_real64*86400.0_real64, "t_end scaled by time_unit = day")
+      if (allocated(error)) return
+      call check(error, real(cfg%dt_fixed, real64) == 600.0_real64, "integer for a real key")
+      if (allocated(error)) return
+      call check(error, real(cfg%coriolis_f, real64) == 9.4e-5_real64, "real")
+      if (allocated(error)) return
+      call check(error, real(cfg%ocean%hvisc%nu_h, real64) == 10000.0_real64, "integer for a real key (ocean table)")
+      if (allocated(error)) return
+      call check(error, cfg%ocean%hvisc%smag_ah, "boolean true")
+      if (allocated(error)) return
+      call check(error, trim(cfg%ocean%hvisc%lateral_closure) == "smagorinsky", &
+                 "enum canonicalised to its registered spelling")
+      if (allocated(error)) return
+      call check(error, real(cfg%ocean%ic%layer_rho_init(1), real64) == 1036.0_real64 .and. &
+                 real(cfg%ocean%ic%layer_rho_init(2), real64) == 1035.0_real64, "real array")
+      if (allocated(error)) return
+      call check(error, cfg%ocean%vmix%dt_therm_ratio == 2, "integer in an ocean table")
+      if (allocated(error)) return
+      call check(error, trim(cfg%ocean%diag%filename) == "run_a" .and. .not. cfg%ocean%diag%enabled, &
+                 "string and boolean false")
+   end subroutine test_all_key_types
 
-   subroutine test_equivalent_double_gyre(error)
-      !! `validation_examples/ocean/double_gyre/double_gyre_mom6.nml`,
-      !! hand-converted (comments dropped).
+   subroutine test_double_gyre(error)
+      !! The canonical double-gyre reference input (`validation_examples/ocean/
+      !! double_gyre/double_gyre_mom6.toml`), comments dropped: every table class
+      !! the reference uses resolves to the stated values.
       type(error_type), allocatable, intent(out) :: error
-      character(len=:), allocatable :: n, t
+      type(config_t), target :: cfg
+      integer :: ierr
 
-      n = &
-         '&sim_nml sim_type = "ocean" /'//NL// &
-         "&grid_nml nx = 44 ny = 40 nghost = 3 /"//NL// &
-         '&ocean_grid_nml axis_units = "degrees" len_lon = 22.0 len_lat = 20.0 rad_earth = 6.378e6 /'//NL// &
-         '&time_nml t_end = 10.0 time_unit = "day" dt_fixed = 1200.0 cfl_interval = 1 /'//NL// &
-         "&physics_nml coriolis_f = 9.4e-5 wind_stress_x = 0.0 wind_stress_y = 0.0 /"//NL// &
-         "&nonhydrostatic_nml nz_layers = 2 /"//NL// &
-         "&tracer_nml initial_temperature = 15.0 initial_salinity = 35.0 /"//NL// &
-         "&ocean_ic_nml layer_rho_init = 1036.0, 1035.0 /"//NL// &
-         '&ocean_coriolis_nml form = "sadourny_energy" /'//NL// &
-         "&ocean_thermo_nml enable_thermodynamics = .false. /"//NL// &
-         '&ocean_topo_nml topo_config = "spoon" max_depth = 2000.0 edge_depth = 100.0 '// &
-         'slope_scale = 400000.0 wind_config = "2gyre" taux_magnitude = 0.1 '// &
-         "coriolis_beta = 1.76e-11 coriolis_y_ref = 1113200.0 /"//NL// &
-         '&ocean_pgf_nml form = "gprime" gprime_gfs = 0.98 gprime_gint = 0.0098 maxvel = 6.0 /'//NL// &
-         '&ocean_bdrag_nml form = "linear" r = 2.5e-5 hbbl = 10.0 bg_vel = 0.1 bbl_thick_min = 0.1 /'//NL// &
-         "&ocean_hvisc_nml nu_h = 10000.0 nu_4 = 0.0 smag_ah = .true. smag_bi_const = 0.06 "// &
-         'nu_4_bg = 0.0 nu_4_max = 1.0e12 lateral_closure = "smagorinsky" c_smag = 0.15 '// &
-         "kh_vel_scale = 3.0e-3 ah_max = 1.0e4 /"//NL// &
-         "&ocean_vmix_nml kv_ml_invz2 = 0.01 hmix_fixed = 20.0 direct_stress = .false. "// &
-         "hmix_stress = 20.0 harmonic_visc = .true. dt_therm_ratio = 2 /"//NL// &
-         "&ocean_bt_nml auto_n_inner = .true. cfl_bt_safety = 0.65 bebt = 0.2 /"//NL// &
-         '&vcoord_nml vcoord_type = "zstar_full" zstar_h_surf_target = 1000.0 zstar_h_min = 1.5e-4 /'//NL// &
-         '&ocean_diag_nml enabled = .true. filename = "double_gyre" dt_out = 1.0 /'//NL// &
-         '&output_nml output_dir = "./out_double_gyre_mom6" output_to_file = .false. /'//NL// &
-         "&logging_nml status_interval = 1.0 /"//NL
-      t = &
+      call read_config_from_toml_string( &
          "[sim]"//NL//'sim_type = "ocean"'//NL// &
          "[grid]"//NL//"nx = 44"//NL//"ny = 40"//NL//"nghost = 3"//NL// &
          "[ocean.grid]"//NL//'axis_units = "degrees"'//NL//"len_lon = 22.0"//NL//"len_lat = 20.0"//NL// &
@@ -270,50 +250,83 @@ contains
          "zstar_h_min = 1.5e-4"//NL// &
          "[ocean.diag]"//NL//"enabled = true"//NL//'filename = "double_gyre"'//NL//"dt_out = 1.0"//NL// &
          "[output]"//NL//'output_dir = "./out_double_gyre_mom6"'//NL//"output_to_file = false"//NL// &
-         "[logging]"//NL//"status_interval = 1.0"//NL
-      call check_equivalent(error, n, t)
-   end subroutine test_equivalent_double_gyre
+         "[logging]"//NL//"status_interval = 1.0"//NL, cfg, ierr=ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, "accepted")
+      if (allocated(error)) return
+      call check(error, cfg%nx == 44 .and. cfg%ny == 40 .and. cfg%nghost == 3, "grid size")
+      if (allocated(error)) return
+      ! len_lon/len_lat in degrees derive dx/dy by the arc-length formula.
+      call check(error, abs(real(cfg%dx, real64) - 6.378e6_real64*22.0_real64*DEG2RAD/44.0_real64) < 1.0e-6_real64, &
+                 "dx derived from len_lon")
+      if (allocated(error)) return
+      call check(error, abs(real(cfg%dy, real64) - 6.378e6_real64*20.0_real64*DEG2RAD/40.0_real64) < 1.0e-6_real64, &
+                 "dy derived from len_lat")
+      if (allocated(error)) return
+      call check(error, real(cfg%dt_fixed, real64) == 1200.0_real64 .and. cfg%ocean%vmix%dt_therm_ratio == 2, &
+                 "time stepping")
+      if (allocated(error)) return
+      call check(error, trim(cfg%ocean%pgf%form) == "gprime" .and. trim(cfg%ocean%coriolis%form) == "sadourny_energy" &
+                 .and. trim(cfg%ocean%bdrag%form) == "linear", "the three `form` keys land in their own tables")
+      if (allocated(error)) return
+      call check(error, real(cfg%ocean%bt%bebt, real64) == 0.2_real64 .and. cfg%ocean%bt%auto_n_inner, "bt table")
+      if (allocated(error)) return
+      call check(error, trim(cfg%ocean%hvisc%lateral_closure) == "smagorinsky" .and. cfg%ocean%hvisc%smag_ah &
+                 .and. real(cfg%ocean%hvisc%nu_4_max, real64) == 1.0e12_real64, "hvisc table")
+      if (allocated(error)) return
+      call check(error, trim(cfg%vcoord_type) == "zstar_full" .and. trim(cfg%output_dir) == "./out_double_gyre_mom6" &
+                 .and. .not. cfg%output_to_file, "vcoord and output tables")
+      if (allocated(error)) return
+      call check(error, real(cfg%ocean%ic%layer_rho_init(2), real64) == 1035.0_real64, "layer_rho_init")
+   end subroutine test_double_gyre
 
-   subroutine test_equivalent_file(error)
-      !! `read_config` dispatches on the `.toml` extension; the file form
-      !! resolves like the namelist file form.
+   subroutine test_file_entry(error)
+      !! `read_config` reads a `.toml` file; any other name is refused with a
+      !! message naming TOML (never silently defaults), and a namelist file is
+      !! recognised as such.
       type(error_type), allocatable, intent(out) :: error
-      type(config_t), target :: c1, c2
-      type(nml_schema_t) :: s1, s2
-      character(len=:), allocatable :: a1, a2
-      integer :: u, i1, i2
+      type(config_t), target :: c1
+      type(nml_schema_t) :: s1
+      character(len=:), allocatable :: a1
+      integer :: u, i1
 
-      open (newunit=u, file="test_toml_in.nml", status="replace", action="write")
-      write (u, "(A)") "&grid_nml"
-      write (u, "(A)") " nx = 30"
-      write (u, "(A)") "/"
-      write (u, "(A)") "&ocean_hvisc_nml"
-      write (u, "(A)") " nu_h = 250.5"
-      write (u, "(A)") "/"
-      close (u)
       open (newunit=u, file="test_toml_in.toml", status="replace", action="write")
       write (u, "(A)") "[grid]"
       write (u, "(A)") "nx = 30"
       write (u, "(A)") "[ocean.hvisc]"
       write (u, "(A)") "nu_h = 250.5"
       close (u)
-
-      call read_config("test_toml_in.nml", c1, s1, i1)
-      call read_config("test_toml_in.toml", c2, s2, i2)
-      call check(error, i1, OCEAN_STATUS_OK)
-      if (allocated(error)) return
-      call check(error, i2, OCEAN_STATUS_OK)
-      if (allocated(error)) return
-      call s1%write_resolved("test_toml_f1.exact")
-      call s2%write_resolved("test_toml_f2.exact")
-      call slurp("test_toml_f1.exact", a1)
-      call slurp("test_toml_f2.exact", a2)
-      call check(error, len(a1) > 0 .and. a1 == a2, "file readers resolve identically")
-      open (newunit=u, file="test_toml_in.nml", status="old")
-      close (u, status="delete")
+      call read_config("test_toml_in.toml", c1, s1, i1)
       open (newunit=u, file="test_toml_in.toml", status="old")
       close (u, status="delete")
-   end subroutine test_equivalent_file
+      call check(error, i1, OCEAN_STATUS_OK)
+      if (allocated(error)) return
+      call check(error, c1%nx == 30 .and. real(c1%ocean%hvisc%nu_h, real64) == 250.5_real64, "file values resolved")
+      if (allocated(error)) return
+      call s1%write_resolved("test_toml_f1.exact")
+      call slurp("test_toml_f1.exact", a1)
+      call check(error, len(a1) > 0, "resolved dump written")
+      if (allocated(error)) return
+
+      ! A namelist file (and any other non-.toml name) is refused, not defaulted.
+      open (newunit=u, file="test_toml_in.nml", status="replace", action="write")
+      write (u, "(A)") "! a namelist"
+      write (u, "(A)") "&grid_nml"
+      write (u, "(A)") " nx = 30"
+      write (u, "(A)") "/"
+      close (u)
+      call read_config("test_toml_in.nml", c1, s1, i1)
+      open (newunit=u, file="test_toml_in.nml", status="old")
+      close (u, status="delete")
+      call check(error, i1, OCEAN_STATUS_ERR_CONFIG_PARSE, "a .nml file is refused")
+      if (allocated(error)) return
+      call check(error, c1%nx == 200, "refusal leaves the defaults untouched")
+      if (allocated(error)) return
+      call read_config("no_such_file_anywhere.nml", c1, s1, i1)
+      call check(error, i1, OCEAN_STATUS_ERR_CONFIG_PARSE, "a missing non-.toml name is refused too")
+      if (allocated(error)) return
+      call read_config("input.txt", c1, s1, i1)
+      call check(error, i1, OCEAN_STATUS_ERR_CONFIG_PARSE, "any non-.toml name is refused")
+   end subroutine test_file_entry
 
    subroutine test_oracle_sensitivity(error)
       !! The equality oracle is not vacuous: the doc dump rounds reals to 11
@@ -323,8 +336,8 @@ contains
       character(len=:), allocatable :: a1, e1, a2, e2
       integer :: i1, i2
 
-      call dumps_of("[physics]"//NL//"coriolis_f = 1.0"//NL, .true., a1, e1, i1)
-      call dumps_of("[physics]"//NL//"coriolis_f = 1.0000000000000002"//NL, .true., a2, e2, i2)
+      call dumps_of("[physics]"//NL//"coriolis_f = 1.0"//NL, a1, e1, i1)
+      call dumps_of("[physics]"//NL//"coriolis_f = 1.0000000000000002"//NL, a2, e2, i2)
       call check(error, i1 == OCEAN_STATUS_OK .and. i2 == OCEAN_STATUS_OK, "both accepted")
       if (allocated(error)) return
       call check(error, e1 /= e2, "full-precision dump separates one ulp")
@@ -336,15 +349,15 @@ contains
       !! A float written by the reader is read back bit for bit: sweep a few
       !! thousand bit patterns (every exponent, every mantissa shape) through
       !! TOML text -> toml-f -> stringify -> `read` and compare with the value
-      !! the namelist path reads from the SAME decimal text.
+      !! the text was written from; then a table of known values against the
+      !! compiler's own literals.
       type(error_type), allocatable, intent(out) :: error
       integer(int64) :: state, bits
-      real(real64) :: x, got_toml, got_nml
+      real(real64) :: x
       character(len=40) :: lit
       character(len=:), allocatable :: txt
       type(config_t), target :: cfg
-      type(nml_schema_t) :: schema
-      integer :: i, ierr, i_toml, nbad, ntest
+      integer :: i, ierr, nbad, ntest
 
       state = 88172645463325252_int64
       nbad = 0
@@ -363,47 +376,58 @@ contains
          if (.not. ieee_is_finite(x)) cycle
          write (lit, "(ES30.17E3)") x
          txt = "[physics]"//NL//"coriolis_f = "//trim(adjustl(lit))//NL
-         call read_config_from_toml_string(txt, cfg, schema, ierr)
-         i_toml = ierr
-         got_toml = cfg%coriolis_f
-         txt = "&physics_nml coriolis_f = "//trim(adjustl(lit))//" /"//NL
-         call read_config_from_string(txt, cfg, schema, ierr)
-         got_nml = cfg%coriolis_f
+         call read_config_from_toml_string(txt, cfg, ierr=ierr)
          ntest = ntest + 1
-         if (i_toml /= ierr) then
+         if (ierr /= OCEAN_STATUS_OK) then
             nbad = nbad + 1
-         else if (ierr == OCEAN_STATUS_OK) then
-            if (got_toml /= got_nml) nbad = nbad + 1
-            if (got_toml /= x) nbad = nbad + 1
+         else if (real(cfg%coriolis_f, real64) /= x) then
+            nbad = nbad + 1
          end if
       end do
       call check(error, ntest > 2000, "enough finite samples")
       if (allocated(error)) return
-      call check(error, nbad, 0, "every sampled real is identical across the readers")
+      call check(error, nbad, 0, "every sampled real reads back bit for bit")
+      if (allocated(error)) return
+
+      ! Known values, against the compiler's own literal parser.
+      call check_real_value(error, "0.1", 0.1_real64)
+      if (allocated(error)) return
+      call check_real_value(error, "0.3333333333333333", 0.3333333333333333_real64)
+      if (allocated(error)) return
+      call check_real_value(error, "1.7976931348623157e308", huge(1.0_real64))
+      if (allocated(error)) return
+      call check_real_value(error, "2.2250738585072014e-308", tiny(1.0_real64))
+      if (allocated(error)) return
+      call check_real_value(error, "4.9406564584124654e-324", transfer(1_int64, 1.0_real64))
+      if (allocated(error)) return
+      call check_real_value(error, "-6.378e6", -6.378e6_real64)
+      if (allocated(error)) return
+      call check_real_value(error, "9007199254740993", 9007199254740992.0_real64)
+      if (allocated(error)) return
+      call check_real_value(error, "1.0000000000000002", 1.0_real64 + epsilon(1.0_real64))
    end subroutine test_real_exact
 
    subroutine test_empty_missing(error)
-      !! Empty text and a missing file keep the defaults, as the namelist
-      !! path does.
+      !! Empty text, a comment-only document and a missing `.toml` file keep the
+      !! defaults.
       type(error_type), allocatable, intent(out) :: error
       character(len=:), allocatable :: a1, e1, a2, e2
       type(config_t), target :: cfg
       type(nml_schema_t) :: schema
       integer :: i1, i2, i3
 
-      call dumps_of("", .false., a1, e1, i1)
-      call dumps_of("", .true., a2, e2, i2)
+      call dumps_of("", a1, e1, i1)
       call check(error, i1, OCEAN_STATUS_OK)
       if (allocated(error)) return
-      call check(error, i2, OCEAN_STATUS_OK)
+      call check(error, len(a1) > 0 .and. len(e1) > 0, "the defaults dump is non-empty")
       if (allocated(error)) return
-      call check(error, a1 == a2 .and. e1 == e2, "empty text keeps defaults in both")
-      if (allocated(error)) return
-      call dumps_of("# only a comment"//NL, .true., a2, e2, i2)
-      call check(error, i2 == OCEAN_STATUS_OK .and. a2 == a1, "comment-only toml keeps defaults")
+      call dumps_of("# only a comment"//NL, a2, e2, i2)
+      call check(error, i2 == OCEAN_STATUS_OK .and. a2 == a1 .and. e2 == e1, "comment-only toml keeps defaults")
       if (allocated(error)) return
       call read_config("no_such_file_anywhere.toml", cfg, schema, i3)
       call check(error, i3, OCEAN_STATUS_OK, "missing .toml keeps defaults")
+      if (allocated(error)) return
+      call check(error, cfg%nx == 200, "missing .toml leaves the default nx")
    end subroutine test_empty_missing
 
    ! ---- refusals -------------------------------------------------------
@@ -421,7 +445,7 @@ contains
       call check_refused(error, "[ocean_hvisc]"//NL//"nu_h = 1.0"//NL, &
                          [character(len=24) :: ":1:", "unknown table [ocean_hvisc]", "ocean.hvisc"])
       if (allocated(error)) return
-      ! A namelist-style suffix is not a table name either.
+      ! A `_nml` suffix is not part of a table name.
       call check_refused(error, "[grid_nml]"//NL//"nx = 3"//NL, &
                          [character(len=24) :: "unknown table [grid_nml]"])
       if (allocated(error)) return
@@ -435,7 +459,7 @@ contains
       call check_refused(error, "[ocean.hvisc]"//NL//"nu_hh = 1.0"//NL, &
                          [character(len=24) :: ":2:", "unknown key 'nu_hh'", "[ocean.hvisc]", "nu_h"])
       if (allocated(error)) return
-      ! Keys are exact-case: the namelist spelling `NU_H` is NOT a key here.
+      ! Keys are exact-case: `NU_H` is NOT a key here.
       call check_refused(error, "[ocean.hvisc]"//NL//"NU_H = 1.0"//NL, &
                          [character(len=24) :: ":2:", "unknown key 'NU_H'", "did you mean 'nu_h'"])
       if (allocated(error)) return
@@ -546,14 +570,24 @@ contains
    end subroutine test_accumulate
 
    subroutine test_scalar_for_array(error)
-      !! A lone number is a legal value for an array key, as a single value
-      !! is in a namelist (it fills element 1 and leaves the rest alone).
+      !! A lone number is a legal value for an array key (it fills element 1 and
+      !! leaves the rest alone); a one-element and a two-element array likewise.
       type(error_type), allocatable, intent(out) :: error
-      call check_equivalent(error, "&ocean_ic_nml layer_rho_init = 1030.5 /"//NL, &
-                            "[ocean.ic]"//NL//"layer_rho_init = 1030.5"//NL)
+      type(config_t), target :: cfg, def
+      integer :: ierr
+
+      call read_config_from_toml_string("[ocean.ic]"//NL//"layer_rho_init = 1030.5"//NL, cfg, ierr=ierr)
+      call check(error, ierr, OCEAN_STATUS_OK)
       if (allocated(error)) return
-      call check_equivalent(error, "&ocean_ic_nml layer_rho_init = 1030.5, 1031 /"//NL, &
-                            "[ocean.ic]"//NL//"layer_rho_init = [1030.5, 1031]"//NL)
+      call check(error, real(cfg%ocean%ic%layer_rho_init(1), real64) == 1030.5_real64, "scalar fills element 1")
+      if (allocated(error)) return
+      call check(error, cfg%ocean%ic%layer_rho_init(2) == def%ocean%ic%layer_rho_init(2), "element 2 untouched")
+      if (allocated(error)) return
+      call read_config_from_toml_string("[ocean.ic]"//NL//"layer_rho_init = [1030.5, 1031]"//NL, cfg, ierr=ierr)
+      call check(error, ierr, OCEAN_STATUS_OK)
+      if (allocated(error)) return
+      call check(error, real(cfg%ocean%ic%layer_rho_init(1), real64) == 1030.5_real64 .and. &
+                 real(cfg%ocean%ic%layer_rho_init(2), real64) == 1031.0_real64, "two-element array")
    end subroutine test_scalar_for_array
 
    subroutine test_mapping(error)
@@ -601,20 +635,6 @@ contains
 
    ! ---- review round ----------------------------------------------------
 
-   subroutine check_real_value(error, token, expected)
-      !! `[physics] coriolis_f = <token>` reads as exactly `expected`.
-      type(error_type), allocatable, intent(out) :: error
-      character(len=*), intent(in) :: token
-      real(real64), intent(in) :: expected
-      type(config_t), target :: cfg
-      integer :: ierr
-
-      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = "//token//NL, cfg, ierr=ierr)
-      call check(error, ierr, OCEAN_STATUS_OK, "coriolis_f = "//token//" accepted")
-      if (allocated(error)) return
-      call check(error, real(cfg%coriolis_f, real64) == expected, "coriolis_f = "//token//" reads exactly")
-   end subroutine check_real_value
-
    subroutine test_int_overflow(error)
       !! toml-f wraps an overflowing integer silently; the reader hands the
       !! schema the source digits instead, so the schema sees (and refuses) the
@@ -647,81 +667,74 @@ contains
       !! exponent without a dot read as the digits say; hex integers are refused.
       type(error_type), allocatable, intent(out) :: error
       type(config_t), target :: cfg
-      type(nml_schema_t) :: schema
       integer :: ierr
-      logical :: neg_toml, neg_nml
 
-      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = -0"//NL, cfg, schema, ierr)
+      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = -0"//NL, cfg, ierr=ierr)
       call check(error, ierr, OCEAN_STATUS_OK)
       if (allocated(error)) return
-      neg_toml = sign(1.0_real64, cfg%coriolis_f) < 0.0_real64
-      call read_config_from_string("&physics_nml coriolis_f = -0 /"//NL, cfg, schema, ierr)
-      neg_nml = sign(1.0_real64, cfg%coriolis_f) < 0.0_real64
-      call check(error, neg_toml .eqv. neg_nml, "integer -0 for a real key reads like the namelist path")
+      call check(error, sign(1.0_real64, real(cfg%coriolis_f, real64)) < 0.0_real64, "integer -0 for a real keeps its sign")
       if (allocated(error)) return
-      call check_equivalent(error, "&physics_nml coriolis_f = -0 /"//NL, &
-                            "[physics]"//NL//"coriolis_f = -0"//NL)
+      call check_int_value(error, "1_000", 1000)
       if (allocated(error)) return
-      call check_equivalent(error, "&grid_nml nx = 1000 /"//NL, "[grid]"//NL//"nx = 1_000"//NL)
+      call check_real_value(error, "1_500.2_5", 1500.25_real64)
       if (allocated(error)) return
-      call check_equivalent(error, "&physics_nml coriolis_f = 1500.25 /"//NL, &
-                            "[physics]"//NL//"coriolis_f = 1_500.2_5"//NL)
+      call check_real_value(error, "+1.5E-4", 1.5e-4_real64)
       if (allocated(error)) return
-      call check_equivalent(error, "&physics_nml coriolis_f = 1.5e-4 /"//NL, &
-                            "[physics]"//NL//"coriolis_f = +1.5E-4"//NL)
-      if (allocated(error)) return
-      call check_equivalent(error, "&physics_nml coriolis_f = 3000.0 /"//NL, &
-                            "[physics]"//NL//"coriolis_f = 3e3"//NL)
+      call check_real_value(error, "3e3", 3000.0_real64)
       if (allocated(error)) return
       call check_refused(error, "[grid]"//NL//"nx = 0x10"//NL, &
                          [character(len=24) :: ":2:", "hexadecimal"])
    end subroutine test_number_spellings
 
    subroutine test_nonfinite(error)
-      !! inf/nan are the same value in both front ends for an unranged key, and
-      !! are refused (both front ends) for a key with a declared range.
+      !! inf/nan read as those values for an unranged key and are refused for a
+      !! key with a declared range.
       type(error_type), allocatable, intent(out) :: error
       type(config_t), target :: cfg
-      type(nml_schema_t) :: schema
       integer :: ierr
+      real(real64) :: v
 
-      call check_equivalent(error, "&physics_nml coriolis_f = inf /"//NL, &
-                            "[physics]"//NL//"coriolis_f = inf"//NL)
+      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = inf"//NL, cfg, ierr=ierr)
+      v = cfg%coriolis_f
+      call check(error, ierr == OCEAN_STATUS_OK .and. .not. ieee_is_finite(v) .and. v > 0.0_real64, "inf")
       if (allocated(error)) return
-      call check_equivalent(error, "&physics_nml coriolis_f = -inf /"//NL, &
-                            "[physics]"//NL//"coriolis_f = -inf"//NL)
+      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = -inf"//NL, cfg, ierr=ierr)
+      v = cfg%coriolis_f
+      call check(error, ierr == OCEAN_STATUS_OK .and. .not. ieee_is_finite(v) .and. v < 0.0_real64, "-inf")
       if (allocated(error)) return
-      call check_equivalent(error, "&physics_nml coriolis_f = inf /"//NL, &
-                            "[physics]"//NL//"coriolis_f = +inf"//NL)
+      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = +inf"//NL, cfg, ierr=ierr)
+      v = cfg%coriolis_f
+      call check(error, ierr == OCEAN_STATUS_OK .and. .not. ieee_is_finite(v) .and. v > 0.0_real64, "+inf")
       if (allocated(error)) return
-      call check_equivalent(error, "&physics_nml coriolis_f = nan /"//NL, &
-                            "[physics]"//NL//"coriolis_f = nan"//NL)
+      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = nan"//NL, cfg, ierr=ierr)
+      v = cfg%coriolis_f
+      call check(error, ierr == OCEAN_STATUS_OK .and. ieee_is_nan(v), "nan")
       if (allocated(error)) return
       call check_refused(error, "[ocean.bt]"//NL//"pc_be = nan"//NL, &
                          [character(len=24) :: ":2:", "key 'pc_be'", "not finite"])
       if (allocated(error)) return
       call check_refused(error, "[ocean.bt]"//NL//"pc_be = inf"//NL, &
                          [character(len=24) :: "not finite"])
-      if (allocated(error)) return
-      call read_config_from_string("&ocean_bt_nml pc_be = nan /"//NL, cfg, schema, ierr)
-      call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_PARSE, "namelist path refuses NaN for a ranged key")
-      if (allocated(error)) return
-      call read_config_from_string("&ocean_bt_nml pc_be = inf /"//NL, cfg, schema, ierr)
-      call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_PARSE, "namelist path refuses Inf for a ranged key")
    end subroutine test_nonfinite
 
    subroutine test_float_overflow(error)
-      !! A literal beyond the real range: both front ends give the same answer
-      !! (the same value, or both refuse), on every compiler.
+      !! A literal beyond the real range gives the same answer on every
+      !! compiler: both runs of the reader agree (the same value, or both
+      !! refuse), and a refusal carries the key and line.
       type(error_type), allocatable, intent(out) :: error
       character(len=:), allocatable :: a1, e1, a2, e2
       integer :: i1, i2
 
-      call dumps_of("&physics_nml coriolis_f = 1e400 /"//NL, .false., a1, e1, i1)
-      call dumps_of("[physics]"//NL//"coriolis_f = 1e400"//NL, .true., a2, e2, i2)
-      call check(error, i1 == i2, "same accept/refuse verdict for 1e400")
+      call dumps_of("[physics]"//NL//"coriolis_f = 1e400"//NL, a1, e1, i1)
+      call dumps_of("[physics]"//NL//"coriolis_f = 1e400"//NL, a2, e2, i2)
+      call check(error, i1 == i2, "deterministic accept/refuse verdict for 1e400")
       if (allocated(error)) return
-      if (i1 == OCEAN_STATUS_OK) call check(error, e1 == e2, "same value for 1e400")
+      if (i1 == OCEAN_STATUS_OK) then
+         call check(error, e1 == e2, "deterministic value for 1e400")
+      else
+         call check_refused(error, "[physics]"//NL//"coriolis_f = 1e400"//NL, &
+                            [character(len=24) :: ":2:", "key 'coriolis_f'"])
+      end if
    end subroutine test_float_overflow
 
    subroutine test_duplicate_group(error)
@@ -739,12 +752,22 @@ contains
    subroutine test_dotted_inline(error)
       !! Dotted keys and inline tables build the same tables as headers do.
       type(error_type), allocatable, intent(out) :: error
-      character(len=*), parameter :: N = "&ocean_hvisc_nml nu_h = 5.0 /"//NL//"&grid_nml nx = 20 /"//NL
-      call check_equivalent(error, N, "[ocean]"//NL//"hvisc.nu_h = 5.0"//NL//"[grid]"//NL//"nx = 20"//NL)
+      character(len=:), allocatable :: a1, e1, a2, e2
+      integer :: i1, i2
+
+      call dumps_of("[ocean.hvisc]"//NL//"nu_h = 5.0"//NL//"[grid]"//NL//"nx = 20"//NL, a1, e1, i1)
+      call check(error, i1, OCEAN_STATUS_OK)
       if (allocated(error)) return
-      call check_equivalent(error, N, "grid = { nx = 20 }"//NL//"[ocean]"//NL//"hvisc = { nu_h = 5.0 }"//NL)
+      call dumps_of("[ocean]"//NL//"hvisc.nu_h = 5.0"//NL//"[grid]"//NL//"nx = 20"//NL, a2, e2, i2)
+      call check(error, i2 == OCEAN_STATUS_OK .and. a2 == a1 .and. e2 == e1, "dotted key under [ocean]")
       if (allocated(error)) return
-      call check_equivalent(error, N, "ocean.hvisc.nu_h = 5.0"//NL//"grid.nx = 20"//NL)
+      call dumps_of("grid = { nx = 20 }"//NL//"[ocean]"//NL//"hvisc = { nu_h = 5.0 }"//NL, a2, e2, i2)
+      call check(error, i2 == OCEAN_STATUS_OK .and. a2 == a1 .and. e2 == e1, "inline tables")
+      if (allocated(error)) return
+      call dumps_of("ocean.hvisc.nu_h = 5.0"//NL//"grid.nx = 20"//NL, a2, e2, i2)
+      call check(error, i2 == OCEAN_STATUS_OK .and. a2 == a1 .and. e2 == e1, "fully dotted keys")
+      if (allocated(error)) return
+      call check_int_value(error, "20", 20)
    end subroutine test_dotted_inline
 
    subroutine test_exotic_values(error)
@@ -804,10 +827,6 @@ contains
       call read_config_from_toml_string("[output]"//NL//'output_dir = "'//longs//'"'//NL, cfg, schema, ierr)
       call check(error, ierr == OCEAN_STATUS_OK .and. trim(cfg%output_dir) == longs, "200 chars fit")
       if (allocated(error)) return
-      ! The namelist tokenizer no longer truncates a long token silently.
-      longs = repeat("z", 300)
-      call read_config_from_string("&output_nml output_dir = '"//longs//"' /"//NL, cfg, schema, ierr)
-      call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_PARSE, "namelist path refuses a 300-char token")
    end subroutine test_strings
 
    subroutine test_unreadable(error)

@@ -1,29 +1,27 @@
 !! TOML front end for the strict configuration schema.
 module rdb_toml_read
    !! Reads a TOML document (toml-f) and applies it to an `nml_schema_t` through
-   !! the SAME per-key validators the namelist reader uses, so the two front ends
-   !! share one set of range / enum / length / required-key / cross-check rules
-   !! and one error list (`path:line:` prefixed, accumulating).
+   !! the schema's per-key validators: one set of range / enum / length /
+   !! required-key / cross-check rules and one error list (`path:line:`
+   !! prefixed, accumulating).
    !!
    !! Layout (the group <-> table mapping lives in [[group_to_table]] /
    !! [[table_to_group]] and nowhere else):
    !!
-   !!   `&ocean_<x>_nml`  <->  `[ocean.<x>]`   (only the LEADING `ocean_` splits)
-   !!   `&<x>_nml`        <->  `[<x>]`
+   !!   group `ocean_<x>`  <->  `[ocean.<x>]`   (only the LEADING `ocean_` splits)
+   !!   group `<x>`        <->  `[<x>]`
    !!
-   !! Key names are unchanged and EXACT-CASE: a key or table spelled in a
-   !! different case is unknown (and the did-you-mean points at the registered
-   !! spelling).  Value types are TOML's own: reals are floats or integers,
-   !! integers are integers, logicals are booleans, strings and enums are
-   !! strings, real arrays are arrays of numbers (a lone number is accepted for
-   !! an array key, as a single namelist value is).
+   !! Key names are EXACT-CASE: a key or table spelled in a different case is
+   !! unknown (and the did-you-mean points at the registered spelling).  Value
+   !! types are TOML's own: reals are floats or integers, integers are
+   !! integers, logicals are booleans, strings and enums are strings, real
+   !! arrays are arrays of numbers (a lone number is accepted for an array key).
    !!
-   !! Values reach the key validators as TEXT (`parse_tokens`).  An integer is
-   !! written with `I0`; a float with `ES30.17E3` (18 significant digits, more
-   !! than the 17 a binary64 needs), which list-directed `read` returns bit for
-   !! bit -- `tests/test_toml_config.F90` proves it over a sweep of bit
-   !! patterns -- so stringifying loses nothing and the validators' messages
-   !! stay identical across the two formats.
+   !! Values reach the key validators as TEXT (`parse_tokens`): a number as its
+   !! SOURCE spelling (underscores and a leading `+` dropped; an integer for a
+   !! real key gets `.0` appended), which list-directed `read` returns bit for
+   !! bit -- `tests/test_toml_config.F90` proves it over a sweep of bit patterns
+   !! -- so stringifying loses nothing.
    use, intrinsic :: iso_fortran_env, only: int64, real64
    use rdb_nml_schema, only: nml_schema_t, nml_group_t, nml_real_key_t, &
                              nml_int_key_t, nml_logical_key_t, nml_string_key_t, &
@@ -291,16 +289,8 @@ contains
       gidx = 0
       if (len(gname) > 0) then
          gidx = schema%find_group(gname)
-         ! find_group is case-insensitive and drops a `_nml` suffix; a TOML
-         ! table must spell the registered name exactly.
-         if (gidx > 0) then
-            if (schema%groups(gidx)%name /= gname) gidx = 0
-         end if
       end if
       if (gidx == 0) then
-         if (len(gname) > 0) then
-            if (schema%is_external(gname)) return
-         end if
          names = table_name_list(schema)
          call add_err(errors, n_err, loc(ctx, label, torigin)//"unknown table ["// &
                       tpath//"]"//suggest(tpath, names))

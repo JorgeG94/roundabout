@@ -1,10 +1,12 @@
-!! Strict, schema-driven namelist validation engine.
+!! Strict, schema-driven configuration validation engine.
 module rdb_nml_schema
-   !! A host-only, schema-driven namelist parser and validator. Validates a
-   !! namelist file against a registered schema of groups and keys,
-   !! collecting ALL errors (with `path:line:` prefixes, did-you-mean
-   !! suggestions, range/enum/length checks) and rejecting unsupported
-   !! syntax (repeat-counts, indexed assignment, derived-type refs).
+   !! A host-only schema of configuration groups and keys with the per-key
+   !! validators (range / enum / length / required / cross-check) the TOML
+   !! front end (`rdb_toml_read`) applies a parsed document through,
+   !! collecting ALL errors (with `path:line:` prefixes and did-you-mean
+   !! suggestions).  The module keeps its historical `nml_*` names; a group
+   !! `ocean_<x>` is the TOML table `[ocean.<x>]`, any other group `<x>` the
+   !! table `[<x>]`.
    !!
    !! Defaults contract (load-bearing): every key constructor captures its
    !! default from the CURRENT target value at registration; the schema
@@ -12,7 +14,7 @@ module rdb_nml_schema
    !! BEFORE parsing.
    !!
    !! Required-key semantics: a `required=.true.` key must appear whenever
-   !! its GROUP appears; an absent group is fine (defaults rule).
+   !! its TABLE appears; an absent group is fine (defaults rule).
    use, intrinsic :: iso_fortran_env, only: int64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
@@ -34,8 +36,8 @@ module rdb_nml_schema
    public :: nml_group_t, nml_schema_t, nml_key_box_t
    public :: nml_real, nml_int, nml_logical, nml_string, nml_enum, nml_real_array
    public :: group_check_iface
-   ! Building blocks for a second front end (rdb_toml_read) that applies a
-   ! parsed document through the SAME key validators and error list.
+   ! Building blocks for the front end (rdb_toml_read) that applies a parsed
+   ! document through the key validators and the error list.
    public :: add_err, suggest, group_key_list, make_prefix
    public :: reset_state, post_parse_validate
 
@@ -214,24 +216,17 @@ module rdb_nml_schema
    end type nml_group_t
 
    type :: nml_schema_t
-      !! The top-level schema: validated groups plus external (skipped)
-      !! group names.
+      !! The top-level schema: the validated groups.
       type(nml_group_t), allocatable :: groups(:)
          !! Registered, validated groups.
-      character(len=:), allocatable :: external_names(:)
-         !! Names of groups whose bodies are skipped without validation.
    contains
       procedure :: add_group => schema_add_group
-      procedure :: add_external_group => schema_add_external_group
-      procedure :: parse => schema_parse
-      procedure :: parse_lines => schema_parse_lines
       procedure :: write_doc_all => schema_write_doc_all
       procedure :: write_doc_short => schema_write_doc_short
       procedure :: write_resolved => schema_write_resolved
       procedure :: render_markdown => schema_render_markdown
       procedure :: render_json => schema_render_json
       procedure :: find_group => schema_find_group
-      procedure :: is_external => schema_is_external
    end type nml_schema_t
 contains
 
@@ -852,71 +847,20 @@ contains
       src%cross_check => null()
    end subroutine move_group
 
-   subroutine schema_add_external_group(this, name)
-      !! Register a group name the schema knows exists but does NOT
-      !! validate (its body is skipped silently).
-      class(nml_schema_t), intent(inout) :: this
-      character(len=*), intent(in) :: name
-      character(len=:), allocatable :: tmp(:)
-      integer :: n, newlen, i
-
-      if (.not. allocated(this%external_names)) allocate (character(len=0) :: this%external_names(0))
-      n = size(this%external_names)
-      newlen = max(len(this%external_names), len(name))
-      allocate (character(len=newlen) :: tmp(n + 1))
-      do i = 1, n
-         tmp(i) = this%external_names(i)
-      end do
-      tmp(n + 1) = name
-      call move_alloc(tmp, this%external_names)
-   end subroutine schema_add_external_group
-
    function schema_find_group(this, name) result(idx)
-      !! Index of `name` in the schema's groups, 0 if absent.
+      !! Index of `name` in the schema's groups (exact, case-sensitive), 0 if absent.
       class(nml_schema_t), intent(in) :: this
       character(len=*), intent(in) :: name
       integer :: idx, i
       idx = 0
       if (.not. allocated(this%groups)) return
       do i = 1, size(this%groups)
-         if (lower(this%groups(i)%name) == lower(strip_nml(name))) then
+         if (this%groups(i)%name == name) then
             idx = i
             return
          end if
       end do
    end function schema_find_group
-
-   pure function strip_nml(name) result(out)
-      !! Drop a trailing `_nml` suffix (namelist files spell groups
-      !! `&<name>_nml`; the schema stores the bare `<name>`).
-      character(len=*), intent(in) :: name
-      character(len=:), allocatable :: out
-      integer :: n
-      n = len_trim(name)
-      if (n > 4) then
-         if (lower(name(n - 3:n)) == "_nml") then
-            out = name(1:n - 4)
-            return
-         end if
-      end if
-      out = trim(name)
-   end function strip_nml
-
-   function schema_is_external(this, name) result(yes)
-      !! True if `name` is a registered external group.
-      class(nml_schema_t), intent(in) :: this
-      character(len=*), intent(in) :: name
-      logical :: yes
-      integer :: i
-      yes = .false.
-      if (.not. allocated(this%external_names)) return
-      do i = 1, size(this%external_names)
-         if (lower(trim(this%external_names(i))) == lower(strip_nml(name))) then
-            yes = .true.
-            return
-         end if
-      end do
-   end function schema_is_external
 
    ! ------------------------------------------------------------------
    ! Levenshtein + did-you-mean.
@@ -1353,50 +1297,8 @@ contains
    end subroutine add_err
 
    ! ------------------------------------------------------------------
-   ! The parser.
+   ! Post-parse passes shared by the front ends.
    ! ------------------------------------------------------------------
-
-   subroutine schema_parse(this, path, status, errors)
-      !! Parse and validate the namelist file at `path`.
-      !!
-      !! Error-return convention: if BOTH `status` and `errors` are present,
-      !! collected messages return in `errors` (unallocated when none) and
-      !! `status` = error count (0 = clean), no stop. If either is absent and
-      !! any error occurs, each is logged via `global_logger%error` and the
-      !! routine `error stop`s.
-      class(nml_schema_t), intent(inout) :: this
-      character(len=*), intent(in) :: path
-      integer, intent(out), optional :: status
-      character(len=:), allocatable, intent(out), optional :: errors(:)
-
-      character(len=:), allocatable :: err_buf(:)
-      integer :: n_err
-
-      n_err = 0
-      call reset_state(this)
-      call parse_file(this, path, err_buf, n_err)
-      call post_parse_validate(this, path, err_buf, n_err, status, errors)
-   end subroutine schema_parse
-
-   subroutine schema_parse_lines(this, lines, n_lines, status, errors)
-      !! In-memory sibling of `schema_parse`: validate + apply a namelist
-      !! already held as a `lines(:)` character array (no file touch).
-      !! Same error-return convention as `schema_parse`.
-      class(nml_schema_t), intent(inout) :: this
-      character(len=*), intent(in) :: lines(:)
-      integer, intent(in) :: n_lines
-      integer, intent(out), optional :: status
-      character(len=:), allocatable, intent(out), optional :: errors(:)
-
-      character(len=:), allocatable :: err_buf(:)
-      integer :: n_err
-      character(len=*), parameter :: LABEL = "<config-string>"
-
-      n_err = 0
-      call reset_state(this)
-      call parse_from_lines(this, lines, n_lines, LABEL, err_buf, n_err)
-      call post_parse_validate(this, LABEL, err_buf, n_err, status, errors)
-   end subroutine schema_parse_lines
 
    subroutine post_parse_validate(this, label, err_buf, n_err, status, errors, skip_checks)
       !! Required-key + cross-check pass shared by the file and buffer
@@ -1482,133 +1384,6 @@ contains
          end if
       end do
    end subroutine reset_state
-   subroutine read_lines(path, lines, n_lines, ok)
-      !! Read the whole file into a deferred-len line array.
-      character(len=*), intent(in) :: path
-      character(len=:), allocatable, intent(out) :: lines(:)
-      integer, intent(out) :: n_lines
-      logical, intent(out) :: ok
-      integer :: u, ios, cap, maxlen
-      character(len=4096) :: buf
-      character(len=256) :: imsg
-      character(len=:), allocatable :: tmp(:)
-      integer :: i
-
-      n_lines = 0
-      ok = .false.
-      open (newunit=u, file=path, status="old", action="read", iostat=ios, iomsg=imsg)
-      if (ios /= 0) return
-      ok = .true.
-      cap = 64
-      maxlen = 256
-      allocate (character(len=maxlen) :: lines(cap))
-      do
-         read (u, "(A)", iostat=ios, iomsg=imsg) buf
-         if (ios /= 0) exit
-         if (n_lines >= cap .or. len_trim(buf) > maxlen) then
-            maxlen = max(maxlen, len_trim(buf))
-            allocate (character(len=maxlen) :: tmp(max(2*cap, n_lines + 1)))
-            do i = 1, n_lines
-               tmp(i) = lines(i)
-            end do
-            call move_alloc(tmp, lines)
-            cap = size(lines)
-         end if
-         n_lines = n_lines + 1
-         lines(n_lines) = buf
-      end do
-      close (u)
-   end subroutine read_lines
-
-   pure function strip_comment(line) result(out)
-      !! Remove a trailing `!` comment, respecting single/double quotes.
-      character(len=*), intent(in) :: line
-      character(len=:), allocatable :: out
-      integer :: i
-      character :: q
-      logical :: in_str
-
-      in_str = .false.
-      q = " "
-      out = line
-      do i = 1, len(line)
-         if (in_str) then
-            if (line(i:i) == q) in_str = .false.
-         else
-            if (line(i:i) == '"' .or. line(i:i) == "'") then
-               in_str = .true.
-               q = line(i:i)
-            else if (line(i:i) == "!") then
-               out = line(1:i - 1)
-               return
-            end if
-         end if
-      end do
-   end function strip_comment
-
-   subroutine parse_file(this, path, errors, n_err)
-      !! Read the namelist file at `path`, then drive the parse.  The file
-      !! is the only on-disk touch; the walk runs on the in-memory lines
-      !! (shared with the from-buffer path, parse_from_lines).
-      type(nml_schema_t), intent(inout) :: this
-      character(len=*), intent(in) :: path
-      character(len=:), allocatable, intent(inout) :: errors(:)
-      integer, intent(inout) :: n_err
-
-      character(len=:), allocatable :: lines(:)
-      integer :: n_lines
-      logical :: ok
-
-      call read_lines(path, lines, n_lines, ok)
-      if (.not. ok) then
-         call add_err(errors, n_err, path//": cannot open file")
-         return
-      end if
-      call parse_from_lines(this, lines, n_lines, path, errors, n_err)
-   end subroutine parse_file
-
-   subroutine parse_from_lines(this, lines, n_lines, label, errors, n_err)
-      !! Walk an in-memory namelist (already split into `lines`): strip
-      !! comments, scan for `&group` headers, dispatch keys.  `label`
-      !! names the source in error messages — a file path for parse_file,
-      !! a sentinel (e.g. "<config-string>") for buffer parses.
-      type(nml_schema_t), intent(inout) :: this
-      character(len=*), intent(in) :: lines(:)
-      integer, intent(in) :: n_lines
-      character(len=*), intent(in) :: label
-      character(len=:), allocatable, intent(inout) :: errors(:)
-      integer, intent(inout) :: n_err
-
-      integer :: li, col, gline
-      character(len=:), allocatable :: gname, prefix
-      logical, allocatable :: group_seen(:)
-
-      if (allocated(this%groups)) then
-         allocate (group_seen(size(this%groups)))
-         group_seen = .false.
-      else
-         allocate (group_seen(0))
-      end if
-
-      li = 1
-      col = 1
-      do
-         ! Scan for the next '&' that opens a group.
-         call next_amp(lines, n_lines, li, col)
-         if (li > n_lines) exit
-         gline = li
-         call read_group_name(lines, n_lines, li, col, gname)
-         prefix = make_prefix(label, gline)
-         if (len_trim(gname) == 0) then
-            call add_err(errors, n_err, prefix//"malformed group header (expected name after '&')")
-            ! Skip to next '/' to recover.
-            call skip_to_slash(lines, n_lines, li, col)
-            cycle
-         end if
-         call dispatch_group(this, lines, n_lines, li, col, gname, prefix, &
-                             group_seen, errors, n_err, label)
-      end do
-   end subroutine parse_from_lines
 
    pure function make_prefix(path, line) result(p)
       !! Build a `path:line: ` error prefix.
@@ -1617,158 +1392,6 @@ contains
       character(len=:), allocatable :: p
       p = path//":"//fmt_int(line)//": "
    end function make_prefix
-
-   subroutine next_amp(lines, n_lines, li, col)
-      !! Advance (li,col) to the character AFTER the next '&'.  On EOF
-      !! sets li = n_lines + 1.  Bare non-blank tokens before '&' are
-      !! tolerated as inter-group whitespace.
-      character(len=*), intent(in) :: lines(:)
-      integer, intent(in) :: n_lines
-      integer, intent(inout) :: li, col
-      character(len=:), allocatable :: s
-      integer :: i
-
-      do while (li <= n_lines)
-         s = strip_comment(lines(li))
-         do i = col, len(s)
-            if (s(i:i) == "&") then
-               col = i + 1
-               return
-            end if
-         end do
-         li = li + 1
-         col = 1
-      end do
-   end subroutine next_amp
-
-   subroutine read_group_name(lines, n_lines, li, col, gname)
-      !! Read an identifier starting at (li,col); advance past it.
-      character(len=*), intent(in) :: lines(:)
-      integer, intent(in) :: n_lines
-      integer, intent(inout) :: li, col
-      character(len=:), allocatable, intent(out) :: gname
-      character(len=:), allocatable :: s
-      integer :: i, start
-
-      gname = ""
-      if (li > n_lines) return
-      s = strip_comment(lines(li))
-      ! Skip leading blanks.
-      do while (col <= len(s))
-         if (s(col:col) /= " " .and. s(col:col) /= achar(9)) exit
-         col = col + 1
-      end do
-      start = col
-      do i = col, len(s)
-         if (is_ident_char(s(i:i))) then
-            col = i + 1
-         else
-            exit
-         end if
-      end do
-      if (col > start) gname = s(start:col - 1)
-   end subroutine read_group_name
-
-   pure function is_ident_char(c) result(yes)
-      !! True for identifier characters (alnum + underscore).
-      character, intent(in) :: c
-      logical :: yes
-      integer :: ic
-      ic = iachar(c)
-      yes = (ic >= iachar("a") .and. ic <= iachar("z")) .or. &
-            (ic >= iachar("A") .and. ic <= iachar("Z")) .or. &
-            (ic >= iachar("0") .and. ic <= iachar("9")) .or. &
-            (c == "_")
-   end function is_ident_char
-
-   subroutine skip_to_slash(lines, n_lines, li, col)
-      !! Advance past the next '/' (group terminator); recovery aid.
-      character(len=*), intent(in) :: lines(:)
-      integer, intent(in) :: n_lines
-      integer, intent(inout) :: li, col
-      character(len=:), allocatable :: s
-      integer :: i
-      do while (li <= n_lines)
-         s = strip_comment(lines(li))
-         do i = col, len(s)
-            if (s(i:i) == "/") then
-               col = i + 1
-               return
-            end if
-         end do
-         li = li + 1
-         col = 1
-      end do
-   end subroutine skip_to_slash
-   subroutine dispatch_group(this, lines, n_lines, li, col, gname, prefix, &
-                             group_seen, errors, n_err, path)
-      !! Resolve a group name to known / external / unknown and parse
-      !! (or skip) its body up to the terminating '/'.
-      type(nml_schema_t), intent(inout) :: this
-      character(len=*), intent(in) :: lines(:)
-      integer, intent(in) :: n_lines
-      integer, intent(inout) :: li, col
-      character(len=*), intent(in) :: gname, prefix, path
-      logical, allocatable, intent(inout) :: group_seen(:)
-      character(len=:), allocatable, intent(inout) :: errors(:)
-      integer, intent(inout) :: n_err
-      integer :: gidx
-
-      gidx = this%find_group(gname)
-      if (gidx > 0) then
-         if (group_seen(gidx)) then
-            call add_err(errors, n_err, prefix//"duplicate occurrence of group '"//gname//"'")
-            call skip_to_slash(lines, n_lines, li, col)
-            return
-         end if
-         group_seen(gidx) = .true.
-         this%groups(gidx)%found = .true.
-         call parse_group_body(this%groups(gidx), lines, n_lines, li, col, &
-                               path, errors, n_err)
-         return
-      end if
-      if (this%is_external(gname)) then
-         call skip_to_slash(lines, n_lines, li, col)
-         return
-      end if
-      ! Unknown group.
-      block
-         character(len=:), allocatable :: names(:)
-         character(len=:), allocatable :: sug
-         names = group_name_list(this)
-         sug = ""
-         if (size(names) > 0) sug = suggest(strip_nml(gname), names)
-         call add_err(errors, n_err, prefix//"unknown group '"//gname//"'"//sug)
-      end block
-      call skip_to_slash(lines, n_lines, li, col)
-   end subroutine dispatch_group
-
-   function group_name_list(this) result(names)
-      !! All registered + external group names as a char array.
-      type(nml_schema_t), intent(in) :: this
-      character(len=:), allocatable :: names(:)
-      integer :: ng, ne, i, mlen, k
-
-      ng = 0
-      if (allocated(this%groups)) ng = size(this%groups)
-      ne = 0
-      if (allocated(this%external_names)) ne = size(this%external_names)
-      mlen = 1
-      do i = 1, ng
-         mlen = max(mlen, len(this%groups(i)%name))
-      end do
-      if (ne > 0) mlen = max(mlen, len(this%external_names))
-      allocate (character(len=mlen) :: names(ng + ne))
-      k = 0
-      do i = 1, ng
-         k = k + 1
-         names(k) = this%groups(i)%name
-      end do
-      do i = 1, ne
-         k = k + 1
-         names(k) = this%external_names(i)
-      end do
-   end function group_name_list
 
    function group_key_list(g) result(names)
       !! All key names of a group as a char array.
@@ -1787,310 +1410,5 @@ contains
          names(i) = g%keys(i)%key%name
       end do
    end function group_key_list
-
-   subroutine parse_group_body(g, lines, n_lines, li, col, path, errors, n_err)
-      !! Tokenize and apply `key = value...` pairs until '/'.
-      type(nml_group_t), intent(inout) :: g
-      character(len=*), intent(in) :: lines(:)
-      integer, intent(in) :: n_lines
-      integer, intent(inout) :: li, col
-      character(len=*), intent(in) :: path
-      character(len=:), allocatable, intent(inout) :: errors(:)
-      integer, intent(inout) :: n_err
-
-      character(len=256), allocatable :: tokens(:)
-      integer, allocatable :: tok_line(:)
-      integer :: n_tok, ti
-
-      call collect_tokens(lines, n_lines, li, col, path, tokens, tok_line, n_tok, errors, n_err)
-
-      ti = 1
-      do while (ti <= n_tok)
-         call apply_one_pair(g, tokens, tok_line, n_tok, ti, path, errors, n_err)
-      end do
-   end subroutine parse_group_body
-   subroutine collect_tokens(lines, n_lines, li, col, path, tokens, tok_line, n_tok, errors, n_err)
-      !! Tokenize a group body up to and including the terminating '/'.
-      !! Token kinds are encoded by their text: "=" , "," , a quoted or
-      !! bare value, an identifier, or special markers for unsupported
-      !! syntax which are flagged here.  The '/' ends collection.
-      character(len=*), intent(in) :: lines(:)
-      integer, intent(in) :: n_lines
-      integer, intent(inout) :: li, col
-      character(len=*), intent(in) :: path
-      character(len=256), allocatable, intent(out) :: tokens(:)
-      integer, allocatable, intent(out) :: tok_line(:)
-      integer, intent(out) :: n_tok
-      character(len=:), allocatable, intent(inout) :: errors(:)
-      integer, intent(inout) :: n_err
-
-      character(len=:), allocatable :: s
-      integer :: i, slen
-      logical :: closed
-      character :: c, q
-
-      n_tok = 0
-      allocate (tokens(32))
-      allocate (tok_line(32))
-      closed = .false.
-
-      do while (li <= n_lines .and. .not. closed)
-         s = strip_comment(lines(li))
-         slen = len(s)
-         i = col
-         do while (i <= slen)
-            c = s(i:i)
-            if (c == "/") then
-               closed = .true.
-               col = i + 1
-               exit
-            end if
-            if (c == " " .or. c == achar(9)) then
-               i = i + 1
-            else if (c == "=") then
-               call push_tok(tokens, tok_line, n_tok, "=", li)
-               i = i + 1
-            else if (c == ",") then
-               call push_tok(tokens, tok_line, n_tok, ",", li)
-               i = i + 1
-            else if (c == '"' .or. c == "'") then
-               q = c
-               block
-                  integer :: j
-                  j = i + 1
-                  do while (j <= slen)
-                     if (s(j:j) == q) exit
-                     j = j + 1
-                  end do
-                  if (j - i - 1 > len(tokens)) then
-                     call add_err(errors, n_err, make_prefix(path, li)//"string literal longer than "// &
-                                  fmt_int(len(tokens))//" characters (the namelist token limit)")
-                  end if
-                  if (j > slen) then
-                     call add_err(errors, n_err, make_prefix(path, li)//"unterminated string literal")
-                     call push_tok(tokens, tok_line, n_tok, s(i + 1:slen), li)
-                     i = slen + 1
-                  else
-                     call push_tok(tokens, tok_line, n_tok, s(i + 1:j - 1), li)
-                     i = j + 1
-                  end if
-               end block
-            else
-               ! Bare token: identifier or value, runs to delimiter.
-               block
-                  integer :: start, j
-                  character(len=:), allocatable :: word
-                  start = i
-                  j = i
-                  do while (j <= slen)
-                     if (s(j:j) == " " .or. s(j:j) == achar(9) .or. s(j:j) == "=" .or. &
-                         s(j:j) == "," .or. s(j:j) == "/") exit
-                     j = j + 1
-                  end do
-                  word = s(start:j - 1)
-                  if (len(word) > len(tokens)) then
-                     call add_err(errors, n_err, make_prefix(path, li)//"token longer than "// &
-                                  fmt_int(len(tokens))//" characters (the namelist token limit)")
-                  end if
-                  call check_unsupported(word, path, li, errors, n_err)
-                  call push_tok(tokens, tok_line, n_tok, word, li)
-                  i = j
-               end block
-            end if
-         end do
-         if (.not. closed) then
-            li = li + 1
-            col = 1
-         end if
-      end do
-
-      if (.not. closed) then
-         call add_err(errors, n_err, make_prefix(path, max(li - 1, 1))// &
-                      "group not terminated with '/' before end of file")
-      end if
-   end subroutine collect_tokens
-
-   subroutine check_unsupported(word, path, line, errors, n_err)
-      !! Flag unsupported namelist syntax embedded in a bare token.
-      character(len=*), intent(in) :: word
-      character(len=*), intent(in) :: path
-      integer, intent(in) :: line
-      character(len=:), allocatable, intent(inout) :: errors(:)
-      integer, intent(inout) :: n_err
-
-      if (index(word, "%") > 0) then
-         call add_err(errors, n_err, make_prefix(path, line)// &
-                      "derived-type reference '"//trim(word)//"' is not supported")
-      else if (index(word, "(") > 0) then
-         call add_err(errors, n_err, make_prefix(path, line)// &
-                      "indexed assignment '"//trim(word)//"' is not supported")
-      else if (is_repeat_count(word)) then
-         call add_err(errors, n_err, make_prefix(path, line)// &
-                      "repeat-count syntax '"//trim(word)//"' is not supported")
-      end if
-   end subroutine check_unsupported
-
-   pure function is_repeat_count(word) result(yes)
-      !! True if `word` looks like `N*value` (integer, then '*').
-      character(len=*), intent(in) :: word
-      logical :: yes
-      integer :: star, i
-      character :: c
-      yes = .false.
-      star = index(word, "*")
-      if (star <= 1) return
-      do i = 1, star - 1
-         c = word(i:i)
-         if (c < "0" .or. c > "9") return
-      end do
-      yes = .true.
-   end function is_repeat_count
-
-   subroutine push_tok(tokens, tok_line, n_tok, val, line)
-      !! Append a token, growing the buffer as needed.
-      character(len=256), allocatable, intent(inout) :: tokens(:)
-      integer, allocatable, intent(inout) :: tok_line(:)
-      integer, intent(inout) :: n_tok
-      character(len=*), intent(in) :: val
-      integer, intent(in) :: line
-      character(len=256), allocatable :: tmp(:)
-      integer, allocatable :: tmpl(:)
-      integer :: cap, i
-
-      cap = size(tokens)
-      if (n_tok >= cap) then
-         allocate (tmp(2*cap), tmpl(2*cap))
-         do i = 1, n_tok
-            tmp(i) = tokens(i)
-            tmpl(i) = tok_line(i)
-         end do
-         call move_alloc(tmp, tokens)
-         call move_alloc(tmpl, tok_line)
-      end if
-      n_tok = n_tok + 1
-      tokens(n_tok) = val
-      tok_line(n_tok) = line
-   end subroutine push_tok
-   subroutine apply_one_pair(g, tokens, tok_line, n_tok, ti, path, errors, n_err)
-      !! Consume one `key = value [value...]` starting at token `ti`;
-      !! advance `ti` past the consumed tokens.  Validates structure,
-      !! unknown keys, duplicate keys, and applies via parse_tokens.
-      type(nml_group_t), intent(inout) :: g
-      character(len=256), intent(in) :: tokens(:)
-      integer, intent(in) :: tok_line(:)
-      integer, intent(in) :: n_tok
-      integer, intent(inout) :: ti
-      character(len=*), intent(in) :: path
-      character(len=:), allocatable, intent(inout) :: errors(:)
-      integer, intent(inout) :: n_err
-
-      character(len=:), allocatable :: keyname, prefix
-      integer :: kidx, kline, vstart, vcount, j
-      character(len=256), allocatable :: vals(:)
-
-      ! Skip stray separators.
-      do while (ti <= n_tok)
-         if (trim(tokens(ti)) == ",") then
-            ti = ti + 1
-         else
-            exit
-         end if
-      end do
-      if (ti > n_tok) return
-
-      keyname = trim(tokens(ti))
-      kline = tok_line(ti)
-      prefix = make_prefix(path, kline)
-
-      if (keyname == "=") then
-         call add_err(errors, n_err, prefix//"stray '=' with no key name")
-         ti = ti + 1
-         return
-      end if
-
-      ! Expect '=' next.
-      if (ti + 1 > n_tok) then
-         call add_err(errors, n_err, prefix//"key '"//keyname//"' has no '=' assignment")
-         ti = ti + 1
-         return
-      end if
-      if (trim(tokens(ti + 1)) /= "=") then
-         call add_err(errors, n_err, prefix//"expected '=' after key '"//keyname// &
-                      "', got '"//trim(tokens(ti + 1))//"'")
-         ti = ti + 1
-         return
-      end if
-
-      ! Gather value tokens (skip commas) until next `ident =` or end.
-      vstart = ti + 2
-      vcount = 0
-      allocate (vals(0))
-      j = vstart
-      do while (j <= n_tok)
-         if (trim(tokens(j)) == ",") then
-            j = j + 1
-            cycle
-         end if
-         ! Lookahead: is this token a key (followed by '=')?
-         if (j + 1 <= n_tok) then
-            if (trim(tokens(j + 1)) == "=") exit
-         end if
-         call append_val(vals, vcount, tokens(j))
-         j = j + 1
-      end do
-
-      ti = j
-
-      ! Resolve and apply.
-      kidx = g%find_key(keyname)
-      if (kidx == 0) then
-         block
-            character(len=:), allocatable :: names(:)
-            character(len=:), allocatable :: sug
-            names = group_key_list(g)
-            sug = ""
-            if (size(names) > 0) sug = suggest(keyname, names)
-            call add_err(errors, n_err, prefix//"unknown key '"//keyname// &
-                         "' in group '"//g%name//"'"//sug)
-         end block
-         return
-      end if
-      if (g%keys(kidx)%key%found) then
-         call add_err(errors, n_err, prefix//"duplicate key '"//keyname// &
-                      "' in group '"//g%name//"'")
-         return
-      end if
-      g%keys(kidx)%key%found = .true.
-      if (vcount == 0) then
-         call add_err(errors, n_err, prefix//"key '"//keyname//"' has no value")
-         return
-      end if
-      block
-         character(len=:), allocatable :: emsg
-         call g%keys(kidx)%key%parse_tokens(vals(1:vcount), emsg)
-         if (allocated(emsg)) then
-            call add_err(errors, n_err, prefix//trim(emsg))
-         end if
-      end block
-   end subroutine apply_one_pair
-
-   subroutine append_val(vals, vcount, tok)
-      !! Append one value token to the values buffer.
-      character(len=256), allocatable, intent(inout) :: vals(:)
-      integer, intent(inout) :: vcount
-      character(len=*), intent(in) :: tok
-      character(len=256), allocatable :: tmp(:)
-      integer :: i
-
-      if (vcount >= size(vals)) then
-         allocate (tmp(max(4, 2*size(vals))))
-         do i = 1, vcount
-            tmp(i) = vals(i)
-         end do
-         call move_alloc(tmp, vals)
-      end if
-      vcount = vcount + 1
-      vals(vcount) = tok
-   end subroutine append_val
 
 end module rdb_nml_schema

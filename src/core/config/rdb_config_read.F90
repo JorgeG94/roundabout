@@ -1,27 +1,20 @@
 submodule(rdb_config) rdb_config_read
-   !! Namelist / TOML / string reading entry points + post-parse cascades.
+   !! TOML file / string reading entry points + post-parse cascades.
    use rdb_toml_read, only: toml_schema_parse_file, toml_schema_parse_string
    implicit none
 
-   integer, parameter :: SRC_NML_FILE = 1
-   integer, parameter :: SRC_NML_STRING = 2
-   integer, parameter :: SRC_TOML_FILE = 3
-   integer, parameter :: SRC_TOML_STRING = 4
+   integer, parameter :: SRC_TOML_FILE = 1
+   integer, parameter :: SRC_TOML_STRING = 2
 
 contains
 
    module subroutine read_config(filename, cfg, schema, ierr)
-      !! Read simulation configuration from a namelist file, or from a TOML
-      !! file when `filename` ends in `.toml` (case-insensitive).  Both
-      !! front ends feed the same strict schema, so validation, defaults,
-      !! the `schema` return and the post-parse cascades are identical.
-      !!
-      !! Groups still read natively (`read(nml=)`) are seeded from the
-      !! `cfg` defaults, read, and copied back as before.  Groups that
-      !! have migrated to the strict schema (`rdb_nml_schema`) are
-      !! validated and applied here, AFTER the native reads, by building
-      !! a local schema (defaults captured from `cfg`'s pristine field
-      !! initialisers) and strict-parsing the file — so `error stop` on
+      !! Read the simulation configuration from the TOML file `filename`.
+      !! The name must end in `.toml` (case-insensitive): any other name is
+      !! refused with a message naming TOML (and, when the file is a namelist,
+      !! saying so) -- it never falls back to defaults.  The document is
+      !! validated and applied through the strict schema (`rdb_nml_schema`)
+      !! built from `cfg`'s pristine field initialisers, so `error stop` on
       !! any unknown key / range / enum violation fires for every caller
       !! (driver, FFI, unit tests), not just the production entry points.
       !!
@@ -30,7 +23,7 @@ contains
       !! `cfg`; both entry points keep their `cfg` alive (and `target`),
       !! so returning it is safe.
       character(len=*), intent(in) :: filename
-         !! Path to the namelist input file
+         !! Path to the TOML input file
       type(config_t), target, intent(out) :: cfg
          !! Populated configuration
       type(nml_schema_t), intent(out), optional :: schema
@@ -62,7 +55,7 @@ contains
       !! file (validate + apply straight into `cfg`), run the post-parse
       !! time-unit cascade.
       character(len=*), intent(in) :: filename
-         !! Path to the namelist input file
+         !! Path to the TOML input file
       type(config_t), target, intent(out) :: cfg
          !! Populated configuration
       type(nml_schema_t), intent(out) :: sch
@@ -71,26 +64,28 @@ contains
          !! Non-zero on a strict-parse failure when present; absent
          !! behaves as today (`error stop`).
 
-      ! `cfg` arrives at its pristine field-initialiser defaults.  Every
-      ! namelist group is now on the strict schema: build it (capturing
-      ! those defaults), then parse — which validates AND applies every
-      ! override straight into `cfg` via the schema's key pointers.  No
-      ! native readers, no flat shadow locals, no copy-back remain.
-
-      ! Build the strict schema so its key constructors capture defaults
-      ! from the pristine `cfg` field initialisers.
+      ! `cfg` arrives at its pristine field-initialiser defaults.  Build the
+      ! strict schema (its key constructors capture those defaults), then parse
+      ! -- which validates AND applies every override straight into `cfg` via
+      ! the schema's key pointers.
       call build_rdb_schema(cfg, sch)
 
-      ! A missing namelist file is not an error — the pristine `cfg`
-      ! defaults stand (production main.F90 fails loudly on a missing
-      ! file earlier; tests + the FFI rely on this defaults-on-absent
-      ! behaviour).  Guard the strict parse so it never error-stops on
-      ! "cannot open file".
+      ! Only TOML is read.  Refuse any other name up front, whether or not the
+      ! file exists, rather than guessing a format or silently keeping defaults.
+      if (.not. is_toml_name(filename)) then
+         call refuse_non_toml(filename, ierr)
+         return
+      end if
+
+      ! A missing TOML file is not an error -- the pristine `cfg` defaults
+      ! stand (production main.F90 fails loudly on a missing file earlier;
+      ! tests + the FFI rely on this defaults-on-absent behaviour).  Guard the
+      ! strict parse so it never error-stops on "cannot open file".
       block
          logical :: file_exists
          inquire (file=trim(filename), exist=file_exists)
          if (.not. file_exists) then
-            call logger%debug("Namelist file not found, keeping defaults: "//trim(filename))
+            call logger%debug("Configuration file not found, keeping defaults: "//trim(filename))
             if (present(ierr)) ierr = OCEAN_STATUS_OK
             return
          end if
@@ -100,10 +95,7 @@ contains
       ! `cfg`; routing of `ierr` / `error stop` is in `parse_into_schema`.
       block
          logical :: failed
-         integer :: src
-         src = SRC_NML_FILE
-         if (is_toml_name(filename)) src = SRC_TOML_FILE
-         call parse_into_schema(sch, src, trim(filename), ierr, failed)
+         call parse_into_schema(sch, SRC_TOML_FILE, trim(filename), ierr, failed)
          if (failed) return
       end block
 
@@ -113,76 +105,17 @@ contains
 
    end subroutine read_config_impl
 
-   module subroutine read_config_from_string(text, cfg, schema, ierr)
-      !! In-memory sibling of [[read_config]]: build + strict-parse +
-      !! apply a namelist held entirely in the `text` buffer (newline-
-      !! separated), with NO filesystem touch — no temp file, no `chdir`,
-      !! no cleanup.  Same validation behaviour as the file path (the
-      !! schema parser and the native &ocean_bc_nml read both run from
-      !! the in-memory line array); same `error stop` default and same
-      !! optional non-aborting `ierr` as [[read_config]].
-      character(len=*), intent(in) :: text
-         !! Whole namelist as one string (records separated by '\n').
-      type(config_t), target, intent(out) :: cfg
-      type(nml_schema_t), intent(out), optional :: schema
-      integer, intent(out), optional :: ierr
-         !! Non-zero on a strict-parse failure when present; absent
-         !! behaves as today (`error stop`). The natural FFI/create()
-         !! door: a bad namelist string becomes a returned status
-         !! instead of aborting the host process.
-
-      if (present(schema)) then
-         call read_config_from_string_impl(text, cfg, schema, ierr=ierr)
-      else
-         block
-            type(nml_schema_t) :: sch
-            call read_config_from_string_impl(text, cfg, sch, ierr=ierr)
-         end block
-      end if
-   end subroutine read_config_from_string
-
-   module subroutine read_config_from_string_impl(text, cfg, sch, ierr)
-      !! Body of [[read_config_from_string]] — mirrors read_config_impl
-      !! with the line array replacing the file unit.
-      character(len=*), intent(in) :: text
-      type(config_t), target, intent(out) :: cfg
-      type(nml_schema_t), intent(out) :: sch
-      integer, intent(out), optional :: ierr
-         !! Non-zero on a strict-parse failure when present; absent
-         !! behaves as today (`error stop`).
-
-      call build_rdb_schema(cfg, sch)
-
-      ! Empty buffer → keep pristine defaults (mirrors the missing-file
-      ! branch of read_config_impl).
-      if (len_trim(text) == 0) then
-         if (present(ierr)) ierr = OCEAN_STATUS_OK
-         return
-      end if
-
-      block
-         logical :: failed
-         call parse_into_schema(sch, SRC_NML_STRING, text, ierr, failed)
-         if (failed) return
-      end block
-
-      call apply_time_unit_cascade(cfg)
-      call apply_cartesian_degrees(cfg)
-      if (present(ierr)) ierr = OCEAN_STATUS_OK
-   end subroutine read_config_from_string_impl
-
    module subroutine read_config_from_toml_string(text, cfg, schema, ierr)
-      !! TOML sibling of [[read_config_from_string]]: the document is held
-      !! in `text`, nothing touches the filesystem, and the result, the
-      !! `ierr` contract and the post-parse cascades are the namelist
-      !! reader's.
+      !! In-memory sibling of [[read_config]]: the TOML document is held in
+      !! `text` and nothing touches the filesystem.  Same `ierr` contract and
+      !! post-parse cascades as the file reader.
       character(len=*), intent(in) :: text
          !! Whole TOML document as one string.
       type(config_t), target, intent(out) :: cfg
       type(nml_schema_t), intent(out), optional :: schema
       integer, intent(out), optional :: ierr
          !! Non-zero on a refused document when present; absent behaves as
-         !! the namelist readers do (`error stop`).
+         !! the file reader does (`error stop`).
 
       if (present(schema)) then
          call read_config_from_toml_string_impl(text, cfg, schema, ierr=ierr)
@@ -215,6 +148,55 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine read_config_from_toml_string_impl
 
+   subroutine refuse_non_toml(filename, ierr)
+      !! A non-`.toml` input name: log why (naming TOML; when the file reads as a
+      !! namelist, saying namelist input is gone), then return
+      !! `OCEAN_STATUS_ERR_CONFIG_PARSE` when `ierr` is present, else `error stop`.
+      character(len=*), intent(in) :: filename
+      integer, intent(out), optional :: ierr
+
+      character(len=:), allocatable :: msg
+
+      msg = trim(filename)//": the input file must be TOML (a '.toml' file name)"
+      if (looks_like_namelist(filename)) then
+         msg = msg//"; this file is a Fortran namelist (&..._nml groups), which is no longer read "// &
+               "and has no converter -- rewrite it as TOML: &ocean_<x>_nml becomes [ocean.<x>], "// &
+               "any other &<x>_nml becomes [<x>] (see 'Input file format' in docs/REFERENCE.md)"
+      end if
+      call error_ring_push(msg)
+      call logger%error(msg)
+      if (present(ierr)) then
+         ierr = OCEAN_STATUS_ERR_CONFIG_PARSE
+      else
+         error stop "read_config: the input file must be TOML"
+      end if
+   end subroutine refuse_non_toml
+
+   function looks_like_namelist(filename) result(yes)
+      !! True when the first non-blank, non-comment line of `filename` opens a
+      !! namelist group (`&<name>_nml`).  False for an unreadable file.
+      character(len=*), intent(in) :: filename
+      logical :: yes
+
+      character(len=512) :: line
+      character(len=128) :: imsg
+      integer :: u, ios, i, k
+
+      yes = .false.
+      open (newunit=u, file=trim(filename), status="old", action="read", iostat=ios, iomsg=imsg)
+      if (ios /= 0) return
+      do k = 1, 200
+         read (u, "(A)", iostat=ios, iomsg=imsg) line
+         if (ios /= 0) exit
+         i = verify(line, " "//achar(9))
+         if (i == 0) cycle
+         if (line(i:i) == "!" .or. line(i:i) == "#") cycle
+         yes = line(i:i) == "&" .and. index(line(i:), "_nml") > 0
+         exit
+      end do
+      close (u)
+   end function looks_like_namelist
+
    pure function is_toml_name(filename) result(yes)
       !! True when `filename` ends in `.toml` (any case).
       character(len=*), intent(in) :: filename
@@ -241,23 +223,16 @@ contains
       integer, intent(out), optional :: ierr
       logical, intent(out) :: failed
 
-      integer :: parse_status, e, n_lines
-      character(len=:), allocatable :: parse_errors(:), lines(:)
+      integer :: parse_status, e
+      character(len=:), allocatable :: parse_errors(:)
 
       failed = .false.
-      if (src == SRC_NML_STRING) call split_to_lines(text, lines, n_lines)
-
       if (present(ierr)) then
-         select case (src)
-         case (SRC_NML_FILE)
-            call sch%parse(text, status=parse_status, errors=parse_errors)
-         case (SRC_NML_STRING)
-            call sch%parse_lines(lines, n_lines, status=parse_status, errors=parse_errors)
-         case (SRC_TOML_FILE)
+         if (src == SRC_TOML_FILE) then
             call toml_schema_parse_file(sch, text, status=parse_status, errors=parse_errors)
-         case default
+         else
             call toml_schema_parse_string(sch, text, status=parse_status, errors=parse_errors)
-         end select
+         end if
          if (parse_status /= 0) then
             if (allocated(parse_errors)) then
                do e = 1, size(parse_errors)
@@ -269,76 +244,13 @@ contains
             failed = .true.
          end if
       else
-         select case (src)
-         case (SRC_NML_FILE)
-            call sch%parse(text)
-         case (SRC_NML_STRING)
-            call sch%parse_lines(lines, n_lines)
-         case (SRC_TOML_FILE)
+         if (src == SRC_TOML_FILE) then
             call toml_schema_parse_file(sch, text)
-         case default
+         else
             call toml_schema_parse_string(sch, text)
-         end select
+         end if
       end if
    end subroutine parse_into_schema
-
-   module subroutine split_to_lines(text, lines, n_lines)
-      !! Split a newline-separated buffer into a fixed-len character array
-      !! (one record per line, trailing CR stripped) for internal-file
-      !! reads + the schema line walker.
-      character(len=*), intent(in) :: text
-      character(len=:), allocatable, intent(out) :: lines(:)
-      integer, intent(out) :: n_lines
-
-      integer :: i, start, maxlen, cur, nl
-      character(len=1) :: c
-
-      ! First pass: count records + longest line.
-      nl = 1
-      maxlen = 0
-      cur = 0
-      do i = 1, len(text)
-         c = text(i:i)
-         if (c == achar(10)) then
-            nl = nl + 1
-            maxlen = max(maxlen, cur)
-            cur = 0
-         else if (c /= achar(13)) then
-            cur = cur + 1
-         end if
-      end do
-      maxlen = max(maxlen, cur, 1)
-
-      allocate (character(len=maxlen) :: lines(nl))
-      ! Blank-fill via a SECTION, not `lines = ""`.  `lines` has a DEFERRED
-      ! length, so whole-variable intrinsic assignment from a zero-length
-      ! scalar re-allocates it with len = 0 (F2018 10.2.1.3p3) — ifx does
-      ! exactly that, and every record then parses as empty.  A section
-      ! designator is not an allocatable variable, so it blank-pads in place.
-      lines(:) = ""
-
-      ! Second pass: copy each record.
-      n_lines = 0
-      start = 1
-      cur = 0
-      do i = 1, len(text)
-         c = text(i:i)
-         if (c == achar(10)) then
-            n_lines = n_lines + 1
-            if (cur > 0) lines(n_lines) = text(start:start + cur - 1)
-            start = i + 1
-            cur = 0
-         else if (c /= achar(13)) then
-            ! CR is skipped (a trailing CR before LF is excluded because
-            ! `cur` counts only content chars and `start` marks the first).
-            if (cur == 0) start = i
-            cur = cur + 1
-         end if
-      end do
-      ! Trailing record (no final newline).
-      n_lines = n_lines + 1
-      if (cur > 0) lines(n_lines) = text(start:start + cur - 1)
-   end subroutine split_to_lines
 
    module subroutine apply_time_unit_cascade(cfg)
       !! Post-parse time-unit fixup shared by the file + string config

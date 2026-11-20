@@ -3,7 +3,7 @@
 The regression drivers build and edit model inputs as plain text.  Some of
 them run under python3.10 (the interpreter that has netCDF4), which has no
 `tomllib`, so this module parses nothing: it WRITES TOML and PATCHES the
-line-per-key files the repo ships (see `tools/nml_to_toml.py` for the shape).
+line-per-key files the repo ships (one `key = value` per line, arrays on one line).
 
 Groups are named the way the schema and the drivers always have, with the
 `_nml` suffix (`time_nml`, `ocean_bt_nml`); the table path follows the one

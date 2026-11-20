@@ -87,7 +87,6 @@ module rdb_config
              ocean_diag_config_t, ocean_bc_config_t, &
              ocean_wetdry_config_t, ocean_mpi_config_t
    public :: read_config
-   public :: read_config_from_string
    public :: read_config_from_toml_string
    public :: validate_config
    public :: diag_density_levels_ok
@@ -4901,24 +4900,6 @@ module rdb_config
          integer, intent(out), optional :: ierr
       end subroutine read_config_impl
 
-      module subroutine read_config_from_string(text, cfg, schema, ierr)
-            !! See submodule [[rdb_config_read]].
-         implicit none
-         character(len=*), intent(in) :: text
-         type(config_t), target, intent(out) :: cfg
-         type(nml_schema_t), intent(out), optional :: schema
-         integer, intent(out), optional :: ierr
-      end subroutine read_config_from_string
-
-      module subroutine read_config_from_string_impl(text, cfg, sch, ierr)
-            !! See submodule [[rdb_config_read]].
-         implicit none
-         character(len=*), intent(in) :: text
-         type(config_t), target, intent(out) :: cfg
-         type(nml_schema_t), intent(out) :: sch
-         integer, intent(out), optional :: ierr
-      end subroutine read_config_from_string_impl
-
       module subroutine read_config_from_toml_string(text, cfg, schema, ierr)
             !! See submodule [[rdb_config_read]].
          implicit none
@@ -4936,14 +4917,6 @@ module rdb_config
          type(nml_schema_t), intent(out) :: sch
          integer, intent(out), optional :: ierr
       end subroutine read_config_from_toml_string_impl
-
-      module subroutine split_to_lines(text, lines, n_lines)
-            !! See submodule [[rdb_config_read]].
-         implicit none
-         character(len=*), intent(in) :: text
-         character(len=:), allocatable, intent(out) :: lines(:)
-         integer, intent(out) :: n_lines
-      end subroutine split_to_lines
 
       module subroutine apply_time_unit_cascade(cfg)
             !! See submodule [[rdb_config_read]].

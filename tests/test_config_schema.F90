@@ -25,7 +25,7 @@ contains
                   new_unittest("typo_key_suggestion", test_typo), &
                   new_unittest("out_of_range", test_range), &
                   new_unittest("doc_short_non_default", test_doc_short), &
-                  new_unittest("legacy_group_external", test_external), &
+                  new_unittest("groups_are_strict", test_strict_groups), &
                   new_unittest("ocean_bc_migrated", test_ocean_bc), &
                   new_unittest("retired_split_scheme_names_successor", &
                                test_retired_mom6_pc), &
@@ -258,27 +258,19 @@ contains
       call rm_file(sf)
    end subroutine test_doc_short
 
-   subroutine test_external(error)
-      !! Every group is now migrated onto the strict schema — there are
-      !! no external (skipped) groups left (P4.5 closed the last one,
-      !! ocean_bc).  An ocean group that used to be external
-      !! (ocean_topo_nml) is now strictly validated: a known key applies,
-      !! an unknown key errors, and a bad enum value errors.  A migrated
+   subroutine test_strict_groups(error)
+      !! Every group is on the strict schema (there is no skipped group).
+      !! An ocean group (ocean_topo_nml) is strictly validated: a known key
+      !! applies, an unknown key errors, and a bad enum value errors.  A
       !! coastal group (physics_nml) likewise rejects garbage.
       type(error_type), allocatable, intent(out) :: error
       type(config_t), target :: cfg
       type(nml_schema_t) :: schema
-      integer :: stat, n_ext
+      integer :: stat
       character(len=:), allocatable :: errs(:)
       character(len=*), parameter :: fn = "scratch_cs_ext.toml"
 
       call build_rdb_schema(cfg, schema)
-
-      ! No external (skipped) groups remain.
-      n_ext = 0
-      if (allocated(schema%external_names)) n_ext = size(schema%external_names)
-      call check(error, n_ext == 0, "no transitional external groups remain")
-      if (allocated(error)) return
 
       ! A clean ocean_topo_nml validates and applies.
       call write_file(fn, "[ocean.topo]"//achar(10)//"max_depth = 4000.0"//achar(10)//'topo_config = "spoon"')
@@ -306,7 +298,7 @@ contains
       call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
       call check(error, stat == 1, "migrated physics_nml rejects unknown key")
-   end subroutine test_external
+   end subroutine test_strict_groups
 
    subroutine test_ocean_bc(error)
       !! P4.5: `&ocean_bc_nml` is now a strictly-validated schema group

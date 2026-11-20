@@ -123,7 +123,6 @@ set(RDB_TESTS
     "test_cice_flux|test_cice_flux|collect_cice_flux_tests|cice_flux|ocean"
     "test_cice_restart_convert|test_cice_restart_convert|collect_cice_restart_convert_tests|cice_restart_convert|ocean"
     "test_cice_therm1_ledger|test_cice_therm1_ledger|collect_cice_therm1_ledger_tests|cice_therm1_ledger|ocean"
-    "test_nml_schema|test_nml_schema|collect_nml_schema_tests|nml_schema|core"
     "test_toml_config|test_toml_config|collect_toml_config_tests|toml_config|core"
     "test_config_schema|test_config_schema|collect_config_schema_tests|config_schema|core"
     "test_config_schema_toml|test_config_schema_toml|collect_config_schema_toml_tests|config_schema_toml|core"
@@ -554,16 +553,16 @@ set(MPI_LAUNCH_TESTS test_driver_ocean test_ocean_halo_single_rank
 # (B) RUNTIME FAILURES — BUILD fine but crash when run.  Deliberately LEFT IN
 # the suite as live regression markers: they will start passing once lfortran
 # fixes the bug, so re-running the suite after an upgrade tells us for free.
-# test_nml_schema, test_config_schema - SIGSEGV on allocate(dst, source=src) of
-# a type with a character- pointer component (the nml_string/nml_enum key
-# `tgt`).
+# test_config_schema, test_config_schema_toml - SIGSEGV on allocate(dst,
+# source=src) of a type with a character- pointer component (the
+# nml_string/nml_enum key `tgt`).
 #
 # MREs for every bug live in tmp_local_artifacts/lf_nz_mre/; track upstream at
 # lfortran/lfortran.  Extend either list as more surface.
 # ---------------------------------------------------------------------------
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "LFortran")
   set(RDB_LFORTRAN_UNBUILDABLE test_config test_profiler)
-  set(RDB_LFORTRAN_RUNTIME_FAILURES test_nml_schema test_config_schema)
+  set(RDB_LFORTRAN_RUNTIME_FAILURES test_config_schema test_config_schema_toml)
 
   # (A) remove the unbuildable ones from the build
   foreach(_row ${RDB_TESTS})

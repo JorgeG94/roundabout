@@ -15,7 +15,7 @@ module test_ocean_knob_retirement
    !! "unknown key" error, not silently ignored — the exact defect class
    !! this PR closes.  Cloned from
    !! `tests/test_config_schema.F90:test_typo`
-   !! (itself modelled on `tests/test_nml_schema.F90:test_unknown_key`).
+   !! (itself modelled on `tests/test_config_schema_toml.F90:test_unknown`).
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_config, only: config_t
    use rdb_config_schema, only: build_rdb_schema
