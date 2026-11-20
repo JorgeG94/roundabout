@@ -32,6 +32,10 @@ module rdb_nml_schema
    public :: nml_group_t, nml_schema_t, nml_key_box_t
    public :: nml_real, nml_int, nml_logical, nml_string, nml_enum, nml_real_array
    public :: group_check_iface
+   ! Building blocks for a second front end (rdb_toml_read) that applies a
+   ! parsed document through the SAME key validators and error list.
+   public :: add_err, suggest, group_key_list, make_prefix
+   public :: reset_state, post_parse_validate
 
    type, abstract :: nml_key_t
       !! Abstract base for a single namelist key descriptor.
@@ -221,6 +225,7 @@ module rdb_nml_schema
       procedure :: parse_lines => schema_parse_lines
       procedure :: write_doc_all => schema_write_doc_all
       procedure :: write_doc_short => schema_write_doc_short
+      procedure :: write_resolved => schema_write_resolved
       procedure :: render_markdown => schema_render_markdown
       procedure :: render_json => schema_render_json
       procedure :: find_group => schema_find_group
@@ -1029,6 +1034,51 @@ contains
       close (u)
    end subroutine schema_write_doc_short
 
+   subroutine schema_write_resolved(this, path)
+      !! Write every key as `group.key = value` with reals at full precision
+      !! (`ES30.17E3`: 18 significant digits, an exact binary64 round trip),
+      !! where the doc dumps round them to 11.  A function of the resolved
+      !! configuration only -- it is the equality oracle between input
+      !! formats (`rdb_cfg_dump`).
+      class(nml_schema_t), intent(in) :: this
+      character(len=*), intent(in) :: path
+      integer :: u, ig, ik
+
+      open (newunit=u, file=path, status="replace", action="write")
+      do ig = 1, size(this%groups)
+         if (.not. allocated(this%groups(ig)%keys)) cycle
+         do ik = 1, size(this%groups(ig)%keys)
+            write (u, "(A)") this%groups(ig)%name//"."// &
+               this%groups(ig)%keys(ik)%key%name//" = "// &
+               exact_value_string(this%groups(ig)%keys(ik)%key)
+         end do
+      end do
+      close (u)
+   end subroutine schema_write_resolved
+
+   function exact_value_string(key) result(str)
+      !! `value_string` with reals at full precision.
+      class(nml_key_t), intent(in) :: key
+      character(len=:), allocatable :: str
+      character(len=32) :: buf
+      integer :: i
+
+      select type (key)
+      type is (nml_real_key_t)
+         write (buf, "(ES30.17E3)") key%tgt
+         str = trim(adjustl(buf))
+      type is (nml_real_array_key_t)
+         str = ""
+         do i = 1, size(key%tgt)
+            write (buf, "(ES30.17E3)") key%tgt(i)
+            if (i > 1) str = str//", "
+            str = str//trim(adjustl(buf))
+         end do
+      class default
+         str = key%value_string()
+      end select
+   end function exact_value_string
+
    subroutine schema_render_markdown(this, path)
       !! Render the schema as Markdown: per group a heading, doc line,
       !! and a knob table.
@@ -1329,23 +1379,30 @@ contains
       call post_parse_validate(this, LABEL, err_buf, n_err, status, errors)
    end subroutine schema_parse_lines
 
-   subroutine post_parse_validate(this, label, err_buf, n_err, status, errors)
+   subroutine post_parse_validate(this, label, err_buf, n_err, status, errors, skip_checks)
       !! Required-key + cross-check pass shared by the file and buffer
       !! parsers, then the error-return / error-stop finalization.
+      !! `skip_checks` (default false) omits the two passes: a source that
+      !! never parsed (a TOML syntax error) has applied nothing, so they
+      !! would only add noise to the one real error.
       type(nml_schema_t), intent(inout) :: this
       character(len=*), intent(in) :: label
       character(len=:), allocatable, intent(inout) :: err_buf(:)
       integer, intent(inout) :: n_err
       integer, intent(out), optional :: status
       character(len=:), allocatable, intent(out), optional :: errors(:)
+      logical, intent(in), optional :: skip_checks
 
       integer :: i, ig
-      logical :: testable
+      logical :: testable, do_checks
 
       testable = present(status) .and. present(errors)
+      do_checks = .true.
+      if (present(skip_checks)) do_checks = .not. skip_checks
 
       ! Required-key check (only for groups present in the source).
       do ig = 1, size(this%groups)
+         if (.not. do_checks) exit
          if (.not. this%groups(ig)%found) cycle
          if (.not. allocated(this%groups(ig)%keys)) cycle
          do i = 1, size(this%groups(ig)%keys)
@@ -1360,6 +1417,7 @@ contains
 
       ! Cross-checks: run for every registered group regardless of presence.
       do ig = 1, size(this%groups)
+         if (.not. do_checks) exit
          if (associated(this%groups(ig)%cross_check)) then
             block
                character(len=:), allocatable :: cmsg

@@ -124,6 +124,7 @@ set(RDB_TESTS
     "test_cice_restart_convert|test_cice_restart_convert|collect_cice_restart_convert_tests|cice_restart_convert|ocean"
     "test_cice_therm1_ledger|test_cice_therm1_ledger|collect_cice_therm1_ledger_tests|cice_therm1_ledger|ocean"
     "test_nml_schema|test_nml_schema|collect_nml_schema_tests|nml_schema|core"
+    "test_toml_config|test_toml_config|collect_toml_config_tests|toml_config|core"
     "test_config_schema|test_config_schema|collect_config_schema_tests|config_schema|core"
     "test_ocean_knob_retirement|test_ocean_knob_retirement|collect_ocean_knob_retirement_tests|ocean_knob_retirement|ocean"
     "test_state_roundtrip|test_state_roundtrip|collect_state_roundtrip_tests|state_roundtrip|ocean"

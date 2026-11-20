@@ -21,6 +21,8 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_array_utils.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/ALE/rdb_vcoord.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_decomp.F90
+    # TOML front end on the strict schema (toml-f); used by rdb_config_read.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_toml_read.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_config.F90
     # Submodules of rdb_config (R1 split, 11.7k-line monolith -> parent +
     # bodies-by-concern): read/validate entry points, then the strict-schema

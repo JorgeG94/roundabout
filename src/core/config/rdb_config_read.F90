@@ -1,11 +1,20 @@
 submodule(rdb_config) rdb_config_read
-   !! Namelist / string reading entry points + post-parse cascades.
+   !! Namelist / TOML / string reading entry points + post-parse cascades.
+   use rdb_toml_read, only: toml_schema_parse_file, toml_schema_parse_string
    implicit none
+
+   integer, parameter :: SRC_NML_FILE = 1
+   integer, parameter :: SRC_NML_STRING = 2
+   integer, parameter :: SRC_TOML_FILE = 3
+   integer, parameter :: SRC_TOML_STRING = 4
 
 contains
 
    module subroutine read_config(filename, cfg, schema, ierr)
-      !! Read simulation configuration from a namelist file.
+      !! Read simulation configuration from a namelist file, or from a TOML
+      !! file when `filename` ends in `.toml` (case-insensitive).  Both
+      !! front ends feed the same strict schema, so validation, defaults,
+      !! the `schema` return and the post-parse cascades are identical.
       !!
       !! Groups still read natively (`read(nml=)`) are seeded from the
       !! `cfg` defaults, read, and copied back as before.  Groups that
@@ -88,31 +97,15 @@ contains
       end block
 
       ! Strict schema parse: validate + APPLY every group straight into
-      ! `cfg`.  When `ierr` is present, route through the schema's own
-      ! non-aborting `status`/`errors` pair (already implemented in
-      ! `rdb_nml_schema`) instead of the bare (strict, error-stopping)
-      ! form — every collected message is still logged, just without the
-      ! `error stop`.  Absent `ierr` ⇒ unchanged bare call, for EVERY
-      ! existing caller (driver, benchmarks, unit tests).
-      if (present(ierr)) then
-         block
-            integer :: parse_status, e
-            character(len=:), allocatable :: parse_errors(:)
-            call sch%parse(trim(filename), status=parse_status, errors=parse_errors)
-            if (parse_status /= 0) then
-               if (allocated(parse_errors)) then
-                  do e = 1, size(parse_errors)
-                     call error_ring_push(trim(parse_errors(e)))
-                     call logger%error(trim(parse_errors(e)))
-                  end do
-               end if
-               ierr = OCEAN_STATUS_ERR_CONFIG_PARSE
-               return
-            end if
-         end block
-      else
-         call sch%parse(trim(filename))
-      end if
+      ! `cfg`; routing of `ierr` / `error stop` is in `parse_into_schema`.
+      block
+         logical :: failed
+         integer :: src
+         src = SRC_NML_FILE
+         if (is_toml_name(filename)) src = SRC_TOML_FILE
+         call parse_into_schema(sch, src, trim(filename), ierr, failed)
+         if (failed) return
+      end block
 
       call apply_time_unit_cascade(cfg)
       call apply_cartesian_degrees(cfg)
@@ -158,9 +151,6 @@ contains
          !! Non-zero on a strict-parse failure when present; absent
          !! behaves as today (`error stop`).
 
-      character(len=:), allocatable :: lines(:)
-      integer :: n_lines
-
       call build_rdb_schema(cfg, sch)
 
       ! Empty buffer → keep pristine defaults (mirrors the missing-file
@@ -170,35 +160,127 @@ contains
          return
       end if
 
-      call split_to_lines(text, lines, n_lines)
-
-      ! Strict schema parse from the same lines: validate + APPLY every
-      ! migrated group straight into `cfg`.  Same status/errors routing
-      ! as read_config_impl — see its comment for the rationale.
-      if (present(ierr)) then
-         block
-            integer :: parse_status, e
-            character(len=:), allocatable :: parse_errors(:)
-            call sch%parse_lines(lines, n_lines, status=parse_status, errors=parse_errors)
-            if (parse_status /= 0) then
-               if (allocated(parse_errors)) then
-                  do e = 1, size(parse_errors)
-                     call error_ring_push(trim(parse_errors(e)))
-                     call logger%error(trim(parse_errors(e)))
-                  end do
-               end if
-               ierr = OCEAN_STATUS_ERR_CONFIG_PARSE
-               return
-            end if
-         end block
-      else
-         call sch%parse_lines(lines, n_lines)
-      end if
+      block
+         logical :: failed
+         call parse_into_schema(sch, SRC_NML_STRING, text, ierr, failed)
+         if (failed) return
+      end block
 
       call apply_time_unit_cascade(cfg)
       call apply_cartesian_degrees(cfg)
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine read_config_from_string_impl
+
+   module subroutine read_config_from_toml_string(text, cfg, schema, ierr)
+      !! TOML sibling of [[read_config_from_string]]: the document is held
+      !! in `text`, nothing touches the filesystem, and the result, the
+      !! `ierr` contract and the post-parse cascades are the namelist
+      !! reader's.
+      character(len=*), intent(in) :: text
+         !! Whole TOML document as one string.
+      type(config_t), target, intent(out) :: cfg
+      type(nml_schema_t), intent(out), optional :: schema
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a refused document when present; absent behaves as
+         !! the namelist readers do (`error stop`).
+
+      if (present(schema)) then
+         call read_config_from_toml_string_impl(text, cfg, schema, ierr=ierr)
+      else
+         block
+            type(nml_schema_t) :: sch
+            call read_config_from_toml_string_impl(text, cfg, sch, ierr=ierr)
+         end block
+      end if
+   end subroutine read_config_from_toml_string
+
+   module subroutine read_config_from_toml_string_impl(text, cfg, sch, ierr)
+      !! Body of [[read_config_from_toml_string]].
+      character(len=*), intent(in) :: text
+      type(config_t), target, intent(out) :: cfg
+      type(nml_schema_t), intent(out) :: sch
+      integer, intent(out), optional :: ierr
+
+      logical :: failed
+
+      call build_rdb_schema(cfg, sch)
+      if (len_trim(text) == 0) then
+         if (present(ierr)) ierr = OCEAN_STATUS_OK
+         return
+      end if
+      call parse_into_schema(sch, SRC_TOML_STRING, text, ierr, failed)
+      if (failed) return
+      call apply_time_unit_cascade(cfg)
+      call apply_cartesian_degrees(cfg)
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine read_config_from_toml_string_impl
+
+   pure function is_toml_name(filename) result(yes)
+      !! True when `filename` ends in `.toml` (any case).
+      character(len=*), intent(in) :: filename
+      logical :: yes
+      integer :: n
+
+      n = len_trim(filename)
+      yes = .false.
+      if (n > 5) yes = to_lower(filename(n - 4:n)) == ".toml"
+   end function is_toml_name
+
+   subroutine parse_into_schema(sch, src, text, ierr, failed)
+      !! Parse + validate + apply `text` (a file path for the `*_FILE` kinds,
+      !! the document for the `*_STRING` kinds) into `sch` through the front
+      !! end `src` selects.  When `ierr` is present a refusal is routed
+      !! through the schema's own non-aborting `status`/`errors` pair: every
+      !! message is logged and pushed to the error ring, `ierr` is set to
+      !! `OCEAN_STATUS_ERR_CONFIG_PARSE` and `failed` is true.  Absent
+      !! `ierr` keeps the bare strict form (log + `error stop`), for every
+      !! existing caller (driver, benchmarks, unit tests).
+      type(nml_schema_t), intent(inout) :: sch
+      integer, intent(in) :: src
+      character(len=*), intent(in) :: text
+      integer, intent(out), optional :: ierr
+      logical, intent(out) :: failed
+
+      integer :: parse_status, e, n_lines
+      character(len=:), allocatable :: parse_errors(:), lines(:)
+
+      failed = .false.
+      if (src == SRC_NML_STRING) call split_to_lines(text, lines, n_lines)
+
+      if (present(ierr)) then
+         select case (src)
+         case (SRC_NML_FILE)
+            call sch%parse(text, status=parse_status, errors=parse_errors)
+         case (SRC_NML_STRING)
+            call sch%parse_lines(lines, n_lines, status=parse_status, errors=parse_errors)
+         case (SRC_TOML_FILE)
+            call toml_schema_parse_file(sch, text, status=parse_status, errors=parse_errors)
+         case default
+            call toml_schema_parse_string(sch, text, status=parse_status, errors=parse_errors)
+         end select
+         if (parse_status /= 0) then
+            if (allocated(parse_errors)) then
+               do e = 1, size(parse_errors)
+                  call error_ring_push(trim(parse_errors(e)))
+                  call logger%error(trim(parse_errors(e)))
+               end do
+            end if
+            ierr = OCEAN_STATUS_ERR_CONFIG_PARSE
+            failed = .true.
+         end if
+      else
+         select case (src)
+         case (SRC_NML_FILE)
+            call sch%parse(text)
+         case (SRC_NML_STRING)
+            call sch%parse_lines(lines, n_lines)
+         case (SRC_TOML_FILE)
+            call toml_schema_parse_file(sch, text)
+         case default
+            call toml_schema_parse_string(sch, text)
+         end select
+      end if
+   end subroutine parse_into_schema
 
    module subroutine split_to_lines(text, lines, n_lines)
       !! Split a newline-separated buffer into a fixed-len character array

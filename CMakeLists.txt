@@ -253,6 +253,14 @@ target_include_directories(rdb_nml_json PRIVATE "${CMAKE_BINARY_DIR}/modules"
                                                 "${RDB_SHARED_INCLUDE_DIR}")
 target_link_libraries(rdb_nml_json PRIVATE ${core_dist})
 
+# Resolved-configuration dump (read_config + write_doc_all/write_resolved):
+# `./rdb_cfg_dump <input.nml|input.toml> <out>`. Same output for the same
+# configuration whatever the input format -- the equivalence oracle.
+add_executable(rdb_cfg_dump ${PROJECT_SOURCE_DIR}/app/cfg_dump.F90)
+target_include_directories(rdb_cfg_dump PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                                "${RDB_SHARED_INCLUDE_DIR}")
+target_link_libraries(rdb_cfg_dump PRIVATE ${core_dist})
+
 if(RDB_ENABLE_TESTING)
   add_subdirectory(tests)
 endif()
