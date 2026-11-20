@@ -35,7 +35,7 @@ module test_ocean_cavity_engine
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp, RHO_WATER
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -100,40 +100,97 @@ contains
          ! (validate_config: >= 2 h_nominal).  The draft (~300-500 m) cuts
          ! the top two to four nominal layers into fillers (k_top < nz).
          nzl = "8"
-         vc = "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL
-         cav = ", h_min_cavity = 250.0 /"//NL
-         vm = "&ocean_vmix_nml use_kpp = .false., pp81_nu0 = 0.0, pp81_nu_bg = 1.0e-3, "// &
-              "pp81_kappa_bg = 5.0e-5 /"//NL
+         vc = "[vcoord]"//NL// &
+              'vcoord_type = "z_fixed"'//NL// &
+              "zfixed_closed_faces = true"//NL
+         cav = "h_min_cavity = 250.0"//NL
+         vm = "[ocean.vmix]"//NL// &
+              "use_kpp = false"//NL// &
+              "pp81_nu0 = 0.0"//NL// &
+              "pp81_nu_bg = 1.0e-3"//NL// &
+              "pp81_kappa_bg = 5.0e-5"//NL
       else
          nzl = "4"
-         vc = "&vcoord_nml vcoord_type = 'sigma' /"//NL
-         cav = ", h_min_cavity = 100.0 /"//NL
+         vc = "[vcoord]"//NL// &
+              'vcoord_type = "sigma"'//NL
+         cav = "h_min_cavity = 100.0"//NL
          vm = ""
       end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = "//nzl//" /"//NL// &
-            "&tracer_nml initial_salinity = 34.5, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = -1.409e-4 /"//NL// &
-            vc//vm// &
-            "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
-            "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            "draft_depth = 500.0, draft_slope = -4.0e-4, draft_x0 = 0.0, "// &
-            "draft_x1 = 380000.0, draft_y1 = 260000.0"//cav// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
-            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
-            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0 /"//NL// &
-            "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
-            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[mpi]"//NL// &
+            "px = "//trim(spx)//NL// &
+            "py = "//trim(spy)//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = "//nzl//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 34.5"//NL// &
+            "T_init_surface = 3.0"//NL// &
+            "T_init_bottom = 1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            'split_scheme = "'//scheme//'"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            'lateral_closure = "smagorinsky"'//NL// &
+            "smag_ah = true"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 26"//NL// &
+            "ny = 18"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = -1.409e-4"//NL// &
+            vc//NL// &
+            vm//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "seamount"'//NL// &
+            "max_depth = 1000.0"//NL// &
+            "edge_depth = 400.0"//NL// &
+            "slope_scale = 80000.0"//NL// &
+            'wind_config = "constant"'//NL// &
+            "taux_magnitude = 0.05"//NL// &
+            "[ocean.cavity_dyn]"//NL// &
+            "enable = true"//NL// &
+            'draft_config = "linear"'//NL// &
+            "draft_depth = 500.0"//NL// &
+            "draft_slope = -4.0e-4"//NL// &
+            "draft_x0 = 0.0"//NL// &
+            "draft_x1 = 380000.0"//NL// &
+            "draft_y1 = 260000.0"//NL// &
+            cav//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.cavity_melt]"//NL// &
+            "enable = true"//NL// &
+            'exchange_law = "const_gamma"'//NL// &
+            "gamma_t = 2.2e-2"//NL// &
+            "gamma_s = -1.0"//NL// &
+            "cdrag_top = 2.5e-3"//NL// &
+            'ice_conduction = "insulating"'//NL// &
+            "s_ice = 0.0"//NL// &
+            "far_field_depth = 10.0"//NL// &
+            "[ocean.tdrag]"//NL// &
+            "enable = true"//NL// &
+            'form = "quadratic"'//NL// &
+            "cd = 2.5e-3"//NL// &
+            "[ocean.pgf]"//NL// &
+            'form = "fv_mom6"'//NL// &
+            "p_top_in_bc = true"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "linear"'//NL// &
+            'tfreeze_set = "isomip"'//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL
    end function cavity_case_nml
 
    ! ------------------------------------------------------------------
@@ -153,7 +210,7 @@ contains
          comm_inited = .true.
       end if
       ok = .false.
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= 0) return
       call validate_config(cfg, ierr)
       if (ierr /= 0) return
@@ -352,8 +409,9 @@ contains
       real(wp) :: t, m0, s0, h0, mt_, st_, ht_, src_s, src_h, out_s, out_h, m_out
       real(wp) :: worst_m, worst_s, worst_h, r
 
-      call start_engine(cavity_case_nml(label, scheme, 1, 1)// &
-                        "&output_nml output_to_file = .false. /", engine, cfg, ok)
+      call start_engine(cavity_case_nml(label, scheme, 1, 1)//new_line('a')// &
+                        "[output]"//new_line('a')// &
+                        "output_to_file = false"//new_line('a'), engine, cfg, ok)
       call check(error, ok, label//"/"//scheme//": engine starts (validate_config + engine_setup)")
       if (allocated(error)) return
 

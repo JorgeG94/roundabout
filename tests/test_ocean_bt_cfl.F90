@@ -21,7 +21,7 @@ module test_ocean_bt_cfl
    use rdb_ocean_setup, only: bt_auto_n_inner, metrics_bt_cfl_length, &
                               bt_auto_n_inner_from_dt, bt_cfl_dt_wet
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner, bt_dtbt_safe_step
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use ocean_test_metrics, only: make_cartesian_metrics, make_anisotropic_metrics, &
                                  destroy_cartesian_metrics
@@ -449,11 +449,11 @@ contains
       type(error_type), allocatable, intent(out) :: error
       call expect_dtbt(error, "dtbt = -0.9", .true., "dtbt alone")
       if (allocated(error)) return
-      call expect_dtbt(error, "dtbt = -0.9, dtbt_reset_period = 0.0", .true., "dtbt + reset 0")
+      call expect_dtbt(error, "dtbt = -0.9"//new_line("a")//"dtbt_reset_period = 0.0", .true., "dtbt + reset 0")
       if (allocated(error)) return
-      call expect_dtbt(error, "dtbt = -0.9, auto_n_inner = .true.", .false., "dtbt + auto_n_inner")
+      call expect_dtbt(error, "dtbt = -0.9"//new_line("a")//"auto_n_inner = true", .false., "dtbt + auto_n_inner")
       if (allocated(error)) return
-      call expect_dtbt(error, "dtbt = -0.9, cfl_bt_safety = 0.5", .false., "dtbt + cfl_bt_safety")
+      call expect_dtbt(error, "dtbt = -0.9"//new_line("a")//"cfl_bt_safety = 0.5", .false., "dtbt + cfl_bt_safety")
       if (allocated(error)) return
       call expect_dtbt(error, "dtbt = -1.5", .false., "dtbt < -1")
       if (allocated(error)) return
@@ -467,16 +467,32 @@ contains
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
       integer :: ierr
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 400.0 /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//new_line("a")// &
-            "&ocean_bt_nml n_inner = 8, "//bt_body//" /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 400.0"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "z_fixed"'//new_line("a")// &
+            "zfixed_closed_faces = true"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            bt_body//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "namelist must PARSE: "//what)
       if (allocated(error)) return
       ierr = -999

@@ -24,7 +24,7 @@ module test_ocean_cavity_draft
    !! the device in this slice.)
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY, LAND_DEPTH_THRESHOLD
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_seed_from_cfg, &
                               ocean_state_build_restart_registry
@@ -98,38 +98,59 @@ contains
       !! test that accidentally relied on that would be testing the
       !! reader, not the cavity.
       character(len=*), intent(in) :: cavity
-         !! The `&ocean_cavity_dyn_nml` body, WITHOUT the group name or
-         !! the closing `/` — empty string for "no cavity group at all".
+         !! The `[ocean.cavity_dyn]` key lines (TOML), WITHOUT the table
+         !! header — empty string for "no cavity group at all".
       character(len=*), intent(in), optional :: topo, vcoord, bt, pgf, extra
       character(len=:), allocatable :: nml
       character(len=:), allocatable :: topo_l, vcoord_l, bt_l, pgf_l, extra_l
 
-      topo_l = "&ocean_topo_nml max_depth = 1000.0 /"
+      topo_l = "[ocean.topo]"//new_line('a')// &
+               "max_depth = 1000.0"//new_line('a')
       if (present(topo)) topo_l = topo
-      vcoord_l = "&vcoord_nml vcoord_type = 'sigma' /"
+      vcoord_l = "[vcoord]"//new_line('a')// &
+                 'vcoord_type = "sigma"'//new_line('a')
       if (present(vcoord)) vcoord_l = vcoord
-      bt_l = "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"
+      bt_l = "[ocean.bt]"//new_line('a')// &
+             "auto_n_inner = false"//new_line('a')// &
+             "n_inner = 8"//new_line('a')
       if (present(bt)) bt_l = bt
       ! The production cavity spelling (P5.2): the isostatic load has to
       ! have a consumer, and `p_top_in_bc` is the only one.  Configure
       ! refuses a NON-UNIFORM draft without it, so the default carries it
       ! — the `expect_invalid` rows that probe the PGF envelope override
       ! this whole line anyway.
-      pgf_l = "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"
+      pgf_l = "[ocean.pgf]"//new_line('a')// &
+              'form = "fv_mom6"'//new_line('a')// &
+              "p_top_in_bc = true"//new_line('a')
       if (present(pgf)) pgf_l = pgf
       extra_l = ""
       if (present(extra)) extra_l = extra
 
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            topo_l//new_line("a")//pgf_l//new_line("a")//vcoord_l//new_line("a")// &
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            topo_l//new_line("a")// &
+            pgf_l//new_line("a")// &
+            vcoord_l//new_line("a")// &
             bt_l//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
       if (len_trim(cavity) > 0) then
-         nml = nml//"&ocean_cavity_dyn_nml "//cavity//" /"//new_line("a")
+         nml = nml//new_line("a")// &
+               "[ocean.cavity_dyn]"//new_line("a")// &
+               cavity//new_line("a")
       end if
       if (len_trim(extra_l) > 0) nml = nml//extra_l//new_line("a")
    end function nml_case
@@ -137,7 +158,9 @@ contains
    function cavity_on() result(body)
       !! The stock in-envelope cavity: a 300 m flat lid over the 1000 m bed.
       character(len=:), allocatable :: body
-      body = "enable = .true., draft_config = 'flat', draft_depth = 300.0"
+      body = "enable = true"//new_line('a')// &
+             'draft_config = "flat"'//new_line('a')// &
+             "draft_depth = 300.0"
    end function cavity_on
 
    subroutine build_seeded(cfg, grid, state, nml, ierr)
@@ -151,7 +174,7 @@ contains
       character(len=*), intent(in) :: nml
       integer, intent(out) :: ierr
 
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       ! Take dx/dy FROM the namelist, never from the module constants:
       ! the spherical case ships degrees there, and a grid built in
@@ -347,20 +370,41 @@ contains
 
       ! 8 x 6 cells of 1 DEGREE each; the metres front at 200 km must
       ! land ~1.8 degrees in, i.e. inside cell 2.
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1.0, dy = 1.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
-            "lat_south = 0.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6' /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"//new_line("a")// &
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'flat', "// &
-            "draft_depth = 300.0, draft_x1 = 200.0e3 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1.0"//new_line("a")// &
+            "dy = 1.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.grid]"//new_line("a")// &
+            'grid_config = "spherical"'//new_line("a")// &
+            "lon_west = 0.0"//new_line("a")// &
+            "lat_south = 0.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "fv_mom6"'//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            "[ocean.cavity_dyn]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'draft_config = "flat"'//new_line("a")// &
+            "draft_depth = 300.0"//new_line("a")// &
+            "draft_x1 = 200.0e3"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
 
       call build_seeded(cfg, grid, state, nml, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "spherical cavity namelist must seed")
@@ -453,8 +497,10 @@ contains
       real(wp) :: worst, spread, tol
 
       call build_configured(cfg, grid, state, nml_case( &
-                            "enable = .true., draft_config = 'linear', "// &
-                            "draft_depth = 100.0, draft_slope = 0.05, "// &
+                            "enable = true"//new_line('a')// &
+                            'draft_config = "linear"'//new_line('a')// &
+                            "draft_depth = 100.0"//new_line('a')// &
+                            "draft_slope = 0.05"//new_line('a')// &
                             "draft_x0 = 0.0"), ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "sloping-lid cavity must configure")
       if (allocated(error)) return
@@ -497,12 +543,16 @@ contains
       ! A 700 m flat lid grounds the shallow centre and leaves the deep
       ! rim afloat.
       call build_configured(cfg, grid, state, nml_case( &
-                            "enable = .true., draft_config = 'flat', "// &
-                            "draft_depth = 700.0, h_min_cavity = 50.0, "// &
+                            "enable = true"//new_line('a')// &
+                            'draft_config = "flat"'//new_line('a')// &
+                            "draft_depth = 700.0"//new_line('a')// &
+                            "h_min_cavity = 50.0"//new_line('a')// &
                             "grounded_max_frac = 0.9", &
-                            topo="&ocean_topo_nml topo_config = 'seamount', "// &
-                            "max_depth = 1000.0, edge_depth = 200.0, "// &
-                            "slope_scale = 2000.0 /"), ierr)
+                            topo="[ocean.topo]"//new_line('a')// &
+                            'topo_config = "seamount"'//new_line('a')// &
+                            "max_depth = 1000.0"//new_line('a')// &
+                            "edge_depth = 200.0"//new_line('a')// &
+                            "slope_scale = 2000.0"//new_line('a')), ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "grounded cavity must configure")
       if (allocated(error)) return
 
@@ -542,10 +592,14 @@ contains
       ! `island`: a central LAND square in a flat basin, under a lid that
       ! covers the whole domain.
       call build_configured(cfg, grid, state, nml_case( &
-                            "enable = .true., draft_config = 'flat', "// &
-                            "draft_depth = 300.0, grounded_max_frac = 0.9", &
-                            topo="&ocean_topo_nml topo_config = 'island', "// &
-                            "max_depth = 1000.0, slope_scale = 0.3 /"), ierr)
+                            "enable = true"//new_line('a')// &
+                            'draft_config = "flat"'//new_line('a')// &
+                            "draft_depth = 300.0"//new_line('a')// &
+                            "grounded_max_frac = 0.9", &
+                            topo="[ocean.topo]"//new_line('a')// &
+                            'topo_config = "island"'//new_line('a')// &
+                            "max_depth = 1000.0"//new_line('a')// &
+                            "slope_scale = 0.3"//new_line('a')), ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "island + cavity must configure")
       if (allocated(error)) return
 
@@ -602,8 +656,10 @@ contains
       integer :: ierr
 
       call build_seeded(cfg, grid, state, nml_case( &
-                        "enable = .true., draft_config = 'flat', "// &
-                        "draft_depth = 995.0, h_min_cavity = 10.0, "// &
+                        "enable = true"//new_line('a')// &
+                        'draft_config = "flat"'//new_line('a')// &
+                        "draft_depth = 995.0"//new_line('a')// &
+                        "h_min_cavity = 10.0"//new_line('a')// &
                         "grounded_max_frac = 0.5"), ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
                  "a draft that grounds the whole domain must FAIL configure, not "// &
@@ -630,8 +686,10 @@ contains
       logical :: exact
 
       call build_configured(cfg, grid, state, nml_case( &
-                            "enable = .true., draft_config = 'linear', "// &
-                            "draft_depth = 100.0, draft_slope = 0.05, "// &
+                            "enable = true"//new_line('a')// &
+                            'draft_config = "linear"'//new_line('a')// &
+                            "draft_depth = 100.0"//new_line('a')// &
+                            "draft_slope = 0.05"//new_line('a')// &
                             "draft_x0 = 0.0"), ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "cavity must configure")
       if (allocated(error)) return
@@ -760,19 +818,25 @@ contains
       if (allocated(error)) return
 
       ! --- geometry sources that are named but not implemented ---
-      call expect_invalid(error, nml_case("enable = .true., draft_config = 'file'"), &
+      call expect_invalid(error, nml_case("enable = true"//new_line('a')// &
+                                          'draft_config = "file"'), &
                           "draft_config='file'")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on//", draft_source = 'in_situ'"), &
+      call expect_invalid(error, nml_case(on//new_line('a')// &
+                                          'draft_source = "in_situ"'), &
                           "draft_source='in_situ'")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case("enable = .true., draft_config = 'linear', "// &
-                                          "draft_depth = 100.0, draft_slope = 0.01"), &
+      call expect_invalid(error, nml_case("enable = true"//new_line('a')// &
+                                          'draft_config = "linear"'//new_line('a')// &
+                                          "draft_depth = 100.0"//new_line('a')// &
+                                          "draft_slope = 0.01"), &
                           "linear with no finite draft_x0 anchor")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on//", h_min_cavity = 0.0"), "h_min_cavity = 0")
+      call expect_invalid(error, nml_case(on//new_line('a')// &
+                                          "h_min_cavity = 0.0"), "h_min_cavity = 0")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on//", grounded_max_frac = 1.5"), &
+      call expect_invalid(error, nml_case(on//new_line('a')// &
+                                          "grounded_max_frac = 1.5"), &
                           "grounded_max_frac outside (0, 1]")
       if (allocated(error)) return
 
@@ -780,31 +844,40 @@ contains
       ! A draft that VARIES needs `&ocean_pgf_nml p_top_in_bc`: that knob
       ! is the only route by which rho_ref*g*z_draft reaches the FV_MOM6
       ! pa(nz+1) surface BC.  Refused, not auto-enabled.
-      call expect_invalid(error, nml_case("enable = .true., draft_config = 'linear', "// &
-                                          "draft_depth = 100.0, draft_slope = 0.01, "// &
+      call expect_invalid(error, nml_case("enable = true"//new_line('a')// &
+                                          'draft_config = "linear"'//new_line('a')// &
+                                          "draft_depth = 100.0"//new_line('a')// &
+                                          "draft_slope = 0.01"//new_line('a')// &
                                           "draft_x0 = 0.0", &
-                                          pgf="&ocean_pgf_nml form = 'fv_mom6' /"), &
+                                          pgf="[ocean.pgf]"//new_line('a')// &
+                                          'form = "fv_mom6"'//new_line('a')), &
                           "a sloping draft without p_top_in_bc")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case("enable = .true., draft_config = 'flat', "// &
-                                          "draft_depth = 300.0, draft_x1 = 4000.0", &
-                                          pgf="&ocean_pgf_nml form = 'fv_mom6' /"), &
+      call expect_invalid(error, nml_case("enable = true"//new_line('a')// &
+                                          'draft_config = "flat"'//new_line('a')// &
+                                          "draft_depth = 300.0"//new_line('a')// &
+                                          "draft_x1 = 4000.0", &
+                                          pgf="[ocean.pgf]"//new_line('a')// &
+                                          'form = "fv_mom6"'//new_line('a')), &
                           "a flat draft with a CALVING FRONT (a step) and no p_top_in_bc")
       if (allocated(error)) return
       ! ... but a draft that is UNIFORM over the whole array is EXEMPT: a
       ! load with no gradient is bit-identically inert in the top BC, and
       ! that exemption is what keeps the unloaded flat-lid datum-
       ! equivalence gate expressible at all.
-      call expect_valid(error, nml_case(on, pgf="&ocean_pgf_nml form = 'fv_mom6' /"), &
+      call expect_valid(error, nml_case(on, pgf="[ocean.pgf]"//new_line('a')// &
+                                        'form = "fv_mom6"'//new_line('a')), &
                         "a UNIFORM draft without p_top_in_bc (provably inert)")
       if (allocated(error)) return
 
       ! --- pressure-gradient envelope ---
-      call expect_invalid(error, nml_case(on, pgf="&ocean_pgf_nml form = 'mont' /"), &
+      call expect_invalid(error, nml_case(on, pgf="[ocean.pgf]"//new_line('a')// &
+                                          'form = "mont"'//new_line('a')), &
                           "PGF form /= fv_mom6")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, pgf="&ocean_pgf_nml form = 'fv_mom6', "// &
-                                          "gfs_scale = 0.9 /"), "gfs_scale /= 1")
+      call expect_invalid(error, nml_case(on, pgf="[ocean.pgf]"//new_line('a')// &
+                                          'form = "fv_mom6"'//new_line('a')// &
+                                          "gfs_scale = 0.9"//new_line('a')), "gfs_scale /= 1")
       if (allocated(error)) return
 
       ! --- vertical-coordinate envelope ---
@@ -813,104 +886,120 @@ contains
       ! and refuse eight.  The rows below are the whole complement of the
       ! whitelist; `parse_vcoord_type`'s own test pins that the list of
       ! spellings is complete.
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'zsigma' /"), "vcoord zsigma")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "zsigma"'//new_line('a')), "vcoord zsigma")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'zstar_full' /"), "vcoord zstar_full")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "zstar_full"'//new_line('a')), "vcoord zstar_full")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'z_fixed' /"), "vcoord z_fixed")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "z_fixed"'//new_line('a')), "vcoord z_fixed")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'eulerian_z' /"), "vcoord eulerian_z")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "eulerian_z"'//new_line('a')), "vcoord eulerian_z")
       if (allocated(error)) return
       ! The two the old message refused WITHOUT naming them.  Both are
       ! geometrically datum-safe — lagrangian has no target at all,
       ! zstar_sigma is a purely fractional rescale — so both are refused
       ! for want of VALIDATION, not for mis-placement, and the message now
       ! says so.  If either is ever admitted, this row is the one to flip.
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'lagrangian' /"), "vcoord lagrangian")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "lagrangian"'//new_line('a')), "vcoord lagrangian")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'zstar_sigma' /"), "vcoord zstar_sigma")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "zstar_sigma"'//new_line('a')), "vcoord zstar_sigma")
       if (allocated(error)) return
       ! ... and the two density-space families, which the old message DID
       ! name but under the wrong reason ("anchors at z = 0" — they have no
       ! geometric anchor at all).
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'rho' /"), "vcoord rho")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "rho"'//new_line('a')), "vcoord rho")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'hycom' /"), "vcoord hycom")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "hycom"'//new_line('a')), "vcoord hycom")
       if (allocated(error)) return
       ! The accept set itself, so the whitelist cannot silently narrow.
-      call expect_valid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                        "'sigma' /"), "vcoord sigma (accepted)")
+      call expect_valid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                        'vcoord_type = "sigma"'//new_line('a')), "vcoord sigma (accepted)")
       if (allocated(error)) return
       ! 'zstar' WAS accepted while it was sigma under another name.  As
       ! MOM6 z* it dilates its fixed nominal profile from the free surface
       ! and has no rigid-top branch, so it is refused until that lands.
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'zstar' /"), "vcoord zstar (MOM6 z*, no rigid top)")
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "zstar"'//new_line('a')), "vcoord zstar (MOM6 z*, no rigid top)")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                          "'sigma', thickness_config = 'uniform_z' /"), &
+      call expect_invalid(error, nml_case(on, vcoord="[vcoord]"//new_line('a')// &
+                                          'vcoord_type = "sigma"'//new_line('a')// &
+                                          'thickness_config = "uniform_z"'//new_line('a')), &
                           "thickness_config uniform_z")
       if (allocated(error)) return
 
       ! --- solver envelope ---
-      call expect_invalid(error, nml_case(on, bt="&ocean_bt_nml auto_n_inner = "// &
-                                          ".false., n_inner = 0 /"), "the unsplit driver")
+      call expect_invalid(error, nml_case(on, bt="[ocean.bt]"//new_line('a')// &
+                                          "auto_n_inner = false"//new_line('a')// &
+                                          "n_inner = 0"//new_line('a')), "the unsplit driver")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, bt="&ocean_bt_nml auto_n_inner = "// &
-                                          ".false., n_inner = 8, bt_halo = 8 /"), &
+      call expect_invalid(error, nml_case(on, bt="[ocean.bt]"//new_line('a')// &
+                                          "auto_n_inner = false"//new_line('a')// &
+                                          "n_inner = 8"//new_line('a')// &
+                                          "bt_halo = 8"//new_line('a')), &
                           "bt_halo > 0")
       if (allocated(error)) return
       ! The cavity runs decomposed (the narrow multi-rank refusals live in
       ! `engine_setup`, tested by `test_ocean_decomp_bitid_mpi`).
-      call expect_valid(error, nml_case(on, extra="&mpi_nml px = 2, py = 1 /"), &
+      call expect_valid(error, nml_case(on, extra="[mpi]"//new_line('a')// &
+                                        "px = 2"//new_line('a')// &
+                                        "py = 1"//new_line('a')), &
                         "multi-rank (accepted)")
       if (allocated(error)) return
 
       ! --- mutually exclusive capabilities ---
-      call expect_invalid(error, nml_case(on, extra="&ocean_wetdry_nml enable = "// &
-                                          ".true., dry_depth = 0.1, rewet_depth = 0.2 /"), &
+      call expect_invalid(error, nml_case(on, extra="[ocean.wetdry]"//new_line('a')// &
+                                          "enable = true"//new_line('a')// &
+                                          "dry_depth = 0.1"//new_line('a')// &
+                                          "rewet_depth = 0.2"//new_line('a')), &
                           "wet/dry")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, extra="&ocean_porous_nml enable = .true. /"), &
+      call expect_invalid(error, nml_case(on, extra="[ocean.porous]"//new_line('a')// &
+                                          "enable = true"//new_line('a')), &
                           "porous barriers")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, extra="&ocean_ice_nml enable = .true. /"), &
+      call expect_invalid(error, nml_case(on, extra="[ocean.ice]"//new_line('a')// &
+                                          "enable = true"//new_line('a')), &
                           "sea ice")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, extra="&ocean_tides_nml enable = .true., "// &
-                                          "use_sal = .true. /"), "tidal SAL")
+      call expect_invalid(error, nml_case(on, extra="[ocean.tides]"//new_line('a')// &
+                                          "enable = true"//new_line('a')// &
+                                          "use_sal = true"//new_line('a')), "tidal SAL")
       if (allocated(error)) return
       ! `&ocean_zinit_nml` was refused here until `build_z_ctr` learned to
       ! measure the layer-centre depth from `z = 0` rather than from the
       ! column top.  It now COMPOSES with a cavity, so the row is a
       ! POSITIVE one — and the analytic `source='linear'` profile is the
       ! one an idealised sloping-lid case actually wants.
-      call expect_valid(error, nml_case(on, extra="&ocean_zinit_nml enable = .true., "// &
-                                        "source = 'linear', lin_t_ref = -1.0, "// &
-                                        "lin_dt_dz = 0.002 /"), &
+      call expect_valid(error, nml_case(on, extra="[ocean.zinit]"//new_line('a')// &
+                                        "enable = true"//new_line('a')// &
+                                        'source = "linear"'//new_line('a')// &
+                                        "lin_t_ref = -1.0"//new_line('a')// &
+                                        "lin_dt_dz = 0.002"//new_line('a')), &
                         "the analytic z-level T/S IC composes with a cavity")
       if (allocated(error)) return
       ! ... and its own knobs stay fail-loud.
-      call expect_invalid(error, nml_case(on, extra="&ocean_zinit_nml enable = .true., "// &
-                                          "source = 'linear', file = 'ts.nc' /"), &
+      call expect_invalid(error, nml_case(on, extra="[ocean.zinit]"//new_line('a')// &
+                                          "enable = true"//new_line('a')// &
+                                          'source = "linear"'//new_line('a')// &
+                                          'file = "ts.nc"'//new_line('a')), &
                           "source='linear' with a file= that would be ignored")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, extra="&ocean_zinit_nml enable = .true., "// &
-                                          "source = 'file' /"), &
+      call expect_invalid(error, nml_case(on, extra="[ocean.zinit]"//new_line('a')// &
+                                          "enable = true"//new_line('a')// &
+                                          'source = "file"'//new_line('a')), &
                           "source='file' with no file= path")
       if (allocated(error)) return
 
       ! --- and the knob-off path stays acceptable everywhere ---
-      call expect_valid(error, nml_case("", vcoord="&vcoord_nml vcoord_type = "// &
-                                        "'zstar_full' /"), &
+      call expect_valid(error, nml_case("", vcoord="[vcoord]"//new_line('a')// &
+                                        'vcoord_type = "zstar_full"'//new_line('a')), &
                         "with the cavity OFF every refused partner is fine again")
    end subroutine test_validate_matrix
 
@@ -921,7 +1010,7 @@ contains
       character(len=*), intent(in) :: nml, what
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          call check(error, .false., what//": namelist must parse")
          return
@@ -936,7 +1025,7 @@ contains
       character(len=*), intent(in) :: nml, what
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return   ! a parse-level rejection is a refusal too
       ierr = -999
       call validate_config(cfg, ierr=ierr)

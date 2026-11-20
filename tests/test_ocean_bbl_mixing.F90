@@ -16,7 +16,7 @@
 module test_ocean_bbl_mixing
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY, OMEGA_EARTH
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_eos, only: eos_t, EOS_VARIANT_LINEAR
    use rdb_ocean_bbl_mixing, only: ocean_bbl_mixing_t, bbl_column_sweep, &
                                    bbl_mixing_set_tke_impl, bbl_mixing_compute_impl, &
@@ -331,14 +331,26 @@ contains
       type(ocean_state_t) :: st
       character(len=:), allocatable :: nml
 
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 4, ny = 4, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_vmix_nml use_closure = .true. /"//new_line("a")// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//new_line("a")// &
-            "&ocean_bbl_mixing_nml enable = .true., effic = 0.01 /"//new_line("a")
-      call read_config_from_string(nml, cfg)
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 4"//new_line("a")// &
+            "ny = 4"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.vmix]"//new_line("a")// &
+            "use_closure = true"//new_line("a")// &
+            "[ocean.thermo]"//new_line("a")// &
+            "enable_thermodynamics = true"//new_line("a")// &
+            "[ocean.bbl_mixing]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            "effic = 0.01"//new_line("a")
+      call read_config_from_toml_string(nml, cfg)
       allocate (st%multilayer%h_layer(4, 4, 3), source=1.0_wp)
       st%vdiff%bbl_glue = per_face
       st%vdiff%bbl_per_face = per_face

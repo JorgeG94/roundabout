@@ -30,7 +30,7 @@ module test_ocean_hvisc_biharm_zfixed
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_multilayer_state, only: multilayer_state_t
@@ -441,7 +441,8 @@ contains
       character(len=:), allocatable :: msg
       integer :: ierr
 
-      call configure_case("&ocean_hvisc_nml stress_tensor = .true. /", ierr, msg)
+      call configure_case("[ocean.hvisc]"//new_line('a')// &
+                          "stress_tensor = true"//new_line('a'), ierr, msg)
       call check(error, ierr == OCEAN_STATUS_ERR_SETUP .and. &
                  index(msg, "stress_tensor") > 0, &
                  "stress_tensor must still be REFUSED under zfixed_closed_faces; got: "//msg)
@@ -449,8 +450,10 @@ contains
 
       ! nu_4 > 0 together with a LATER refusal: the hvisc gate must let
       ! nu_4 through, so the refusal reached is correction_bc_pgf's.
-      call configure_case("&ocean_hvisc_nml nu_4 = 1.0e9 /"//new_line("a")// &
-                          "&ocean_bt_nml correction_bc_pgf = .true. /", ierr, msg)
+      call configure_case("[ocean.hvisc]"//new_line("a")// &
+                          "nu_4 = 1.0e9"//new_line("a")// &
+                          "[ocean.bt]"//new_line("a")// &
+                          "correction_bc_pgf = true"//new_line("a"), ierr, msg)
       call check(error, ierr == OCEAN_STATUS_ERR_SETUP .and. &
                  index(msg, "correction_bc_pgf") > 0 .and. index(msg, "nu_4") == 0, &
                  "nu_4 must now pass the closed-face hvisc gate; got: "//msg)
@@ -467,13 +470,23 @@ contains
       st%multilayer%is_init = .true.
       st%vcoord%coord_type = VCOORD_Z_FIXED
       st%vcoord%z_fixed_h_ref = 400.0_wp
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
-            '&vcoord_nml vcoord_type = "z_fixed", zfixed_closed_faces = .true. /'// &
-            new_line("a")//extra//new_line("a")
-      call read_config_from_string(nml, cfg)
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "z_fixed"'//new_line("a")// &
+            "zfixed_closed_faces = true"//new_line("a")// &
+            extra//new_line("a")
+      call read_config_from_toml_string(nml, cfg)
       call error_ring_clear()
       call configure_ocean_closed_faces(cfg, st, grid, 1, ierr=ierr)
       msg = trim(error_ring_get(0))

@@ -39,7 +39,7 @@ module test_cice_tripole
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -110,29 +110,76 @@ contains
       write (snx, '(i0)') NI
       write (sny, '(i0)') merge(NJ, 2*NJ, folded)
       north = merge("tripolar_fold", "wall         ", folded)
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&tracer_nml initial_temperature = -1.8, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.8, T_init_bottom = -1.8 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'remap', ndte = 20 /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.8, h_snow = 0.1, t_ice = -8.0 /"//NL// &
-            "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 0.0, uni_vas = 0.0 /"//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = '"//trim(north)//"' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.8"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.8"//NL// &
+            "T_init_bottom = -1.8"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = "//trim(snx)//NL// &
+            "ny = "//trim(sny)//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.4e-4"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 1000.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 2"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "remap"'//NL// &
+            "ndte = 20"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 0.8"//NL// &
+            "h_snow = 0.1"//NL// &
+            "t_ice = -8.0"//NL// &
+            "[ocean.ice_atm]"//NL// &
+            "uni_tas = 255.0"//NL// &
+            "uni_rlds = 180.0"//NL// &
+            "uni_uas = 0.0"//NL// &
+            "uni_vas = 0.0"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "'//trim(north)//'"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function tripole_nml
 
    subroutine ensure_comm()
@@ -152,7 +199,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call engine_setup(engine, cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
@@ -573,15 +620,41 @@ contains
       character(len=*), parameter :: NL = new_line("a")
 
       nml = tripole_nml(.true.)
-      nml = replace(nml, "&grid_nml nx = 16, ny = 8, nghost = 3, dx = 20000.0, dy = 20000.0 /", &
-                    "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
-                    "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, phi_join = 74.0, "// &
-                    "lon_pole = 0.0, rad_earth = 6.378e6, coriolis_scheme = 'planetary' /")
-      nml = replace(nml, "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /", &
-                    "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /")
-      nml = replace(nml, "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /", &
-                    "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, slope_scale = 0.2 /")
-      nml = replace(nml, "uni_uas = 0.0, uni_vas = 0.0", "uni_uas = 8.0, uni_vas = -5.0")
+      nml = replace(nml, "[grid]"//new_line('a')// &
+                    "nx = 16"//new_line('a')// &
+                    "ny = 8"//new_line('a')// &
+                    "nghost = 3"//new_line('a')// &
+                    "dx = 20000.0"//new_line('a')// &
+                    "dy = 20000.0"//new_line('a'), &
+                    "[grid]"//new_line('a')// &
+                    "nx = 30"//new_line('a')// &
+                    "ny = 24"//new_line('a')// &
+                    "nghost = 3"//new_line('a')// &
+                    "dx = 12.0"//new_line('a')// &
+                    "dy = 1.0"//new_line('a')// &
+                    "[ocean.grid]"//new_line('a')// &
+                    'grid_config = "tripolar"'//new_line('a')// &
+                    "lon_west = 0.0"//new_line('a')// &
+                    "lat_south = 59.0"//new_line('a')// &
+                    "phi_join = 74.0"//new_line('a')// &
+                    "lon_pole = 0.0"//new_line('a')// &
+                    "rad_earth = 6.378e6"//new_line('a')// &
+                    'coriolis_scheme = "planetary"'//new_line('a'))
+      nml = replace(nml, "[physics]"//new_line('a')// &
+                    "coriolis_f = 1.4e-4"//new_line('a')// &
+                    "wind_stress_x = 0.0"//new_line('a')// &
+                    "wind_stress_y = 0.0"//new_line('a'), &
+                    "[physics]"//new_line('a')// &
+                    "wind_stress_x = 0.1"//new_line('a')// &
+                    "wind_stress_y = 0.04"//new_line('a'))
+      nml = replace(nml, "[ocean.topo]"//new_line('a')// &
+                    'topo_config = "flat"'//new_line('a')// &
+                    "max_depth = 1000.0"//new_line('a'), &
+                    "[ocean.topo]"//new_line('a')// &
+                    'topo_config = "double_drake"'//new_line('a')// &
+                    "max_depth = 1000.0"//new_line('a')// &
+                    "slope_scale = 0.2"//new_line('a'))
+      nml = replace(nml, "uni_uas = 0.0"//new_line('a')//"uni_vas = 0.0", "uni_uas = 8.0"//new_line('a')//"uni_vas = -5.0")
    end function cap_nml
 
    function row_resid(a, nx, ny, j, sgn) result(r)
@@ -713,7 +786,7 @@ contains
       logical :: ok
       real(wp) :: t
 
-      call make_engine(engine, cfg, replace(tripole_nml(.true.), "advection = 'remap'", "advection = 'upwind'"), ok)
+      call make_engine(engine, cfg, replace(tripole_nml(.true.), 'advection = "remap"', 'advection = "upwind"'), ok)
       call check(error, ok, "engine setup (validation skipped)")
       if (allocated(error)) return
       t = 0.0_wp

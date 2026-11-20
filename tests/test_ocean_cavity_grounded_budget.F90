@@ -83,7 +83,7 @@ module test_ocean_cavity_grounded_budget
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp, RHO_WATER, H_VANISHED
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -169,14 +169,24 @@ contains
       character(len=32) :: dx_s
 
       write (dx_s, '(F12.2)') DX
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 16, ny = 16, nghost = 2, dx = "// &
-            trim(adjustl(dx_s))//", dy = "//trim(adjustl(dx_s))//" /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 300.0 /"//new_line("a")// &
-            "&physics_nml coriolis_f = -1.409e-4, wind_stress_x = 0.0, "// &
-            "wind_stress_y = 0.0 /"//new_line("a")// &
-            topo// &
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 16"//new_line("a")// &
+            "ny = 16"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = "//trim(adjustl(dx_s))//new_line("a")// &
+            "dy = "//trim(adjustl(dx_s))//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 1.0e9"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[physics]"//new_line("a")// &
+            "coriolis_f = -1.409e-4"//new_line("a")// &
+            "wind_stress_x = 0.0"//new_line("a")// &
+            "wind_stress_y = 0.0"//new_line("a")// &
+            topo//new_line("a")// &
             ! Stratified, so the wet columns carry a live baroclinic
             ! pressure gradient and the run is not a vacuous rest state.
             !
@@ -188,33 +198,48 @@ contains
             ! must not be reading its own denominator's round-off.
             ! (It is also comfortably above the in-situ freezing point at
             ! these depths, so the melt variant melts rather than freezes.)
-            "&tracer_nml initial_salinity = 34.5, T_init_bottom = 1.0, "// &
-            "T_init_surface = 3.0 /"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 34.5"//new_line("a")// &
+            "T_init_bottom = 1.0"//new_line("a")// &
+            "T_init_surface = 3.0"//new_line("a")// &
             ! fv_mom6 + p_top_in_bc: REQUIRED for a varying draft, and
             ! carried by the cavity-free twin too so the two runs differ
             ! in the cavity group alone.
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
-            "&ocean_eos_nml eos = 'linear', tfreeze_set = '"//tfreeze//"' /"// &
-            new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
-            "north = 'wall' /"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "fv_mom6"'//new_line("a")// &
+            "p_top_in_bc = true"//new_line("a")// &
+            "[ocean.eos]"//new_line("a")// &
+            'eos = "linear"'//new_line("a")// &
+            'tfreeze_set = "'//tfreeze//'"'//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bc]"//new_line("a")// &
+            'west = "wall"'//new_line("a")// &
+            'east = "wall"'//new_line("a")// &
+            'south = "wall"'//new_line("a")// &
+            'north = "wall"'//new_line("a")// &
             ! n_inner pinned: `auto_n_inner` derives it from max(b), which
             ! is the same 400 m in all these runs, but pinning it keeps
             ! the comparison independent of that derivation.
-            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .false., "// &
-            "n_inner = 12 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+            "[ocean.bt]"//new_line("a")// &
+            'split_scheme = "pred_corr"'//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 12"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function base_nml
 
    function flat_topo() result(grp)
       character(len=:), allocatable :: grp
       character(len=32) :: bed_s
       write (bed_s, '(F12.2)') BED
-      grp = "&ocean_topo_nml topo_config = 'flat', max_depth = "// &
-            trim(adjustl(bed_s))//", wind_config = 'constant', "// &
-            "taux_magnitude = 0.0 /"//new_line("a")
+      grp = "[ocean.topo]"//new_line("a")// &
+            'topo_config = "flat"'//new_line("a")// &
+            "max_depth = "//trim(adjustl(bed_s))//new_line("a")// &
+            'wind_config = "constant"'//new_line("a")// &
+            "taux_magnitude = 0.0"//new_line("a")
    end function flat_topo
 
    function island_topo() result(grp)
@@ -224,9 +249,12 @@ contains
       character(len=32) :: bed_s, hf_s
       write (bed_s, '(F12.2)') BED
       write (hf_s, '(F8.4)') ISLAND_HALF_FRAC
-      grp = "&ocean_topo_nml topo_config = 'island', max_depth = "// &
-            trim(adjustl(bed_s))//", slope_scale = "//trim(adjustl(hf_s))// &
-            ", wind_config = 'constant', taux_magnitude = 0.0 /"//new_line("a")
+      grp = "[ocean.topo]"//new_line("a")// &
+            'topo_config = "island"'//new_line("a")// &
+            "max_depth = "//trim(adjustl(bed_s))//new_line("a")// &
+            "slope_scale = "//trim(adjustl(hf_s))//new_line("a")// &
+            'wind_config = "constant"'//new_line("a")// &
+            "taux_magnitude = 0.0"//new_line("a")
    end function island_topo
 
    function cavity_grounded_box() result(grp)
@@ -240,13 +268,15 @@ contains
       write (d_s, '(F12.2)') DRAFT
       write (lo_s, '(F16.2)') BOX_LO
       write (hi_s, '(F16.2)') BOX_HI
-      grp = "&ocean_cavity_dyn_nml enable = .true., draft_config = 'flat', "// &
-            "draft_depth = "//trim(adjustl(d_s))// &
-            ", draft_x0 = "//trim(adjustl(lo_s))// &
-            ", draft_x1 = "//trim(adjustl(hi_s))// &
-            ", draft_y0 = "//trim(adjustl(lo_s))// &
-            ", draft_y1 = "//trim(adjustl(hi_s))// &
-            ", h_min_cavity = 20.0 /"//new_line("a")
+      grp = "[ocean.cavity_dyn]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'draft_config = "flat"'//new_line("a")// &
+            "draft_depth = "//trim(adjustl(d_s))//new_line("a")// &
+            "draft_x0 = "//trim(adjustl(lo_s))//new_line("a")// &
+            "draft_x1 = "//trim(adjustl(hi_s))//new_line("a")// &
+            "draft_y0 = "//trim(adjustl(lo_s))//new_line("a")// &
+            "draft_y1 = "//trim(adjustl(hi_s))//new_line("a")// &
+            "h_min_cavity = 20.0"//new_line("a")
    end function cavity_grounded_box
 
    function melt_topo() result(grp)
@@ -259,9 +289,11 @@ contains
       character(len=:), allocatable :: grp
       character(len=32) :: bed_s
       write (bed_s, '(F12.2)') MELT_BED
-      grp = "&ocean_topo_nml topo_config = 'flat', max_depth = "// &
-            trim(adjustl(bed_s))//", wind_config = 'constant', "// &
-            "taux_magnitude = 0.0 /"//new_line("a")
+      grp = "[ocean.topo]"//new_line("a")// &
+            'topo_config = "flat"'//new_line("a")// &
+            "max_depth = "//trim(adjustl(bed_s))//new_line("a")// &
+            'wind_config = "constant"'//new_line("a")// &
+            "taux_magnitude = 0.0"//new_line("a")
    end function melt_topo
 
    function cavity_melt_shelf() result(grp)
@@ -297,26 +329,39 @@ contains
       !! conservation one.
       character(len=:), allocatable :: grp
 
-      grp = "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            "draft_depth = 800.0, draft_slope = -8.0e-3, draft_x0 = 0.0"// &
-            ", h_min_cavity = 100.0 /"//new_line("a")// &
+      grp = "[ocean.cavity_dyn]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'draft_config = "linear"'//new_line("a")// &
+            "draft_depth = 800.0"//new_line("a")// &
+            "draft_slope = -8.0e-3"//new_line("a")// &
+            "draft_x0 = 0.0"//new_line("a")// &
+            "h_min_cavity = 100.0"//new_line("a")// &
             ! The basal-melt package: a heat flux and a VIRTUAL salt
             ! flux, both delivered through the ordinary
             ! `heat_budget_surface` / `salt_budget_surface` contributors,
             ! so the `src` term the console prints is the only place they
             ! can appear.
-            "&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
-            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
-            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
-            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0 /"// &
-            new_line("a")// &
-            "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"// &
-            new_line("a")// &
+            "[ocean.forcing]"//new_line("a")// &
+            "enable_components = true"//new_line("a")// &
+            "[ocean.cavity_melt]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'exchange_law = "const_gamma"'//new_line("a")// &
+            "gamma_t = 2.2e-2"//new_line("a")// &
+            "gamma_s = -1.0"//new_line("a")// &
+            "cdrag_top = 2.5e-3"//new_line("a")// &
+            'ice_conduction = "insulating"'//new_line("a")// &
+            "s_ice = 0.0"//new_line("a")// &
+            "far_field_depth = 10.0"//new_line("a")// &
+            "[ocean.tdrag]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'form = "quadratic"'//new_line("a")// &
+            "cd = 2.5e-3"//new_line("a")// &
             ! A real basin has lateral friction; a sloping-lid cavity run
             ! with none is a grid-noise experiment.  Stated rather than
             ! tuned: 100 m2/s at dx = 2 km is a viscous CFL of
             ! nu*dt/dx^2 = 7.5e-3, four decades inside the limit.
-            "&ocean_hvisc_nml nu_h = 100.0 /"//new_line("a")
+            "[ocean.hvisc]"//new_line("a")// &
+            "nu_h = 100.0"//new_line("a")
    end function cavity_melt_shelf
 
    ! ------------------------------------------------------------------
@@ -400,7 +445,7 @@ contains
       integer :: ierr
 
       ok = .false.
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= 0) return
       call validate_config(cfg, ierr)
       if (ierr /= 0) return

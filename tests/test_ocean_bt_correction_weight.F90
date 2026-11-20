@@ -62,7 +62,7 @@ module test_ocean_bt_correction_weight
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_vcoord, only: z_fixed_nominal_dz, ZFIXED_PROFILE_TANH, ZFIXED_DZ_OK
-   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config, &
                          ocean_bt_forcing_visc_rem_on, ocean_bt_renorm_visc_rem_on, &
                          ocean_bt_rem_from_visc_rem_on, ocean_bt_visc_rem_producer_on
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
@@ -457,7 +457,7 @@ contains
       call expect_status(error, base_nml(""), .true., "the fixture namelist")
       if (allocated(error)) return
       call error_ring_clear()
-      call expect_status(error, base_nml("correction_h_weighted = .true."), .false., &
+      call expect_status(error, base_nml("correction_h_weighted = true"), .false., &
                          "correction_h_weighted = .true.")
       if (allocated(error)) return
       found = .false.
@@ -482,20 +482,21 @@ contains
       !! The three real consumers are each SELF-SUFFICIENT — no longer
       !! "require" a separate producer knob — and compose freely.
       type(error_type), allocatable, intent(out) :: error
-      call expect_status(error, base_nml("correction_visc_rem = .true."), .false., &
+      call expect_status(error, base_nml("correction_visc_rem = true"), .false., &
                          "correction_visc_rem alone (retired)")
       if (allocated(error)) return
-      call expect_status(error, base_nml("forcing_visc_rem = .true."), .true., &
+      call expect_status(error, base_nml("forcing_visc_rem = true"), .true., &
                          "forcing_visc_rem alone (self-sufficient)")
       if (allocated(error)) return
-      call expect_status(error, base_nml("renorm_visc_rem = .true."), .true., &
+      call expect_status(error, base_nml("renorm_visc_rem = true"), .true., &
                          "renorm_visc_rem alone (self-sufficient)")
       if (allocated(error)) return
-      call expect_status(error, base_nml("bt_rem_from_visc_rem = .true."), .true., &
+      call expect_status(error, base_nml("bt_rem_from_visc_rem = true"), .true., &
                          "bt_rem_from_visc_rem alone (self-sufficient)")
       if (allocated(error)) return
-      call expect_status(error, base_nml("forcing_visc_rem = .true., renorm_visc_rem = .true., "// &
-                                         "bt_rem_from_visc_rem = .true."), .true., &
+      call expect_status(error, base_nml("forcing_visc_rem = true"//new_line('a')// &
+                                         "renorm_visc_rem = true"//new_line('a')// &
+                                         "bt_rem_from_visc_rem = true"), .true., &
                          "forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem")
    end subroutine test_visc_rem_chain
 
@@ -561,7 +562,7 @@ contains
       !! case two lines up), with no other knob touched — in particular
       !! it does NOT turn on the retired weighted BT-correction fold.
       type(error_type), allocatable, intent(out) :: error
-      call expect_status(error, base_nml("visc_rem_chain = .true."), .true., &
+      call expect_status(error, base_nml("visc_rem_chain = true"), .true., &
                          "visc_rem_chain alone")
    end subroutine test_chain_switch
 
@@ -575,7 +576,7 @@ contains
       logical :: found
       integer :: n
       call error_ring_clear()
-      call expect_status(error, base_nml("correction_visc_rem = .true."), .false., &
+      call expect_status(error, base_nml("correction_visc_rem = true"), .false., &
                          "correction_visc_rem = .true.")
       if (allocated(error)) return
       found = .false.
@@ -599,7 +600,8 @@ contains
       !! `bt_rem_from_visc_rem` already does — mutually exclusive,
       !! fail-loud (double-counted bed drag).
       type(error_type), allocatable, intent(out) :: error
-      call expect_status(error, base_nml("visc_rem_chain = .true., substep_drag = .true."), &
+      call expect_status(error, base_nml("visc_rem_chain = true"//new_line('a')// &
+                                         "substep_drag = true"), &
                          .false., "visc_rem_chain + substep_drag")
    end subroutine test_chain_substep_drag
 
@@ -608,7 +610,8 @@ contains
       !! reachable through `visc_rem_chain` exactly as it already is
       !! through `bt_rem_from_visc_rem`.
       type(error_type), allocatable, intent(out) :: error
-      call expect_status(error, base_nml("visc_rem_chain = .true., strong_drag = .true."), &
+      call expect_status(error, base_nml("visc_rem_chain = true"//new_line('a')// &
+                                         "strong_drag = true"), &
                          .true., "visc_rem_chain + strong_drag")
    end subroutine test_chain_strong_drag
 
@@ -625,14 +628,27 @@ contains
       logical :: found
       integer :: n
 
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 400.0 /"//new_line("a")// &
-            "&ocean_vdiff_nml accel_visc_rem = .true. /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 400.0"//new_line("a")// &
+            "[ocean.vdiff]"//new_line("a")// &
+            "accel_visc_rem = true"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
 
       call error_ring_clear()
       call expect_status(error, nml, .false., "accel_visc_rem = .true.")
@@ -657,17 +673,32 @@ contains
       !! `&ocean_bt_nml` entries under test.
       character(len=*), intent(in) :: bt_body
       character(len=:), allocatable :: nml, bt_l
-      bt_l = "auto_n_inner = .false., n_inner = 8"
-      if (len_trim(bt_body) > 0) bt_l = bt_l//", "//bt_body
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 400.0 /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//new_line("a")// &
-            "&ocean_bt_nml "//bt_l//" /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")
+      bt_l = "auto_n_inner = false"//new_line("a")//"n_inner = 8"
+      if (len_trim(bt_body) > 0) bt_l = bt_l//new_line("a")//bt_body
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 400.0"//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "z_fixed"'//new_line("a")// &
+            "zfixed_closed_faces = true"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            bt_l//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")
    end function base_nml
 
    subroutine expect_status(error, nml, valid, what)
@@ -676,7 +707,7 @@ contains
       logical, intent(in) :: valid
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "namelist must PARSE: "//what)
       if (allocated(error)) return
       ierr = -999

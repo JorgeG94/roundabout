@@ -11,7 +11,7 @@
 !!   4. Configure refusals.
 module test_ocean_hvisc_om3_floors
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
@@ -316,18 +316,25 @@ contains
 
    subroutine test_refusals(error)
       type(error_type), allocatable, intent(out) :: error
-      call expect(error, "&ocean_hvisc_nml smag_ah=.true., bound_coriolis_biharm=.true. /", .true., &
+      call expect(error, "[ocean.hvisc]"//new_line('a')// &
+                  "smag_ah = true"//new_line('a')// &
+                  "bound_coriolis_biharm = true"//new_line('a'), .true., &
                   "bound_coriolis_biharm with smag_ah")
       if (allocated(error)) return
-      call expect(error, "&ocean_hvisc_nml bound_coriolis_biharm=.true. /", .false., &
+      call expect(error, "[ocean.hvisc]"//new_line('a')// &
+                  "bound_coriolis_biharm = true"//new_line('a'), .false., &
                   "bound_coriolis_biharm without smag_ah")
       if (allocated(error)) return
-      call expect(error, "&ocean_hvisc_nml ah_vel_scale=0.01 /", .false., "ah_vel_scale without smag_ah")
+      call expect(error, "[ocean.hvisc]"//new_line('a')// &
+                  "ah_vel_scale = 0.01"//new_line('a'), .false., "ah_vel_scale without smag_ah")
       if (allocated(error)) return
-      call expect(error, "&ocean_hvisc_nml smag_ah=.true., bound_coriolis_biharm=.true., "// &
-                  "bound_coriolis_vel=0.0 /", .false., "bound_coriolis_vel = 0")
+      call expect(error, "[ocean.hvisc]"//new_line('a')// &
+                  "smag_ah = true"//new_line('a')// &
+                  "bound_coriolis_biharm = true"//new_line('a')// &
+                  "bound_coriolis_vel = 0.0"//new_line('a'), .false., "bound_coriolis_vel = 0")
       if (allocated(error)) return
-      call expect(error, "&ocean_hvisc_nml kh_sin_lat=2000.0 /", .false., "kh_sin_lat on cartesian")
+      call expect(error, "[ocean.hvisc]"//new_line('a')// &
+                  "kh_sin_lat = 2000.0"//new_line('a'), .false., "kh_sin_lat on cartesian")
    end subroutine test_refusals
 
    subroutine expect(error, nml, valid, what)
@@ -336,7 +343,7 @@ contains
       logical, intent(in) :: valid
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          call check(error, .false., what//": namelist must parse")
          return

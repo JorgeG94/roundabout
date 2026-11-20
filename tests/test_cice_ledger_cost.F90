@@ -8,7 +8,7 @@ module test_cice_ledger_cost
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, engine_step, engine_step_ice, &
                                engine_step_finalize, engine_exit_data, engine_teardown
    use rdb_ocean_status, only: OCEAN_STATUS_OK
@@ -39,29 +39,77 @@ contains
 
       write (snx, '(i0)') NX
       write (sny, '(i0)') NY
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.03 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 1 /"//NL// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true., ledger = "//merge(".true. ", ".false.", ledger)//" /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'remap', ndte = 20 /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.9, h_snow = 0.1, t_ice = -8.0 /"//NL// &
-            "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 12.0, uni_vas = 3.0 /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.0"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.0"//NL// &
+            "T_init_bottom = -1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = "//trim(snx)//NL// &
+            "ny = "//trim(sny)//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "wind_stress_x = 0.1"//NL// &
+            "wind_stress_y = 0.03"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 1"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "ledger = "//merge("true ", "false", ledger)//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "remap"'//NL// &
+            "ndte = 20"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 0.9"//NL// &
+            "h_snow = 0.1"//NL// &
+            "t_ice = -8.0"//NL// &
+            "[ocean.ice_atm]"//NL// &
+            "uni_tas = 255.0"//NL// &
+            "uni_rlds = 180.0"//NL// &
+            "uni_uas = 12.0"//NL// &
+            "uni_vas = 3.0"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function basin_nml
 
    subroutine run_basin(ledger, ms_per_step, vsum, finite, ok)
@@ -84,7 +132,7 @@ contains
          call comm_env_setup_roles(.false.)
          comm_inited = .true.
       end if
-      call read_config_from_string(basin_nml(ledger), cfg, ierr=ierr)
+      call read_config_from_toml_string(basin_nml(ledger), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call engine_setup(engine, cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return

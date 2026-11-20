@@ -9,7 +9,7 @@ module test_cice_config
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX
    use rdb_ice_params, only: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, ice_params_t, ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
@@ -26,8 +26,14 @@ module test_cice_config
    public :: collect_cice_config_tests
 
    character(len=*), parameter :: BASE_NML = &
-                                  "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-                                  "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//new_line('a')
+                                  "[sim]"//new_line('a')// &
+                                  'sim_type = "ocean"'//new_line('a')// &
+                                  "[grid]"//new_line('a')// &
+                                  "nx = 24"//new_line('a')// &
+                                  "ny = 16"//new_line('a')// &
+                                  "nghost = 3"//new_line('a')// &
+                                  "dx = 20000.0"//new_line('a')// &
+                                  "dy = 20000.0"//new_line('a')
 
 contains
 
@@ -78,7 +84,7 @@ contains
       integer :: ierr
 
       ierr = -999
-      call read_config_from_string(BASE_NML//extra, cfg, ierr=ierr)
+      call read_config_from_toml_string(BASE_NML//extra, cfg, ierr=ierr)
       call check(error, ierr, OCEAN_STATUS_OK, "namelist text must parse: "//extra)
    end subroutine parse
 
@@ -90,7 +96,7 @@ contains
       integer :: ierr
 
       ierr = OCEAN_STATUS_OK
-      call read_config_from_string(BASE_NML//extra, cfg, ierr=ierr)
+      call read_config_from_toml_string(BASE_NML//extra, cfg, ierr=ierr)
       failed = ierr /= OCEAN_STATUS_OK
    end function parse_fails
 
@@ -219,42 +225,65 @@ contains
       type(config_t) :: cfg
       integer :: ierr
 
-      call expect_refusal("&ocean_ice_nml enable = .true., scheme = 'cice' /", &
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          "enable = true"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a'), &
                           "scheme='cice' needs enable_components", error)
       if (allocated(error)) return
-      call parse("&ocean_ice_nml enable = .true., scheme = 'cice' /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 "enable = true"//new_line('a')// &
+                 'scheme = "cice"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                  "validate_config refuses a scheme='cice' namelist outside the envelope")
       if (allocated(error)) return
-      call check(error, parse_fails("&ocean_ice_nml scheme = 'bogus' /"), &
+      call check(error, parse_fails("[ocean.ice]"//new_line('a')// &
+                                    'scheme = "bogus"'//new_line('a')), &
                  "an unknown scheme is a parse error")
    end subroutine test_scheme_cice
 
    subroutine test_structure_refusals(error)
       type(error_type), allocatable, intent(out) :: error
 
-      call expect_refusal("&ocean_ice_nml scheme='cice', nslyr=2 /", "nslyr /= 1", error)
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "nslyr = 2"//new_line('a'), "nslyr /= 1", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', nilyr=1 /", "nilyr >= 2", error)
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "nilyr = 1"//new_line('a'), "nilyr >= 2", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', ncat=1 /", "ncat >= 2", error)
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "ncat = 1"//new_line('a'), "ncat >= 2", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', kcatbound=-1 /", "kcatbound must be 0..3", &
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "kcatbound = -1"//new_line('a'), "kcatbound must be 0..3", &
                           error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', kcatbound=4 /", "kcatbound must be 0..3", &
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "kcatbound = 4"//new_line('a'), "kcatbound must be 0..3", &
                           error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', kcatbound=2, ncat=4 /", &
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "kcatbound = 2"//new_line('a')// &
+                          "ncat = 4"//new_line('a'), &
                           "kcatbound=2", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', kcatbound=2, ncat=8 /", &
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "kcatbound = 2"//new_line('a')// &
+                          "ncat = 8"//new_line('a'), &
                           "kcatbound=2", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', hlim=0.0,0.6,1.4 /", "hlim", error)
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "hlim = [0.0, 0.6, 1.4]"//new_line('a'), "hlim", error)
    end subroutine test_structure_refusals
 
    subroutine test_structure_limits(error)
@@ -264,22 +293,33 @@ contains
 
       write (s1, "(i0)") ICE_NILYR_MAX + 1
       write (s2, "(i0)") ICE_NCAT_MAX + 1
-      call expect_refusal("&ocean_ice_nml scheme='cice', nilyr="//trim(s1)//" /", &
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "nilyr = "//trim(s1)//new_line('a'), &
                           "ICE_NILYR_MAX", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', ncat="//trim(s2)//" /", &
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "ncat = "//trim(s2)//new_line('a'), &
                           "ICE_NCAT_MAX", error)
       if (allocated(error)) return
       ! The maxima themselves are legal: only the 'not runnable' reason remains.
       write (s1, "(i0)") ICE_NILYR_MAX
       write (s2, "(i0)") ICE_NCAT_MAX
-      call parse("&ocean_ice_nml scheme='cice', nilyr="//trim(s1)//", ncat="//trim(s2)//" /"// &
-                 new_line('a')//"&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'scheme = "cice"'//new_line('a')// &
+                 "nilyr = "//trim(s1)//new_line('a')// &
+                 "ncat = "//trim(s2)//new_line('a')// &
+                 "[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "upwind"'//new_line('a'), cfg, error)
       if (allocated(error)) return
  call check(error, count_msgs(cfg), 5, "only the envelope reasons (enable, components, hfreeze, dynamics, transport) at the maxima")
       if (allocated(error)) return
       ! Under scheme='sis2' the structure keys are inert.
-      call parse("&ocean_ice_nml nilyr=1, nslyr=3, kcatbound=9 /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 "nilyr = 1"//new_line('a')// &
+                 "nslyr = 3"//new_line('a')// &
+                 "kcatbound = 9"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "structure keys inert under sis2")
    end subroutine test_structure_limits
@@ -287,29 +327,40 @@ contains
    subroutine test_option_refusals(error)
       type(error_type), allocatable, intent(out) :: error
 
-      call expect_refusal("&ocean_ice_thermo_nml ktherm=2 /", "ktherm /= 1", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          "ktherm = 2"//new_line('a'), "ktherm /= 1", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml ktherm=0 /", "ktherm /= 1", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          "ktherm = 0"//new_line('a'), "ktherm /= 1", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml tfrz_option='mushy' /", "mushy", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          'tfrz_option = "mushy"'//new_line('a'), "mushy", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml saltflux_option='prognostic' /", &
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          'saltflux_option = "prognostic"'//new_line('a'), &
                           "saltflux_option", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml fbot_xfer_type='Cdn_ocn' /", &
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          'fbot_xfer_type = "Cdn_ocn"'//new_line('a'), &
                           "fbot_xfer_type", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml cpl_frazil='internal' /", "cpl_frazil", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          'cpl_frazil = "internal"'//new_line('a'), "cpl_frazil", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml cpl_frazil='external' /", "cpl_frazil", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          'cpl_frazil = "external"'//new_line('a'), "cpl_frazil", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml floediam=0.0 /", "floediam must be > 0", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          "floediam = 0.0"//new_line('a'), "floediam must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml kitd=0 /", "kitd /= 1", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          "kitd = 0"//new_line('a'), "kitd /= 1", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml calc_Tsfc=.false. /", "calc_Tsfc", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          "calc_Tsfc = false"//new_line('a'), "calc_Tsfc", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml semi_implicit_Tsfc=.true. /", &
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          "semi_implicit_Tsfc = true"//new_line('a'), &
                           "semi_implicit_Tsfc", error)
    end subroutine test_option_refusals
 
@@ -317,11 +368,14 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call expect_refusal("&ocean_ice_sw_nml ahmax=0.0 /", "ahmax must be > 0", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "ahmax = 0.0"//new_line('a'), "ahmax must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml ahmax=-0.1 /", "ahmax must be > 0", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "ahmax = -0.1"//new_line('a'), "ahmax must be > 0", error)
       if (allocated(error)) return
-      call parse("&ocean_ice_sw_nml ahmax=1.0e-6 /", cfg, error)
+      call parse("[ocean.ice_sw]"//new_line('a')// &
+                 "ahmax = 1.0e-6"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "a tiny positive ahmax is accepted")
    end subroutine test_ahmax
@@ -331,10 +385,17 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call parse("&ocean_ice_nml scheme='cice', nilyr=1, nslyr=2 /"//new_line('a')// &
-                 "&ocean_ice_thermo_nml ktherm=2, kitd=0 /"//new_line('a')// &
-                 "&ocean_ice_sw_nml ahmax=0.0 /"//new_line('a')// &
-                 "&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'scheme = "cice"'//new_line('a')// &
+                 "nilyr = 1"//new_line('a')// &
+                 "nslyr = 2"//new_line('a')// &
+                 "[ocean.ice_thermo]"//new_line('a')// &
+                 "ktherm = 2"//new_line('a')// &
+                 "kitd = 0"//new_line('a')// &
+                 "[ocean.ice_sw]"//new_line('a')// &
+                 "ahmax = 0.0"//new_line('a')// &
+                 "[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "upwind"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 10, "envelope x5 + nilyr + nslyr + ktherm + kitd + ahmax")
       if (allocated(error)) return
@@ -357,7 +418,8 @@ contains
       type(ice_params_t) :: p
       real(wp), parameter :: tol = 1.0e-12_wp
 
-      call parse("&ocean_ice_nml constants_set='cesm' /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'constants_set = "cesm"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       p = ice_params_from_config(cfg)
       call check(error, p%constants_set, ICE_CONSTANTS_CESM)
@@ -367,14 +429,18 @@ contains
       call check(error, abs(p%c%snowpatch - 0.005_wp) < tol, "cesm snowpatch follows the set")
       if (allocated(error)) return
       ! An explicit snowpatch wins over either set.
-      call parse("&ocean_ice_nml constants_set='cesm' /"//new_line('a')// &
-                 "&ocean_ice_sw_nml snowpatch=0.013 /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'constants_set = "cesm"'//new_line('a')// &
+                 "[ocean.ice_sw]"//new_line('a')// &
+                 "snowpatch = 0.013"//new_line('a'), cfg, error)
       if (allocated(error)) return
       p = ice_params_from_config(cfg)
       call check(error, abs(p%c%snowpatch - 0.013_wp) < tol, "explicit snowpatch (cesm)")
       if (allocated(error)) return
-      call parse("&ocean_ice_nml constants_set='icepack' /"//new_line('a')// &
-                 "&ocean_ice_sw_nml snowpatch=0.013 /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'constants_set = "icepack"'//new_line('a')// &
+                 "[ocean.ice_sw]"//new_line('a')// &
+                 "snowpatch = 0.013"//new_line('a'), cfg, error)
       if (allocated(error)) return
       p = ice_params_from_config(cfg)
       call check(error, p%constants_set, ICE_CONSTANTS_ICEPACK)
@@ -383,7 +449,8 @@ contains
       if (allocated(error)) return
       call check(error, abs(p%c%snowpatch - 0.013_wp) < tol, "explicit snowpatch (icepack)")
       if (allocated(error)) return
-      call check(error, parse_fails("&ocean_ice_nml constants_set='bogus' /"), &
+      call check(error, parse_fails("[ocean.ice]"//new_line('a')// &
+                                    'constants_set = "bogus"'//new_line('a')), &
                  "an unknown constants_set is a parse error")
    end subroutine test_constants_sets
 
@@ -394,14 +461,31 @@ contains
       type(ice_params_t) :: p
       real(wp), parameter :: tol = 1.0e-15_wp
 
-      call parse("&ocean_ice_nml ncat=5, nilyr=4, nslyr=1, kcatbound=0, "// &
-                 "constants_set='cesm' /"//new_line('a')// &
-                 "&ocean_ice_thermo_nml conduct='MU71', tfrz_option='constant', "// &
-                 "ice_ref_salinity=5.0, congel_freeze='one-step', update_ocn_f=.true., "// &
-                 "hfrazilmin=0.07, hi_min=0.02, ustar_min=5.0e-4, floediam=250.0, "// &
-                 "ksno=0.31, emissivity=0.95 /"//new_line('a')// &
-                 "&ocean_ice_sw_nml albicev=0.86, albicei=0.44, albsnowv=0.97, "// &
-                 "albsnowi=0.69, ahmax=0.1, snowpatch=0.011 /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 "ncat = 5"//new_line('a')// &
+                 "nilyr = 4"//new_line('a')// &
+                 "nslyr = 1"//new_line('a')// &
+                 "kcatbound = 0"//new_line('a')// &
+                 'constants_set = "cesm"'//new_line('a')// &
+                 "[ocean.ice_thermo]"//new_line('a')// &
+                 'conduct = "MU71"'//new_line('a')// &
+                 'tfrz_option = "constant"'//new_line('a')// &
+                 "ice_ref_salinity = 5.0"//new_line('a')// &
+                 'congel_freeze = "one-step"'//new_line('a')// &
+                 "update_ocn_f = true"//new_line('a')// &
+                 "hfrazilmin = 0.07"//new_line('a')// &
+                 "hi_min = 0.02"//new_line('a')// &
+                 "ustar_min = 5.0e-4"//new_line('a')// &
+                 "floediam = 250.0"//new_line('a')// &
+                 "ksno = 0.31"//new_line('a')// &
+                 "emissivity = 0.95"//new_line('a')// &
+                 "[ocean.ice_sw]"//new_line('a')// &
+                 "albicev = 0.86"//new_line('a')// &
+                 "albicei = 0.44"//new_line('a')// &
+                 "albsnowv = 0.97"//new_line('a')// &
+                 "albsnowi = 0.69"//new_line('a')// &
+                 "ahmax = 0.1"//new_line('a')// &
+                 "snowpatch = 0.011"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "OM3-style values need no refusal under sis2")
       if (allocated(error)) return
@@ -451,7 +535,8 @@ contains
       call check(error, abs(p%c%snowpatch - 0.011_wp) < tol, "snowpatch")
       if (allocated(error)) return
       ! The other two tfrz spellings.
-      call parse("&ocean_ice_thermo_nml tfrz_option='minus1p8' /", cfg, error)
+      call parse("[ocean.ice_thermo]"//new_line('a')// &
+                 'tfrz_option = "minus1p8"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       p = ice_params_from_config(cfg)
       call check(error, p%thermo%tfrz_option, ICE_TFRZ_MINUS1P8)
@@ -503,31 +588,45 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call expect_refusal("&ocean_ice_ridge_nml kstrength=2 /", "kstrength must be 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "kstrength = 2"//new_line('a'), "kstrength must be 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml kstrength=-1 /", "kstrength must be 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "kstrength = -1"//new_line('a'), "kstrength must be 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml krdg_partic=2 /", "krdg_partic must be 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "krdg_partic = 2"//new_line('a'), "krdg_partic must be 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml krdg_redist=3 /", "krdg_redist must be 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "krdg_redist = 3"//new_line('a'), "krdg_redist must be 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml mu_rdg=0.0 /", "mu_rdg must be > 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "mu_rdg = 0.0"//new_line('a'), "mu_rdg must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml mu_rdg=-1.0 /", "mu_rdg must be > 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "mu_rdg = -1.0"//new_line('a'), "mu_rdg must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml Cf=0.0 /", "Cf must be > 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "Cf = 0.0"//new_line('a'), "Cf must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml Cf=-17.0 /", "Cf must be > 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "Cf = -17.0"//new_line('a'), "Cf must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml Pstar=-2.75e4 /", "Pstar must be > 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "Pstar = -2.75e4"//new_line('a'), "Pstar must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml Pstar=0.0 /", "Pstar must be > 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "Pstar = 0.0"//new_line('a'), "Pstar must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_ridge_nml Cstar=-20.0 /", "Cstar must be > 0", error)
+      call expect_refusal("[ocean.ice_ridge]"//new_line('a')// &
+                          "Cstar = -20.0"//new_line('a'), "Cstar must be > 0", error)
       if (allocated(error)) return
       ! Every legal option combination is accepted (upstream documents no
       ! discouraged pairing, so there is no warning either).
-      call parse("&ocean_ice_ridge_nml kstrength=1, krdg_partic=0, krdg_redist=0 /", cfg, error)
+      call parse("[ocean.ice_ridge]"//new_line('a')// &
+                 "kstrength = 1"//new_line('a')// &
+                 "krdg_partic = 0"//new_line('a')// &
+                 "krdg_redist = 0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "legal option combination accepted")
    end subroutine test_ridge_refusals
@@ -536,39 +635,55 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call expect_refusal("&ocean_ice_atm_nml natmiter=-1 /", "natmiter must be >= 0", error)
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "natmiter = -1"//new_line('a'), "natmiter must be >= 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml atmiter_conv=-1.0e-3 /", "atmiter_conv must be >= 0", &
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "atmiter_conv = -1.0e-3"//new_line('a'), "atmiter_conv must be >= 0", &
                           error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml iceruf=0.0 /", "iceruf must be > 0 and below", error)
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "iceruf = 0.0"//new_line('a'), "iceruf must be > 0 and below", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml iceruf=-1.0e-3 /", "iceruf must be > 0 and below", &
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "iceruf = -1.0e-3"//new_line('a'), "iceruf must be > 0 and below", &
                           error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml iceruf=10.0 /", "iceruf must be > 0 and below", error)
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "iceruf = 10.0"//new_line('a'), "iceruf must be > 0 and below", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml iceruf=12.5 /", "iceruf must be > 0 and below", error)
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "iceruf = 12.5"//new_line('a'), "iceruf must be > 0 and below", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml iceruf=12.5 /", "zref=10", error)
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "iceruf = 12.5"//new_line('a'), "zref=10", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml atmbndy='constant' /", "atmbndy /= 'similarity'", &
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          'atmbndy = "constant"'//new_line('a'), "atmbndy /= 'similarity'", &
                           error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml atmbndy='mixed' /", "atmbndy /= 'similarity'", error)
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          'atmbndy = "mixed"'//new_line('a'), "atmbndy /= 'similarity'", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml formdrag=.true. /", "formdrag=.true.", error)
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "formdrag = true"//new_line('a'), "formdrag=.true.", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_atm_nml calc_strair=.false. /", "calc_strair=.false.", error)
+      call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
+                          "calc_strair = false"//new_line('a'), "calc_strair=.false.", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml floeshape=0.0 /", "floeshape must be > 0", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          "floeshape = 0.0"//new_line('a'), "floeshape must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_thermo_nml floeshape=-0.66 /", "floeshape must be > 0", error)
+      call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
+                          "floeshape = -0.66"//new_line('a'), "floeshape must be > 0", error)
       if (allocated(error)) return
-      call check(error, parse_fails("&ocean_ice_thermo_nml floediam=-5.0 /"), "negative floediam is a parse error (schema minimum)")
+      call check(error, parse_fails("[ocean.ice_thermo]"//new_line('a')// &
+                                    "floediam = -5.0"//new_line('a')), "negative floediam is a parse error (schema minimum)")
       if (allocated(error)) return
       ! natmiter = 0 (neutral drag only) and a roughness just below zref are legal.
-      call parse("&ocean_ice_atm_nml natmiter=0, iceruf=9.99 /", cfg, error)
+      call parse("[ocean.ice_atm]"//new_line('a')// &
+                 "natmiter = 0"//new_line('a')// &
+                 "iceruf = 9.99"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "natmiter=0 and iceruf<zref accepted")
    end subroutine test_atm_floe_refusals
@@ -580,8 +695,10 @@ contains
       type(config_t) :: cfg
       type(ice_params_t) :: p
 
-      call parse("&ocean_ice_nml constants_set='cesm' /"//new_line('a')// &
-                 "&ocean_ice_atm_nml iceruf=2.0e-3 /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'constants_set = "cesm"'//new_line('a')// &
+                 "[ocean.ice_atm]"//new_line('a')// &
+                 "iceruf = 2.0e-3"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "cesm set with iceruf=2e-3 accepted")
       if (allocated(error)) return
@@ -591,8 +708,10 @@ contains
       call check(error, abs(p%atm%rdn - p%c%vonkar/log(p%c%zref/2.0e-3_wp)) < 1.0e-12_wp, &
                  "rdn = kappa/ln(zref/iceruf) with the cesm set's constants")
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml constants_set='cesm' /"//new_line('a')// &
-                          "&ocean_ice_atm_nml iceruf=11.0 /", "iceruf must be > 0 and below", error)
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'constants_set = "cesm"'//new_line('a')// &
+                          "[ocean.ice_atm]"//new_line('a')// &
+                          "iceruf = 11.0"//new_line('a'), "iceruf must be > 0 and below", error)
    end subroutine test_atm_cesm_constants
 
    subroutine test_ridge_atm_all_reasons(error)
@@ -600,11 +719,24 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call parse("&ocean_ice_ridge_nml kstrength=2, krdg_partic=5, krdg_redist=-1, "// &
-                 "mu_rdg=0.0, Cf=0.0, Pstar=0.0, Cstar=0.0 /"//new_line('a')// &
-                 "&ocean_ice_atm_nml natmiter=-2, atmiter_conv=-1.0, iceruf=20.0, "// &
-                 "atmbndy='mixed', formdrag=.true., calc_strair=.false. /"//new_line('a')// &
-                 "&ocean_ice_thermo_nml floediam=0.0, floeshape=0.0 /", cfg, error)
+      call parse("[ocean.ice_ridge]"//new_line('a')// &
+                 "kstrength = 2"//new_line('a')// &
+                 "krdg_partic = 5"//new_line('a')// &
+                 "krdg_redist = -1"//new_line('a')// &
+                 "mu_rdg = 0.0"//new_line('a')// &
+                 "Cf = 0.0"//new_line('a')// &
+                 "Pstar = 0.0"//new_line('a')// &
+                 "Cstar = 0.0"//new_line('a')// &
+                 "[ocean.ice_atm]"//new_line('a')// &
+                 "natmiter = -2"//new_line('a')// &
+                 "atmiter_conv = -1.0"//new_line('a')// &
+                 "iceruf = 20.0"//new_line('a')// &
+                 'atmbndy = "mixed"'//new_line('a')// &
+                 "formdrag = true"//new_line('a')// &
+                 "calc_strair = false"//new_line('a')// &
+                 "[ocean.ice_thermo]"//new_line('a')// &
+                 "floediam = 0.0"//new_line('a')// &
+                 "floeshape = 0.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 15, "7 ridge + 6 atm + 2 floe reasons")
       if (allocated(error)) return
@@ -647,7 +779,8 @@ contains
       type(ice_params_t) :: p
       real(wp), parameter :: tol = 1.0e-15_wp
 
-      call parse("&ocean_ice_atm_nml highfreq=.true. /", cfg, error)
+      call parse("[ocean.ice_atm]"//new_line('a')// &
+                 "highfreq = true"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "OM3 atmosphere settings accepted")
       if (allocated(error)) return
@@ -655,12 +788,25 @@ contains
       call check(error, p%atm%highfreq, .true.)
       if (allocated(error)) return
 
-      call parse("&ocean_ice_ridge_nml kstrength=0, krdg_partic=0, krdg_redist=0, "// &
-                 "mu_rdg=4.5, Cf=12.0, Pstar=3.0e4, Cstar=15.0 /"//new_line('a')// &
-                 "&ocean_ice_atm_nml highfreq=.true., natmiter=3, atmiter_conv=1.0e-3, "// &
-                 "iceruf=1.0e-3, atmbndy='similarity', formdrag=.false., "// &
-                 "calc_strair=.true. /"//new_line('a')// &
-                 "&ocean_ice_thermo_nml floediam=250.0, floeshape=0.5 /", cfg, error)
+      call parse("[ocean.ice_ridge]"//new_line('a')// &
+                 "kstrength = 0"//new_line('a')// &
+                 "krdg_partic = 0"//new_line('a')// &
+                 "krdg_redist = 0"//new_line('a')// &
+                 "mu_rdg = 4.5"//new_line('a')// &
+                 "Cf = 12.0"//new_line('a')// &
+                 "Pstar = 3.0e4"//new_line('a')// &
+                 "Cstar = 15.0"//new_line('a')// &
+                 "[ocean.ice_atm]"//new_line('a')// &
+                 "highfreq = true"//new_line('a')// &
+                 "natmiter = 3"//new_line('a')// &
+                 "atmiter_conv = 1.0e-3"//new_line('a')// &
+                 "iceruf = 1.0e-3"//new_line('a')// &
+                 'atmbndy = "similarity"'//new_line('a')// &
+                 "formdrag = false"//new_line('a')// &
+                 "calc_strair = true"//new_line('a')// &
+                 "[ocean.ice_thermo]"//new_line('a')// &
+                 "floediam = 250.0"//new_line('a')// &
+                 "floeshape = 0.5"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "non-default legal values accepted")
       if (allocated(error)) return
@@ -720,30 +866,42 @@ contains
    subroutine test_sw_refusals(error)
       type(error_type), allocatable, intent(out) :: error
 
-      call expect_refusal("&ocean_ice_sw_nml shortwave='dEdd' /", "shortwave='dEdd' is not ported", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          'shortwave = "dEdd"'//new_line('a'), "shortwave='dEdd' is not ported", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml shortwave='dEdd_snicar_ad' /", "is not ported", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          'shortwave = "dEdd_snicar_ad"'//new_line('a'), "is not ported", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml albedo_type='constant' /", &
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          'albedo_type = "constant"'//new_line('a'), &
                           "albedo_type='constant' is not ported", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml albicev=1.01 /", "albicev must lie in [0, 1]", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "albicev = 1.01"//new_line('a'), "albicev must lie in [0, 1]", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml albicei=-0.01 /", "albicei must lie in [0, 1]", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "albicei = -0.01"//new_line('a'), "albicei must lie in [0, 1]", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml albsnowv=1.5 /", "albsnowv must lie in [0, 1]", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "albsnowv = 1.5"//new_line('a'), "albsnowv must lie in [0, 1]", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml albsnowi=-1.0 /", "albsnowi must lie in [0, 1]", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "albsnowi = -1.0"//new_line('a'), "albsnowi must lie in [0, 1]", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml sw_frac=0.0 /", "sw_frac must lie in (0, 1]", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "sw_frac = 0.0"//new_line('a'), "sw_frac must lie in (0, 1]", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml sw_frac=1.2 /", "sw_frac must lie in (0, 1]", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "sw_frac = 1.2"//new_line('a'), "sw_frac must lie in (0, 1]", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml sw_dtemp=-0.01 /", "sw_dtemp must be >= 0", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "sw_dtemp = -0.01"//new_line('a'), "sw_dtemp must be >= 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml sw_vis_frac=-0.1 /", "sw_vis_frac must lie in [0, 1]", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "sw_vis_frac = -0.1"//new_line('a'), "sw_vis_frac must lie in [0, 1]", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_sw_nml sw_vis_frac=1.1 /", "sw_vis_frac must lie in [0, 1]", error)
+      call expect_refusal("[ocean.ice_sw]"//new_line('a')// &
+                          "sw_vis_frac = 1.1"//new_line('a'), "sw_vis_frac must lie in [0, 1]", error)
    end subroutine test_sw_refusals
 
    subroutine test_sw_edges(error)
@@ -751,13 +909,22 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call parse("&ocean_ice_sw_nml albicev=0.0, albicei=1.0, albsnowv=1.0, albsnowi=0.0, "// &
-                 "sw_frac=1.0, sw_dtemp=0.0, sw_vis_frac=0.0 /", cfg, error)
+      call parse("[ocean.ice_sw]"//new_line('a')// &
+                 "albicev = 0.0"//new_line('a')// &
+                 "albicei = 1.0"//new_line('a')// &
+                 "albsnowv = 1.0"//new_line('a')// &
+                 "albsnowi = 0.0"//new_line('a')// &
+                 "sw_frac = 1.0"//new_line('a')// &
+                 "sw_dtemp = 0.0"//new_line('a')// &
+                 "sw_vis_frac = 0.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "closed range ends accepted (vis_frac 0)")
       if (allocated(error)) return
-      call parse("&ocean_ice_sw_nml sw_vis_frac=1.0, sw_frac=1.0e-6, shortwave='ccsm3', "// &
-                 "albedo_type='ccsm3' /", cfg, error)
+      call parse("[ocean.ice_sw]"//new_line('a')// &
+                 "sw_vis_frac = 1.0"//new_line('a')// &
+                 "sw_frac = 1.0e-6"//new_line('a')// &
+                 'shortwave = "ccsm3"'//new_line('a')// &
+                 'albedo_type = "ccsm3"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "sw_vis_frac 1 and tiny sw_frac accepted")
    end subroutine test_sw_edges
@@ -767,9 +934,17 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call parse("&ocean_ice_sw_nml shortwave='dEdd', albedo_type='constant', albicev=2.0, "// &
-                 "albicei=-1.0, albsnowv=3.0, albsnowi=-3.0, ahmax=0.0, sw_frac=0.0, "// &
-                 "sw_dtemp=-1.0, sw_vis_frac=2.0 /", cfg, error)
+      call parse("[ocean.ice_sw]"//new_line('a')// &
+                 'shortwave = "dEdd"'//new_line('a')// &
+                 'albedo_type = "constant"'//new_line('a')// &
+                 "albicev = 2.0"//new_line('a')// &
+                 "albicei = -1.0"//new_line('a')// &
+                 "albsnowv = 3.0"//new_line('a')// &
+                 "albsnowi = -3.0"//new_line('a')// &
+                 "ahmax = 0.0"//new_line('a')// &
+                 "sw_frac = 0.0"//new_line('a')// &
+                 "sw_dtemp = -1.0"//new_line('a')// &
+                 "sw_vis_frac = 2.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 10, "ten shortwave reasons at once")
       if (allocated(error)) return
@@ -788,9 +963,18 @@ contains
       type(ice_params_t) :: p
       real(wp), parameter :: tol = 1.0e-15_wp
 
-      call parse("&ocean_ice_sw_nml shortwave='ccsm3', albedo_type='ccsm3', albicev=0.86, "// &
-                 "albicei=0.44, albsnowv=0.98, albsnowi=0.7, ahmax=0.1, sw_redist=.true., "// &
-                 "sw_frac=0.8, sw_dtemp=0.03, sw_vis_frac=0.6 /", cfg, error)
+      call parse("[ocean.ice_sw]"//new_line('a')// &
+                 'shortwave = "ccsm3"'//new_line('a')// &
+                 'albedo_type = "ccsm3"'//new_line('a')// &
+                 "albicev = 0.86"//new_line('a')// &
+                 "albicei = 0.44"//new_line('a')// &
+                 "albsnowv = 0.98"//new_line('a')// &
+                 "albsnowi = 0.7"//new_line('a')// &
+                 "ahmax = 0.1"//new_line('a')// &
+                 "sw_redist = true"//new_line('a')// &
+                 "sw_frac = 0.8"//new_line('a')// &
+                 "sw_dtemp = 0.03"//new_line('a')// &
+                 "sw_vis_frac = 0.6"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "OM3 shortwave values accepted")
       if (allocated(error)) return
@@ -869,24 +1053,31 @@ contains
       type(config_t) :: cfg
 
       ! remap and upwind are both accepted (remap is runnable since the remap PR), under sis2 and under cice
-      call parse("&ocean_ice_dyn_nml advection='remap' /", cfg, error)
+      call parse("[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "remap"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, has_msg(cfg, "advection="), .false., "remap accepted under sis2")
       if (allocated(error)) return
-      call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
-                 "&ocean_ice_dyn_nml advection='remap' /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'scheme = "cice"'//new_line('a')// &
+                 "[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "remap"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, has_msg(cfg, "advection="), .false., "remap accepted under cice")
       if (allocated(error)) return
-      call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
-                 "&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'scheme = "cice"'//new_line('a')// &
+                 "[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "upwind"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, has_msg(cfg, "advection="), .false., "upwind accepted under cice")
       if (allocated(error)) return
       ! an unknown spelling fails the strict schema
-      call check(error, parse_fails("&ocean_ice_dyn_nml advection='ppm' /"), "unknown advection spelling rejected")
+      call check(error, parse_fails("[ocean.ice_dyn]"//new_line('a')// &
+                                    'advection = "ppm"'//new_line('a')), "unknown advection spelling rejected")
       if (allocated(error)) return
-      call check(error, parse_fails("&ocean_ice_dyn_nml transport_check = 3 /"), "transport_check is a logical")
+      call check(error, parse_fails("[ocean.ice_dyn]"//new_line('a')// &
+                                    "transport_check = 3"//new_line('a')), "transport_check is a logical")
    end subroutine test_transport_refusals
 
    subroutine test_transport_round_trip(error)
@@ -894,7 +1085,9 @@ contains
       type(config_t) :: cfg
       type(ice_params_t) :: p
 
-      call parse("&ocean_ice_dyn_nml advection='upwind', transport_check=.true. /", cfg, error)
+      call parse("[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "upwind"'//new_line('a')// &
+                 "transport_check = true"//new_line('a'), cfg, error)
       if (allocated(error)) return
       p = ice_params_from_config(cfg)
       call check(error, p%transport%advection, ICE_ADVECT_UPWIND, "advection round trip")
@@ -951,48 +1144,73 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call expect_refusal("&ocean_ice_dyn_nml ndte=0 /", "ndte must be >= 1", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "ndte = 0"//new_line('a'), "ndte must be >= 1", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml ndte=-5 /", "ndte must be >= 1", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "ndte = -5"//new_line('a'), "ndte must be >= 1", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml elasticDamp=0.0 /", "elasticDamp must be > 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "elasticDamp = 0.0"//new_line('a'), "elasticDamp must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml revised_evp=.true., arlx=0.0 /", "arlx must be > 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "revised_evp = true"//new_line('a')// &
+                          "arlx = 0.0"//new_line('a'), "arlx must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml revised_evp=.true., brlx=-1.0 /", "brlx must be > 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "revised_evp = true"//new_line('a')// &
+                          "brlx = -1.0"//new_line('a'), "brlx must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml e_yieldcurve=0.0 /", "e_yieldcurve must be > 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "e_yieldcurve = 0.0"//new_line('a'), "e_yieldcurve must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml e_plasticpot=-2.0 /", "e_plasticpot must be > 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "e_plasticpot = -2.0"//new_line('a'), "e_plasticpot must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml Ktens=1.0 /", "Ktens must be in [0, 1)", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "Ktens = 1.0"//new_line('a'), "Ktens must be in [0, 1)", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml Ktens=-0.1 /", "Ktens must be in [0, 1)", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "Ktens = -0.1"//new_line('a'), "Ktens must be in [0, 1)", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml deltaminEVP=0.0 /", "deltaminEVP must be > 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "deltaminEVP = 0.0"//new_line('a'), "deltaminEVP must be > 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml capping_method='min' /", "capping_method must be", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          'capping_method = "min"'//new_line('a'), "capping_method must be", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml dyn_area_min=-1.0e-3 /", "dyn_area_min must be >= 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "dyn_area_min = -1.0e-3"//new_line('a'), "dyn_area_min must be >= 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml dyn_mass_min=-1.0 /", "dyn_mass_min must be >= 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "dyn_mass_min = -1.0"//new_line('a'), "dyn_mass_min must be >= 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml rheo_area_min=-1.0 /", "rheo_area_min must be >= 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "rheo_area_min = -1.0"//new_line('a'), "rheo_area_min must be >= 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml visc_method='avg_viscosity' /", "visc_method must be", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          'visc_method = "avg_viscosity"'//new_line('a'), "visc_method must be", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml cdn_ocn=-0.1 /", "cdn_ocn must be >= 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "cdn_ocn = -0.1"//new_line('a'), "cdn_ocn must be >= 0", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_dyn_nml vel_cap=0.0 /", "vel_cap must be > 0", error)
+      call expect_refusal("[ocean.ice_dyn]"//new_line('a')// &
+                          "vel_cap = 0.0"//new_line('a'), "vel_cap must be > 0", error)
       if (allocated(error)) return
       ! legal alternatives are accepted
-      call parse("&ocean_ice_dyn_nml revised_evp=.true., capping_method='sum', visc_method='avg_strength', "// &
-                 "Ktens=0.2, ndte=240 /", cfg, error)
+      call parse("[ocean.ice_dyn]"//new_line('a')// &
+                 "revised_evp = true"//new_line('a')// &
+                 'capping_method = "sum"'//new_line('a')// &
+                 'visc_method = "avg_strength"'//new_line('a')// &
+                 "Ktens = 0.2"//new_line('a')// &
+                 "ndte = 240"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "legal alternatives accepted")
       if (allocated(error)) return
       ! revised-only relaxation parameters are not checked under the classic EVP
-      call parse("&ocean_ice_dyn_nml arlx=-3.0, brlx=0.0 /", cfg, error)
+      call parse("[ocean.ice_dyn]"//new_line('a')// &
+                 "arlx = -3.0"//new_line('a')// &
+                 "brlx = 0.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 0, "arlx/brlx unused (classic EVP) are not refused")
    end subroutine test_dyn_refusals
@@ -1002,10 +1220,22 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call parse("&ocean_ice_dyn_nml ndte=0, elasticDamp=-1.0, e_yieldcurve=0.0, e_plasticpot=0.0, Ktens=2.0, "// &
-                 "deltaminEVP=0.0, capping_method='x', dyn_area_min=-1.0, dyn_mass_min=-1.0, "// &
-                 "rheo_area_min=-1.0, visc_method='x', cdn_ocn=-1.0, vel_cap=-1.0 /"//new_line('a')// &
-                 "&ocean_ice_ridge_nml Cf=0.0 /", cfg, error)
+      call parse("[ocean.ice_dyn]"//new_line('a')// &
+                 "ndte = 0"//new_line('a')// &
+                 "elasticDamp = -1.0"//new_line('a')// &
+                 "e_yieldcurve = 0.0"//new_line('a')// &
+                 "e_plasticpot = 0.0"//new_line('a')// &
+                 "Ktens = 2.0"//new_line('a')// &
+                 "deltaminEVP = 0.0"//new_line('a')// &
+                 'capping_method = "x"'//new_line('a')// &
+                 "dyn_area_min = -1.0"//new_line('a')// &
+                 "dyn_mass_min = -1.0"//new_line('a')// &
+                 "rheo_area_min = -1.0"//new_line('a')// &
+                 'visc_method = "x"'//new_line('a')// &
+                 "cdn_ocn = -1.0"//new_line('a')// &
+                 "vel_cap = -1.0"//new_line('a')// &
+                 "[ocean.ice_ridge]"//new_line('a')// &
+                 "Cf = 0.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 14, "13 dynamics reasons + 1 ridge reason")
       if (allocated(error)) return
@@ -1014,7 +1244,10 @@ contains
                  has_msg(cfg, "visc_method must be") .and. has_msg(cfg, "vel_cap must be > 0") .and. &
                  has_msg(cfg, "Cf must be > 0"), "reasons present")
       if (allocated(error)) return
-      call parse("&ocean_ice_dyn_nml revised_evp=.true., arlx=0.0, brlx=0.0 /", cfg, error)
+      call parse("[ocean.ice_dyn]"//new_line('a')// &
+                 "revised_evp = true"//new_line('a')// &
+                 "arlx = 0.0"//new_line('a')// &
+                 "brlx = 0.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 2, "revised EVP: arlx and brlx both reported")
    end subroutine test_dyn_all_reasons
@@ -1030,7 +1263,10 @@ contains
       if (allocated(error)) return
       call check(error, cfg%ocean%ice%dt_ice <= 0.0_wp, "dt_ice default: the outer step")
       if (allocated(error)) return
-      call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')//"&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'scheme = "cice"'//new_line('a')// &
+                 "[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "upwind"'//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 5, "only the envelope refusals (enable, components, hfreeze, dynamics, transport)")
    end subroutine test_step_defaults
@@ -1038,8 +1274,10 @@ contains
    subroutine test_step_refusals(error)
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
-      character(len=*), parameter :: CICE = "&ocean_ice_nml scheme='cice' /"//new_line('a')// &
-                                     "&ocean_ice_dyn_nml advection='upwind' /"//new_line('a')
+      character(len=*), parameter :: CICE = "[ocean.ice]"//new_line('a')// &
+                                     'scheme = "cice"'//new_line('a')// &
+                                     "[ocean.ice_dyn]"//new_line('a')// &
+                                     'advection = "upwind"'//new_line('a')
 
       call parse(CICE, cfg, error)
       if (allocated(error)) return
@@ -1057,16 +1295,29 @@ contains
       if (allocated(error)) return
       cfg%ocean%ice%ledger = .false.
       cfg%px = 1
-      call expect_refusal("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
-                          "&ocean_ice_dyn_nml advection='upwind', ndtd = 2 /", "ndtd /= 1", error)
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "[ocean.ice_dyn]"//new_line('a')// &
+                          'advection = "upwind"'//new_line('a')// &
+                          "ndtd = 2"//new_line('a'), "ndtd /= 1", error)
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice', dt_ice = 450.0 /"//new_line('a')// &
-                          "&ocean_ice_dyn_nml advection='upwind' /"//new_line('a')//"&time_nml dt_fixed = 900.0 /", &
+      call expect_refusal("[ocean.ice]"//new_line('a')// &
+                          'scheme = "cice"'//new_line('a')// &
+                          "dt_ice = 450.0"//new_line('a')// &
+                          "[ocean.ice_dyn]"//new_line('a')// &
+                          'advection = "upwind"'//new_line('a')// &
+                          "[time]"//new_line('a')// &
+                          "dt_fixed = 900.0"//new_line('a'), &
                           "dt_ice must equal the outer step", error)
       if (allocated(error)) return
       ! the equal value is accepted
-      call parse("&ocean_ice_nml scheme='cice', dt_ice = 900.0 /"//new_line('a')// &
-                 "&ocean_ice_dyn_nml advection='upwind' /"//new_line('a')//"&time_nml dt_fixed = 900.0 /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'scheme = "cice"'//new_line('a')// &
+                 "dt_ice = 900.0"//new_line('a')// &
+                 "[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "upwind"'//new_line('a')// &
+                 "[time]"//new_line('a')// &
+                 "dt_fixed = 900.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       call check(error,.not. has_msg(cfg, "dt_ice"), "dt_ice = dt_fixed accepted")
       if (allocated(error)) return
@@ -1077,7 +1328,8 @@ contains
       call check(error, has_msg(cfg, "dt_ice must be finite"), "a NaN dt_ice is refused")
       if (allocated(error)) return
       ! none of the envelope refusals applies under the default scheme
-      call parse("&ocean_ice_dyn_nml ndtd = 2 /", cfg, error)
+      call parse("[ocean.ice_dyn]"//new_line('a')// &
+                 "ndtd = 2"//new_line('a'), cfg, error)
       if (allocated(error)) return
       cfg%nghost = 2
       call check(error, count_msgs(cfg), 0, "scheme='sis2' untouched by the cice envelope")
@@ -1088,9 +1340,14 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      call parse("&ocean_ice_nml scheme='cice', dt_ice = 100.0 /"//new_line('a')// &
-                 "&ocean_ice_dyn_nml advection='upwind', ndtd = 3 /"//new_line('a')// &
-                 "&time_nml dt_fixed = 900.0 /", cfg, error)
+      call parse("[ocean.ice]"//new_line('a')// &
+                 'scheme = "cice"'//new_line('a')// &
+                 "dt_ice = 100.0"//new_line('a')// &
+                 "[ocean.ice_dyn]"//new_line('a')// &
+                 'advection = "upwind"'//new_line('a')// &
+                 "ndtd = 3"//new_line('a')// &
+                 "[time]"//new_line('a')// &
+                 "dt_fixed = 900.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       cfg%nghost = 2
       cfg%px = 2
@@ -1109,17 +1366,23 @@ contains
       !! requested; those that do have a knob (mushy, delta-Eddington, `calc_Tsfc`, ...) are refused by the earlier tests.
       type(error_type), allocatable, intent(out) :: error
 
-      call check(error, parse_fails("&ocean_ice_nml tr_pond_lvl = .true. /"), "melt ponds have no knob")
+      call check(error, parse_fails("[ocean.ice]"//new_line('a')// &
+                                    "tr_pond_lvl = true"//new_line('a')), "melt ponds have no knob")
       if (allocated(error)) return
-      call check(error, parse_fails("&ocean_ice_nml tr_fsd = .true. /"), "the floe size distribution has no knob")
+      call check(error, parse_fails("[ocean.ice]"//new_line('a')// &
+                                    "tr_fsd = true"//new_line('a')), "the floe size distribution has no knob")
       if (allocated(error)) return
-      call check(error, parse_fails("&ocean_ice_nml wave_spec = .true. /"), "wave fracture has no knob")
+      call check(error, parse_fails("[ocean.ice]"//new_line('a')// &
+                                    "wave_spec = true"//new_line('a')), "wave fracture has no knob")
       if (allocated(error)) return
-      call check(error, parse_fails("&ocean_ice_nml tr_aero = .true. /"), "aerosols have no knob")
+      call check(error, parse_fails("[ocean.ice]"//new_line('a')// &
+                                    "tr_aero = true"//new_line('a')), "aerosols have no knob")
       if (allocated(error)) return
-      call check(error, parse_fails("&ocean_ice_dyn_nml kdyn = 2 /"), "VP/EAP rheology has no knob")
+      call check(error, parse_fails("[ocean.ice_dyn]"//new_line('a')// &
+                                    "kdyn = 2"//new_line('a')), "VP/EAP rheology has no knob")
       if (allocated(error)) return
-      call check(error, parse_fails("&ponds_nml tr_pond_topo = .true. /"), "no ponds namelist")
+      call check(error, parse_fails("[ponds]"//new_line('a')// &
+                                    "tr_pond_topo = true"//new_line('a')), "no ponds namelist")
    end subroutine test_unrepresentable
 
    subroutine test_dyn_round_trip(error)
@@ -1129,10 +1392,24 @@ contains
       type(ice_params_t) :: p
       real(wp), parameter :: tol = 1.0e-15_wp
 
-      call parse("&ocean_ice_dyn_nml ndte=240, elasticDamp=0.5, revised_evp=.true., arlx=150.0, brlx=250.0, "// &
-                 "e_yieldcurve=1.5, e_plasticpot=2.5, Ktens=0.2, deltaminEVP=2.0e-9, capping_method='sum', "// &
-                 "dyn_area_min=1.0e-6, dyn_mass_min=1.0e-4, rheo_area_min=5.0e-3, free_drift_approx=.false., "// &
-                 "visc_method='avg_strength', cdn_ocn=0.0045, vel_cap=3.0 /", cfg, error)
+      call parse("[ocean.ice_dyn]"//new_line('a')// &
+                 "ndte = 240"//new_line('a')// &
+                 "elasticDamp = 0.5"//new_line('a')// &
+                 "revised_evp = true"//new_line('a')// &
+                 "arlx = 150.0"//new_line('a')// &
+                 "brlx = 250.0"//new_line('a')// &
+                 "e_yieldcurve = 1.5"//new_line('a')// &
+                 "e_plasticpot = 2.5"//new_line('a')// &
+                 "Ktens = 0.2"//new_line('a')// &
+                 "deltaminEVP = 2.0e-9"//new_line('a')// &
+                 'capping_method = "sum"'//new_line('a')// &
+                 "dyn_area_min = 1.0e-6"//new_line('a')// &
+                 "dyn_mass_min = 1.0e-4"//new_line('a')// &
+                 "rheo_area_min = 5.0e-3"//new_line('a')// &
+                 "free_drift_approx = false"//new_line('a')// &
+                 'visc_method = "avg_strength"'//new_line('a')// &
+                 "cdn_ocn = 0.0045"//new_line('a')// &
+                 "vel_cap = 3.0"//new_line('a'), cfg, error)
       if (allocated(error)) return
       p = ice_params_from_config(cfg)
       call check(error, p%dyn%ndte, 240)

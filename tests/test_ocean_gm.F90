@@ -45,7 +45,7 @@ module test_ocean_gm
    use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports
    use rdb_continuity, only: continuity_t, continuity_gm_apply, TR_MODE_ADVECT
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    implicit none
    private
@@ -1061,13 +1061,21 @@ contains
       integer :: ierr
       type(config_t) :: cfg
       ierr = -999
-      call read_config_from_string( &
-         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
-         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
-         new_line('a')// &
-         "&ocean_slopes enable = .true. /"//new_line('a')// &
-         "&ocean_gm "//gm_body//" /"//new_line('a')// &
-         "&ocean_wavespeed "//ws_body//" /"//new_line('a'), cfg, ierr=ierr)
+      call read_config_from_toml_string( &
+         "[sim]"//new_line('a')// &
+         'sim_type = "ocean"'//new_line('a')// &
+         "[grid]"//new_line('a')// &
+         "nx = 24"//new_line('a')// &
+         "ny = 16"//new_line('a')// &
+         "nghost = 3"//new_line('a')// &
+         "dx = 20000.0"//new_line('a')// &
+         "dy = 20000.0"//new_line('a')// &
+         "[ocean.slopes]"//new_line('a')// &
+         "enable = true"//new_line('a')// &
+         "[ocean.gm]"//new_line('a')// &
+         gm_body//new_line('a')// &
+         "[ocean.wavespeed]"//new_line('a')// &
+         ws_body//new_line('a'), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr=ierr)
    end function validate_gm_struct
@@ -1075,23 +1083,23 @@ contains
    subroutine test_ebt_config_refusals(error)
       type(error_type), allocatable, intent(out) :: error
       integer :: ierr
-      ierr = validate_gm_struct("enable = .true., use_ebt_struct = .true.", &
-                                "enable = .true.")
+      ierr = validate_gm_struct("enable = true"//new_line("a")//"use_ebt_struct = true", &
+                                "enable = true")
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                  "use_ebt_struct without wavespeed use_ebt must be refused")
       if (allocated(error)) return
-      ierr = validate_gm_struct("enable = .true., use_ebt_struct = .true.", &
-                                "enable = .false., use_ebt = .true.")
+      ierr = validate_gm_struct("enable = true"//new_line("a")//"use_ebt_struct = true", &
+                                "enable = false"//new_line("a")//"use_ebt = true")
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                  "use_ebt_struct without the wave-speed slot enabled must be refused")
       if (allocated(error)) return
-      ierr = validate_gm_struct("enable = .false., use_ebt_struct = .true.", &
-                                "enable = .true., use_ebt = .true.")
+      ierr = validate_gm_struct("enable = false"//new_line("a")//"use_ebt_struct = true", &
+                                "enable = true"//new_line("a")//"use_ebt = true")
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                  "use_ebt_struct without GM enabled must be refused")
       if (allocated(error)) return
-      ierr = validate_gm_struct("enable = .true., use_ebt_struct = .true.", &
-                                "enable = .true., use_ebt = .true.")
+      ierr = validate_gm_struct("enable = true"//new_line("a")//"use_ebt_struct = true", &
+                                "enable = true"//new_line("a")//"use_ebt = true")
       call check(error, ierr == OCEAN_STATUS_OK, "the full combination must be accepted")
    end subroutine test_ebt_config_refusals
 

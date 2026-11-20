@@ -39,7 +39,7 @@ module test_ocean_cavity_flux
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp, RHO_WATER, H_VANISHED
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_grid, only: hgrid_t
    use rdb_eos, only: eos_t, eos_apply_tfreeze_set, eos_freezing_point, &
                       TFREEZE_SET_ISOMIP, TFREEZE_SET_SEAICE
@@ -1407,32 +1407,36 @@ contains
 
       ! --- the prerequisites ---
       call expect_refused("melt without the cavity geometry group", &
-                          melt_nml("enable = .true.", "isomip", .true., "", .false.), error)
+                          melt_nml("enable = true", "isomip", .true., "", .false.), error)
       if (allocated(error)) return
       call expect_refused("melt with the sea-ice liquidus", &
-                          melt_nml("enable = .true.", "seaice", .true., "", .true.), error)
+                          melt_nml("enable = true", "seaice", .true., "", .true.), error)
       if (allocated(error)) return
       call expect_refused("melt without the surface-flux component set", &
-                          melt_nml("enable = .true.", "isomip", .false., "", .true.), error)
+                          melt_nml("enable = true", "isomip", .false., "", .true.), error)
       if (allocated(error)) return
 
       ! --- the enum seams (RESERVED must be distinguishable from a typo) ---
       call expect_refused("a RESERVED exchange law", &
-                          melt_nml("enable = .true., exchange_law = 'burchard22'", &
+                          melt_nml("enable = true"//new_line('a')// &
+                                   'exchange_law = "burchard22"', &
                                    "isomip", .true., "", .true.), error)
       if (allocated(error)) return
       call expect_refused("the RESERVED diffusive ice mode", &
-                          melt_nml("enable = .true., ice_conduction = 'diffusive'", &
+                          melt_nml("enable = true"//new_line('a')// &
+                                   'ice_conduction = "diffusive"', &
                                    "isomip", .true., "", .true.), error)
       if (allocated(error)) return
       call expect_refused("hj99 on an f = 0 grid", &
-                          melt_nml("enable = .true., exchange_law = 'hj99'", &
+                          melt_nml("enable = true"//new_line('a')// &
+                                   'exchange_law = "hj99"', &
                                    "isomip", .true., "", .true.), error)
       if (allocated(error)) return
 
       ! --- ranges ---
       call expect_refused("gamma_s = 0 (the three-equation form divides by it)", &
-                          melt_nml("enable = .true., gamma_s = 0.0", &
+                          melt_nml("enable = true"//new_line('a')// &
+                                   "gamma_s = 0.0", &
                                    "isomip", .true., "", .true.), error)
       if (allocated(error)) return
 
@@ -1444,21 +1448,25 @@ contains
       !     numerically in `cavity_cover_*` below; this block only pins
       !     the configure-time verdict.
       call expect_accepted("a non-zero wind stress, now cover-masked", &
-                           melt_nml("enable = .true.", "isomip", .true., &
-                                    "&physics_nml wind_stress_x = 0.05 /", .true.), error)
+                           melt_nml("enable = true", "isomip", .true., &
+                                    "[physics]"//new_line('a')// &
+                                    "wind_stress_x = 0.05"//new_line('a'), .true.), error)
       if (allocated(error)) return
       call expect_accepted("surface restoring, now cover-masked", &
-                           melt_nml("enable = .true.", "isomip", .true., &
-                                    "&ocean_restore_nml enable_restore_temp = .true., "// &
-                                    "piston_t = 1.0 /", .true.), error)
+                           melt_nml("enable = true", "isomip", .true., &
+                                    "[ocean.restore]"//new_line('a')// &
+                                    "enable_restore_temp = true"//new_line('a')// &
+                                    "piston_t = 1.0"//new_line('a'), .true.), error)
       if (allocated(error)) return
       call expect_accepted("shortwave penetration, now cover-masked", &
-                           melt_nml("enable = .true.", "isomip", .true., &
-                                    "&ocean_thermo_nml sw_pen_frac = 0.3 /", .true.), error)
+                           melt_nml("enable = true", "isomip", .true., &
+                                    "[ocean.thermo]"//new_line('a')// &
+                                    "sw_pen_frac = 0.3"//new_line('a'), .true.), error)
       if (allocated(error)) return
       call expect_accepted("a uniform scalar surface flux, now cover-masked", &
-                           melt_nml("enable = .true.", "isomip", .true., &
-                                    "&ocean_thermo_nml q_heat = 10.0 /", .true.), error)
+                           melt_nml("enable = true", "isomip", .true., &
+                                    "[ocean.thermo]"//new_line('a')// &
+                                    "q_heat = 10.0"//new_line('a'), .true.), error)
       if (allocated(error)) return
 
       ! --- the ONE atmospheric-forcing path the mask does not reach ---
@@ -1468,8 +1476,9 @@ contains
       ! group, because that is where the cover comes from.
       call expect_refused("the file-driven data override, which re-writes tau "// &
                           "per bracket with no cover", &
-                          melt_nml("enable = .true.", "isomip", .true., &
-                                   "&ocean_dataovr_nml enable = .true. /", .true.), error)
+                          melt_nml("enable = true", "isomip", .true., &
+                                   "[ocean.dataovr]"//new_line('a')// &
+                                   "enable = true"//new_line('a'), .true.), error)
       if (allocated(error)) return
 
       ! --- NOT a gap: the psurf seam composes, it does not clobber ---
@@ -1479,14 +1488,15 @@ contains
       ! as an acceptance rather than deleted, so a future regression that
       ! re-introduced the clobber would have to delete a test to pass.
       call expect_accepted("cavity melt alongside the psurf seam", &
-                           melt_nml("enable = .true.", "isomip", .true., &
-                                    "&ocean_psurf_nml enable = .true. /", .true.), error)
+                           melt_nml("enable = true", "isomip", .true., &
+                                    "[ocean.psurf]"//new_line('a')// &
+                                    "enable = true"//new_line('a'), .true.), error)
       if (allocated(error)) return
 
       ! ... and the in-envelope configuration is ACCEPTED, so the matrix
       ! above is not simply refusing everything.
       call expect_accepted("the shipped in-envelope cavity-melt run", &
-                           melt_nml("enable = .true.", "isomip", .true., "", .true.), error)
+                           melt_nml("enable = true", "isomip", .true., "", .true.), error)
       if (allocated(error)) return
       call expect_accepted("the geometry-only cavity run (melt off)", &
                            melt_nml("", "isomip", .true., "", .true.), error)
@@ -1498,39 +1508,61 @@ contains
       !! refusal test that trips on that would be testing the parser, not
       !! the rule it names.
       character(len=*), intent(in) :: melt_body
-         !! `&ocean_cavity_melt_nml` body without the group name or `/`;
+         !! The `[ocean.cavity_melt]` key lines (TOML) without the table header;
          !! empty ⇒ the group is omitted entirely.
       character(len=*), intent(in) :: tfreeze
          !! `&ocean_eos_nml tfreeze_set` value.
       logical, intent(in) :: components
          !! `&ocean_forcing_nml enable_components`.
       character(len=*), intent(in) :: extra
-         !! One extra complete group (with name and `/`), or empty.
+         !! One extra complete TOML table (with its header), or empty.
       logical, intent(in) :: with_geometry
          !! Append `&ocean_cavity_dyn_nml` (the melt group's prerequisite).
       character(len=:), allocatable :: nml, comp
 
-      comp = ".false."
-      if (components) comp = ".true."
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"// &
-            new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6' /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")// &
-            "&ocean_eos_nml tfreeze_set = '"//tfreeze//"' /"//new_line("a")// &
-            "&ocean_forcing_nml enable_components = "//comp//" /"//new_line("a")
+      comp = "false"
+      if (components) comp = "true"
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 6"//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = 1000.0"//new_line("a")// &
+            "dy = 1000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 60.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            "max_depth = 1000.0"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "fv_mom6"'//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "auto_n_inner = false"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")// &
+            "[ocean.eos]"//new_line("a")// &
+            'tfreeze_set = "'//tfreeze//'"'//new_line("a")// &
+            "[ocean.forcing]"//new_line("a")// &
+            "enable_components = "//comp//new_line("a")
       if (with_geometry) then
-         nml = nml//"&ocean_cavity_dyn_nml enable = .true., draft_config = 'flat', "// &
-               "draft_depth = 300.0 /"//new_line("a")
+         nml = nml//new_line("a")// &
+               "[ocean.cavity_dyn]"//new_line("a")// &
+               "enable = true"//new_line("a")// &
+               'draft_config = "flat"'//new_line("a")// &
+               "draft_depth = 300.0"//new_line("a")
       end if
       if (len_trim(melt_body) > 0) then
-         nml = nml//"&ocean_cavity_melt_nml "//melt_body//" /"//new_line("a")
+         nml = nml//new_line("a")// &
+               "[ocean.cavity_melt]"//new_line("a")// &
+               melt_body//new_line("a")
       end if
       if (len_trim(extra) > 0) nml = nml//extra//new_line("a")
    end function melt_nml
@@ -1542,7 +1574,7 @@ contains
       type(config_t) :: cfg
       integer :: ierr
 
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "the refusal case must PARSE cleanly (else it tests the schema, "// &
                  "not the rule): "//what)
@@ -1557,7 +1589,7 @@ contains
       type(error_type), allocatable, intent(inout) :: error
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "must parse: "//what)
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)

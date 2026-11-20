@@ -28,7 +28,7 @@ module test_cice_forcing
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -137,47 +137,110 @@ contains
       end select
       write (sconc, '(f6.3)') conc
       write (sratio, '(i0)') ratio
-      grid = "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
-             "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 70.0, "// &
-             "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL
+      grid = "[grid]"//NL// &
+             "nx = "//trim(snx)//NL// &
+             "ny = "//trim(sny)//NL// &
+             "nghost = 3"//NL// &
+             "dx = 0.25"//NL// &
+             "dy = 0.25"//NL// &
+             "[ocean.grid]"//NL// &
+             'grid_config = "spherical"'//NL// &
+             "lon_west = 20.0"//NL// &
+             "lat_south = 70.0"//NL// &
+             "rad_earth = 6.371e6"//NL// &
+             'coriolis_scheme = "planetary"'//NL
       if (conc > 0.0_wp) then
-         ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = "//trim(adjustl(sconc))// &
-              ", h_snow = 0.1, t_ice = -8.0 /"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "uniform"'//NL// &
+              "h_ice = 1.0"//NL// &
+              "conc = "//trim(adjustl(sconc))//NL// &
+              "h_snow = 0.1"//NL// &
+              "t_ice = -8.0"//NL
       else
-         ic = "&ocean_ice_ic_nml conc_config = 'zero' /"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "zero"'//NL
       end if
       if (prescribed) then
-         atm = "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', fluxes_regrid = 'bilinear', "// &
-               "time_mode = 'interannual', wind_relative = .false., "// &
-               "filelist_tas = '"//FN_LST//"', filelist_huss = '"//FN_LST//"', filelist_uas = '"//FN_LST//"', "// &
-               "filelist_vas = '"//FN_LST//"', filelist_psl = '"//FN_LST//"', filelist_rlds = '"//FN_LST//"', "// &
-               "filelist_rsds = '"//FN_LST//"', filelist_prra = '"//FN_LST//"', filelist_prsn = '"//FN_LST//"' /"//NL// &
-               "&ocean_bulk_flux_nml enable = .true. /"//NL
+         atm = "[ocean.atm_forcing]"//NL// &
+               "enable = true"//NL// &
+               'sw_interp = "linear"'//NL// &
+               'fluxes_regrid = "bilinear"'//NL// &
+               'time_mode = "interannual"'//NL// &
+               "wind_relative = false"//NL// &
+               'filelist_tas = "'//FN_LST//'"'//NL// &
+               'filelist_huss = "'//FN_LST//'"'//NL// &
+               'filelist_uas = "'//FN_LST//'"'//NL// &
+               'filelist_vas = "'//FN_LST//'"'//NL// &
+               'filelist_psl = "'//FN_LST//'"'//NL// &
+               'filelist_rlds = "'//FN_LST//'"'//NL// &
+               'filelist_rsds = "'//FN_LST//'"'//NL// &
+               'filelist_prra = "'//FN_LST//'"'//NL// &
+               'filelist_prsn = "'//FN_LST//'"'//NL// &
+               "[ocean.bulk_flux]"//NL// &
+               "enable = true"//NL
       else
-         atm = "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 170.0, uni_uas = 3.0, uni_vas = 0.0 /"//NL
+         atm = "[ocean.ice_atm]"//NL// &
+               "uni_tas = 255.0"//NL// &
+               "uni_rlds = 170.0"//NL// &
+               "uni_uas = 3.0"//NL// &
+               "uni_vas = 0.0"//NL
       end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            grid// &
-            "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = "//trim(sratio)//" /"//NL// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-            ic//atm// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            'start_date = "2000-01-01"'//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.0"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.0"//NL// &
+            "T_init_bottom = -1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            grid//NL// &
+            "[physics]"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = "//trim(sratio)//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "upwind"'//NL// &
+            "ndte = 40"//NL// &
+            ic//NL// &
+            atm//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
       if (present(extra)) nml = nml//extra
    end function case_nml
 
@@ -187,34 +250,84 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
 
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
-            "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 70.0, "// &
-            "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-            "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', fluxes_regrid = 'bilinear', "// &
-            "time_mode = 'interannual', "// &
-            "filelist_tas = '"//FN_LST//"', filelist_huss = '"//FN_LST//"', filelist_uas = '"//FN_LST//"', "// &
-            "filelist_vas = '"//FN_LST//"', filelist_psl = '"//FN_LST//"', filelist_rlds = '"//FN_LST//"', "// &
-            "filelist_rsds = '"//FN_LST//"', filelist_prra = '"//FN_LST//"', filelist_prsn = '"//FN_LST//"' /"//NL// &
-            "&ocean_bulk_flux_nml enable = .true. /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            'start_date = "2000-01-01"'//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.0"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.0"//NL// &
+            "T_init_bottom = -1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[grid]"//NL// &
+            "nx = 12"//NL// &
+            "ny = 10"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 0.25"//NL// &
+            "dy = 0.25"//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "spherical"'//NL// &
+            "lon_west = 20.0"//NL// &
+            "lat_south = 70.0"//NL// &
+            "rad_earth = 6.371e6"//NL// &
+            'coriolis_scheme = "planetary"'//NL// &
+            "[physics]"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.atm_forcing]"//NL// &
+            "enable = true"//NL// &
+            'sw_interp = "linear"'//NL// &
+            'fluxes_regrid = "bilinear"'//NL// &
+            'time_mode = "interannual"'//NL// &
+            'filelist_tas = "'//FN_LST//'"'//NL// &
+            'filelist_huss = "'//FN_LST//'"'//NL// &
+            'filelist_uas = "'//FN_LST//'"'//NL// &
+            'filelist_vas = "'//FN_LST//'"'//NL// &
+            'filelist_psl = "'//FN_LST//'"'//NL// &
+            'filelist_rlds = "'//FN_LST//'"'//NL// &
+            'filelist_rsds = "'//FN_LST//'"'//NL// &
+            'filelist_prra = "'//FN_LST//'"'//NL// &
+            'filelist_prsn = "'//FN_LST//'"'//NL// &
+            "[ocean.bulk_flux]"//NL// &
+            "enable = true"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
       if (with_ice) then
-         nml = nml// &
-               "&ocean_ice_nml enable = .true., dynamics = .true., transport = .true. /"//NL// &
-               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.6, h_snow = 0.1, t_ice = -8.0 /"//NL
+         nml = nml//NL// &
+               "[ocean.ice]"//NL// &
+               "enable = true"//NL// &
+               "dynamics = true"//NL// &
+               "transport = true"//NL// &
+               "[ocean.ice_ic]"//NL// &
+               'conc_config = "uniform"'//NL// &
+               "h_ice = 1.0"//NL// &
+               "conc = 0.6"//NL// &
+               "h_snow = 0.1"//NL// &
+               "t_ice = -8.0"//NL
       end if
    end function sis2_nml
 
@@ -238,7 +351,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       if (present(restart_file)) then
          call engine_setup(engine, cfg, ierr, restart_file=restart_file, t_restart=t0, step_restart=step0)
@@ -422,30 +535,32 @@ contains
 
       call ensure_comm()
       ! prescribed atmosphere alone: accepted by the ice config check
-      call read_config_from_string(case_nml("column", 0.6_wp, 1, .true.), cfg, ierr=ierr)
+      call read_config_from_toml_string(case_nml("column", 0.6_wp, 1, .true.), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "the prescribed-atmosphere namelist parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
       call check(error, n == 0, "the prescribed atmosphere alone has no refusal: "//trim(msgs(max(n, 1))))
       if (allocated(error)) return
       ! both atmospheres: refused
-      call read_config_from_string(case_nml("column", 0.6_wp, 1, .true., &
-                                            "&ocean_ice_atm_nml uni_tas = 250.0 /"//NL), cfg, ierr=ierr)
+      call read_config_from_toml_string(case_nml("column", 0.6_wp, 1, .true., &
+                                                 "[ocean.ice_atm]"//NL// &
+                                                 "uni_tas = 250.0"//NL), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "the doubled-atmosphere namelist parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
       call check(error, n > 0 .and. mentions(msgs, n, "is ambiguous"), "uni_* with a prescribed atmosphere is refused")
       if (allocated(error)) return
-      call read_config_from_string(replace(case_nml("column", 0.6_wp, 1, .true.), "hfreeze = 10.0,", &
-                                           "hfreeze = 10.0, snowfall = 1.0e-5,"), cfg, ierr=ierr)
+      call read_config_from_toml_string(replace(case_nml("column", 0.6_wp, 1, .true.), "hfreeze = 10.0", &
+                                                "hfreeze = 10.0"//new_line('a')//"snowfall = 1.0e-5"), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "the snowfall namelist parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
       call check(error, n > 0 .and. mentions(msgs, n, "is ambiguous"), "snowfall with a prescribed atmosphere is refused")
       if (allocated(error)) return
       ! a file wind stress stays refused
-      call read_config_from_string(case_nml("column", 0.6_wp, 1, .false., &
-                                            "&ocean_dataovr_nml tau_x_file = 'wind.nc' /"//NL), cfg, ierr=ierr)
+      call read_config_from_toml_string(case_nml("column", 0.6_wp, 1, .false., &
+                                                 "[ocean.dataovr]"//NL// &
+                                                 'tau_x_file = "wind.nc"'//NL), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "the file-wind namelist parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
@@ -1345,9 +1460,12 @@ contains
       ! is then read EVERY step via `sw_net` but refreshed only at the thermo hand-off, so the
       ! mid-window checkpoint is bitwise only if the restart carries it (`sf_sw_ice`).
       nml_pen = replace(case_nml("basin", 0.6_wp, 2, .true.), &
-                        "&ocean_thermo_nml enable_thermodynamics = .true. /", &
-                        "&ocean_thermo_nml enable_thermodynamics = .true., sw_pen_frac = 0.4, "// &
-                        "sw_source = 'q_sw' /")
+                        "[ocean.thermo]"//new_line('a')// &
+                        "enable_thermodynamics = true"//new_line('a'), &
+                        "[ocean.thermo]"//new_line('a')// &
+                        "enable_thermodynamics = true"//new_line('a')// &
+                        "sw_pen_frac = 0.4"//new_line('a')// &
+                        'sw_source = "q_sw"'//new_line('a'))
       na = 4
       call write_atm_files("cold")
       call make_engine(ea, cfg_a, nml_pen, ok)

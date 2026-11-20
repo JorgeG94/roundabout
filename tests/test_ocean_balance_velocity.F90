@@ -17,7 +17,7 @@
 module test_ocean_balance_velocity
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_exit_data, engine_teardown, engine_step, &
                                engine_step_finalize
@@ -69,26 +69,57 @@ contains
       write (s_dt, "(es14.6)") dT
       write (s_beta, "(es14.6)") beta
       write (s_yref, "(es14.6)") 0.5_wp*real(NXP, wp)*DX
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 32, ny = 32, dx = 10000.0, dy = 10000.0, nghost = 4 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 1200.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&tracer_nml initial_salinity = 35.0 /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 2000.0, "// &
-            "wind_config = 'constant', coriolis_beta = "//trim(adjustl(s_beta))// &
-            ", coriolis_y_ref = "//trim(adjustl(s_yref))//" /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_eos_nml eos = 'linear' /"//NL// &
-            "&ocean_ic_nml ic_config = 'balanced_vortex', alpha_T = 0.17, rho_0 = 1035.0, "// &
-            "vortex_radius = 40000.0, vortex_hv = 500.0, vortex_dT_dz = "//trim(adjustl(s_dtdz))//", vortex_dT = "// &
-            trim(adjustl(s_dt))//", vortex_balance = '"//balance//"' /"//NL// &
-            "&ocean_hvisc_nml nu_h = 350.0 /"//NL// &
-            "&ocean_vmix_nml use_closure = .false. /"//NL// &
-            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .true. /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[grid]"//NL// &
+            "nx = 32"//NL// &
+            "ny = 32"//NL// &
+            "dx = 10000.0"//NL// &
+            "dy = 10000.0"//NL// &
+            "nghost = 4"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 6"//NL// &
+            "[time]"//NL// &
+            "t_end = 1.0e9"//NL// &
+            "dt_fixed = 1200.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.0e-4"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[tracer]"//NL// &
+            "initial_salinity = 35.0"//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 2000.0"//NL// &
+            'wind_config = "constant"'//NL// &
+            "coriolis_beta = "//trim(adjustl(s_beta))//NL// &
+            "coriolis_y_ref = "//trim(adjustl(s_yref))//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.eos]"//NL// &
+            'eos = "linear"'//NL// &
+            "[ocean.ic]"//NL// &
+            'ic_config = "balanced_vortex"'//NL// &
+            "alpha_T = 0.17"//NL// &
+            "rho_0 = 1035.0"//NL// &
+            "vortex_radius = 40000.0"//NL// &
+            "vortex_hv = 500.0"//NL// &
+            "vortex_dT_dz = "//trim(adjustl(s_dtdz))//NL// &
+            "vortex_dT = "//trim(adjustl(s_dt))//NL// &
+            'vortex_balance = "'//balance//'"'//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 350.0"//NL// &
+            "[ocean.vmix]"//NL// &
+            "use_closure = false"//NL// &
+            "[ocean.bt]"//NL// &
+            'split_scheme = "pred_corr"'//NL// &
+            "auto_n_inner = true"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function vortex_nml
 
    subroutine setup_engine(engine, cfg, beta, balance, dT, dtdz, ok)
@@ -100,7 +131,7 @@ contains
       integer :: ierr
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(vortex_nml(beta, balance, dT, dtdz), cfg, ierr=ierr)
+      call read_config_from_toml_string(vortex_nml(beta, balance, dT, dtdz), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return

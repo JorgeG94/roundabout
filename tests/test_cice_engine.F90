@@ -21,7 +21,7 @@ module test_cice_engine
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -115,55 +115,152 @@ contains
       character(len=*), parameter :: NL = new_line("a")
       character(len=:), allocatable :: bc, topo, phys, grid, ic, atm, vmix
 
-      bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', north = 'periodic' /"//NL
-      topo = "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL
-      phys = "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL
-      grid = "&grid_nml nx = 8, ny = 8, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
-      ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 0.5, conc = 1.0, h_snow = 0.0, t_ice = -10.0 /"//NL
-      atm = "&ocean_ice_atm_nml uni_tas = 250.0, uni_rlds = 150.0, uni_uas = 3.0, uni_vas = 0.0 /"//NL
-      vmix = "&ocean_vmix_nml dt_therm_ratio = 1 /"//NL
+      bc = "[ocean.bc]"//NL// &
+           'west = "periodic"'//NL// &
+           'east = "periodic"'//NL// &
+           'south = "periodic"'//NL// &
+           'north = "periodic"'//NL
+      topo = "[ocean.topo]"//NL// &
+             'topo_config = "flat"'//NL// &
+             "max_depth = 100.0"//NL
+      phys = "[physics]"//NL// &
+             "coriolis_f = 1.4e-4"//NL// &
+             "wind_stress_x = 0.0"//NL// &
+             "wind_stress_y = 0.0"//NL
+      grid = "[grid]"//NL// &
+             "nx = 8"//NL// &
+             "ny = 8"//NL// &
+             "nghost = 3"//NL// &
+             "dx = 20000.0"//NL// &
+             "dy = 20000.0"//NL
+      ic = "[ocean.ice_ic]"//NL// &
+           'conc_config = "uniform"'//NL// &
+           "h_ice = 0.5"//NL// &
+           "conc = 1.0"//NL// &
+           "h_snow = 0.0"//NL// &
+           "t_ice = -10.0"//NL
+      atm = "[ocean.ice_atm]"//NL// &
+            "uni_tas = 250.0"//NL// &
+            "uni_rlds = 150.0"//NL// &
+            "uni_uas = 3.0"//NL// &
+            "uni_vas = 0.0"//NL
+      vmix = "[ocean.vmix]"//NL// &
+             "dt_therm_ratio = 1"//NL
       select case (geom)
       case ("column")
          continue
       case ("basin")
-         bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-         phys = "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.03 /"//NL
-         grid = "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
-         ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.9, h_snow = 0.1, t_ice = -8.0 /"//NL
-         atm = "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 12.0, uni_vas = 3.0 /"//NL
-         vmix = "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "wall"'//NL// &
+              'east = "wall"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "wall"'//NL
+         phys = "[physics]"//NL// &
+                "coriolis_f = 1.0e-4"//NL// &
+                "wind_stress_x = 0.1"//NL// &
+                "wind_stress_y = 0.03"//NL
+         grid = "[grid]"//NL// &
+                "nx = 24"//NL// &
+                "ny = 16"//NL// &
+                "nghost = 3"//NL// &
+                "dx = 20000.0"//NL// &
+                "dy = 20000.0"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "uniform"'//NL// &
+              "h_ice = 1.0"//NL// &
+              "conc = 0.9"//NL// &
+              "h_snow = 0.1"//NL// &
+              "t_ice = -8.0"//NL
+         atm = "[ocean.ice_atm]"//NL// &
+               "uni_tas = 255.0"//NL// &
+               "uni_rlds = 180.0"//NL// &
+               "uni_uas = 12.0"//NL// &
+               "uni_vas = 3.0"//NL
+         vmix = "[ocean.vmix]"//NL// &
+                "dt_therm_ratio = 2"//NL
       case ("channel")
-         bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = 'wall' /"//NL
-         phys = "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL
-         topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
-                "slope_scale = 60000.0 /"//NL
-         grid = "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
-         ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7, h_snow = 0.2, t_ice = -8.0 /"//NL
-         atm = "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 8.0, uni_vas = 2.0 /"//NL
-         vmix = "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "periodic"'//NL// &
+              'east = "periodic"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "wall"'//NL
+         phys = "[physics]"//NL// &
+                "coriolis_f = 1.4e-4"//NL// &
+                "wind_stress_x = 0.1"//NL// &
+                "wind_stress_y = 0.04"//NL
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "seamount"'//NL// &
+                "max_depth = 1000.0"//NL// &
+                "edge_depth = 800.0"//NL// &
+                "slope_scale = 60000.0"//NL
+         grid = "[grid]"//NL// &
+                "nx = 24"//NL// &
+                "ny = 16"//NL// &
+                "nghost = 3"//NL// &
+                "dx = 20000.0"//NL// &
+                "dy = 20000.0"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "uniform"'//NL// &
+              "h_ice = 1.0"//NL// &
+              "conc = 0.7"//NL// &
+              "h_snow = 0.2"//NL// &
+              "t_ice = -8.0"//NL
+         atm = "[ocean.ice_atm]"//NL// &
+               "uni_tas = 255.0"//NL// &
+               "uni_rlds = 180.0"//NL// &
+               "uni_uas = 8.0"//NL// &
+               "uni_vas = 2.0"//NL
+         vmix = "[ocean.vmix]"//NL// &
+                "dt_therm_ratio = 2"//NL
       case default
          error stop "test_cice_engine: unknown geometry"
       end select
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            grid//phys// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            topo// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            vmix// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-            ic//atm//bc// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.0"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.0"//NL// &
+            "T_init_bottom = -1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            grid//NL// &
+            phys//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            topo//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            vmix//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "upwind"'//NL// &
+            "ndte = 40"//NL// &
+            ic//NL// &
+            atm//NL// &
+            bc//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
       if (present(extra)) nml = nml//extra
    end function case_nml
 
@@ -187,7 +284,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       if (present(restart_file)) then
          call engine_setup(engine, cfg, ierr, restart_file=restart_file, t_restart=t0, step_restart=step0)
@@ -402,9 +499,12 @@ contains
       integer :: e
       logical :: found_new
 
-  nml = replace(case_nml("column"), "scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, dynamics = .true., transport = .true.", &
-                    "ncat = 5, nk_ice = 2")
-      nml = replace(nml, "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /", "&ocean_ice_dyn_nml ndte = 40 /")
+  nml = replace(case_nml("column"), 'scheme = "cice"'//new_line('a')//"ncat = 5"//new_line('a')//"nilyr = 4"//new_line('a')//"hfreeze = 10.0"//new_line('a')//"dynamics = true"//new_line('a')//"transport = true", &
+                    "ncat = 5"//new_line('a')//"nk_ice = 2")
+      nml = replace(nml, "[ocean.ice_dyn]"//new_line('a')// &
+                    'advection = "upwind"'//new_line('a')// &
+                    "ndte = 40"//new_line('a'), "[ocean.ice_dyn]"//new_line('a')// &
+                    "ndte = 40"//new_line('a'))
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "default-scheme engine setup failed")
       if (allocated(error)) return
@@ -439,7 +539,7 @@ contains
 
       call ensure_comm()
       nml = case_nml("column")
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "the supported configuration parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
@@ -455,39 +555,47 @@ contains
       do k = 1, 15
          select case (k)
          case (1)
-    nml = replace(case_nml("column"), "advection = 'upwind', ndte = 40", "advection = 'remap', transport_buffer_mib = 0, ndte = 40")
+    nml = replace(case_nml("column"), 'advection = "upwind"'//new_line('a')//"ndte = 40", 'advection = "remap"'//new_line('a')//"transport_buffer_mib = 0"//new_line('a')//"ndte = 40")
          case (2)
-            nml = replace(case_nml("column"), "ndte = 40", "ndte = 40, ndtd = 2")
+            nml = replace(case_nml("column"), "ndte = 40", "ndte = 40"//new_line('a')//"ndtd = 2")
          case (3)
             nml = replace(case_nml("column"), "nghost = 3", "nghost = 2")
          case (4)
-            nml = replace(case_nml("column"), "north = 'periodic'", "north = 'tripolar_fold'")
+            nml = replace(case_nml("column"), 'north = "periodic"', 'north = "tripolar_fold"')
          case (5)
-            nml = case_nml("column", "&ocean_wetdry_nml enable = .true. /"//NL)
+            nml = case_nml("column", "[ocean.wetdry]"//NL// &
+                           "enable = true"//NL)
          case (6)
-            nml = case_nml("column", "&ocean_cavity_dyn_nml enable = .true. /"//NL)
+            nml = case_nml("column", "[ocean.cavity_dyn]"//NL// &
+                           "enable = true"//NL)
          case (7)
-            nml = replace(case_nml("column"), "west = 'periodic', east = 'periodic'", "west = 'open', east = 'periodic'")
+            nml = replace(case_nml("column"), 'west = "periodic"'//new_line('a')//'east = "periodic"', 'west = "open"'//new_line('a')//'east = "periodic"')
          case (8)
-            nml = replace(case_nml("column"), "&ocean_thermo_nml enable_thermodynamics = .true. /", &
-                          "&ocean_thermo_nml enable_thermodynamics = .false. /")
+            nml = replace(case_nml("column"), "[ocean.thermo]"//new_line('a')// &
+                          "enable_thermodynamics = true"//new_line('a'), &
+                          "[ocean.thermo]"//new_line('a')// &
+                          "enable_thermodynamics = false"//new_line('a'))
          case (9)
-            nml = replace(case_nml("column"), "enable_components = .true.", "enable_components = .false.")
+            nml = replace(case_nml("column"), "enable_components = true", "enable_components = false")
          case (10)
             nml = replace(case_nml("column"), "hfreeze = 10.0", "hfreeze = -1.0")
          case (11)
-            nml = replace(case_nml("column", "&mpi_nml px = 2, py = 1 /"//NL), "hfreeze = 10.0, dynamics", &
-                          "hfreeze = 10.0, ledger = .true., dynamics")
+            nml = replace(case_nml("column", "[mpi]"//new_line('a')// &
+                                   "px = 2"//new_line('a')// &
+                                   "py = 1"//new_line('a')), "hfreeze = 10.0"//new_line('a')//"dynamics", &
+                          "hfreeze = 10.0"//new_line('a')//"ledger = true"//new_line('a')//"dynamics")
          case (12)
-            nml = replace(case_nml("column"), "hfreeze = 10.0, dynamics = .true.", "hfreeze = 10.0, dynamics = .false.")
+            nml = replace(case_nml("column"), "hfreeze = 10.0"//new_line('a')//"dynamics = true", "hfreeze = 10.0"//new_line('a')//"dynamics = false")
          case (13)
-            nml = replace(case_nml("column"), "transport = .true.", "transport = .false.")
+            nml = replace(case_nml("column"), "transport = true", "transport = false")
          case (14)
-            nml = case_nml("column", "&ocean_atm_forcing_nml enable = .true. /"//NL)   ! with the uniform knobs set: ambiguous
+            nml = case_nml("column", "[ocean.atm_forcing]"//NL// &
+                           "enable = true"//NL)   ! with the uniform knobs set: ambiguous
          case (15)
-            nml = case_nml("column", "&ocean_dataovr_nml tau_x_file = 'wind.nc' /"//NL)
+            nml = case_nml("column", "[ocean.dataovr]"//NL// &
+                           'tau_x_file = "wind.nc"'//NL)
          end select
-         call read_config_from_string(nml, cfg, ierr=ierr)
+         call read_config_from_toml_string(nml, cfg, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) then
             call check(error, .false., "refusal case "//trim(what(k))//": the namelist did not parse")
             return
@@ -550,7 +658,7 @@ contains
       character(len=:), allocatable :: nml
 
       nml = replace(case_nml("column"), "initial_temperature = -1.0", "initial_temperature = -1.84")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -1.84, T_init_bottom = -1.84")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -1.84"//new_line('a')//"T_init_bottom = -1.84")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -577,8 +685,8 @@ contains
       logical :: ok
       character(len=:), allocatable :: nml
 
-      nml = replace(case_nml("column"), "uni_tas = 250.0, uni_rlds = 150.0", "uni_tas = 275.0, uni_rlds = 300.0")
-      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0, sw_down = 250.0")
+      nml = replace(case_nml("column"), "uni_tas = 250.0"//new_line('a')//"uni_rlds = 150.0", "uni_tas = 275.0"//new_line('a')//"uni_rlds = 300.0")
+      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0"//new_line('a')//"sw_down = 250.0")
       nml = replace(nml, "h_ice = 0.5", "h_ice = 0.8")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
@@ -608,7 +716,7 @@ contains
 
       nml = replace(case_nml("column"), "dt_therm_ratio = 1", "dt_therm_ratio = 3")
       nml = replace(nml, "initial_temperature = -1.0", "initial_temperature = -1.84")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -1.84, T_init_bottom = -1.84")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -1.84"//new_line('a')//"T_init_bottom = -1.84")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -662,13 +770,13 @@ contains
       logical :: ok
 
       call ensure_comm()
-      call read_config_from_string(replace(case_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), cfg, ierr=ierr)
+      call read_config_from_toml_string(replace(case_nml("basin"), 'advection = "upwind"', 'advection = "remap"'), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "the remap configuration parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
       call check(error, n == 0, "advection = 'remap' has no refusal under scheme = 'cice'")
       if (allocated(error)) return
-      call make_engine(engine, cfg, replace(case_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), ok)
+      call make_engine(engine, cfg, replace(case_nml("basin"), 'advection = "upwind"', 'advection = "remap"'), ok)
       call check(error, ok, "engine setup with remap")
       if (allocated(error)) return
       call check(error, engine%state%icec%tws%remap, "the transport workspace holds the remap buffers")
@@ -699,7 +807,7 @@ contains
       real(wp) :: t
       logical :: ok
 
-      call make_engine(engine, cfg, replace(case_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), ok)
+      call make_engine(engine, cfg, replace(case_nml("basin"), 'advection = "upwind"', 'advection = "remap"'), ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
       t = 0.0_wp
@@ -734,7 +842,7 @@ contains
       call make_engine(eu, cu, case_nml("basin"), ok)
       call check(error, ok, "upwind engine setup")
       if (allocated(error)) return
-      call make_engine(er, cr, replace(case_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), ok)
+      call make_engine(er, cr, replace(case_nml("basin"), 'advection = "upwind"', 'advection = "remap"'), ok)
       call check(error, ok, "remap engine setup")
       if (allocated(error)) then
          call finish_engine(eu)
@@ -770,9 +878,9 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       !! and ocean state.
       character(len=*), intent(in) :: adv
       character(len=:), allocatable :: nml
-      nml = replace(case_nml("channel"), "topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
-                    "slope_scale = 60000.0", "topo_config = 'flat', max_depth = 1000.0")
-      nml = replace(nml, "advection = 'upwind'", "advection = '"//adv//"'")
+      nml = replace(case_nml("channel"), 'topo_config = "seamount"'//new_line('a')//"max_depth = 1000.0"//new_line('a')//"edge_depth = 800.0"//new_line('a')//&
+                    "slope_scale = 60000.0", 'topo_config = "flat"'//new_line('a')//"max_depth = 1000.0")
+      nml = replace(nml, 'advection = "upwind"', 'advection = "'//adv//'"')
    end function channel_flat_nml
 
    subroutine test_remap_channel(error)
@@ -944,7 +1052,7 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       nml = replace(case_nml("column"), "dt_therm_ratio = 1", "dt_therm_ratio = 3")
       nml = replace(nml, "hfreeze = 10.0", "hfreeze = 0.04")
       nml = replace(nml, "initial_temperature = -1.0", "initial_temperature = 3.0")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = 3.0, T_init_bottom = 3.0")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = 3.0"//new_line('a')//"T_init_bottom = 3.0")
       nml = replace(nml, "h_ice = 0.5", "h_ice = 1.0")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
@@ -985,10 +1093,10 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       logical :: ok
       character(len=:), allocatable :: nml
 
-      nml = replace(case_nml("column"), "conc_config = 'uniform', h_ice = 0.5, conc = 1.0", &
-                    "conc_config = 'zero', h_ice = 0.5, conc = 0.0")
+      nml = replace(case_nml("column"), 'conc_config = "uniform"'//new_line('a')//"h_ice = 0.5"//new_line('a')//"conc = 1.0", &
+                    'conc_config = "zero"'//new_line('a')//"h_ice = 0.5"//new_line('a')//"conc = 0.0")
       nml = replace(nml, "initial_temperature = -1.0", "initial_temperature = -2.0")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -2.0, T_init_bottom = -2.0")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -2.0"//new_line('a')//"T_init_bottom = -2.0")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -1018,7 +1126,7 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       character(len=:), allocatable :: nml
       integer :: i, j, nland, nbad, ng, nwet
 
-      nml = replace(case_nml("basin"), "topo_config = 'flat', max_depth = 100.0", "topo_config = 'island', max_depth = 100.0, slope_scale = 0.2")
+      nml = replace(case_nml("basin"), 'topo_config = "flat"'//new_line('a')//"max_depth = 100.0", 'topo_config = "island"'//new_line('a')//"max_depth = 100.0"//new_line('a')//"slope_scale = 0.2")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -1080,8 +1188,8 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       logical :: ok
       integer :: i, j, ng
 
-      nml = replace(case_nml("basin"), "conc_config = 'uniform', h_ice = 1.0, conc = 0.9", &
-                    "conc_config = 'zero', h_ice = 1.0, conc = 0.0")
+      nml = replace(case_nml("basin"), 'conc_config = "uniform"'//new_line('a')//"h_ice = 1.0"//new_line('a')//"conc = 0.9", &
+                    'conc_config = "zero"'//new_line('a')//"h_ice = 1.0"//new_line('a')//"conc = 0.0")
       call make_engine(ea, cfg, nml, ok)
       call check(error, ok, "ice-free engine setup failed")
       if (allocated(error)) return
@@ -1134,11 +1242,18 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       character(len=8) :: sn
 
       write (sn, "(i0)") ncat
-  nml = replace(case_nml("column"), "scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, dynamics = .true., transport = .true.", &
-                    "ncat = "//trim(sn)//", nk_ice = 2")
-      nml = replace(nml, "&ocean_ice_atm_nml uni_tas = 250.0, uni_rlds = 150.0, uni_uas = 3.0, uni_vas = 0.0 /", "")
-      nml = replace(nml, "&ocean_ice_thermo_nml update_ocn_f = .true. /", "")
-      nml = replace(nml, "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /", "")
+  nml = replace(case_nml("column"), 'scheme = "cice"'//new_line('a')//"ncat = 5"//new_line('a')//"nilyr = 4"//new_line('a')//"hfreeze = 10.0"//new_line('a')//"dynamics = true"//new_line('a')//"transport = true", &
+                    "ncat = "//trim(sn)//new_line('a')//"nk_ice = 2")
+      nml = replace(nml, "[ocean.ice_atm]"//new_line('a')// &
+                    "uni_tas = 250.0"//new_line('a')// &
+                    "uni_rlds = 150.0"//new_line('a')// &
+                    "uni_uas = 3.0"//new_line('a')// &
+                    "uni_vas = 0.0"//new_line('a'), "")
+      nml = replace(nml, "[ocean.ice_thermo]"//new_line('a')// &
+                    "update_ocn_f = true"//new_line('a'), "")
+      nml = replace(nml, "[ocean.ice_dyn]"//new_line('a')// &
+                    'advection = "upwind"'//new_line('a')// &
+                    "ndte = 40"//new_line('a'), "")
    end function sis2_nml
 
    subroutine write_sis2_file(ncat, ok, mass)
@@ -1309,7 +1424,7 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
 
    subroutine test_remap_restart(error)
       type(error_type), allocatable, intent(out) :: error
-      call restart_case(error, replace(case_nml("channel"), "advection = 'upwind'", "advection = 'remap'"))
+      call restart_case(error, replace(case_nml("channel"), 'advection = "upwind"', 'advection = "remap"'))
    end subroutine test_remap_restart
 
    subroutine restart_case(error, nml)

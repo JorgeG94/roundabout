@@ -46,7 +46,7 @@ module test_ocean_gm_work
    use rdb_eos, only: eos_t, EOS_VARIANT_LINEAR
    use rdb_ocean_isopycnal_slopes, only: ocean_slopes_t, ocean_slopes_compute
    use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports, gm_work_source, gm_work_source_impl
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    implicit none
@@ -387,30 +387,47 @@ contains
       type(config_t) :: cfg
       integer :: ierr
       character(len=:), allocatable :: nml
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
             extra//new_line("a")
-      call read_config_from_string(nml, cfg)
+      call read_config_from_toml_string(nml, cfg)
       call validate_config(cfg, ierr=ierr)
       ok = (ierr == OCEAN_STATUS_OK)
    end function validates
 
    subroutine test_config(error)
       type(error_type), allocatable, intent(out) :: error
-      character(len=*), parameter :: SLO = "&ocean_slopes_nml enable = .true. /"
-      character(len=*), parameter :: GM = "&ocean_gm_nml enable = .true., khth = 500.0, "
+      character(len=*), parameter :: SLO = "[ocean.slopes]"//new_line('a')// &
+                                     "enable = true"//new_line('a')
+      character(len=*), parameter :: GM = "[ocean.gm]"//new_line("a")// &
+                                     "enable = true"//new_line("a")// &
+                                     "khth = 500.0"//new_line("a")
       checks: block
-         call check(error, validates(SLO//GM//'gm_src_form = "work" /'), &
+         call check(error, validates(SLO//new_line('a')// &
+                                     GM//new_line('a')// &
+                                     'gm_src_form = "work"'), &
                     "config: gm_src_form='work' with GM must pass")
          if (allocated(error)) exit checks
-         call check(error, validates(SLO//GM//'gm_src_form = "local" /'), &
+         call check(error, validates(SLO//new_line('a')// &
+                                     GM//new_line('a')// &
+                                     'gm_src_form = "local"'), &
                     "config: gm_src_form='local' must pass")
          if (allocated(error)) exit checks
          ! An unknown spelling is rejected by the schema's enum parse
          ! (ERROR STOP at read time, not a recoverable validate_config error).
-         call check(error,.not. validates('&ocean_gm_nml enable = .false., gm_src_form = "work" /'), &
+         call check(error,.not. validates("[ocean.gm]"//new_line('a')// &
+                                          "enable = false"//new_line('a')// &
+                                          'gm_src_form = "work"'//new_line('a')), &
                     "config: gm_src_form='work' without GM must be refused")
       end block checks
    end subroutine test_config

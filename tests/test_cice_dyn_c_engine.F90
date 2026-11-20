@@ -39,7 +39,7 @@ module test_cice_dyn_c_engine
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -122,79 +122,174 @@ contains
       geom = label
       if (cice) geom = label(1:index(label, "_cice") - 1)
       dynnml = ""
-      if (cice) dynnml = "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 20 /"//NL// &
-                         "&ocean_ice_ridge_nml kstrength = 0 /"//NL
-      ice = "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, dynamics = .true., "// &
-            "evp_sub_steps = 20, a_face_stress = .true., cdw = 5.36e-3, rho_ocean = 1026.0 /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 1.0 /"//NL
-      bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-      phys = "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.03 /"//NL
+      if (cice) dynnml = "[ocean.ice_dyn]"//NL// &
+                         'dyn_scheme = "cice_c"'//NL// &
+                         "ndte = 20"//NL// &
+                         "[ocean.ice_ridge]"//NL// &
+                         "kstrength = 0"//NL
+      ice = "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            "ncat = 5"//NL// &
+            "nk_ice = 2"//NL// &
+            "dynamics = true"//NL// &
+            "evp_sub_steps = 20"//NL// &
+            "a_face_stress = true"//NL// &
+            "cdw = 5.36e-3"//NL// &
+            "rho_ocean = 1026.0"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 1.0"//NL
+      bc = "[ocean.bc]"//NL// &
+           'west = "wall"'//NL// &
+           'east = "wall"'//NL// &
+           'south = "wall"'//NL// &
+           'north = "wall"'//NL
+      phys = "[physics]"//NL// &
+             "coriolis_f = 1.0e-4"//NL// &
+             "wind_stress_x = 0.1"//NL// &
+             "wind_stress_y = 0.03"//NL
       thermo = ""
-      topo = "&ocean_topo_nml topo_config = 'flat', max_depth = 200.0 /"//NL
+      topo = "[ocean.topo]"//NL// &
+             'topo_config = "flat"'//NL// &
+             "max_depth = 200.0"//NL
       select case (geom)
       case ("basin")
          continue
       case ("free")
-         phys = "&physics_nml coriolis_f = 0.0 /"//NL
-         dynnml = "&ocean_ice_dyn_nml rheo_area_min = 1.1 /"//NL
-         if (cice) dynnml = "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 20, rheo_area_min = 1.1 /"//NL// &
-                            "&ocean_ice_ridge_nml kstrength = 0 /"//NL
+         phys = "[physics]"//NL// &
+                "coriolis_f = 0.0"//NL
+         dynnml = "[ocean.ice_dyn]"//NL// &
+                  "rheo_area_min = 1.1"//NL
+         if (cice) dynnml = "[ocean.ice_dyn]"//NL// &
+                            'dyn_scheme = "cice_c"'//NL// &
+                            "ndte = 20"//NL// &
+                            "rheo_area_min = 1.1"//NL// &
+                            "[ocean.ice_ridge]"//NL// &
+                            "kstrength = 0"//NL
       case ("uniform")
-         bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', "// &
-              "north = 'periodic' /"//NL
-         phys = "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.0 /"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "periodic"'//NL// &
+              'east = "periodic"'//NL// &
+              'south = "periodic"'//NL// &
+              'north = "periodic"'//NL
+         phys = "[physics]"//NL// &
+                "coriolis_f = 1.4e-4"//NL// &
+                "wind_stress_x = 0.1"//NL// &
+                "wind_stress_y = 0.0"//NL
       case ("channel")
-         bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = 'wall' /"//NL
-         phys = "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL
-         topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
-                "slope_scale = 60000.0 /"//NL
-         thermo = "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
-                  "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL
-         ice = "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
-               "restore_lambda = 20.0, sw_down = 40.0, snowfall = 2.0e-5, dynamics = .true., "// &
-               "evp_sub_steps = 20, transport = .true., adv_substeps = 2 /"//NL// &
-               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "periodic"'//NL// &
+              'east = "periodic"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "wall"'//NL
+         phys = "[physics]"//NL// &
+                "coriolis_f = 1.4e-4"//NL// &
+                "wind_stress_x = 0.1"//NL// &
+                "wind_stress_y = 0.04"//NL
+         topo = "[ocean.topo]"//NL// &
+                'topo_config = "seamount"'//NL// &
+                "max_depth = 1000.0"//NL// &
+                "edge_depth = 800.0"//NL// &
+                "slope_scale = 60000.0"//NL
+         thermo = "[ocean.thermo]"//NL// &
+                  "enable_thermodynamics = true"//NL// &
+                  "q_heat = -100.0"//NL// &
+                  "[ocean.vmix]"//NL// &
+                  "dt_therm_ratio = 2"//NL
+         ice = "[ocean.ice]"//NL// &
+               "enable = true"//NL// &
+               "ncat = 5"//NL// &
+               "nk_ice = 2"//NL// &
+               "air_temp = -20.0"//NL// &
+               "restore_lambda = 20.0"//NL// &
+               "sw_down = 40.0"//NL// &
+               "snowfall = 2.0e-5"//NL// &
+               "dynamics = true"//NL// &
+               "evp_sub_steps = 20"//NL// &
+               "transport = true"//NL// &
+               "adv_substeps = 2"//NL// &
+               "[ocean.ice_ic]"//NL// &
+               'conc_config = "uniform"'//NL// &
+               "h_ice = 1.0"//NL// &
+               "conc = 0.7"//NL
       case default
          error stop "test_cice_dyn_c_engine: unknown case"
       end select
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            phys// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            topo//thermo//ice//dynnml//bc// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.83"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.82"//NL// &
+            "T_init_bottom = -1.835"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 24"//NL// &
+            "ny = 16"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            phys//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            topo//NL// &
+            thermo//NL// &
+            ice//NL// &
+            dynnml//NL// &
+            bc//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
       do k = 1, n_ex
          nml = set_nml(nml, trim(ex_group(k)), trim(ex_key(k)), trim(ex_val(k)))
       end do
    end function case_nml
 
    function set_nml(nml, group, key, val) result(r)
-      !! `key = val` in the namelist group `group` of `nml`: replaced when present, added
-      !! otherwise (a group that is absent is appended).
+      !! `key = val` in the TOML table of the namelist-group name `group` (`ocean_<x>_nml` -> `[ocean.<x>]`,
+      !! `<x>_nml` -> `[<x>]`) of `nml`: replaced when present, added otherwise (a table that is absent is appended).
       character(len=*), intent(in) :: nml, group, key, val
-      character(len=:), allocatable :: r
-      integer :: g, e, k, ve
+      character(len=:), allocatable :: r, tab, hdr
       character(len=*), parameter :: NL = new_line("a")
+      integer :: g, e, k, ve, n
 
-      g = index(nml, "&"//group//" ")
+      tab = group
+      n = len(tab)
+      if (n > 4) then
+         if (tab(n - 3:n) == "_nml") tab = tab(1:n - 4)
+      end if
+      if (len(tab) > 6) then
+         if (tab(1:6) == "ocean_") tab = "ocean."//tab(7:)
+      end if
+      hdr = "["//tab//"]"//NL
+      g = index(nml, hdr)
       if (g == 0) then
-         r = nml//"&"//group//" "//key//" = "//val//" /"//NL
+         r = nml//hdr//key//" = "//val//NL
          return
       end if
-      e = g + index(nml(g:), " /") - 1          ! the closing " /" of this group
-      k = index(nml(g:e), " "//key//" =")
-      if (k == 0) then
-         r = nml(1:e - 1)//", "//key//" = "//val//nml(e:)
+      g = g + len(hdr)                          ! first character after the table header
+      e = index(nml(g:), NL//"[")               ! the next table header, if any
+      if (e == 0) then
+         e = len(nml) + 1
       else
-         k = g + k - 1 + len(" "//key//" = ")    ! first character of the old value
-         ve = k + scan(nml(k:e), ", /") - 2
+         e = g + e                              ! first character of that header (after its NL)
+      end if
+      k = index(nml(g - 1:e - 1), NL//key//" = ")   ! the key's line, relative to the NL ending the header
+      if (k == 0) then
+         r = nml(1:e - 1)//key//" = "//val//NL//nml(e:)
+      else
+         k = g - 2 + k + 1 + len(key//" = ")     ! first character of the old value
+         ve = k + index(nml(k:e - 1), NL) - 2    ! last character of the old value
          r = nml(1:k - 1)//val//nml(ve + 1:)
       end if
    end function set_nml
@@ -231,7 +326,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       if (present(restart_file)) then
          call engine_setup(engine, cfg, ierr, restart_file=restart_file, t_restart=t0, step_restart=step0)
@@ -358,7 +453,7 @@ contains
       integer :: n, i, ierr
 
       text = ""
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
          text = "PARSE-REFUSED"
          return
@@ -382,20 +477,26 @@ contains
       call refusal_text(case_nml("basin"), t)
       call check(error, len_trim(t) == 0, "the default configuration is accepted: "//t)
       if (allocated(error)) return
-      call refusal_text(replace(base, "dyn_scheme = 'cice_c'", "dyn_scheme = 'nope'"), t)
+      call refusal_text(replace(base, 'dyn_scheme = "cice_c"', 'dyn_scheme = "nope"'), t)
       call check(error, index(t, "PARSE-REFUSED") > 0 .or. index(t, "dyn_scheme") > 0, "an unknown scheme is refused")
       if (allocated(error)) return
-      call refusal_text(replace(base, "dynamics = .true.", "dynamics = .false."), t)
+      call refusal_text(replace(base, "dynamics = true", "dynamics = false"), t)
       call check(error, index(t, "dynamics=.true.") > 0, "cice_c needs dynamics=.true.: "//t)
       if (allocated(error)) return
       call refusal_text(replace(base, "nghost = 3", "nghost = 2"), t)
       call check(error, index(t, "nghost >= 3") > 0, "cice_c needs nghost >= 3: "//t)
       if (allocated(error)) return
       ! D9.4: several ranks are accepted, with and without the tripolar fold.
-      call refusal_text(base//"&mpi_nml px = 2, py = 1 /"//NL, t)
+      call refusal_text(base//NL// &
+                        "[mpi]"//NL// &
+                        "px = 2"//NL// &
+                        "py = 1"//NL, t)
       call check(error, len_trim(t) == 0, "cice_c accepts several ranks: "//t)
       if (allocated(error)) return
-      call refusal_text(replace(base, "north = 'wall'", "north = 'tripolar_fold'")//"&mpi_nml px = 2, py = 1 /"//NL, t)
+      call refusal_text(replace(base, 'north = "wall"', 'north = "tripolar_fold"')//new_line('a')// &
+                        "[mpi]"//new_line('a')// &
+                        "px = 2"//new_line('a')// &
+                        "py = 1"//new_line('a'), t)
       call check(error, len_trim(t) == 0, "cice_c accepts the fold on several ranks: "//t)
    end subroutine test_refusals
 
@@ -961,7 +1062,7 @@ contains
 
       call ex_clear()
       call ex_add("ocean_ice_nml", "p0", "1.0e-3")
-      call ex_add("ocean_ice_ridge_nml", "pstar", "1.0e-3")
+      call ex_add("ocean_ice_ridge_nml", "Pstar", "1.0e-3")
       call frozen_stats("basin", 72, 3, ua, va, ka, ok)
       call check(error, ok, "sis2_c run failed")
       if (allocated(error)) return
@@ -1152,7 +1253,7 @@ contains
       if (allocated(error)) return
       call finish_engine(ea)
       call ensure_comm()
-      call read_config_from_string(case_nml(lab_r), cfg_b, ierr=ierr)
+      call read_config_from_toml_string(case_nml(lab_r), cfg_b, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "reader config failed")
       if (allocated(error)) return
       call engine_setup(eb, cfg_b, ierr, restart_file=FN, t_restart=t_b, step_restart=step_b)
@@ -1168,14 +1269,42 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
       nml = case_nml("basin_cice")
-      nml = replace(nml, "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /", &
-                    "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 15.0, dy = 1.0 /"//NL// &
-                    "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
-                    "phi_join = 70.0, lon_pole = 0.0, coriolis_scheme = 'planetary' /")
-      nml = replace(nml, "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /", &
-                    "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = 'tripolar_fold' /")
-      nml = replace(nml, "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.03 /", &
-                    "&physics_nml wind_stress_x = 0.05, wind_stress_y = 0.05 /")
+      nml = replace(nml, "[grid]"//new_line('a')// &
+                    "nx = 24"//new_line('a')// &
+                    "ny = 16"//new_line('a')// &
+                    "nghost = 3"//new_line('a')// &
+                    "dx = 20000.0"//new_line('a')// &
+                    "dy = 20000.0"//new_line('a'), &
+                    "[grid]"//new_line('a')// &
+                    "nx = 24"//new_line('a')// &
+                    "ny = 16"//new_line('a')// &
+                    "nghost = 3"//new_line('a')// &
+                    "dx = 15.0"//new_line('a')// &
+                    "dy = 1.0"//new_line('a')// &
+                    "[ocean.grid]"//new_line('a')// &
+                    'grid_config = "tripolar"'//new_line('a')// &
+                    "lon_west = 0.0"//new_line('a')// &
+                    "lat_south = 59.0"//new_line('a')// &
+                    "phi_join = 70.0"//new_line('a')// &
+                    "lon_pole = 0.0"//new_line('a')// &
+                    'coriolis_scheme = "planetary"'//new_line('a'))
+      nml = replace(nml, "[ocean.bc]"//new_line('a')// &
+                    'west = "wall"'//new_line('a')// &
+                    'east = "wall"'//new_line('a')// &
+                    'south = "wall"'//new_line('a')// &
+                    'north = "wall"'//new_line('a'), &
+                    "[ocean.bc]"//new_line('a')// &
+                    'west = "periodic"'//new_line('a')// &
+                    'east = "periodic"'//new_line('a')// &
+                    'south = "wall"'//new_line('a')// &
+                    'north = "tripolar_fold"'//new_line('a'))
+      nml = replace(nml, "[physics]"//new_line('a')// &
+                    "coriolis_f = 1.0e-4"//new_line('a')// &
+                    "wind_stress_x = 0.1"//new_line('a')// &
+                    "wind_stress_y = 0.03"//new_line('a'), &
+                    "[physics]"//new_line('a')// &
+                    "wind_stress_x = 0.05"//new_line('a')// &
+                    "wind_stress_y = 0.05"//new_line('a'))
    end function tripolar_nml
 
    subroutine test_tripolar_fold(error)
@@ -1266,7 +1395,7 @@ contains
 
       call get_environment_variable("RDB_CICE_EVP_BENCH", flag)
       if (trim(flag) /= "1") return
-      nml = replace(replace(case_nml("basin_cice"), "nx = 24, ny = 16", "nx = 512, ny = 512"), "ndte = 20", "ndte = 120")
+      nml = replace(replace(case_nml("basin_cice"), "nx = 24"//new_line('a')//"ny = 16", "nx = 512"//new_line('a')//"ny = 512"), "ndte = 20", "ndte = 120")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return

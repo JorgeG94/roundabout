@@ -40,7 +40,7 @@ module test_cice_closure
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -203,43 +203,115 @@ contains
       character(len=*), parameter :: NL = new_line("a")
       character(len=:), allocatable :: bc, phys, grid, ic, atm
 
-      bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', north = 'periodic' /"//NL
-      phys = "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL
-      grid = "&grid_nml nx = 8, ny = 8, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
-      ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 0.5, conc = 1.0, h_snow = 0.0, t_ice = -10.0 /"//NL
-      atm = "&ocean_ice_atm_nml uni_tas = 250.0, uni_rlds = 150.0, uni_uas = 3.0, uni_vas = 0.0 /"//NL
+      bc = "[ocean.bc]"//NL// &
+           'west = "periodic"'//NL// &
+           'east = "periodic"'//NL// &
+           'south = "periodic"'//NL// &
+           'north = "periodic"'//NL
+      phys = "[physics]"//NL// &
+             "coriolis_f = 1.4e-4"//NL// &
+             "wind_stress_x = 0.0"//NL// &
+             "wind_stress_y = 0.0"//NL
+      grid = "[grid]"//NL// &
+             "nx = 8"//NL// &
+             "ny = 8"//NL// &
+             "nghost = 3"//NL// &
+             "dx = 20000.0"//NL// &
+             "dy = 20000.0"//NL
+      ic = "[ocean.ice_ic]"//NL// &
+           'conc_config = "uniform"'//NL// &
+           "h_ice = 0.5"//NL// &
+           "conc = 1.0"//NL// &
+           "h_snow = 0.0"//NL// &
+           "t_ice = -10.0"//NL
+      atm = "[ocean.ice_atm]"//NL// &
+            "uni_tas = 250.0"//NL// &
+            "uni_rlds = 150.0"//NL// &
+            "uni_uas = 3.0"//NL// &
+            "uni_vas = 0.0"//NL
       select case (geom)
       case ("column")
          continue
       case ("basin")
-         bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-         phys = "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.03 /"//NL
-         grid = "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
-         ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.9, h_snow = 0.1, t_ice = -8.0 /"//NL
-         atm = "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 12.0, uni_vas = 3.0 /"//NL
+         bc = "[ocean.bc]"//NL// &
+              'west = "wall"'//NL// &
+              'east = "wall"'//NL// &
+              'south = "wall"'//NL// &
+              'north = "wall"'//NL
+         phys = "[physics]"//NL// &
+                "coriolis_f = 1.0e-4"//NL// &
+                "wind_stress_x = 0.1"//NL// &
+                "wind_stress_y = 0.03"//NL
+         grid = "[grid]"//NL// &
+                "nx = 24"//NL// &
+                "ny = 16"//NL// &
+                "nghost = 3"//NL// &
+                "dx = 20000.0"//NL// &
+                "dy = 20000.0"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "uniform"'//NL// &
+              "h_ice = 1.0"//NL// &
+              "conc = 0.9"//NL// &
+              "h_snow = 0.1"//NL// &
+              "t_ice = -8.0"//NL
+         atm = "[ocean.ice_atm]"//NL// &
+               "uni_tas = 255.0"//NL// &
+               "uni_rlds = 180.0"//NL// &
+               "uni_uas = 12.0"//NL// &
+               "uni_vas = 3.0"//NL
       case default
          error stop "test_cice_closure: unknown geometry"
       end select
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            grid//phys// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 1 /"//NL// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true., ledger = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-            ic//atm//bc// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.0"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.0"//NL// &
+            "T_init_bottom = -1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            grid//NL// &
+            phys//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 1"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "ledger = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "upwind"'//NL// &
+            "ndte = 40"//NL// &
+            ic//NL// &
+            atm//NL// &
+            bc//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function uni_nml
 
    function pres_nml(ratio) result(nml)
@@ -251,36 +323,95 @@ contains
       character(len=32) :: sratio
 
       write (sratio, '(i0)') ratio
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
-            "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 70.0, "// &
-            "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-            "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = "//trim(sratio)//" /"//NL// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true., ledger = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.6, h_snow = 0.1, t_ice = -8.0 /"//NL// &
-            "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', fluxes_regrid = 'bilinear', "// &
-            "time_mode = 'interannual', wind_relative = .false., "// &
-            "filelist_tas = '"//FN_LST//"', filelist_huss = '"//FN_LST//"', filelist_uas = '"//FN_LST//"', "// &
-            "filelist_vas = '"//FN_LST//"', filelist_psl = '"//FN_LST//"', filelist_rlds = '"//FN_LST//"', "// &
-            "filelist_rsds = '"//FN_LST//"', filelist_prra = '"//FN_LST//"', filelist_prsn = '"//FN_LST//"' /"//NL// &
-            "&ocean_bulk_flux_nml enable = .true. /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            'start_date = "2000-01-01"'//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.0"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.0"//NL// &
+            "T_init_bottom = -1.0"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[grid]"//NL// &
+            "nx = 12"//NL// &
+            "ny = 10"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 0.25"//NL// &
+            "dy = 0.25"//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "spherical"'//NL// &
+            "lon_west = 20.0"//NL// &
+            "lat_south = 70.0"//NL// &
+            "rad_earth = 6.371e6"//NL// &
+            'coriolis_scheme = "planetary"'//NL// &
+            "[physics]"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = "//trim(sratio)//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "ledger = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "upwind"'//NL// &
+            "ndte = 40"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "uniform"'//NL// &
+            "h_ice = 1.0"//NL// &
+            "conc = 0.6"//NL// &
+            "h_snow = 0.1"//NL// &
+            "t_ice = -8.0"//NL// &
+            "[ocean.atm_forcing]"//NL// &
+            "enable = true"//NL// &
+            'sw_interp = "linear"'//NL// &
+            'fluxes_regrid = "bilinear"'//NL// &
+            'time_mode = "interannual"'//NL// &
+            "wind_relative = false"//NL// &
+            'filelist_tas = "'//FN_LST//'"'//NL// &
+            'filelist_huss = "'//FN_LST//'"'//NL// &
+            'filelist_uas = "'//FN_LST//'"'//NL// &
+            'filelist_vas = "'//FN_LST//'"'//NL// &
+            'filelist_psl = "'//FN_LST//'"'//NL// &
+            'filelist_rlds = "'//FN_LST//'"'//NL// &
+            'filelist_rsds = "'//FN_LST//'"'//NL// &
+            'filelist_prra = "'//FN_LST//'"'//NL// &
+            'filelist_prsn = "'//FN_LST//'"'//NL// &
+            "[ocean.bulk_flux]"//NL// &
+            "enable = true"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function pres_nml
 
    subroutine ensure_comm()
@@ -303,7 +434,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       if (present(restart_file)) then
          call engine_setup(engine, cfg, ierr, restart_file=restart_file, t_restart=t0, step_restart=step0)
@@ -660,7 +791,7 @@ contains
       character(len=:), allocatable :: nml
 
       nml = replace(uni_nml("column"), "initial_temperature = -1.0", "initial_temperature = -1.84")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -1.84, T_init_bottom = -1.84")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -1.84"//new_line('a')//"T_init_bottom = -1.84")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -683,8 +814,8 @@ contains
       logical :: ok
       character(len=:), allocatable :: nml
 
-      nml = replace(uni_nml("column"), "uni_tas = 250.0, uni_rlds = 150.0", "uni_tas = 275.0, uni_rlds = 300.0")
-      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0, sw_down = 250.0")
+      nml = replace(uni_nml("column"), "uni_tas = 250.0"//new_line('a')//"uni_rlds = 150.0", "uni_tas = 275.0"//new_line('a')//"uni_rlds = 300.0")
+      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0"//new_line('a')//"sw_down = 250.0")
       nml = replace(nml, "h_ice = 0.5", "h_ice = 0.8")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
@@ -712,7 +843,7 @@ contains
       logical :: ok
       character(len=:), allocatable :: nml
 
-      nml = replace(uni_nml("column"), "hfreeze = 10.0", "hfreeze = 10.0, snowfall = 2.0e-4")
+      nml = replace(uni_nml("column"), "hfreeze = 10.0", "hfreeze = 10.0"//new_line('a')//"snowfall = 2.0e-4")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -735,10 +866,10 @@ contains
       logical :: ok
       character(len=:), allocatable :: nml
 
-      nml = replace(uni_nml("column"), "conc_config = 'uniform', h_ice = 0.5, conc = 1.0", &
-                    "conc_config = 'zero', h_ice = 0.5, conc = 0.0")
+      nml = replace(uni_nml("column"), 'conc_config = "uniform"'//new_line('a')//"h_ice = 0.5"//new_line('a')//"conc = 1.0", &
+                    'conc_config = "zero"'//new_line('a')//"h_ice = 0.5"//new_line('a')//"conc = 0.0")
       nml = replace(nml, "initial_temperature = -1.0", "initial_temperature = -2.0")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -2.0, T_init_bottom = -2.0")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -2.0"//new_line('a')//"T_init_bottom = -2.0")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -770,9 +901,9 @@ contains
       logical :: ok
       character(len=:), allocatable :: nml
 
-      nml = replace(uni_nml("column"), "conc = 1.0, h_snow = 0.0", "conc = 0.6, h_snow = 0.0")
+      nml = replace(uni_nml("column"), "conc = 1.0"//new_line('a')//"h_snow = 0.0", "conc = 0.6"//new_line('a')//"h_snow = 0.0")
       nml = replace(nml, "initial_temperature = -1.0", "initial_temperature = 0.5")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = 0.5, T_init_bottom = 0.5")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = 0.5"//new_line('a')//"T_init_bottom = 0.5")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -921,8 +1052,8 @@ contains
       character(len=:), allocatable :: nml
 
       nml = replace(uni_nml("basin"), "dt_therm_ratio = 1", "dt_therm_ratio = 2")
-      nml = replace(nml, "uni_tas = 255.0, uni_rlds = 180.0", "uni_tas = 268.0, uni_rlds = 230.0")
-      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0, sw_down = 120.0")
+      nml = replace(nml, "uni_tas = 255.0"//new_line('a')//"uni_rlds = 180.0", "uni_tas = 268.0"//new_line('a')//"uni_rlds = 230.0")
+      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0"//new_line('a')//"sw_down = 120.0")
       call interface_case(error, nml, 2, 40, "uniform atmosphere, ratio 2: ", .false.)
    end subroutine test_interface_uniform
 
@@ -1343,8 +1474,8 @@ contains
 
       ! cold air over a warmish ocean: surface growth, basal and lateral melt, wind-driven ridging in a closed basin
       nml = replace(uni_nml("basin"), "initial_temperature = -1.0", "initial_temperature = -0.6")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -0.6, T_init_bottom = -0.6")
-      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0, snowfall = 3.0e-5")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -0.6"//new_line('a')//"T_init_bottom = -0.6")
+      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0"//new_line('a')//"snowfall = 3.0e-5")
       call global_case(error, nml, .false., 144, "uniform atmosphere, closed basin, wind: ")
    end subroutine test_global_uniform
 
@@ -1366,7 +1497,7 @@ contains
       character(len=:), allocatable :: nml
 
       nml = replace(pres_nml(1), "initial_temperature = -1.0", "initial_temperature = -1.84")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -1.84, T_init_bottom = -1.84")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -1.84"//new_line('a')//"T_init_bottom = -1.84")
       call global_case(error, nml, .true., 96, "prescribed mixed atmosphere, supercooled ocean (frazil): ")
    end subroutine test_global_prescribed_frazil
 
@@ -1380,9 +1511,14 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
 
-      nml = replace(base, "&ocean_forcing_nml enable_components = .true. /", &
-                    "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-                    "&ocean_psurf_nml enable = .true., ice_load = .true. /")
+      nml = replace(base, "[ocean.forcing]"//new_line('a')// &
+                    "enable_components = true"//new_line('a'), &
+                    "[ocean.forcing]"//new_line('a')// &
+                    "enable_components = true"//new_line('a')// &
+                    'freshwater = "mass"'//new_line('a')// &
+                    "[ocean.psurf]"//new_line('a')// &
+                    "enable = true"//new_line('a')// &
+                    "ice_load = true"//new_line('a'))
    end function mass_nml
 
    function sf_fw_net_ref(engine) result(a)
@@ -1398,8 +1534,8 @@ contains
       character(len=:), allocatable :: nml
 
       nml = replace(uni_nml("basin"), "initial_temperature = -1.0", "initial_temperature = -0.6")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -0.6, T_init_bottom = -0.6")
-      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0, snowfall = 3.0e-5")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -0.6"//new_line('a')//"T_init_bottom = -0.6")
+      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0"//new_line('a')//"snowfall = 3.0e-5")
       nml = mass_nml(nml)
    end function mass_uniform_nml
 
@@ -1441,8 +1577,11 @@ contains
       !! `mass_uniform_nml` at `dt_therm_ratio = 8` in the deferred order (`diabatic_first = .false.`).
       character(len=:), allocatable :: nml
 
-      nml = replace(mass_uniform_nml(), "&ocean_vmix_nml dt_therm_ratio = 1 /", &
-                    "&ocean_vmix_nml dt_therm_ratio = 8, diabatic_first = .false. /")
+      nml = replace(mass_uniform_nml(), "[ocean.vmix]"//new_line('a')// &
+                    "dt_therm_ratio = 1"//new_line('a'), &
+                    "[ocean.vmix]"//new_line('a')// &
+                    "dt_therm_ratio = 8"//new_line('a')// &
+                    "diabatic_first = false"//new_line('a'))
    end function mass_ratio8_nml
 
    subroutine test_mass_closure_ratio8(error)
@@ -1563,40 +1702,97 @@ contains
       bcl = .false.
       if (present(baroclinic)) bcl = baroclinic
       write (sratio, '(i0)') n
-      vmix = "&ocean_vmix_nml dt_therm_ratio = "//trim(sratio)
-      if (defer) vmix = vmix//", diabatic_first = .false."
-      vmix = vmix//" /"//NL
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&tracer_nml initial_temperature = -1.80, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.80, T_init_bottom = -1.80 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
-            "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 70.0, "// &
-            "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-            "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
-            vmix// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-            "dynamics = .true., transport = .true. /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-            "&ocean_ice_ridge_nml kstrength = 0, Pstar = 1.0 /"//NL// &
-            "&ocean_ice_ic_nml conc_config = 'latitudes', arctic_edge = 71.2, h_ice = 0.05, conc = 1.0, "// &
-            "h_snow = 0.0, t_ice = -8.0 /"//NL// &
-            "&ocean_ice_atm_nml uni_tas = 240.0, uni_rlds = 120.0, uni_uas = 0.0, uni_vas = 0.0 /"//NL// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
-      if (.not. bcl) nml = nml//"&ocean_ic_nml alpha_T = 0.0, beta_S = 0.0 /"//NL
+      vmix = "[ocean.vmix]"//NL//"dt_therm_ratio = "//trim(sratio)//NL
+      if (defer) vmix = vmix//"diabatic_first = false"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.80"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.80"//NL// &
+            "T_init_bottom = -1.80"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[grid]"//NL// &
+            "nx = 12"//NL// &
+            "ny = 10"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 0.25"//NL// &
+            "dy = 0.25"//NL// &
+            "[ocean.grid]"//NL// &
+            'grid_config = "spherical"'//NL// &
+            "lon_west = 20.0"//NL// &
+            "lat_south = 70.0"//NL// &
+            "rad_earth = 6.371e6"//NL// &
+            'coriolis_scheme = "planetary"'//NL// &
+            "[physics]"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            'freshwater = "mass"'//NL// &
+            vmix//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "upwind"'//NL// &
+            "ndte = 40"//NL// &
+            "[ocean.ice_ridge]"//NL// &
+            "kstrength = 0"//NL// &
+            "Pstar = 1.0"//NL// &
+            "[ocean.ice_ic]"//NL// &
+            'conc_config = "latitudes"'//NL// &
+            "arctic_edge = 71.2"//NL// &
+            "h_ice = 0.05"//NL// &
+            "conc = 1.0"//NL// &
+            "h_snow = 0.0"//NL// &
+            "t_ice = -8.0"//NL// &
+            "[ocean.ice_atm]"//NL// &
+            "uni_tas = 240.0"//NL// &
+            "uni_rlds = 120.0"//NL// &
+            "uni_uas = 0.0"//NL// &
+            "uni_vas = 0.0"//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
+      if (.not. bcl) nml = nml//NL// &
+                           "[ocean.ic]"//NL// &
+                           "alpha_T = 0.0"//NL// &
+                           "beta_S = 0.0"//NL
       if (load) then
          ! `ice_load_balance_ic` is on by default: the cold start is lowered by the ice's weight, no hand IC
-         nml = nml//"&ocean_psurf_nml enable = .true., ice_load = .true. /"//NL
+         nml = nml//NL// &
+               "[ocean.psurf]"//NL// &
+               "enable = true"//NL// &
+               "ice_load = true"//NL
       end if
    end function no_flow_nml
 
@@ -1751,14 +1947,18 @@ contains
 
       if (mass) then
          nml = mass_nml(pres_nml(1))
-         if (atm_load) nml = replace(nml, "ice_load = .true. /", "ice_load = .true., atm_load = .true. /")
+         if (atm_load) nml = replace(nml, "ice_load = true", "ice_load = true"//new_line('a')//"atm_load = true")
       else
          nml = pres_nml(1)
-         nml = replace(nml, "&ocean_forcing_nml enable_components = .true. /", &
-                       "&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
-                       "&ocean_psurf_nml enable = .true., atm_load = .true. /")
+         nml = replace(nml, "[ocean.forcing]"//new_line('a')// &
+                       "enable_components = true"//new_line('a'), &
+                       "[ocean.forcing]"//new_line("a")// &
+                       "enable_components = true"//new_line("a")// &
+                       "[ocean.psurf]"//new_line("a")// &
+                       "enable = true"//new_line("a")// &
+                       "atm_load = true"//new_line("a"))
       end if
-      nml = replace(nml, "west = 'wall', east = 'wall'", "west = 'periodic', east = 'periodic'")
+      nml = replace(nml, 'west = "wall"'//new_line('a')//'east = "wall"', 'west = "periodic"'//new_line('a')//'east = "periodic"')
       call write_synth_atm("psl_lat", FN_ATM, FN_LST)
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
@@ -1921,7 +2121,7 @@ contains
 
       nml = uni_nml("basin")
       if (.not. with_snow) nml = replace(nml, "h_snow = 0.1", "h_snow = 0.0")
-      nml = replace(nml, "wind_stress_x = 0.1, wind_stress_y = 0.03", "wind_stress_x = 0.2, wind_stress_y = 0.06")
+      nml = replace(nml, "wind_stress_x = 0.1"//new_line('a')//"wind_stress_y = 0.03", "wind_stress_x = 0.2"//new_line('a')//"wind_stress_y = 0.06")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -2030,12 +2230,15 @@ contains
       do w = 1, 2
          if (w == 1) then
             ! the CICE scheme with the ledger knob off
-            nml = replace(uni_nml("column"), ", ledger = .true.", "")
+            nml = replace(uni_nml("column"), new_line('a')//"ledger = true", "")
          else
             ! the default scheme
-            nml = replace(uni_nml("column"), "scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
-                          "dynamics = .true., transport = .true., ledger = .true.", "ncat = 5, nk_ice = 2")
-            nml = replace(nml, "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /", "&ocean_ice_dyn_nml ndte = 40 /")
+            nml = replace(uni_nml("column"), 'scheme = "cice"'//new_line('a')//"ncat = 5"//new_line('a')//"nilyr = 4"//new_line('a')//"hfreeze = 10.0"//new_line('a')//"dynamics = true"//new_line('a')//&
+                          "transport = true"//new_line('a')//"ledger = true", "ncat = 5"//new_line('a')//"nk_ice = 2")
+            nml = replace(nml, "[ocean.ice_dyn]"//new_line('a')// &
+                          'advection = "upwind"'//new_line('a')// &
+                          "ndte = 40"//new_line('a'), "[ocean.ice_dyn]"//new_line('a')// &
+                          "ndte = 40"//new_line('a'))
          end if
          call make_engine(engine, cfg, nml, ok)
          call check(error, ok, "engine setup failed")
@@ -2162,7 +2365,7 @@ contains
       logical :: ok
 
       nml_on = replace(uni_nml("basin"), "dt_therm_ratio = 1", "dt_therm_ratio = 2")
-      nml_off = replace(nml_on, ", ledger = .true.", "")
+      nml_off = replace(nml_on, new_line('a')//"ledger = true", "")
       call make_engine(ea, cfg_a, nml_off, ok)
       call check(error, ok, "engine (ledger off) setup failed")
       if (allocated(error)) return
@@ -2245,7 +2448,7 @@ contains
       logical :: ok
 
       nml_on = replace(uni_nml("basin"), "dt_therm_ratio = 1", "dt_therm_ratio = 2")
-      nml_off = replace(nml_on, ", ledger = .true.", "")
+      nml_off = replace(nml_on, new_line('a')//"ledger = true", "")
       if (on_first) then
          call make_engine(ea, cfg_a, nml_on, ok)
       else
@@ -2436,7 +2639,7 @@ contains
       ! a supercooled ocean: no lateral melt, so the removals of the clean-up are the only thing that takes a thin
       ! category away (new ice is made in category 1: the forced categories are the thick one, 5)
       nml = replace(uni_nml("basin"), "initial_temperature = -1.0", "initial_temperature = -1.84")
-      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -1.84, T_init_bottom = -1.84")
+      nml = replace(nml, "T_init_surface = -1.0"//new_line('a')//"T_init_bottom = -1.0", "T_init_surface = -1.84"//new_line('a')//"T_init_bottom = -1.84")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -2600,7 +2803,7 @@ contains
       integer(int32) :: ierr_p
       logical :: ok
 
-      call make_engine(engine, cfg, replace(uni_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), ok)
+      call make_engine(engine, cfg, replace(uni_nml("basin"), 'advection = "upwind"', 'advection = "remap"'), ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
       t = 0.0_wp

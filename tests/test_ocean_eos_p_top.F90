@@ -81,7 +81,7 @@ module test_ocean_eos_p_top
                       eos_wright_pgf_column_sweep_impl, &
                       EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97
    use rdb_ocean_eos_compute, only: ocean_eos_compute
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    implicit none
    private
@@ -643,8 +643,11 @@ contains
 
       checks: block
          ! Legal and ACTIVE: the ported in-situ consumer.
-         call parse_case(cfg, '&ocean_psurf_nml enable = .true., in_eos = .true. /'// &
-                         new_line("a")//'&ocean_pgf_nml form = "fv_wright" /')
+         call parse_case(cfg, "[ocean.psurf]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         "in_eos = true"//new_line("a")// &
+                         "[ocean.pgf]"//new_line("a")// &
+                         'form = "fv_wright"'//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, &
@@ -653,7 +656,9 @@ contains
 
          ! Legal but INERT: no in-situ EOS pressure anywhere in this config.
          ! Accepted with a warning, NOT refused — see the docstring.
-         call parse_case(cfg, "&ocean_psurf_nml enable = .true., in_eos = .true. /")
+         call parse_case(cfg, "[ocean.psurf]"//new_line('a')// &
+                         "enable = true"//new_line('a')// &
+                         "in_eos = true"//new_line('a'))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, &
@@ -662,7 +667,9 @@ contains
          if (allocated(error)) exit checks
 
          ! in_eos without the master switch: there is no p_surf to read.
-         call parse_case(cfg, "&ocean_psurf_nml enable = .false., in_eos = .true. /")
+         call parse_case(cfg, "[ocean.psurf]"//new_line('a')// &
+                         "enable = false"//new_line('a')// &
+                         "in_eos = true"//new_line('a'))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
@@ -673,8 +680,11 @@ contains
          ! seeds its stack at `ms%p_top`), so it must now be ACCEPTED.
          ! The refusal that stood here is gone, and this is the assertion
          ! that keeps it gone.
-         call parse_case(cfg, "&ocean_psurf_nml enable = .true., in_eos = .true. /"// &
-                         new_line("a")//"&ocean_epbl_nml enable = .true. /")
+         call parse_case(cfg, "[ocean.psurf]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         "in_eos = true"//new_line("a")// &
+                         "[ocean.epbl]"//new_line("a")// &
+                         "enable = true"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, &
@@ -684,8 +694,11 @@ contains
 
          ! ... and a builder that is STILL unported is still refused, so
          ! the lift above is scoped to EPBL and did not empty the list.
-         call parse_case(cfg, "&ocean_psurf_nml enable = .true., in_eos = .true. /"// &
-                         new_line("a")//"&ocean_kappa_shear_nml enable = .true. /")
+         call parse_case(cfg, "[ocean.psurf]"//new_line("a")// &
+                         "enable = true"//new_line("a")// &
+                         "in_eos = true"//new_line("a")// &
+                         "[ocean.kappa_shear]"//new_line("a")// &
+                         "enable = true"//new_line("a"))
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
@@ -698,14 +711,24 @@ contains
       type(config_t), intent(out) :: cfg
       character(len=*), intent(in) :: extra
       character(len=:), allocatable :: nml
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
-            "&ocean_bt_nml n_inner = 8 /"//new_line("a")// &
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[ocean.forcing]"//new_line("a")// &
+            "enable_components = true"//new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            "n_inner = 8"//new_line("a")// &
             extra//new_line("a")
-      call read_config_from_string(nml, cfg)
+      call read_config_from_toml_string(nml, cfg)
    end subroutine parse_case
 
 end module test_ocean_eos_p_top

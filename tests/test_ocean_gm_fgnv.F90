@@ -40,7 +40,7 @@ module test_ocean_gm_fgnv
    use rdb_ocean_isopycnal_slopes, only: ocean_slopes_t, ocean_slopes_compute
    use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports, gm_fgnv_solve_column
    use rdb_continuity, only: continuity_t, continuity_gm_apply, TR_MODE_ADVECT
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    implicit none
@@ -585,12 +585,20 @@ contains
       type(config_t), intent(out) :: cfg
       character(len=*), intent(in) :: extra
       character(len=:), allocatable :: nml
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
             extra//new_line("a")
-      call read_config_from_string(nml, cfg)
+      call read_config_from_toml_string(nml, cfg)
    end subroutine parse_case
 
    function validates(extra) result(ok)
@@ -605,32 +613,65 @@ contains
 
    subroutine test_config_refusals(error)
       type(error_type), allocatable, intent(out) :: error
-      character(len=*), parameter :: SLO = "&ocean_slopes_nml enable = .true. /"
-      character(len=*), parameter :: WS = "&ocean_wavespeed_nml enable = .true. /"
-      character(len=*), parameter :: GM = "&ocean_gm_nml enable = .true., khth = 500.0, "
+      character(len=*), parameter :: SLO = "[ocean.slopes]"//new_line('a')// &
+                                     "enable = true"//new_line('a')
+      character(len=*), parameter :: WS = "[ocean.wavespeed]"//new_line('a')// &
+                                     "enable = true"//new_line('a')
+      character(len=*), parameter :: GM = "[ocean.gm]"//new_line("a")// &
+                                     "enable = true"//new_line("a")// &
+                                     "khth = 500.0"//new_line("a")
       checks: block
-         call check(error, validates(SLO//WS//GM//"use_fgnv = .true. /"), &
+         call check(error, validates(SLO//new_line('a')// &
+                                     WS//new_line('a')// &
+                                     GM//new_line('a')// &
+                                     "use_fgnv = true"), &
                     "refusals: a valid FGNV set must pass (positive control)")
          if (allocated(error)) exit checks
-         call check(error, validates(SLO//WS//GM//"use_fgnv = .true., fgnv_filter_scale = 0.1, "// &
-                                     "fgnv_c_min = 0.01 /"), "refusals: OM3-style values must pass")
+         call check(error, validates(SLO//new_line('a')// &
+                                     WS//new_line('a')// &
+                                     GM//new_line('a')// &
+                                     "use_fgnv = true"//new_line('a')// &
+                                     "fgnv_filter_scale = 0.1"//new_line('a')// &
+                                     "fgnv_c_min = 0.01"), "refusals: OM3-style values must pass")
          if (allocated(error)) exit checks
-         call check(error,.not. validates(SLO//WS//"&ocean_gm_nml enable = .false., use_fgnv = .true. /"), &
+         call check(error,.not. validates(SLO//new_line('a')// &
+                                          WS//new_line('a')// &
+                                          "[ocean.gm]"//new_line('a')// &
+                                          "enable = false"//new_line('a')// &
+                                          "use_fgnv = true"//new_line('a')), &
                     "refusals: use_fgnv without GM must be refused")
          if (allocated(error)) exit checks
-         call check(error,.not. validates(SLO//GM//"use_fgnv = .true. /"), &
+         call check(error,.not. validates(SLO//new_line('a')// &
+                                          GM//new_line('a')// &
+                                          "use_fgnv = true"), &
                     "refusals: use_fgnv without the wave-speed slot must be refused")
          if (allocated(error)) exit checks
-         call check(error,.not. validates(SLO//WS//GM//"use_fgnv = .true., fgnv_filter_scale = 0.0 /"), &
+         call check(error,.not. validates(SLO//new_line('a')// &
+                                          WS//new_line('a')// &
+                                          GM//new_line('a')// &
+                                          "use_fgnv = true"//new_line('a')// &
+                                          "fgnv_filter_scale = 0.0"), &
                     "refusals: fgnv_filter_scale = 0 must be refused")
          if (allocated(error)) exit checks
-         call check(error,.not. validates(SLO//WS//GM//"use_fgnv = .true., fgnv_filter_scale = -1.0 /"), &
+         call check(error,.not. validates(SLO//new_line('a')// &
+                                          WS//new_line('a')// &
+                                          GM//new_line('a')// &
+                                          "use_fgnv = true"//new_line('a')// &
+                                          "fgnv_filter_scale = -1.0"), &
                     "refusals: fgnv_filter_scale < 0 must be refused")
          if (allocated(error)) exit checks
-         call check(error,.not. validates(SLO//WS//GM//"use_fgnv = .true., fgnv_strat_floor = 0.0 /"), &
+         call check(error,.not. validates(SLO//new_line('a')// &
+                                          WS//new_line('a')// &
+                                          GM//new_line('a')// &
+                                          "use_fgnv = true"//new_line('a')// &
+                                          "fgnv_strat_floor = 0.0"), &
                     "refusals: fgnv_strat_floor = 0 must be refused")
          if (allocated(error)) exit checks
-         call check(error,.not. validates(SLO//WS//GM//"use_fgnv = .true., fgnv_c_min = -0.1 /"), &
+         call check(error,.not. validates(SLO//new_line('a')// &
+                                          WS//new_line('a')// &
+                                          GM//new_line('a')// &
+                                          "use_fgnv = true"//new_line('a')// &
+                                          "fgnv_c_min = -0.1"), &
                     "refusals: fgnv_c_min < 0 must be refused")
       end block checks
    end subroutine test_config_refusals

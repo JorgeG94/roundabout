@@ -28,7 +28,7 @@ module test_cice_diags
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -100,71 +100,164 @@ contains
       logical, intent(in) :: dyn
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      character(len=:), allocatable :: diag, atm, ic, tr, dd, phys
+      character(len=:), allocatable :: diag, atm, ic, tr, phys
       real(wp) :: sw
       character(len=32) :: sws
 
       if (len_trim(outdir) > 0) then
-         diag = "&ocean_diag_nml enabled = .true., filename = 'd.nc', dt_out = 1200.0 /"//NL// &
-                "&output_nml output_to_file = .true., output_dir = '"//trim(outdir)//"' /"//NL
+         diag = "[ocean.diag]"//NL// &
+                "enabled = true"//NL// &
+                'filename = "d.nc"'//NL// &
+                "dt_out = 1200.0"//NL// &
+                "[output]"//NL// &
+                "output_to_file = true"//NL// &
+                'output_dir = "'//trim(outdir)//'"'//NL
       else
-         diag = "&ocean_diag_nml enabled = .false. /"//NL//"&output_nml output_to_file = .false. /"//NL
+         diag = "[ocean.diag]"//NL// &
+                "enabled = false"//NL// &
+                "[output]"//NL// &
+                "output_to_file = false"//NL
       end if
-      ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 0.5, conc = 0.9, h_snow = 0.05, t_ice = -8.0 /"//NL
-      tr = "&tracer_nml initial_temperature = -1.7, initial_salinity = 34.0, "// &
-           "T_init_surface = -1.7, T_init_bottom = -1.7 /"//NL
-      atm = "&ocean_ice_atm_nml uni_tas = 250.0, uni_rlds = 150.0, uni_uas = 5.0, uni_vas = 0.0 /"//NL
+      ic = "[ocean.ice_ic]"//NL// &
+           'conc_config = "uniform"'//NL// &
+           "h_ice = 0.5"//NL// &
+           "conc = 0.9"//NL// &
+           "h_snow = 0.05"//NL// &
+           "t_ice = -8.0"//NL
+      tr = "[tracer]"//NL// &
+           "initial_temperature = -1.7"//NL// &
+           "initial_salinity = 34.0"//NL// &
+           "T_init_surface = -1.7"//NL// &
+           "T_init_bottom = -1.7"//NL
+      atm = "[ocean.ice_atm]"//NL// &
+            "uni_tas = 250.0"//NL// &
+            "uni_rlds = 150.0"//NL// &
+            "uni_uas = 5.0"//NL// &
+            "uni_vas = 0.0"//NL
       sw = 0.0_wp
       select case (kind)
       case ("growth")
          continue
       case ("melt")
-         ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.8, h_snow = 0.0, t_ice = -1.0 /"//NL
-         tr = "&tracer_nml initial_temperature = 2.0, initial_salinity = 34.0, "// &
-              "T_init_surface = 2.0, T_init_bottom = 2.0 /"//NL
-         atm = "&ocean_ice_atm_nml uni_tas = 278.0, uni_rlds = 320.0, uni_uas = 5.0, uni_vas = 0.0 /"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "uniform"'//NL// &
+              "h_ice = 1.0"//NL// &
+              "conc = 0.8"//NL// &
+              "h_snow = 0.0"//NL// &
+              "t_ice = -1.0"//NL
+         tr = "[tracer]"//NL// &
+              "initial_temperature = 2.0"//NL// &
+              "initial_salinity = 34.0"//NL// &
+              "T_init_surface = 2.0"//NL// &
+              "T_init_bottom = 2.0"//NL
+         atm = "[ocean.ice_atm]"//NL// &
+               "uni_tas = 278.0"//NL// &
+               "uni_rlds = 320.0"//NL// &
+               "uni_uas = 5.0"//NL// &
+               "uni_vas = 0.0"//NL
          sw = 250.0_wp
       case ("column")
-         ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 0.5, conc = 1.0, h_snow = 0.0, t_ice = -8.0 /"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "uniform"'//NL// &
+              "h_ice = 0.5"//NL// &
+              "conc = 1.0"//NL// &
+              "h_snow = 0.0"//NL// &
+              "t_ice = -8.0"//NL
       case ("flood")
-         ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 0.6, conc = 0.8, h_snow = 0.4, t_ice = -4.0 /"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "uniform"'//NL// &
+              "h_ice = 0.6"//NL// &
+              "conc = 0.8"//NL// &
+              "h_snow = 0.4"//NL// &
+              "t_ice = -4.0"//NL
       case ("mixed")
-         ic = "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 0.6, conc = 0.8, h_snow = 0.03, t_ice = -4.0 /"//NL
-         tr = "&tracer_nml initial_temperature = -1.9, initial_salinity = 34.0, "// &
-              "T_init_surface = -1.9, T_init_bottom = -1.9 /"//NL
-         atm = "&ocean_ice_atm_nml uni_tas = 250.0, uni_rlds = 150.0, uni_uas = 5.0, uni_vas = 0.0 /"//NL
+         ic = "[ocean.ice_ic]"//NL// &
+              'conc_config = "uniform"'//NL// &
+              "h_ice = 0.6"//NL// &
+              "conc = 0.8"//NL// &
+              "h_snow = 0.03"//NL// &
+              "t_ice = -4.0"//NL
+         tr = "[tracer]"//NL// &
+              "initial_temperature = -1.9"//NL// &
+              "initial_salinity = 34.0"//NL// &
+              "T_init_surface = -1.9"//NL// &
+              "T_init_bottom = -1.9"//NL
+         atm = "[ocean.ice_atm]"//NL// &
+               "uni_tas = 250.0"//NL// &
+               "uni_rlds = 150.0"//NL// &
+               "uni_uas = 5.0"//NL// &
+               "uni_vas = 0.0"//NL
       case default
          error stop "test_cice_diags: unknown kind"
       end select
       write (sws, '(f8.1)') sw
-      dd = "dynamics = .true., transport = .true., snowfall = 0.0, sw_down = "//trim(adjustl(sws))
       ! The CICE-port dynamics, transport and ridging always run (production REFUSES `dynamics = .false.`
       ! under this scheme), so `dyn = .false.` means: no wind, no stress, the ice at rest.
       if (.not. dyn) then
          atm = replace(atm, "uni_uas = 5.0", "uni_uas = 0.0")
-         phys = "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL
+         phys = "[physics]"//NL// &
+                "coriolis_f = 1.0e-4"//NL// &
+                "wind_stress_x = 0.0"//NL// &
+                "wind_stress_y = 0.0"//NL
       else
-         phys = "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.03 /"//NL
+         phys = "[physics]"//NL// &
+                "coriolis_f = 1.0e-4"//NL// &
+                "wind_stress_x = 0.1"//NL// &
+                "wind_stress_y = 0.03"//NL
       end if
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            tr// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            diag// &
-            "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            phys// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
-            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "//dd//" /"//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-            ic//atm// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 86400.0"//NL// &
+            "dt_fixed = 600.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            tr//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            diag//NL// &
+            "[grid]"//NL// &
+            "nx = 24"//NL// &
+            "ny = 16"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            phys//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 100.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 2"//NL// &
+            "[ocean.ice]"//NL// &
+            "enable = true"//NL// &
+            'scheme = "cice"'//NL// &
+            "ncat = 5"//NL// &
+            "nilyr = 4"//NL// &
+            "hfreeze = 10.0"//NL// &
+            "dynamics = true"//NL// &
+            "transport = true"//NL// &
+            "snowfall = 0.0"//NL// &
+            "sw_down = "//trim(adjustl(sws))//NL// &
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "upwind"'//NL// &
+            "ndte = 40"//NL// &
+            ic//NL// &
+            atm//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "wall"'//NL// &
+            'east = "wall"'//NL// &
+            'south = "wall"'//NL// &
+            'north = "wall"'//NL
    end function case_nml
 
    function replace(s, a, b) result(r)
@@ -212,7 +305,7 @@ contains
 
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       ! a configuration a user could run: production validates it before setup
       call validate_config(cfg, ierr=ierr)

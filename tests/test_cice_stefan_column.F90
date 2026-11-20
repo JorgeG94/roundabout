@@ -43,7 +43,7 @@ module test_cice_stefan_column
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_toml_string
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -443,35 +443,73 @@ contains
       integer, intent(in) :: nilyr
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      character(len=256) :: a, b, c
+      character(len=512) :: a, b, c
 
-      write (a, "(a,f0.3,a,f0.3,a,es10.3,a,f0.3,a,es10.3)") "&ocean_ice_atm_nml uni_tas = ", tas, ", uni_rlds = ", rlds_, &
-         ", uni_huss = ", HUSS, ", uni_uas = ", WIND, ", uni_vas = 0.0, iceruf = 5.0e-4 /"
-      write (b, "(a,i0,a,f0.2,a,es10.3,a)") "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = ", nilyr, &
-         ", hfreeze = 20.0, sw_down = ", sw, ", snowfall = ", snow, ", dynamics = .true., transport = .true., ledger = .true. /"
-      write (c, "(a,f0.3,a,f0.3,a)") "&ocean_ice_ic_nml conc_config = 'uniform', conc = 1.0, h_ice = ", h_ice, ", t_ice = ", &
-         TICE0, ", h_snow = 0.0 /"
-      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&time_nml t_end = 5184000.0, dt_fixed = 900.0 /"//NL// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
-            "&tracer_nml initial_temperature = -1.836, initial_salinity = 34.0, "// &
-            "T_init_surface = -1.836, T_init_bottom = -1.836 /"//NL// &
-            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
-            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&grid_nml nx = 8, ny = 8, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-            "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = 20.0 /"//NL// &
-            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 1 /"//NL// &
+      write (a, "(a,f12.3,a,f12.3,a,es12.3,a,f12.3,a)") &
+         "[ocean.ice_atm]"//NL//"uni_tas =", tas, NL//"uni_rlds =", rlds_, &
+         NL//"uni_huss =", HUSS, NL//"uni_uas =", WIND, NL//"uni_vas = 0.0"//NL//"iceruf = 5.0e-4"//NL
+      write (b, "(a,i0,a,f12.2,a,es12.3,a)") &
+         "[ocean.ice]"//NL//"enable = true"//NL//'scheme = "cice"'//NL//"ncat = 5"//NL//"nilyr = ", nilyr, &
+         NL//"hfreeze = 20.0"//NL//"sw_down =", sw, NL//"snowfall =", snow, &
+         NL//"dynamics = true"//NL//"transport = true"//NL//"ledger = true"//NL
+      write (c, "(a,f12.3,a,f12.3,a)") &
+         "[ocean.ice_ic]"//NL//'conc_config = "uniform"'//NL//"conc = 1.0"//NL//"h_ice =", h_ice, &
+         NL//"t_ice =", TICE0, NL//"h_snow = 0.0"//NL
+      nml = "[sim]"//NL// &
+            'sim_type = "ocean"'//NL// &
+            "[time]"//NL// &
+            "t_end = 5184000.0"//NL// &
+            "dt_fixed = 900.0"//NL// &
+            "[nonhydrostatic]"//NL// &
+            "nz_layers = 3"//NL// &
+            "[tracer]"//NL// &
+            "initial_temperature = -1.836"//NL// &
+            "initial_salinity = 34.0"//NL// &
+            "T_init_surface = -1.836"//NL// &
+            "T_init_bottom = -1.836"//NL// &
+            "[ocean.bt]"//NL// &
+            "auto_n_inner = true"//NL// &
+            "[ocean.hvisc]"//NL// &
+            "nu_h = 200.0"//NL// &
+            "[ocean.diag]"//NL// &
+            "enabled = false"//NL// &
+            "[grid]"//NL// &
+            "nx = 8"//NL// &
+            "ny = 8"//NL// &
+            "nghost = 3"//NL// &
+            "dx = 20000.0"//NL// &
+            "dy = 20000.0"//NL// &
+            "[physics]"//NL// &
+            "coriolis_f = 1.4e-4"//NL// &
+            "wind_stress_x = 0.0"//NL// &
+            "wind_stress_y = 0.0"//NL// &
+            "[vcoord]"//NL// &
+            'vcoord_type = "sigma"'//NL// &
+            "[ocean.topo]"//NL// &
+            'topo_config = "flat"'//NL// &
+            "max_depth = 20.0"//NL// &
+            "[ocean.thermo]"//NL// &
+            "enable_thermodynamics = true"//NL// &
+            "[ocean.forcing]"//NL// &
+            "enable_components = true"//NL// &
+            "[ocean.vmix]"//NL// &
+            "dt_therm_ratio = 1"//NL// &
             trim(b)//NL// &
-            "&ocean_ice_thermo_nml update_ocn_f = .true., emissivity = 0.985 /"//NL// &
-            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
-            trim(c)//NL//trim(a)//NL// &
-            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', north = 'periodic' /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+            "[ocean.ice_thermo]"//NL// &
+            "update_ocn_f = true"//NL// &
+            "emissivity = 0.985"//NL// &
+            "[ocean.ice_dyn]"//NL// &
+            'advection = "upwind"'//NL// &
+            "ndte = 40"//NL// &
+            trim(c)//NL// &
+            trim(a)//NL// &
+            "[ocean.bc]"//NL// &
+            'west = "periodic"'//NL// &
+            'east = "periodic"'//NL// &
+            'south = "periodic"'//NL// &
+            'north = "periodic"'//NL// &
+            "[output]"//NL// &
+            "output_to_file = false"//NL
    end function stefan_nml
 
    subroutine ensure_comm()
@@ -516,7 +554,7 @@ contains
       real(wp), allocatable :: area(:, :)
 
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call engine_setup(engine, cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return

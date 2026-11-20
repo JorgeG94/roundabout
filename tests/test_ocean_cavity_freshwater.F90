@@ -47,7 +47,7 @@ module test_ocean_cavity_freshwater
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp, RHO_WATER, H_VANISHED
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -1196,36 +1196,58 @@ contains
 
       melt_keys = ""
       if (len_trim(freshwater) > 0) then
-         melt_keys = melt_keys//", freshwater = '"//trim(freshwater)//"'"
+         melt_keys = melt_keys//'freshwater = "'//trim(freshwater)//'"'//new_line("a")
       end if
       if (len_trim(compensation) > 0) then
-         melt_keys = melt_keys//", volume_compensation = '"//trim(compensation)//"'"
+         melt_keys = melt_keys//'volume_compensation = "'//trim(compensation)//'"'//new_line("a")
       end if
 
-      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
-            "&grid_nml nx = "//trim(adjustl(nx_s))//", ny = "// &
-            trim(adjustl(ny_s))//", nghost = 2, dx = "//trim(adjustl(dx_s))// &
-            ", dy = "//trim(adjustl(dx_s))//" /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
-            "&time_nml t_end = 1.0e9, dt_fixed = 300.0 /"//new_line("a")// &
-            "&physics_nml coriolis_f = -1.409e-4, wind_stress_x = 0.0, "// &
-            "wind_stress_y = 0.0 /"//new_line("a")// &
-            "&ocean_topo_nml topo_config = 'flat', max_depth = "// &
-            trim(adjustl(bed_s))//", wind_config = 'constant', "// &
-            "taux_magnitude = 0.0 /"//new_line("a")// &
-            "&tracer_nml initial_salinity = 34.5, T_init_bottom = 1.0, "// &
-            "T_init_surface = 3.0 /"//new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
-            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//new_line("a")// &
-            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
-            "north = 'wall' /"//new_line("a")// &
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = "//trim(adjustl(nx_s))//new_line("a")// &
+            "ny = "//trim(adjustl(ny_s))//new_line("a")// &
+            "nghost = 2"//new_line("a")// &
+            "dx = "//trim(adjustl(dx_s))//new_line("a")// &
+            "dy = "//trim(adjustl(dx_s))//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 4"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 1.0e9"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
+            "[physics]"//new_line("a")// &
+            "coriolis_f = -1.409e-4"//new_line("a")// &
+            "wind_stress_x = 0.0"//new_line("a")// &
+            "wind_stress_y = 0.0"//new_line("a")// &
+            "[ocean.topo]"//new_line("a")// &
+            'topo_config = "flat"'//new_line("a")// &
+            "max_depth = "//trim(adjustl(bed_s))//new_line("a")// &
+            'wind_config = "constant"'//new_line("a")// &
+            "taux_magnitude = 0.0"//new_line("a")// &
+            "[tracer]"//new_line("a")// &
+            "initial_salinity = 34.5"//new_line("a")// &
+            "T_init_bottom = 1.0"//new_line("a")// &
+            "T_init_surface = 3.0"//new_line("a")// &
+            "[ocean.pgf]"//new_line("a")// &
+            'form = "fv_mom6"'//new_line("a")// &
+            "p_top_in_bc = true"//new_line("a")// &
+            "[ocean.eos]"//new_line("a")// &
+            'eos = "linear"'//new_line("a")// &
+            'tfreeze_set = "isomip"'//new_line("a")// &
+            "[vcoord]"//new_line("a")// &
+            'vcoord_type = "sigma"'//new_line("a")// &
+            "[ocean.bc]"//new_line("a")// &
+            'west = "wall"'//new_line("a")// &
+            'east = "wall"'//new_line("a")// &
+            'south = "wall"'//new_line("a")// &
+            'north = "wall"'//new_line("a")// &
             ! `auto_n_inner`, not a pinned count: the open ocean east of
             ! the calving taper carries the FULL 800 m bed, so the
             ! gravity-wave CFL there is ~13 substeps and a hand-pinned 12
             ! silently runs the barotropic loop unstable.
-            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .true. /"// &
-            new_line("a")// &
+            "[ocean.bt]"//new_line("a")// &
+            'split_scheme = "pred_corr"'//new_line("a")// &
+            "auto_n_inner = true"//new_line("a")// &
             ! A draft of 750 m at the west wall thinning at 1e-2 m/m:
             ! the western five columns GROUND (their water column falls
             ! below `h_min_cavity`) and become land, the middle of the
@@ -1235,19 +1257,36 @@ contains
             ! 2 km cell, the same order as the neighbouring
             ! grounded-budget gate's slope -- a steeper lid is a
             ! barotropic shock, not a cavity.
-            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
-            "draft_depth = 750.0, draft_slope = -1.0e-2, draft_x0 = 0.0, "// &
-            "h_min_cavity = 150.0 /"//new_line("a")// &
-            "&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
-            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
-            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
-            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"// &
-            melt_keys//" /"//new_line("a")// &
-            "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"// &
-            new_line("a")// &
-            "&ocean_hvisc_nml nu_h = 100.0 /"//new_line("a")// &
-            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
-            "&output_nml output_to_file = .false. /"//new_line("a")//extra
+            "[ocean.cavity_dyn]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'draft_config = "linear"'//new_line("a")// &
+            "draft_depth = 750.0"//new_line("a")// &
+            "draft_slope = -1.0e-2"//new_line("a")// &
+            "draft_x0 = 0.0"//new_line("a")// &
+            "h_min_cavity = 150.0"//new_line("a")// &
+            "[ocean.forcing]"//new_line("a")// &
+            "enable_components = true"//new_line("a")// &
+            "[ocean.cavity_melt]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'exchange_law = "const_gamma"'//new_line("a")// &
+            "gamma_t = 2.2e-2"//new_line("a")// &
+            "gamma_s = -1.0"//new_line("a")// &
+            "cdrag_top = 2.5e-3"//new_line("a")// &
+            'ice_conduction = "insulating"'//new_line("a")// &
+            "s_ice = 0.0"//new_line("a")// &
+            "far_field_depth = 10.0"//new_line("a")// &
+            melt_keys//new_line("a")// &
+            "[ocean.tdrag]"//new_line("a")// &
+            "enable = true"//new_line("a")// &
+            'form = "quadratic"'//new_line("a")// &
+            "cd = 2.5e-3"//new_line("a")// &
+            "[ocean.hvisc]"//new_line("a")// &
+            "nu_h = 100.0"//new_line("a")// &
+            "[ocean.diag]"//new_line("a")// &
+            "enabled = false"//new_line("a")// &
+            "[output]"//new_line("a")// &
+            "output_to_file = false"//new_line("a")// &
+            extra//new_line("a")
    end function melt_nml
 
    ! ======================================================================
@@ -1278,7 +1317,7 @@ contains
       integer :: ierr
       ok = .false.
       call ensure_comm()
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= 0) return
       call validate_config(cfg, ierr)
       if (ierr /= 0) return
@@ -1608,12 +1647,13 @@ contains
       !! on a malformed namelist rather than on the rule it names.
       type(error_type), allocatable, intent(out) :: error
       call expect_refused(error, melt_nml("mass", "", &
-                                          "&ocean_wetdry_nml enable = .true. /"//new_line("a")), &
+                                          "[ocean.wetdry]"//new_line("a")// &
+                                          "enable = true"//new_line("a")), &
                           "mass x wet/dry")
       if (allocated(error)) return
       call expect_refused(error, melt_nml("mass", "", &
-                                          "&ocean_vmix_nml dt_tracer_advect_ratio = 2 /"// &
-                                          new_line("a")), "mass x windowed tracer advect")
+                                          "[ocean.vmix]"//new_line("a")// &
+                                          "dt_tracer_advect_ratio = 2"//new_line("a")), "mass x windowed tracer advect")
       if (allocated(error)) return
       call expect_refused(error, melt_nml("virtual", "uniform_open_ocean", ""), &
                           "compensation without the mass form")
@@ -1627,7 +1667,7 @@ contains
       character(len=*), intent(in) :: nml, label
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == 0, label//": the namelist PARSES")
       if (allocated(error)) return
       call validate_config(cfg, ierr)
@@ -1639,7 +1679,7 @@ contains
       character(len=*), intent(in) :: nml, label
       type(config_t) :: cfg
       integer :: ierr
-      call read_config_from_string(nml, cfg, ierr=ierr)
+      call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == 0, label//": parses")
       if (allocated(error)) return
       call validate_config(cfg, ierr)

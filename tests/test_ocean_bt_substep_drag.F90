@@ -44,7 +44,7 @@ module test_ocean_bt_substep_drag
    use rdb_coriolis_adv, only: coriolis_adv_t
    use rdb_ocean_dyn, only: ocean_dyn_t
    use rdb_barotropic_substep, only: barotropic_substep_nonlinear_interior
-   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+   use rdb_config, only: config_t, read_config_from_toml_string, validate_config, &
                          substep_drag_ignores_bdrag_form
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    implicit none
@@ -251,8 +251,10 @@ contains
 
       checks: block
          ! Default bottom drag is QUADRATIC: the warning must fire.
-         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true., "// &
-                         "visc_rem_chain = .false. /")
+         call parse_case(cfg, "[ocean.bt]"//new_line('a')// &
+                         "n_inner = 8"//new_line('a')// &
+                         "substep_drag = true"//new_line('a')// &
+                         "visc_rem_chain = false"//new_line('a'))
          call check(error, substep_drag_ignores_bdrag_form(cfg), &
                     "substep_drag under the default (quadratic) bottom drag "// &
                     "must trip the warning")
@@ -263,22 +265,34 @@ contains
                     "substep_drag x quadratic drag must WARN, not refuse")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true., "// &
-                         "visc_rem_chain = .false. /"//new_line("a")// &
-                         '&ocean_bdrag_nml form = "quadratic", cd = 2.5e-3, r = 1.0e-4, '// &
-                         "hbbl = 10.0 /")
+         call parse_case(cfg, "[ocean.bt]"//new_line("a")// &
+                         "n_inner = 8"//new_line("a")// &
+                         "substep_drag = true"//new_line("a")// &
+                         "visc_rem_chain = false"//new_line("a")// &
+                         "[ocean.bdrag]"//new_line("a")// &
+                         'form = "quadratic"'//new_line("a")// &
+                         "cd = 2.5e-3"//new_line("a")// &
+                         "r = 1.0e-4"//new_line("a")// &
+                         "hbbl = 10.0"//new_line("a"))
          call check(error, substep_drag_ignores_bdrag_form(cfg), &
                     "a nonzero r under quadratic drag is still the wrong operator")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true., "// &
-                         "visc_rem_chain = .false. /"//new_line("a")// &
-                         '&ocean_bdrag_nml form = "linear", r = 1.0e-4, hbbl = 10.0 /')
+         call parse_case(cfg, "[ocean.bt]"//new_line("a")// &
+                         "n_inner = 8"//new_line("a")// &
+                         "substep_drag = true"//new_line("a")// &
+                         "visc_rem_chain = false"//new_line("a")// &
+                         "[ocean.bdrag]"//new_line("a")// &
+                         'form = "linear"'//new_line("a")// &
+                         "r = 1.0e-4"//new_line("a")// &
+                         "hbbl = 10.0"//new_line("a"))
          call check(error,.not. substep_drag_ignores_bdrag_form(cfg), &
                     "substep_drag under LINEAR drag is the supported pairing")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, '&ocean_bdrag_nml form = "quadratic", cd = 2.5e-3 /')
+         call parse_case(cfg, "[ocean.bdrag]"//new_line('a')// &
+                         'form = "quadratic"'//new_line('a')// &
+                         "cd = 2.5e-3"//new_line('a'))
          call check(error,.not. substep_drag_ignores_bdrag_form(cfg), &
                     "no warning when substep_drag is off")
       end block checks
@@ -288,12 +302,20 @@ contains
       type(config_t), intent(out) :: cfg
       character(len=*), intent(in) :: extra
       character(len=:), allocatable :: nml
-      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
-            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
-            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
-            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
+      nml = "[sim]"//new_line("a")// &
+            'sim_type = "ocean"'//new_line("a")// &
+            "[grid]"//new_line("a")// &
+            "nx = 8"//new_line("a")// &
+            "ny = 8"//new_line("a")// &
+            "dx = 2000.0"//new_line("a")// &
+            "dy = 2000.0"//new_line("a")// &
+            "[nonhydrostatic]"//new_line("a")// &
+            "nz_layers = 3"//new_line("a")// &
+            "[time]"//new_line("a")// &
+            "t_end = 3600.0"//new_line("a")// &
+            "dt_fixed = 300.0"//new_line("a")// &
             extra//new_line("a")
-      call read_config_from_string(nml, cfg)
+      call read_config_from_toml_string(nml, cfg)
    end subroutine parse_case
 
 end module test_ocean_bt_substep_drag
