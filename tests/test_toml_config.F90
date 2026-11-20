@@ -7,12 +7,14 @@ module test_toml_config
    !! of the TOML syntax, with the file/line and key in the message, and (3) the
    !! group <-> table mapping.
    use, intrinsic :: iso_fortran_env, only: int64, real64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_config, only: config_t, read_config, read_config_from_string, &
                          read_config_from_toml_string, build_rdb_schema
    use rdb_nml_schema, only: nml_schema_t
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_PARSE
-   use rdb_toml_read, only: group_to_table, table_to_group, toml_schema_parse_string
+   use rdb_toml_read, only: group_to_table, table_to_group, toml_schema_parse_string, &
+                            toml_schema_parse_file
    implicit none
    private
 
@@ -39,7 +41,16 @@ contains
                   new_unittest("syntax_error_contract", test_syntax_error), &
                   new_unittest("errors_accumulate", test_accumulate), &
                   new_unittest("scalar_for_array_key", test_scalar_for_array), &
-                  new_unittest("group_table_mapping", test_mapping) &
+                  new_unittest("group_table_mapping", test_mapping), &
+                  new_unittest("integer_overflow_not_wrapped", test_int_overflow), &
+                  new_unittest("number_spellings", test_number_spellings), &
+                  new_unittest("nonfinite_and_ranges", test_nonfinite), &
+                  new_unittest("float_overflow_agrees", test_float_overflow), &
+                  new_unittest("duplicate_group_routes", test_duplicate_group), &
+                  new_unittest("dotted_keys_and_inline_tables", test_dotted_inline), &
+                  new_unittest("refuse_exotic_values", test_exotic_values), &
+                  new_unittest("string_contents_and_length", test_strings), &
+                  new_unittest("unreadable_file_label", test_unreadable) &
                   ]
    end subroutine collect_toml_config_tests
 
@@ -106,6 +117,20 @@ contains
       if (allocated(error)) return
       call check(error, e2 == e1, "full-precision dumps identical")
    end subroutine check_equivalent
+
+   subroutine check_agree(error, nml_text, toml_text)
+      !! Same verdict from both front ends and, when accepted, the same dumps.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: nml_text, toml_text
+      character(len=:), allocatable :: a1, e1, a2, e2
+      integer :: i1, i2
+
+      call dumps_of(nml_text, .false., a1, e1, i1)
+      call dumps_of(toml_text, .true., a2, e2, i2)
+      call check(error, i1 == i2, "same accept/refuse verdict for: "//toml_text)
+      if (allocated(error)) return
+      if (i1 == OCEAN_STATUS_OK) call check(error, e1 == e2 .and. a1 == a2, "same value for: "//toml_text)
+   end subroutine check_agree
 
    subroutine errors_of(text, status, errors)
       !! The schema's own error list for a TOML text, against a fresh schema.
@@ -319,7 +344,7 @@ contains
       character(len=:), allocatable :: txt
       type(config_t), target :: cfg
       type(nml_schema_t) :: schema
-      integer :: i, ierr, nbad, ntest
+      integer :: i, ierr, i_toml, nbad, ntest
 
       state = 88172645463325252_int64
       nbad = 0
@@ -331,21 +356,26 @@ contains
          state = ieor(state, ishft(state, 17))
          bits = state
          x = transfer(bits, x)
-         if (abs(x) > 1.0e300_real64 .or. abs(x) < 1.0e-300_real64) cycle
-         if (x /= x) cycle
+         ! Every 7th sample a subnormal, every 11th one near huge().
+         if (mod(i, 7) == 0) x = transfer(iand(bits, 4503599627370495_int64), x)
+         if (mod(i, 11) == 0) x = transfer(ior(iand(bits, 4503599627370495_int64), &
+                                               9218868437227405312_int64 - 4503599627370496_int64), x)
+         if (.not. ieee_is_finite(x)) cycle
          write (lit, "(ES30.17E3)") x
          txt = "[physics]"//NL//"coriolis_f = "//trim(adjustl(lit))//NL
          call read_config_from_toml_string(txt, cfg, schema, ierr)
-         if (ierr /= OCEAN_STATUS_OK) then
-            nbad = nbad + 1
-            cycle
-         end if
+         i_toml = ierr
          got_toml = cfg%coriolis_f
          txt = "&physics_nml coriolis_f = "//trim(adjustl(lit))//" /"//NL
          call read_config_from_string(txt, cfg, schema, ierr)
          got_nml = cfg%coriolis_f
          ntest = ntest + 1
-         if (got_toml /= got_nml) nbad = nbad + 1
+         if (i_toml /= ierr) then
+            nbad = nbad + 1
+         else if (ierr == OCEAN_STATUS_OK) then
+            if (got_toml /= got_nml) nbad = nbad + 1
+            if (got_toml /= x) nbad = nbad + 1
+         end if
       end do
       call check(error, ntest > 2000, "enough finite samples")
       if (allocated(error)) return
@@ -568,5 +598,215 @@ contains
                  .and. table_to_group("a.b") == "" .and. table_to_group("ocean.a.b") == "", &
                  "non-canonical paths name no group")
    end subroutine test_mapping
+
+   ! ---- review round ----------------------------------------------------
+
+   subroutine test_int_overflow(error)
+      !! toml-f wraps an overflowing integer silently; the reader hands the
+      !! schema the source digits instead, so the schema sees (and refuses) the
+      !! real magnitude for an integer key and reads the real value for a real
+      !! key, exactly as the namelist path does.
+      type(error_type), allocatable, intent(out) :: error
+      call check_refused(error, "[grid]"//NL//"nx = 18446744073709551660"//NL, &
+                         [character(len=24) :: ":2:", "key 'nx'", "cannot parse integer"])
+      if (allocated(error)) return
+      call check_refused(error, "[grid]"//NL//"nx = 99999999999"//NL, &
+                         [character(len=24) :: ":2:", "key 'nx'"])
+      if (allocated(error)) return
+      ! An integer-looking literal beyond int64 for a real key: whatever the
+      ! compiler's `read` makes of those digits (1.0e20 on gfortran; nvfortran
+      ! refuses it), the two front ends must agree -- never toml-f's wrapped value.
+      call check_agree(error, "&ocean_hvisc_nml nu_h = 100000000000000000000 /"//NL, &
+                       "[ocean.hvisc]"//NL//"nu_h = 100000000000000000000"//NL)
+      if (allocated(error)) return
+      call check_agree(error, "&ocean_hvisc_nml nu_h = -9223372036854775809 /"//NL, &
+                       "[ocean.hvisc]"//NL//"nu_h = -9223372036854775809"//NL)
+      if (allocated(error)) return
+      call check_agree(error, "&ocean_hvisc_nml nu_h = 9223372036854775807 /"//NL, &
+                       "[ocean.hvisc]"//NL//"nu_h = 9223372036854775807"//NL)
+   end subroutine test_int_overflow
+
+   subroutine test_number_spellings(error)
+      !! `-0` keeps its sign for a real key; underscores, a leading `+` and an
+      !! exponent without a dot read as the digits say; hex integers are refused.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t), target :: cfg
+      type(nml_schema_t) :: schema
+      integer :: ierr
+      logical :: neg_toml, neg_nml
+
+      call read_config_from_toml_string("[physics]"//NL//"coriolis_f = -0"//NL, cfg, schema, ierr)
+      call check(error, ierr, OCEAN_STATUS_OK)
+      if (allocated(error)) return
+      neg_toml = sign(1.0_real64, cfg%coriolis_f) < 0.0_real64
+      call read_config_from_string("&physics_nml coriolis_f = -0 /"//NL, cfg, schema, ierr)
+      neg_nml = sign(1.0_real64, cfg%coriolis_f) < 0.0_real64
+      call check(error, neg_toml .eqv. neg_nml, "integer -0 for a real key reads like the namelist path")
+      if (allocated(error)) return
+      call check_equivalent(error, "&physics_nml coriolis_f = -0 /"//NL, &
+                            "[physics]"//NL//"coriolis_f = -0"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, "&grid_nml nx = 1000 /"//NL, "[grid]"//NL//"nx = 1_000"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, "&physics_nml coriolis_f = 1500.25 /"//NL, &
+                            "[physics]"//NL//"coriolis_f = 1_500.2_5"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, "&physics_nml coriolis_f = 1.5e-4 /"//NL, &
+                            "[physics]"//NL//"coriolis_f = +1.5E-4"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, "&physics_nml coriolis_f = 3000.0 /"//NL, &
+                            "[physics]"//NL//"coriolis_f = 3e3"//NL)
+      if (allocated(error)) return
+      call check_refused(error, "[grid]"//NL//"nx = 0x10"//NL, &
+                         [character(len=24) :: ":2:", "hexadecimal"])
+   end subroutine test_number_spellings
+
+   subroutine test_nonfinite(error)
+      !! inf/nan are the same value in both front ends for an unranged key, and
+      !! are refused (both front ends) for a key with a declared range.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t), target :: cfg
+      type(nml_schema_t) :: schema
+      integer :: ierr
+
+      call check_equivalent(error, "&physics_nml coriolis_f = inf /"//NL, &
+                            "[physics]"//NL//"coriolis_f = inf"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, "&physics_nml coriolis_f = -inf /"//NL, &
+                            "[physics]"//NL//"coriolis_f = -inf"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, "&physics_nml coriolis_f = inf /"//NL, &
+                            "[physics]"//NL//"coriolis_f = +inf"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, "&physics_nml coriolis_f = nan /"//NL, &
+                            "[physics]"//NL//"coriolis_f = nan"//NL)
+      if (allocated(error)) return
+      call check_refused(error, "[ocean.bt]"//NL//"pc_be = nan"//NL, &
+                         [character(len=24) :: ":2:", "key 'pc_be'", "not finite"])
+      if (allocated(error)) return
+      call check_refused(error, "[ocean.bt]"//NL//"pc_be = inf"//NL, &
+                         [character(len=24) :: "not finite"])
+      if (allocated(error)) return
+      call read_config_from_string("&ocean_bt_nml pc_be = nan /"//NL, cfg, schema, ierr)
+      call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_PARSE, "namelist path refuses NaN for a ranged key")
+      if (allocated(error)) return
+      call read_config_from_string("&ocean_bt_nml pc_be = inf /"//NL, cfg, schema, ierr)
+      call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_PARSE, "namelist path refuses Inf for a ranged key")
+   end subroutine test_nonfinite
+
+   subroutine test_float_overflow(error)
+      !! A literal beyond the real range: both front ends give the same answer
+      !! (the same value, or both refuse), on every compiler.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=:), allocatable :: a1, e1, a2, e2
+      integer :: i1, i2
+
+      call dumps_of("&physics_nml coriolis_f = 1e400 /"//NL, .false., a1, e1, i1)
+      call dumps_of("[physics]"//NL//"coriolis_f = 1e400"//NL, .true., a2, e2, i2)
+      call check(error, i1 == i2, "same accept/refuse verdict for 1e400")
+      if (allocated(error)) return
+      if (i1 == OCEAN_STATUS_OK) call check(error, e1 == e2, "same value for 1e400")
+   end subroutine test_float_overflow
+
+   subroutine test_duplicate_group(error)
+      type(error_type), allocatable, intent(out) :: error
+      call check_refused(error, '["ocean.hvisc"]'//NL//"nu_h = 1.0"//NL, &
+                         [character(len=24) :: ":1:", "contains a dot", "[ocean.<group>]"])
+      if (allocated(error)) return
+      call check_refused(error, "[ocean.hvisc]"//NL//"nu_h = 1.0"//NL//'["ocean.hvisc"]'//NL// &
+                         "nu_h = 2.0"//NL, [character(len=24) :: ":3:", "contains a dot"])
+      if (allocated(error)) return
+      call check_refused(error, '["grid.x"]'//NL//"a = 1"//NL, &
+                         [character(len=24) :: "contains a dot"])
+   end subroutine test_duplicate_group
+
+   subroutine test_dotted_inline(error)
+      !! Dotted keys and inline tables build the same tables as headers do.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), parameter :: N = "&ocean_hvisc_nml nu_h = 5.0 /"//NL//"&grid_nml nx = 20 /"//NL
+      call check_equivalent(error, N, "[ocean]"//NL//"hvisc.nu_h = 5.0"//NL//"[grid]"//NL//"nx = 20"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, N, "grid = { nx = 20 }"//NL//"[ocean]"//NL//"hvisc = { nu_h = 5.0 }"//NL)
+      if (allocated(error)) return
+      call check_equivalent(error, N, "ocean.hvisc.nu_h = 5.0"//NL//"grid.nx = 20"//NL)
+   end subroutine test_dotted_inline
+
+   subroutine test_exotic_values(error)
+      !! Datetimes, nested / mixed / empty arrays are refused with a line.
+      type(error_type), allocatable, intent(out) :: error
+      call check_refused(error, "[grid]"//NL//"nx = 1979-05-27"//NL, &
+                         [character(len=24) :: ":2:", "datetime"])
+      if (allocated(error)) return
+      call check_refused(error, "[physics]"//NL//"coriolis_f = 1979-05-27T07:32:00Z"//NL, &
+                         [character(len=24) :: ":2:", "datetime"])
+      if (allocated(error)) return
+      call check_refused(error, "[ocean.ic]"//NL//"layer_rho_init = [[1.0], [2.0]]"//NL, &
+                         [character(len=24) :: ":2:", "element 1"])
+      if (allocated(error)) return
+      call check_refused(error, "[ocean.ic]"//NL//'layer_rho_init = [1.0, "a", 2.0]'//NL, &
+                         [character(len=24) :: ":2:", "element 2"])
+      if (allocated(error)) return
+      call check_refused(error, "[ocean.ic]"//NL//"layer_rho_init = []"//NL, &
+                         [character(len=24) :: ":2:", "has no value"])
+      if (allocated(error)) return
+      call check_refused(error, "[ocean.ic]"//NL//"layer_rho_init = [1979-05-27]"//NL, &
+                         [character(len=24) :: "element 1", "datetime"])
+   end subroutine test_exotic_values
+
+   subroutine test_strings(error)
+      !! Special characters survive; control characters and over-long strings
+      !! are refused.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t), target :: cfg
+      type(nml_schema_t) :: schema
+      character(len=:), allocatable :: want, toml, longs
+      character(len=1), parameter :: BS = achar(92)
+      integer :: ierr
+
+      want = " lead, a/b & c! d# 'q' e"
+      toml = "[output]"//NL//'output_dir = " lead, a/b & c! d# ''q'' e"'//NL
+      call read_config_from_toml_string(toml, cfg, schema, ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, "special characters accepted")
+      if (allocated(error)) return
+      call check(error, trim(cfg%output_dir) == want, "special characters preserved: '"// &
+                 trim(cfg%output_dir)//"'")
+      if (allocated(error)) return
+      call check_refused(error, "[output]"//NL//'output_dir = "a'//BS//'nb"'//NL, &
+                         [character(len=24) :: ":2:", "control character"])
+      if (allocated(error)) return
+      call check_refused(error, "[output]"//NL//'output_dir = "a'//BS//'tb"'//NL, &
+                         [character(len=24) :: ":2:", "control character"])
+      if (allocated(error)) return
+      call check_refused(error, "[ocean.hvisc]"//NL//'lateral_closure = "none'//BS//'n"'//NL, &
+                         [character(len=24) :: "control character"])
+      if (allocated(error)) return
+      longs = repeat("x", 300)
+      call check_refused(error, "[output]"//NL//'output_dir = "'//longs//'"'//NL, &
+                         [character(len=24) :: ":2:", "exceeds target length"])
+      if (allocated(error)) return
+      longs = repeat("y", 200)
+      call read_config_from_toml_string("[output]"//NL//'output_dir = "'//longs//'"'//NL, cfg, schema, ierr)
+      call check(error, ierr == OCEAN_STATUS_OK .and. trim(cfg%output_dir) == longs, "200 chars fit")
+      if (allocated(error)) return
+      ! The namelist tokenizer no longer truncates a long token silently.
+      longs = repeat("z", 300)
+      call read_config_from_string("&output_nml output_dir = '"//longs//"' /"//NL, cfg, schema, ierr)
+      call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_PARSE, "namelist path refuses a 300-char token")
+   end subroutine test_strings
+
+   subroutine test_unreadable(error)
+      !! A path that cannot be opened is not reported as a TOML syntax error.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t), target :: cfg
+      type(nml_schema_t) :: schema
+      character(len=:), allocatable :: errors(:)
+      integer :: status
+
+      call build_rdb_schema(cfg, schema)
+      call toml_schema_parse_file(schema, ".", status=status, errors=errors)
+      call check(error, status, 1)
+      if (allocated(error)) return
+      call check(error, index(joined(errors), "syntax") == 0, "not labelled a syntax error: "//joined(errors))
+   end subroutine test_unreadable
 
 end module test_toml_config

@@ -167,14 +167,20 @@ contains
       type(toml_error), intent(in) :: terr
       character(len=*), intent(in) :: label
       character(len=:), allocatable :: msg
-      msg = label//": TOML syntax error: "//terr%message
+      if (index(terr%message, "Could not open") > 0) then
+         ! toml-f's lexer could not read the source (a directory, a file the
+         ! process may not read): not a syntax problem.
+         msg = label//": cannot open file ("//trim(terr%message)//")"
+      else
+         msg = label//": TOML syntax error: "//terr%message
+      end if
    end function syntax_message
 
    ! ------------------------------------------------------------------
    ! The walk.
    ! ------------------------------------------------------------------
 
-   function line_of(ctx, origin) result(line)
+   pure function line_of(ctx, origin) result(line)
       !! 1-based source line of a toml-f origin token (0 when unknown).
       type(toml_context), intent(in) :: ctx
       integer, intent(in) :: origin
@@ -190,7 +196,7 @@ contains
       end do
    end function line_of
 
-   function loc(ctx, label, origin) result(prefix)
+   pure function loc(ctx, label, origin) result(prefix)
       !! `label:line: ` for an origin token.
       type(toml_context), intent(in) :: ctx
       character(len=*), intent(in) :: label
@@ -218,7 +224,11 @@ contains
          call root%get(keys(i)%key, v)
          select type (v)
          type is (toml_table)
-            if (keys(i)%key == OCEAN_TABLE) then
+            if (index(keys(i)%key, ".") > 0) then
+               call add_err(errors, n_err, loc(ctx, label, keys(i)%origin)//"table name '"// &
+                            keys(i)%key//"' contains a dot; write nested tables as "// &
+                            "[ocean.<group>], not as a quoted name")
+            else if (keys(i)%key == OCEAN_TABLE) then
                call apply_ocean_container(schema, v, ctx, label, errors, n_err)
             else
                call apply_group(schema, v, keys(i)%key, keys(i)%origin, ctx, label, errors, n_err)
@@ -297,6 +307,11 @@ contains
          return
       end if
 
+      if (schema%groups(gidx)%found) then
+         call add_err(errors, n_err, loc(ctx, label, torigin)//"duplicate occurrence of group '"// &
+                      schema%groups(gidx)%name//"' (table ["//tpath//"])")
+         return
+      end if
       schema%groups(gidx)%found = .true.
       call tbl%get_keys(keys)
       do i = 1, size(keys)
@@ -360,7 +375,7 @@ contains
       g%keys(kidx)%key%found = .true.
 
       call key_expectation(g%keys(kidx)%key, want, array_ok)
-      call to_values(v, want, array_ok, vals, ok, why)
+      call to_values(v, ctx, want, array_ok, vals, ok, why)
       if (.not. ok) then
          call add_err(errors, n_err, prefix//"key '"//key%key//"' in ["//tpath//"] "//why)
          return
@@ -369,7 +384,7 @@ contains
       if (allocated(emsg)) call add_err(errors, n_err, prefix//trim(emsg))
    end subroutine apply_key
 
-   subroutine key_expectation(k, want, array_ok)
+   pure subroutine key_expectation(k, want, array_ok)
       !! What TOML type a registered key takes.
       class(nml_key_t), intent(in) :: k
       integer, intent(out) :: want
@@ -395,10 +410,11 @@ contains
       end select
    end subroutine key_expectation
 
-   subroutine to_values(v, want, array_ok, vals, ok, why)
+   subroutine to_values(v, ctx, want, array_ok, vals, ok, why)
       !! TOML value -> the text tokens `parse_tokens` takes; `why` is the
       !! refusal (ending the sentence "key 'k' in [t] ...") when not `ok`.
       class(toml_value), pointer, intent(in) :: v
+      type(toml_context), intent(in) :: ctx
       integer, intent(in) :: want
       logical, intent(in) :: array_ok
       character(len=:), allocatable, intent(out) :: vals(:)
@@ -413,7 +429,7 @@ contains
       ok = .false.
       select type (v)
       type is (toml_keyval)
-         call scalar_text(v, want, one, why)
+         call scalar_text(v, ctx, want, one, why)
          if (.not. allocated(one)) return
          allocate (character(len=max(len(one), 1)) :: vals(1))
          vals(1) = one
@@ -434,7 +450,7 @@ contains
             call v%get(j, ev)
             select type (ev)
             type is (toml_keyval)
-               call scalar_text(ev, want, one, why)
+               call scalar_text(ev, ctx, want, one, why)
                if (.not. allocated(one)) then
                   why = "element "//itoa(j)//": "//why
                   return
@@ -456,40 +472,27 @@ contains
       end select
    end subroutine to_values
 
-   subroutine scalar_text(kv, want, text, why)
+   subroutine scalar_text(kv, ctx, want, text, why)
       !! One TOML scalar as text, or `why` when its type is not `want`.
+      !! NUMBERS are handed over as their SOURCE spelling (the value token
+      !! in `ctx`), never re-formatted from toml-f's parsed value: toml-f's
+      !! integer extraction wraps silently on overflow, so only the raw digits
+      !! let the schema's own `read` see the real magnitude (and refuse it).
       type(toml_keyval), intent(inout) :: kv
+      type(toml_context), intent(in) :: ctx
       integer, intent(in) :: want
       character(len=:), allocatable, intent(out) :: text
       character(len=:), allocatable, intent(out) :: why
 
-      integer(int64) :: ival
-      real(real64) :: rval
       logical :: lval
       character(len=:), allocatable :: sval
-      character(len=40) :: buf
-      integer :: t, stat
+      integer :: t, stat, i
 
       t = kv%get_type()
       select case (want)
-      case (WANT_NUMBER)
-         if (t == toml_type%int) then
-            call get_value(kv, ival, stat=stat)
-            write (buf, "(I0)") ival
-            text = trim(buf)
-            return
-         end if
-         if (t == toml_type%float) then
-            call get_value(kv, rval, stat=stat)
-            write (buf, "(ES30.17E3)") rval
-            text = trim(adjustl(buf))
-            return
-         end if
-      case (WANT_INTEGER)
-         if (t == toml_type%int) then
-            call get_value(kv, ival, stat=stat)
-            write (buf, "(I0)") ival
-            text = trim(buf)
+      case (WANT_NUMBER, WANT_INTEGER)
+         if (t == toml_type%int .or. (t == toml_type%float .and. want == WANT_NUMBER)) then
+            call raw_number(ctx, kv%origin_value, t == toml_type%int, text, why)
             return
          end if
       case (WANT_BOOLEAN)
@@ -505,11 +508,15 @@ contains
       case (WANT_STRING)
          if (t == toml_type%string) then
             call get_value(kv, sval, stat=stat)
-            if (allocated(sval)) then
-               text = sval
-            else
-               text = ""
-            end if
+            if (.not. allocated(sval)) sval = ""
+            do i = 1, len(sval)
+               if (iachar(sval(i:i)) < 32 .or. iachar(sval(i:i)) == 127) then
+                  why = "is a string with a control character (newline, tab, ...) at "// &
+                        "position "//itoa(i)//"; not allowed in a configuration value"
+                  return
+               end if
+            end do
+            text = sval
             return
          end if
       case default
@@ -517,6 +524,67 @@ contains
       end select
       why = "expects "//want_name(want)//", got "//type_name(t)
    end subroutine scalar_text
+
+   subroutine raw_number(ctx, origin, is_int, text, why)
+      !! The source spelling of a numeric value token, normalised to what the
+      !! schema's list-directed `read` takes: underscores dropped, a leading
+      !! `+` dropped, `inf`/`nan` lower-cased.  Hexadecimal / octal / binary
+      !! integers are refused (write them in decimal).
+      type(toml_context), intent(in) :: ctx
+      integer, intent(in) :: origin
+      logical, intent(in) :: is_int
+      character(len=:), allocatable, intent(out) :: text
+      character(len=:), allocatable, intent(out) :: why
+
+      character(len=:), allocatable :: raw
+      integer :: i, f, l
+
+      if (origin <= 0 .or. origin > ctx%top .or. .not. allocated(ctx%source)) then
+         why = "has a numeric value whose source text cannot be recovered"
+         return
+      end if
+      f = ctx%token(origin)%first
+      l = ctx%token(origin)%last
+      if (f < 1 .or. l > len(ctx%source) .or. l < f) then
+         why = "has a numeric value whose source text cannot be recovered"
+         return
+      end if
+      raw = ""
+      do i = f, l
+         if (ctx%source(i:i) /= "_") raw = raw//ctx%source(i:i)
+      end do
+      if (len(raw) > 0) then
+         if (raw(1:1) == "+") raw = raw(2:)
+      end if
+      if (len(raw) == 0) then
+         why = "has an empty numeric value"
+         return
+      end if
+      if (is_int .and. len(raw) > 1) then
+         if (raw(1:1) == "0" .and. scan(raw(2:2), "xXoObB") > 0) then
+            why = "is a hexadecimal/octal/binary integer; write the value in decimal"
+            return
+         end if
+      end if
+      if (.not. is_int) then
+         if (scan(raw, "iInN") > 0) raw = lowercase(raw)
+      end if
+      text = raw
+   end subroutine raw_number
+
+   pure function lowercase(s) result(o)
+      character(len=*), intent(in) :: s
+      character(len=len(s)) :: o
+      integer :: i, c
+      do i = 1, len(s)
+         c = iachar(s(i:i))
+         if (c >= iachar("A") .and. c <= iachar("Z")) then
+            o(i:i) = achar(c + 32)
+         else
+            o(i:i) = s(i:i)
+         end if
+      end do
+   end function lowercase
 
    pure function want_name(want) result(s)
       integer, intent(in) :: want

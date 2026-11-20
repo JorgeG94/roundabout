@@ -13,6 +13,8 @@ module rdb_nml_schema
    !!
    !! Required-key semantics: a `required=.true.` key must appear whenever
    !! its GROUP appears; an absent group is fine (defaults rule).
+   use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
    use pic_logger, only: global_logger
    use rdb_error_ring, only: error_ring_push
@@ -474,6 +476,14 @@ contains
          err_msg = "key '"//this%name//"': cannot parse real from '"//trim(values(1))//"'"
          return
       end if
+      ! A declared range is a promise that the value is a usable number:
+      ! `v < vmin` / `v > vmax` are both FALSE for NaN, so a NaN (and, with
+      ! only one bound declared, an infinity on the other side) must be
+      ! refused by name, never by comparison.
+      if ((this%has_min .or. this%has_max) .and. .not. ieee_is_finite(v)) then
+         err_msg = "key '"//this%name//"' = "//fmt_real(v)//" is not finite (the key has a declared range)"
+         return
+      end if
       if (this%has_min .and. v < this%vmin) then
          err_msg = "key '"//this%name//"' = "//fmt_real(v)//" below min "//fmt_real(this%vmin)
          return
@@ -511,18 +521,27 @@ contains
       class(nml_int_key_t), intent(inout) :: this
       character(len=*), intent(in) :: values(:)
       character(len=:), allocatable, intent(out) :: err_msg
-      integer :: v, ios
+      integer :: v
+      integer(int64) :: wide
+      integer :: ios
       character(len=128) :: imsg
 
       if (size(values) /= 1) then
          err_msg = "key '"//this%name//"' expects 1 value, got "//fmt_int(size(values))
          return
       end if
-      read (values(1), *, iostat=ios, iomsg=imsg) v
+      read (values(1), *, iostat=ios, iomsg=imsg) wide
       if (ios /= 0) then
          err_msg = "key '"//this%name//"': cannot parse integer from '"//trim(values(1))//"'"
          return
       end if
+      ! Read WIDE and range-check: a narrow `read` of an out-of-range value
+      ! is an error on gfortran but wraps silently on nvfortran.
+      if (wide > int(huge(v), int64) .or. wide < -int(huge(v), int64) - 1_int64) then
+         err_msg = "key '"//this%name//"': integer '"//trim(values(1))//"' out of range"
+         return
+      end if
+      v = int(wide)
       if (this%has_min .and. v < this%vmin) then
          err_msg = "key '"//this%name//"' = "//fmt_int(v)//" below min "//fmt_int(this%vmin)
          return
@@ -1591,7 +1610,7 @@ contains
       end do
    end subroutine parse_from_lines
 
-   function make_prefix(path, line) result(p)
+   pure function make_prefix(path, line) result(p)
       !! Build a `path:line: ` error prefix.
       character(len=*), intent(in) :: path
       integer, intent(in) :: line
@@ -1843,6 +1862,10 @@ contains
                      if (s(j:j) == q) exit
                      j = j + 1
                   end do
+                  if (j - i - 1 > len(tokens)) then
+                     call add_err(errors, n_err, make_prefix(path, li)//"string literal longer than "// &
+                                  fmt_int(len(tokens))//" characters (the namelist token limit)")
+                  end if
                   if (j > slen) then
                      call add_err(errors, n_err, make_prefix(path, li)//"unterminated string literal")
                      call push_tok(tokens, tok_line, n_tok, s(i + 1:slen), li)
@@ -1865,6 +1888,10 @@ contains
                      j = j + 1
                   end do
                   word = s(start:j - 1)
+                  if (len(word) > len(tokens)) then
+                     call add_err(errors, n_err, make_prefix(path, li)//"token longer than "// &
+                                  fmt_int(len(tokens))//" characters (the namelist token limit)")
+                  end if
                   call check_unsupported(word, path, li, errors, n_err)
                   call push_tok(tokens, tok_line, n_tok, word, li)
                   i = j
