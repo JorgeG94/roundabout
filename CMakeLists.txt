@@ -144,7 +144,7 @@ set_target_properties(${core_objs} PROPERTIES Fortran_MODULE_DIRECTORY
                                               ${CMAKE_BINARY_DIR}/modules)
 
 # Link dependencies (PUBLIC on the objects ⇒ propagate to every core consumer)
-list(APPEND libraries_to_link pic::pic)
+list(APPEND libraries_to_link pic::pic toml-f::toml-f)
 if(RDB_ENABLE_NETCDF)
   list(APPEND libraries_to_link netCDF::netcdff)
 endif()

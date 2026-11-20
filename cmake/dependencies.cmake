@@ -36,6 +36,11 @@ if(NOT TARGET pic::pic)
   find_package("pic" REQUIRED)
 endif()
 
+# toml-f: the TOML configuration front end (host-only, built static).
+if(NOT TARGET toml-f::toml-f)
+  find_package("toml-f" REQUIRED)
+endif()
+
 # NetCDF-Fortran: CMake config first (modern installs), then pkg-config
 # (autotools installs).
 if(RDB_ENABLE_NETCDF)
