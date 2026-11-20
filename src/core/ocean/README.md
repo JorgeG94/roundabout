@@ -74,7 +74,7 @@ reconstruction (`src/ALE/`), tracer schemes (`src/tracer/`), vertical and latera
 
 `engine_step` is followed by `engine_step_ice` and `engine_step_finalize`; the order matters because the
 sea-ice block writes surface-flux components that the finalize step assembles. The default scheme is
-`pred_corr` (`&ocean_bt_nml split_scheme`); `ssp_rk2` differs in how the two stages are combined (item 5).
+`pred_corr` (`[ocean.bt] split_scheme`); `ssp_rk2` differs in how the two stages are combined (item 5).
 
 1. **Engine pre-step** (`engine_step`): update file-backed inputs and apply forcing (wind, heat, bulk formulae),
    refresh boundary data, the porous-barrier areas and the analytic sponge target, and refresh the
@@ -113,8 +113,8 @@ Restart checkpoints, console statistics and diagnostic output are written by the
 
 ## Adding a slot or a physics knob
 
-1. Add a namelist knob that defaults to off, so existing namelists and tests stay bit-identical
-   (`docs/howto/add_namelist_knob.md`). Fail loud in `validate_config` for combinations you do not support.
+1. Add an input knob that defaults to off, so existing inputs and tests stay bit-identical
+   (`docs/howto/add_input_knob.md`). Fail loud in `validate_config` for combinations you do not support.
 2. Put the arrays in a slot type with `init`, `destroy`, `enter_data`, `exit_data` and `bytes`, and
    an `is_init` flag. If the closure is default-off, allocate only when enabled and include the slot in the
    memory report; latch `enable` before `init` (`docs/codebase/CONTRACTS.md`).
@@ -164,5 +164,5 @@ the rules that have no single owner (indexing, `is_init`, memory gating, one rho
 | Land state | `ocean_state_seed_land_cells` in `state/ocean_state/rdb_ocean_state_seed.F90` |
 | Which closures exist and their knobs | `docs/CLOSURE_MATRIX.md`, `docs/generated_nml_knobs.md` |
 | What works and what does not | `docs/CAPABILITIES_AND_LIMITATIONS.md` |
-| Physics and namelist reference | `docs/REFERENCE.md` |
+| Physics and input reference | `docs/REFERENCE.md` |
 | Style, `do concurrent` and OpenACC practice | `FORTRAN_STYLE.md` |

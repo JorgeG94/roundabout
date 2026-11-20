@@ -183,7 +183,7 @@ contains
 
       ! FV_MOM6 + grounded-layer gate: `z_centre` is the gate's ONLY input on
       ! this path, so it must appear exactly when `skip_nonoverlap` is on.
-      ! That flag is config-time (vcoord + namelist), which is why the ocean
+      ! That flag is config-time (vcoord + input), which is why the ocean
       ! driver latches it BEFORE `init` alongside `variant` — if it arrived
       ! only at configure time, Pass 4 would read an unallocated buffer, and
       ! under `-gpu=...,mem:separate` that is a silent wrong answer.

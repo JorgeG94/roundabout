@@ -442,7 +442,7 @@ class Physics(Group):
         units='',
         required=False,
         default=0.0,
-        dead_on_ocean_path="coastal-legacy A-grid bottom-drag knob; the A-grid god state that read it is gone (see rdb_state.F90's module docstring). The ocean path's drag is &ocean_bdrag_nml.",
+        dead_on_ocean_path="coastal-legacy A-grid bottom-drag knob; the A-grid god state that read it is gone (see rdb_state.F90's module docstring). The ocean path's drag is [ocean.bdrag].",
     )
 
     wind_stress_x = Real(
@@ -562,7 +562,7 @@ class Boundary(Group):
         required=False,
         default='wall',
         allowed=('wall', 'open', 'tidal', 'nested', 'inflow', 'discharge', 'clamped', 'sponge', 'chapman'),
-        dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc and nothing else. The ocean path's edge selector is &ocean_bc_nml west/east/south/north.",
+        dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc and nothing else. The ocean path's edge selector is [ocean.bc] west/east/south/north.",
     )
 
     bc_east = Enum(
@@ -572,7 +572,7 @@ class Boundary(Group):
         required=False,
         default='wall',
         allowed=('wall', 'open', 'tidal', 'nested', 'inflow', 'discharge', 'clamped', 'sponge', 'chapman'),
-        dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc and nothing else. The ocean path's edge selector is &ocean_bc_nml west/east/south/north.",
+        dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc and nothing else. The ocean path's edge selector is [ocean.bc] west/east/south/north.",
     )
 
     bc_south = Enum(
@@ -582,7 +582,7 @@ class Boundary(Group):
         required=False,
         default='wall',
         allowed=('wall', 'open', 'tidal', 'nested', 'inflow', 'discharge', 'clamped', 'sponge', 'chapman'),
-        dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc and nothing else. The ocean path's edge selector is &ocean_bc_nml west/east/south/north.",
+        dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc and nothing else. The ocean path's edge selector is [ocean.bc] west/east/south/north.",
     )
 
     bc_north = Enum(
@@ -592,7 +592,7 @@ class Boundary(Group):
         required=False,
         default='wall',
         allowed=('wall', 'open', 'tidal', 'nested', 'inflow', 'discharge', 'clamped', 'sponge', 'chapman'),
-        dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc and nothing else. The ocean path's edge selector is &ocean_bc_nml west/east/south/north.",
+        dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc and nothing else. The ocean path's edge selector is [ocean.bc] west/east/south/north.",
     )
 
     n_tidal_constituents = Int(
@@ -689,7 +689,7 @@ class Tracer(Group):
         units='PSU',
         required=False,
         default=0.0,
-        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_ref via register_default_tracers but eos_ref is read nowhere on the ocean path. The live ocean-path spelling is &ocean_ic_nml S_ref; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
+        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_ref via register_default_tracers but eos_ref is read nowhere on the ocean path. The live ocean-path spelling is [ocean.ic] S_ref; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
     )
 
     beta_S = Real(
@@ -698,7 +698,7 @@ class Tracer(Group):
         units='kg/m^3/PSU',
         required=False,
         default=0.78,
-        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_coeff via register_default_tracers but eos_coeff is read nowhere on the ocean path. The live ocean-path spelling is &ocean_ic_nml beta_S; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
+        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_coeff via register_default_tracers but eos_coeff is read nowhere on the ocean path. The live ocean-path spelling is [ocean.ic] beta_S; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
     )
 
     S_min = Real(
@@ -725,7 +725,7 @@ class Tracer(Group):
         units='m^2/s',
         required=False,
         default=1e-05,
-        dead_on_ocean_path="stored onto tracer_t%kappa_bg via register_default_tracers but kappa_bg is read nowhere on the ocean path -- the ocean path's background salt diffusivity is &ocean_vmix_nml ks_bg (found by the P4 dead-knob sweep, 2026-09-10).",
+        dead_on_ocean_path="stored onto tracer_t%kappa_bg via register_default_tracers but kappa_bg is read nowhere on the ocean path -- the ocean path's background salt diffusivity is [ocean.vmix] ks_bg (found by the P4 dead-knob sweep, 2026-09-10).",
     )
 
     S_init_surface = Real(
@@ -762,7 +762,7 @@ class Tracer(Group):
         units='degC',
         required=False,
         default=15.0,
-        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_ref via register_default_tracers but eos_ref is read nowhere on the ocean path. The live ocean-path spelling is &ocean_ic_nml T_ref; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
+        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_ref via register_default_tracers but eos_ref is read nowhere on the ocean path. The live ocean-path spelling is [ocean.ic] T_ref; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
     )
 
     alpha_T = Real(
@@ -771,7 +771,7 @@ class Tracer(Group):
         units='kg/m^3/degC',
         required=False,
         default=0.17,
-        dead_on_ocean_path='RETIRED -- the coastal-legacy alpha_T (D2.5): stored onto tracer_t%eos_coeff via register_default_tracers but eos_coeff is read nowhere on the ocean path. The live ocean-path spelling is &ocean_ic_nml alpha_T; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
+        dead_on_ocean_path='RETIRED -- the coastal-legacy alpha_T (D2.5): stored onto tracer_t%eos_coeff via register_default_tracers but eos_coeff is read nowhere on the ocean path. The live ocean-path spelling is [ocean.ic] alpha_T; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
     )
 
     T_min = Real(
@@ -798,7 +798,7 @@ class Tracer(Group):
         units='m^2/s',
         required=False,
         default=1e-05,
-        dead_on_ocean_path="stored onto tracer_t%kappa_bg via register_default_tracers but kappa_bg is read nowhere on the ocean path -- the ocean path's background heat diffusivity is &ocean_vmix_nml kt_bg (found by the P4 dead-knob sweep, 2026-09-10).",
+        dead_on_ocean_path="stored onto tracer_t%kappa_bg via register_default_tracers but kappa_bg is read nowhere on the ocean path -- the ocean path's background heat diffusivity is [ocean.vmix] kt_bg (found by the P4 dead-knob sweep, 2026-09-10).",
     )
 
     T_init_surface = Real(
@@ -891,11 +891,11 @@ class Nonhydrostatic(Group):
 
     hdiff_kappa = Real(
         'hdiff_kappa',
-        doc="Horizontal tracer diffusion coefficient (COASTAL path only; ocean's along-coordinate equivalent is &ocean_hdiff_nml kappa_h)",
+        doc="Horizontal tracer diffusion coefficient (COASTAL path only; ocean's along-coordinate equivalent is [ocean.hdiff] kappa_h)",
         units='m^2/s',
         required=False,
         default=0.0,
-        dead_on_ocean_path="coastal-legacy, per this key's own doc string: stored onto tracer_t%hdiff_kappa via register_default_tracers but hdiff_kappa is read nowhere on the ocean path. Use &ocean_hdiff_nml kappa_h.",
+        dead_on_ocean_path="coastal-legacy, per this key's own doc string: stored onto tracer_t%hdiff_kappa via register_default_tracers but hdiff_kappa is read nowhere on the ocean path. Use [ocean.hdiff] kappa_h.",
     )
 
 
@@ -1127,7 +1127,7 @@ class OceanGm(Group):
 
     enable = Bool(
         'enable',
-        doc='Master switch (requires &ocean_slopes_nml enable; default off ⇒ no-op)',
+        doc='Master switch (requires [ocean.slopes] enable; default off ⇒ no-op)',
         units='',
         required=False,
         default=False,
@@ -1413,7 +1413,7 @@ class OceanMeke(Group):
 
     enable = Bool(
         'enable',
-        doc='Master switch (requires &ocean_gm_nml enable; default off ⇒ no-op)',
+        doc='Master switch (requires [ocean.gm] enable; default off ⇒ no-op)',
         units='',
         required=False,
         default=False,
@@ -2189,7 +2189,7 @@ class OceanPsurf(Group):
 
     enable = Bool(
         'enable',
-        doc='Master switch (split-solver only; requires &ocean_forcing_nml enable_components=.true.)',
+        doc='Master switch (split-solver only; requires [ocean.forcing] enable_components=true)',
         units='',
         required=False,
         default=False,
@@ -2197,7 +2197,7 @@ class OceanPsurf(Group):
 
     in_eos = Bool(
         'in_eos',
-        doc='Also feed the surface load to the equation of state as the top-of-column pressure p_top (requires enable=.true.; refused with the unported pressure builders)',
+        doc='Also feed the surface load to the equation of state as the top-of-column pressure p_top (requires enable=true; refused with the unported pressure builders)',
         units='',
         required=False,
         default=False,
@@ -2205,7 +2205,7 @@ class OceanPsurf(Group):
 
     ice_load = Bool(
         'ice_load',
-        doc="Sea-ice + snow mass loading: p_surf = p_surf_const + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=.true.)",
+        doc="Sea-ice + snow mass loading: p_surf = p_surf_const + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=true)",
         units='',
         required=False,
         default=False,
@@ -2213,7 +2213,7 @@ class OceanPsurf(Group):
 
     atm_load = Bool(
         'atm_load',
-        doc="Add the bulk forcing's sea-level pressure (p_surf_atm = psl) to p_surf: the atmosphere's inverse barometer, seam ghosts exchanged every step (requires enable=.true. and &ocean_bulk_flux_nml enable). Off: p_surf stays the p_surf_const seed",
+        doc="Add the bulk forcing's sea-level pressure (p_surf_atm = psl) to p_surf: the atmosphere's inverse barometer, seam ghosts exchanged every step (requires enable=true and [ocean.bulk_flux] enable). Off: p_surf stays the p_surf_const seed",
         units='',
         required=False,
         default=False,
@@ -2384,7 +2384,7 @@ class OceanCavityMelt(Group):
 
     enable = Bool(
         'enable',
-        doc="Master switch (requires &ocean_cavity_dyn_nml, tfreeze_set='isomip' and the surface-flux component set)",
+        doc="Master switch (requires [ocean.cavity_dyn], tfreeze_set='isomip' and the surface-flux component set)",
         units='',
         required=False,
         default=False,
@@ -2888,7 +2888,7 @@ class OceanWavespeed(Group):
 
     use_ebt = Bool(
         'use_ebt',
-        doc='Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (consumed by GM with ocean_gm_nml use_ebt_struct)',
+        doc='Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (consumed by GM with [ocean.gm] use_ebt_struct)',
         units='',
         required=False,
         default=False,
@@ -3569,7 +3569,7 @@ class OceanIce(Group):
 
     p0 = Real(
         'p0',
-        doc='Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of &ocean_ice_ridge_nml)',
+        doc='Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of [ocean.ice_ridge])',
         units='Pa',
         required=False,
         default=27500.0,
@@ -3579,7 +3579,7 @@ class OceanIce(Group):
 
     c0 = Real(
         'c0',
-        doc='Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of &ocean_ice_ridge_nml)',
+        doc='Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of [ocean.ice_ridge])',
         units='',
         required=False,
         default=20.0,
@@ -3723,7 +3723,7 @@ class OceanIce(Group):
 
     dt_ice = Real(
         'dt_ice',
-        doc="scheme='cice': ice time step; <= 0 is the outer ocean step, a positive value must equal &time_nml dt_fixed (refused otherwise)",
+        doc="scheme='cice': ice time step; <= 0 is the outer ocean step, a positive value must equal [time] dt_fixed (refused otherwise)",
         units='s',
         required=False,
         default=-1.0,
@@ -4101,7 +4101,7 @@ class OceanIceRidge(Group):
 
     Pstar = Real(
         'Pstar',
-        doc='Hibler (1979) strength constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads p0 of &ocean_ice_nml)',
+        doc='Hibler (1979) strength constant, kstrength=0; must be > 0.  Read by [ocean.ice_dyn] dyn_scheme=cice_c (the sis2_c core reads p0 of [ocean.ice])',
         units='N/m',
         required=False,
         default=27500.0,
@@ -4109,7 +4109,7 @@ class OceanIceRidge(Group):
 
     Cstar = Real(
         'Cstar',
-        doc='Hibler (1979) concentration constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads c0 of &ocean_ice_nml)',
+        doc='Hibler (1979) concentration constant, kstrength=0; must be > 0.  Read by [ocean.ice_dyn] dyn_scheme=cice_c (the sis2_c core reads c0 of [ocean.ice])',
         units='',
         required=False,
         default=20.0,
@@ -4188,7 +4188,7 @@ class OceanIceAtm(Group):
 
     uni_tas = Real(
         'uni_tas',
-        doc='Uniform-atmosphere air temperature, used when &ocean_atm_forcing_nml enable is off',
+        doc='Uniform-atmosphere air temperature, used when [ocean.atm_forcing] enable is off',
         units='K',
         required=False,
         default=263.15,
@@ -4257,7 +4257,7 @@ class OceanIceDyn(Group):
 
     dyn_scheme = Enum(
         'dyn_scheme',
-        doc='Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs &ocean_ice_nml enable and dynamics, nghost >= 3; runs on any rank count, a tripolar north fold included (px > 1 too)',
+        doc='Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs [ocean.ice] enable and dynamics, nghost >= 3; runs on any rank count, a tripolar north fold included (px > 1 too)',
         units='',
         required=False,
         default='sis2_c',
@@ -4790,7 +4790,7 @@ class OceanSponge(Group):
 
     west_width = Int(
         'west_width',
-        doc='Per-edge band-width override, cells (<0 => inherit &ocean_bc_nml sponge_width)',
+        doc='Per-edge band-width override, cells (<0 => inherit [ocean.bc] sponge_width)',
         units='',
         required=False,
         default=-1,
@@ -4804,7 +4804,7 @@ class OceanSponge(Group):
 
     west_strength = Real(
         'west_strength',
-        doc='Per-edge peak relaxation-rate override (<0 => inherit &ocean_bc_nml sponge_strength)',
+        doc='Per-edge peak relaxation-rate override (<0 => inherit [ocean.bc] sponge_strength)',
         units='1/s',
         required=False,
         default=-1.0,
@@ -4965,7 +4965,7 @@ class OceanBt(Group):
 
     visc_rem_chain = Bool(
         'visc_rem_chain',
-        doc="PR-3 (D1): ONE switch for exactly MOM6's visc_rem/av_rem/bt_rem set -- equivalent to switching on the visc_rem producer plus forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem all at once (never a superset); the BT-correction fold stays UNIFORM (MOM6 accel_layer_u never weights it; correction_visc_rem, which used to, is retired). strong_drag/rescale_strong_drag stay separate keys (their own MOM6 params). Still requires ocean_vdiff_nml implicit_drag or bbl_glue, else visc_rem is inert (=1, warned).",
+        doc="PR-3 (D1): ONE switch for exactly MOM6's visc_rem/av_rem/bt_rem set -- equivalent to switching on the visc_rem producer plus forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem all at once (never a superset); the BT-correction fold stays UNIFORM (MOM6 accel_layer_u never weights it; correction_visc_rem, which used to, is retired). strong_drag/rescale_strong_drag stay separate keys (their own MOM6 params). Still requires [ocean.vdiff] implicit_drag or bbl_glue, else visc_rem is inert (=1, warned).",
         units='',
         required=False,
         default=True,
@@ -5052,7 +5052,7 @@ class OceanBt(Group):
 
     correction_bc_pgf = Bool(
         'correction_bc_pgf',
-        doc="Per-layer baroclinic-PGF retro-correction for the eta change (requires &ocean_pgf_nml form='fv_mom6')",
+        doc="Per-layer baroclinic-PGF retro-correction for the eta change (requires [ocean.pgf] form='fv_mom6')",
         units='',
         required=False,
         default=False,
@@ -5410,7 +5410,7 @@ class OceanPgf(Group):
 
     insitu_density = Bool(
         'insitu_density',
-        doc='FV_MOM6 constant-by-layer density at its in-situ pressure (MOM6 PCM parity); .false. = legacy potential density at &ocean_eos_nml p_ref. Inert for the linear EOS',
+        doc='FV_MOM6 constant-by-layer density at its in-situ pressure (MOM6 PCM parity); .false. = legacy potential density at [ocean.eos] p_ref. Inert for the linear EOS',
         units='',
         required=False,
         default=True,
@@ -5591,14 +5591,14 @@ class OceanBdrag(Group):
 
 
 class OceanTdrag(Group):
-    """`[ocean.tdrag]` -- Ice-shelf top-drag selector + coefficients (mirror of &ocean_bdrag_nml)."""
+    """`[ocean.tdrag]` -- Ice-shelf top-drag selector + coefficients (mirror of [ocean.bdrag])."""
 
     _group = 'ocean_tdrag'
     _table = 'ocean.tdrag'
 
     enable = Bool(
         'enable',
-        doc='Enable the ice-shelf top drag (requires &ocean_cavity_dyn_nml enable)',
+        doc='Enable the ice-shelf top drag (requires [ocean.cavity_dyn] enable)',
         units='',
         required=False,
         default=False,
@@ -5615,7 +5615,7 @@ class OceanTdrag(Group):
 
     cd = Real(
         'cd',
-        doc='Quadratic top-drag coefficient (0 disables); must equal &ocean_cavity_melt_nml cdrag_top when melt is on',
+        doc='Quadratic top-drag coefficient (0 disables); must equal [ocean.cavity_melt] cdrag_top when melt is on',
         units='',
         required=False,
         default=0.0,
@@ -6255,7 +6255,7 @@ class OceanVmix(Group):
 
     buoyancy_coeffs = Enum(
         'buoyancy_coeffs',
-        doc='Source of alpha/beta for KPP B_0 + double diffusion: constant (scalar &ocean_ic_nml pair) | eos (active EOS derivatives)',
+        doc='Source of alpha/beta for KPP B_0 + double diffusion: constant (scalar [ocean.ic] pair) | eos (active EOS derivatives)',
         units='',
         required=False,
         default='constant',
@@ -6283,7 +6283,7 @@ class OceanVdiff(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="RETIRED -- PR-3's audit found no MOM6 state-update equivalent: btstep_layer_accel applies the depth-mean barotropic acceleration uniformly across every layer, no visc_rem weight. Setting it .true. is a fail-loud configure error (validate_config). The real MOM6 visc_rem*velocity mechanisms are ocean_bt_nml renorm_visc_rem and rescale_strong_drag.",
+        dead_on_ocean_path="RETIRED -- PR-3's audit found no MOM6 state-update equivalent: btstep_layer_accel applies the depth-mean barotropic acceleration uniformly across every layer, no visc_rem weight. Setting it .true. is a fail-loud configure error (validate_config). The real MOM6 visc_rem*velocity mechanisms are [ocean.bt] renorm_visc_rem and rescale_strong_drag.",
     )
 
     implicit_drag = Bool(
@@ -7313,7 +7313,7 @@ class OceanAtmForcing(Group):
 
     filelist_tas = Str(
         'filelist_tas',
-        doc='tools/jra_filelist.py-style file list for tas (air temperature); blank = fail loud when enable=.true.',
+        doc='tools/jra_filelist.py-style file list for tas (air temperature); blank = fail loud when enable=true',
         units='',
         required=False,
         default='',
@@ -7575,7 +7575,7 @@ class OceanBulkFlux(Group):
 
     enable = Bool(
         'enable',
-        doc='Master switch (required when &ocean_atm_forcing_nml enable is on)',
+        doc='Master switch (required when [ocean.atm_forcing] enable is on)',
         units='',
         required=False,
         default=False,
@@ -8226,7 +8226,7 @@ class OceanBc(Group):
 
     obc_tidal_nodal = Bool(
         'obc_tidal_nodal',
-        doc='Apply the 18.6-yr nodal factor + equilibrium/nodal phase to the open-boundary tidal elevation forcing (shares the &ocean_tides_nml astro generator); when true *_tidal_phase becomes a Greenwich phase lag',
+        doc='Apply the 18.6-yr nodal factor + equilibrium/nodal phase to the open-boundary tidal elevation forcing (shares the [ocean.tides] astro generator); when true *_tidal_phase becomes a Greenwich phase lag',
         units='',
         required=False,
         default=False,

@@ -570,7 +570,7 @@ contains
          ierr = 0_int32
          if (pass == 1) then
             call run_cell1(p, nilyr, 3600.0_wp, TF, a, v, s, tr, f0, aggr, fl, ierr, dorebin=.false.)
-            call check(error, a(2) == a1(2) .and. v(2) == v1(2), "dorebin = .false.: the category stays out of its bin")
+            call check(error, a(2) == a1(2) .and. v(2) == v1(2), "dorebin = false: the category stays out of its bin")
             if (allocated(error)) return
          else
             call run_cell1(p, nilyr, 3600.0_wp, TF, a, v, s, tr, f0, aggr, fl, ierr)
@@ -643,9 +643,9 @@ contains
          else
             call run_cell1(p, nilyr, 3600.0_wp, TF, a, v, s, tr, f0, aggr, fl, ierr, limit=.false.)
          end if
-         call check(error, ierr, 0_int32, "limit_aice = .false.: no range error")
+         call check(error, ierr, 0_int32, "limit_aice = false: no range error")
          if (allocated(error)) return
-         call check(error, a(3) == 3.0e-12_wp .and. all(fl == f0), "limit_aice = .false.: nothing zapped")
+         call check(error, a(3) == 3.0e-12_wp .and. all(fl == f0), "limit_aice = false: nothing zapped")
          if (allocated(error)) return
       end do
    end subroutine test_error_bits

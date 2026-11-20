@@ -547,7 +547,7 @@ set(MPI_LAUNCH_TESTS test_driver_ocean test_ocean_halo_single_rank
 # the build (otherwise `cmake --build` itself fails; they can't be "tests that
 # fail"): test_config   - LLVM-backend codegen ICE ("x is nullptr") when a unit
 # consumes the .mod of a module that (transitively) calls rdb_config's
-# read_config_from_string. test_profiler - VOLATILE attribute statement,
+# read_config_from_toml_string. test_profiler - VOLATILE attribute statement,
 # rejected by lfortran 0.64 ("Attribute declaration not supported").
 #
 # (B) RUNTIME FAILURES — BUILD fine but crash when run.  Deliberately LEFT IN
@@ -959,7 +959,7 @@ if(RDB_ENABLE_MPI)
   add_test(NAME rdb_test_ocean_decomp_bitid_mpi_4rank
            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
                    $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
-  # EXPERIMENTAL in-halo barotropic march (`&ocean_bt_nml inhalo_march`): the
+  # EXPERIMENTAL in-halo barotropic march (`[ocean.bt] inhalo_march`): the
   # decomposed runs march with it (poisoned NaN ghosts between exchanges), the
   # serial reference without; a representative subset of the families (walls +
   # island, periodic, open/tidal OBC, tripolar fold incl. px > 1).

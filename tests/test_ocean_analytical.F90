@@ -1608,7 +1608,7 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
       integer, parameter :: N_INNER = 2
          !! A real split (was 1).  The lock's depth-mean baroclinic PGF,
          !! `-(g/rho0)(H/2)*d(rho)/dx`, forces the barotropic mode (MOM6
-         !! `BT_force`, `&ocean_bt_nml bc_pgf_forcing`): the physical
+         !! `BT_force`, `[ocean.bt] bc_pgf_forcing`): the physical
          !! response is a surface gravity-wave pair with
          !! `u_bt ~ c*(drho/rho0)/4 = 1.2 cm/s`, measured 1.4 cm/s at
          !! N_INNER = 2 or 8.  At N_INNER = 1 (one forward-backward substep

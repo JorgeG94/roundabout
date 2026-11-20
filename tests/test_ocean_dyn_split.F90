@@ -917,7 +917,7 @@ contains
    end subroutine test_obc_sponge_kernel
 
    subroutine test_sponge_bit_identity_when_disabled(error)
-      !! PR-23 acceptance gate (plan §9.7 / §10): with `&ocean_sponge_nml`
+      !! PR-23 acceptance gate (plan §9.7 / §10): with `[ocean.sponge]`
       !! absent, a >=20-step `ocean_dyn_step_split` run on a west-`OBC_SPONGE`
       !! 3-D config (legacy `sponge_relax_tracers=.true.`) must be
       !! BIT-FOR-BIT identical to the same run with `sp` present but

@@ -1,5 +1,5 @@
 !! Analytic tests for the FV_MOM6 constant-by-layer (PCM) pressure gradient
-!! at the IN-SITU density (`&ocean_pgf_nml insitu_density`, MOM6
+!! at the IN-SITU density (`[ocean.pgf] insitu_density`, MOM6
 !! `int_density_dz_generic_pcm` parity).
 !!
 !! 1. thermobaric_face_matches_insitu_oracle — flat, aligned z-level

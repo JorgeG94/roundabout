@@ -13,7 +13,7 @@ Cheap diagnostic of:
 ## Run
 
 ```bash
-./build/rdb validation_examples/ocean/geostrophic_adjustment/geostrophic_adjustment.nml
+./build/rdb validation_examples/ocean/geostrophic_adjustment/geostrophic_adjustment.toml
 ```
 
 1000 × 1000 km closed basin (100 × 100 cells @ 10 km), single

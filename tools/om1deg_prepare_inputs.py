@@ -13,7 +13,7 @@ Writes, next to the fetched data (``tools/fetch_om1deg.py``):
 ``ic_woa13_jan.nc``
     WOA13 decav January potential temperature (``ptemp_an``) and salinity
     (``s_an``) on the model's 360 x 320 tracer points at WOA's own 102
-    standard depths — the input of ``&ocean_zinit_nml source = "file"``,
+    standard depths — the input of ``[ocean.zinit] source = "file"``,
     which interpolates linearly in depth onto the model layers at run time.
     Horizontal: nearest neighbour (the WOA 1-degree cell containing the
     model T-point, from the supergrid's cell-centre nodes).  Missing data

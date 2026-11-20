@@ -1,17 +1,17 @@
 # Southern Ocean 1 degree, wind-forced — a single-GPU cut of OM_1deg
 
-`southern_ocean_1deg_wind.nml` runs a **regional cut** of the MOM6
+`southern_ocean_1deg_wind.toml` runs a **regional cut** of the MOM6
 **OM_1deg** tripolar geometry — everything from the Antarctic coast up to
 30.02 S, periodic east-west, no Arctic cap — from a **WOA13 January** ocean
 at rest, forced by one (cycled) year of **JRA55-do 1958** wind stress, for
 **two simulated years**. It is the same physics, vertical grid, time step
 and closures as
-[`../global_1deg/global_1deg_wind.nml`](../global_1deg/global_1deg_wind.nml),
+[`../global_1deg/global_1deg_wind.toml`](../global_1deg/global_1deg_wind.toml),
 with **no physics change**: the lateral viscosity is the global run's
 (Smagorinsky + `nu_h = 2000` m²/s floor, `ah_max` 10000). The only things
 that change are the domain (Southern Ocean instead of global) and the north
 edge (a sponge instead of the tripolar fold). An earlier version of this
-namelist raised the viscosity to 150000 m²/s to survive a day-573 blow-up;
+input raised the viscosity to 150000 m²/s to survive a day-573 blow-up;
 that blow-up was a model defect in the sponge edge, now fixed — see
 "Stability" (§5). The
 point is a single-GPU, few-hour run of the Antarctic Circumpolar Current
@@ -30,7 +30,7 @@ and a side-by-side comparison against the 1/4-degree companion run.
 | Initial state | WOA13 decav January T/S, same y-cut, at rest, eta = 0 |
 | Forcing | JRA55-do 1958 daily-mean wind stress, same y-cut, cycled annually |
 | Time step | `dt = 1800 s`, `pred_corr`, barotropic `n_inner` from the per-wet-cell CFL |
-| North BC | `&ocean_bc_nml north = "sponge"`: OBC_SPONGE (wall at the outer face + a 5-cell/~5 degree interior relaxation band), `&ocean_sponge_nml target_source = "ic"` — relax T/S/u/v toward the WOA13 snapshot |
+| North BC | `[ocean.bc] north = "sponge"`: OBC_SPONGE (wall at the outer face + a 5-cell/~5 degree interior relaxation band), `[ocean.sponge] target_source = "ic"` — relax T/S/u/v toward the WOA13 snapshot |
 | Output | daily: SSH, top-10 m u/v/T (T doubling as SST), surface `vorticity_z`, depth-integrated `transport_x`/`transport_y`; single precision, 2-D only |
 | Length | 730 days (2 years) |
 
@@ -40,7 +40,7 @@ and a side-by-side comparison against the 1/4-degree companion run.
 tripolar cap (checked directly against `ocean_hgrid.nc`: at every column,
 row `j=0`'s latitude is 77.8796 S and it is exactly uniform across the row
 — see "How the inputs were cut" below), and row `j=0` is already the wall
-the global runs (`global_1deg_unforced.nml`, `global_1deg_wind.nml`) use
+the global runs (`global_1deg_unforced.toml`, `global_1deg_wind.toml`) use
 for `south = "wall"`. Cutting at `j=0` reuses that wall unchanged; no new
 land mask.
 
@@ -51,7 +51,7 @@ node row 194 (0-indexed), the north face of T-row 96. Keeping tracer rows
 cut, chosen for landing almost exactly on the requested "about 30 S", not
 for any dynamical reason.
 
-**Sponge, not an open (Flather) edge.** `&ocean_bc_nml` OPEN/Flather needs
+**Sponge, not an open (Flather) edge.** `[ocean.bc]` OPEN/Flather needs
 a boundary DATA series (`data_eta`, and per-tracer inflow values) to
 radiate against; this cut has none — there is no parent-model boundary
 archive for this line, only the same static WOA13 climatology the interior
@@ -65,7 +65,7 @@ snapshot, `target_source = "ic"`, on a 10-day timescale
 `isomip_plus` examples use). This *is* the model's existing OBC/sponge
 machinery (`docs/CLOSURE_MATRIX.md`, `docs/REFERENCE.md` §4) — no new
 physics, per the brief. SSH is not separately restored: the real sponge's
-interior-thickness relaxation (`&ocean_sponge_nml relax_h`) is not
+interior-thickness relaxation (`[ocean.sponge] relax_h`) is not
 implemented in this tree (v1), so the wall face is what pins the
 barotropic mode at the edge; T/S/u/v restoring is what's live.
 
@@ -76,7 +76,7 @@ exchange code is untouched.
 ## 2. The supergrid reader accepts a non-global subset
 
 `metrics_fill_from_supergrid` (`src/core/ocean/state/rdb_ocean_metrics.F90`)
-reads `ni = grid%nx_global`, `nj = grid%ny_global` from `&grid_nml nx/ny`
+reads `ni = grid%nx_global`, `nj = grid%ny_global` from `[grid] nx/ny`
 and only checks that the supergrid file's `nxp/nyp/nx/ny` dimensions equal
 `2*ni+1`/`2*nj+1`/`2*ni`/`2*nj` — it never assumes the file is a *global*
 grid. The topology cross-checks are both satisfied by this cut without any
@@ -87,7 +87,7 @@ source change:
   on the sphere (both longitude and latitude). Our cut's top row (30.02 S)
   is an ordinary constant-latitude row with genuinely different longitudes
   at `m` and at its mirror, so the test correctly returns `.false.` —
-  matching `&ocean_bc_nml north = "sponge"` (not `tripolar_fold`).
+  matching `[ocean.bc] north = "sponge"` (not `tripolar_fold`).
 * **Periodic east-west**: checked as `y(1,:) == y(nxp,:)`, which holds
   because the cut keeps the full longitude circle (only `y` is cut).
 
@@ -146,8 +146,8 @@ cmake --build build_cc70 -j 8
 mkdir -p /home/jorge/nci/cdx/data/runs/southern_ocean_1deg
 cd /home/jorge/nci/cdx/data/runs/southern_ocean_1deg
 ln -s /home/jorge/nci/cdx/data/OM_1deg_southern INPUT
-cp /path/to/roundabout/validation_examples/ocean/southern_ocean_1deg/southern_ocean_1deg_wind.nml .
-CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=1 /path/to/build_cc70/rdb southern_ocean_1deg_wind.nml \
+cp /path/to/roundabout/validation_examples/ocean/southern_ocean_1deg/southern_ocean_1deg_wind.toml .
+CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=1 /path/to/build_cc70/rdb southern_ocean_1deg_wind.toml \
     > run.log
 ```
 
@@ -160,7 +160,7 @@ the signature of the defect described in "Stability" just below.
 
 ## 5. Stability: the day-573 blow-up was a leaking sponge edge (history, fixed)
 
-The first attempt at this namelist (global viscosity, `nu_h = 2000`) ran
+The first attempt at this input (global viscosity, `nu_h = 2000`) ran
 for 573 days and then blew up: at outer step 27528 (day 573.5) the
 barotropic correction produced ~4000 non-finite faces
 (`[nan-catch] ... non-finite BT-correction faces`) and the run aborted on
@@ -230,7 +230,7 @@ circumpolar-mean jet at 51.7 S / 50.6 S, against an old `nu_h = 150000`
 workaround run at 134.3 / 126.1 Sv. That pair of runs predated four further
 fixes that landed afterward — the periodic east-west seam's ghost refresh,
 the velocity-form Laplacian/biharmonic going free-slip at land, `z_fixed`
-being seeded on its own target under `&ocean_zinit_nml`, and `vorticity_z`
+being seeded on its own target under `[ocean.zinit]`, and `vorticity_z`
 being written as the dynamics' own corner ζ with a proper `_FillValue` —
 each of which touches this domain (the periodic seam runs the full
 longitude circle here; the free-slip fix changes every land-adjacent
@@ -248,7 +248,7 @@ ghost refresh (#84), the free-slip viscosity and the `z_fixed` + zinit
 on-target seed (#88), and the `vorticity_z` diagnostic (#86). This branch
 alone does not reproduce these numbers; `main` with this PR merged does.
 
-**The run.** `southern_ocean_1deg_wind.nml` on that build, one V100,
+**The run.** `southern_ocean_1deg_wind.toml` on that build, one V100,
 single rank, `CUDA_VISIBLE_DEVICES`-pinned, host-staged halo path (no MPI):
 730 days, 35040 steps, **3116.4 s wall — 4.3 s/simulated day, ~55 simulated
 years per wallclock day (SYPD)**. Grepped the full `run.log` for
@@ -594,13 +594,13 @@ flood-fill happenstance.
 
 | | |
 |---|---|
-| `southern_ocean_1deg_wind.nml` | the namelist (§ above) |
+| `southern_ocean_1deg_wind.toml` | the input (§ above) |
 | `southern_movie.py` | the polar movie renderer |
 | `tools/om1deg_subset.f90` (repo root `tools/`) | the generic NetCDF subsetter used to cut the four inputs |
 
 ## 11. Commit
 
-The reproducible pieces — this namelist and `southern_movie.py` — are
+The reproducible pieces — this input and `southern_movie.py` — are
 committed to `roundabout` (no `tools/` changes this round; the subsetter was
 already in the tree). The run-specific analysis script
 (`python_prototypes/southern_ocean_025/southern_025_analysis.py`, now

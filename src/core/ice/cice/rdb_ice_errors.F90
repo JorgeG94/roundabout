@@ -14,7 +14,7 @@ module rdb_ice_errors
    !!
    !! Bits are `ishft(1, n)` for `n = 0 .. ICE_NERR-1`; the registry below is the
    !! single authority.  Class is FATAL (F) or COUNTED (C); bit 10
-   !! (`ICE_ERR_ITD_HBNEW_ORDER`) is COUNTED unless `&ocean_ice_nml
+   !! (`ICE_ERR_ITD_HBNEW_ORDER`) is COUNTED unless `[ocean.ice]
    !! fatal_on_error`, which `ice_err_fatal_set` folds in.
    !!
    !! Reduction layout.  The grid is reduced in passes no wider than a few

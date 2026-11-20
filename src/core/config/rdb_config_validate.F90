@@ -157,7 +157,7 @@ contains
       ! column arrays.  Overrunning them corrupts thread-local storage
       ! SILENTLY — wrong answers, no crash — so this must refuse the run,
       ! not warn.  It replaces a warning-only check that additionally
-      ! never fired on the ocean path: no ocean namelist sets
+      ! never fired on the ocean path: no ocean input sets
       ! `use_multilayer` (it defaults .false.), so the ocean regime had no
       ! nz guard at all beyond the wavespeed- and Redi-specific ones.
       !
@@ -185,7 +185,7 @@ contains
          if (trim(cfg%ocean%vmix%tracer_advection_scheme) == "ppm_h3" .and. &
              cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. &
              trim(cfg%ocean%vmix%tracer_recon) /= "ppm") then
-            call logger%error("&ocean_vmix_nml tracer_advection_scheme='ppm_h3' with "// &
+            call logger%error("[ocean.vmix] tracer_advection_scheme='ppm_h3' with "// &
                               "dt_tracer_advect_ratio > 1 requires tracer_recon = 'ppm' "// &
                               "(the drain uses ONE reconstruction)")
             has_error = .true.
@@ -203,19 +203,19 @@ contains
              .not. cfg%ocean%isopycnal%conservative_floor .and. &
              cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. &
              parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) == VCOORD_LAGRANGIAN) then
-            call logger%error("&ocean_isopycnal_nml angstrom_h > 0 (injecting floor, "// &
-                              "conservative_floor off) with &ocean_vmix_nml "// &
+            call logger%error("[ocean.isopycnal] angstrom_h > 0 (injecting floor, "// &
+                              "conservative_floor off) with [ocean.vmix] "// &
                               "dt_tracer_advect_ratio > 1 is NOT YET SUPPORTED: the "// &
                               "windowed tracer drain does not carry the thickness the "// &
                               "floor adds, so tracer content is created.  Use "// &
                               "dt_tracer_advect_ratio = 1, or conservative_floor = "// &
-                              ".true.  (temporary limitation)")
+                              "true  (temporary limitation)")
             has_error = .true.
          end if
       end if
 
       ! Ocean windowed-drain tracer_recon guard (Q6).  A SEPARATE knob from
-      ! the coastal tracer_recon above — it lives in `&ocean_vmix_nml` and
+      ! the coastal tracer_recon above — it lives in `[ocean.vmix]` and
       ! only takes effect on sim_type='ocean' (ignored on coastal, like all
       ! ocean knobs).  Reuses the coastal parse + per-rung nghost helpers
       ! but NOT the coastal support-status predicate (which rejects ocean by
@@ -231,17 +231,17 @@ contains
             integer :: ocn_recon_code
             ocn_recon_code = parse_tracer_recon(trim(cfg%ocean%vmix%tracer_recon))
             if (ocn_recon_code == -2) then
-               call logger%error("&ocean_vmix_nml tracer_recon='pqm' is not implemented; "// &
+               call logger%error("[ocean.vmix] tracer_recon='pqm' is not implemented; "// &
                                  "use ppm, weno5, weno7 or weno9")
                has_error = .true.
             else if (ocn_recon_code < 0) then
-               call logger%error("&ocean_vmix_nml tracer_recon='"// &
+               call logger%error("[ocean.vmix] tracer_recon='"// &
                                  trim(cfg%ocean%vmix%tracer_recon)// &
                                  "' not recognised; valid: ppm, weno5, weno7, weno9")
                has_error = .true.
             else if (ocn_recon_code /= TRACER_RECON_PPM) then
                if (cfg%nghost < tracer_recon_required_nghost(ocn_recon_code)) then
-                  call logger%error("&ocean_vmix_nml tracer_recon='"// &
+                  call logger%error("[ocean.vmix] tracer_recon='"// &
                                     trim(cfg%ocean%vmix%tracer_recon)// &
                                     "' requires nghost >= "// &
                                     to_string(tracer_recon_required_nghost(ocn_recon_code))// &
@@ -259,32 +259,32 @@ contains
       ! night-time negative-I0 hazard (§2.4 of the plan).
       if (trim(cfg%sim_type) == "ocean") then
          if (.not. sw_source_is_implemented(trim(cfg%ocean%thermo%sw_source))) then
-            call logger%error("&ocean_thermo_nml sw_source='"// &
+            call logger%error("[ocean.thermo] sw_source='"// &
                               trim(cfg%ocean%thermo%sw_source)// &
                               "' not recognised; valid: net_heat, q_sw")
             has_error = .true.
          end if
          if (.not. kpp_sw_method_is_implemented(trim(cfg%ocean%thermo%kpp_sw_method))) then
-            call logger%error("&ocean_thermo_nml kpp_sw_method='"// &
+            call logger%error("[ocean.thermo] kpp_sw_method='"// &
                               trim(cfg%ocean%thermo%kpp_sw_method)// &
                               "' not recognised; valid: all_sw, mxl_sw, lv1_sw")
             has_error = .true.
          end if
          if (trim(cfg%ocean%thermo%sw_source) == "q_sw" .and. &
              .not. cfg%ocean%forcing%enable_components) then
-            call logger%error("&ocean_thermo_nml sw_source='q_sw' requires "// &
-                              "&ocean_forcing_nml enable_components=.true. "// &
+            call logger%error("[ocean.thermo] sw_source='q_sw' requires "// &
+                              "[ocean.forcing] enable_components=true "// &
                               "(q_sw is allocated only with the component set)")
             has_error = .true.
          end if
          if (trim(cfg%ocean%thermo%sw_source) == "net_heat" .and. &
              cfg%ocean%thermo%sw_pen_frac > 0.0_wp) then
             call logger%warning("shortwave penetration is reading the NET heat flux "// &
-                                "(&ocean_thermo_nml sw_source='net_heat', sw_pen_frac>0): "// &
+                                "([ocean.thermo] sw_source='net_heat', sw_pen_frac>0): "// &
                                 "I0 < 0 wherever Q_heat < 0, which drives unphysical "// &
                                 "negative irradiance down the two-band profile. Set "// &
-                                "sw_source='q_sw' with &ocean_forcing_nml "// &
-                                "enable_components=.true.")
+                                "sw_source='q_sw' with [ocean.forcing] "// &
+                                "enable_components=true")
          end if
          ! Chlorophyll-dependent N-band shortwave (Manizza et al. 2005): the
          ! scheme band-absorbs the WHOLE shortwave, so it has no separate
@@ -292,30 +292,30 @@ contains
          ! rather than silently mixing the two formulations.
          if (trim(cfg%ocean%thermo%sw_scheme) == "manizza05") then
             if (len_trim(cfg%ocean%thermo%sw_chl_file) == 0) then
-               call logger%error("&ocean_thermo_nml sw_scheme='manizza05' requires "// &
+               call logger%error("[ocean.thermo] sw_scheme='manizza05' requires "// &
                                  "sw_chl_file (surface chlorophyll climatology)")
                has_error = .true.
             end if
             if (len_trim(cfg%ocean%thermo%sw_chl_var) == 0) then
-               call logger%error("&ocean_thermo_nml sw_scheme='manizza05' requires sw_chl_var")
+               call logger%error("[ocean.thermo] sw_scheme='manizza05' requires sw_chl_var")
                has_error = .true.
             end if
             if (cfg%ocean%thermo%sw_nbands < 3 .or. &
                 cfg%ocean%thermo%sw_nbands > MAX_SW_BANDS) then
-               call logger%error("&ocean_thermo_nml sw_scheme='manizza05' needs sw_nbands "// &
+               call logger%error("[ocean.thermo] sw_scheme='manizza05' needs sw_nbands "// &
                                  "in 3.."//to_string(MAX_SW_BANDS)//", got "// &
                                  to_string(cfg%ocean%thermo%sw_nbands))
                has_error = .true.
             end if
             if (cfg%ocean%thermo%sw_pen_frac /= 0.0_wp .and. &
                 cfg%ocean%thermo%sw_pen_frac /= 1.0_wp) then
-               call logger%error("&ocean_thermo_nml sw_scheme='manizza05' band-absorbs the "// &
+               call logger%error("[ocean.thermo] sw_scheme='manizza05' band-absorbs the "// &
                                  "whole shortwave: sw_pen_frac must be 0 (unset) or 1, got "// &
                                  to_string(cfg%ocean%thermo%sw_pen_frac))
                has_error = .true.
             end if
          else if (len_trim(cfg%ocean%thermo%sw_chl_file) > 0) then
-            call logger%warning("&ocean_thermo_nml sw_chl_file is set but "// &
+            call logger%warning("[ocean.thermo] sw_chl_file is set but "// &
                                 "sw_scheme='default': the chlorophyll file is ignored")
          end if
       end if
@@ -345,37 +345,37 @@ contains
          has_error = .true.
       end if
 
-      ! Retired coastal-legacy `&tracer_nml` linear-EOS quartet.  These
+      ! Retired coastal-legacy `[tracer]` linear-EOS quartet.  These
       ! four keys reach `tracer_t%eos_coeff`/`eos_ref` and nothing else;
-      ! the C-grid ocean path's linear EOS reads `&ocean_ic_nml` alone.
+      ! the C-grid ocean path's linear EOS reads `[ocean.ic]` alone.
       ! A knob that validates and silently does nothing is the bug, so
       ! moving any of them off its historical default is fatal and names
       ! the live replacement rather than being quietly ignored.
       if (cfg%alpha_T /= LEGACY_TRACER_ALPHA_T) then
-         call logger%error("&tracer_nml alpha_T is RETIRED on the ocean path: it only ever "// &
+         call logger%error("[tracer] alpha_T is RETIRED on the ocean path: it only ever "// &
                            "reached tracer_t%eos_coeff, which no ocean kernel reads, so "// &
-                           "setting it changed nothing. Use &ocean_ic_nml alpha_T "// &
+                           "setting it changed nothing. Use [ocean.ic] alpha_T "// &
                            "(kg/m^3 per degC) instead, or delete the key.")
          has_error = .true.
       end if
       if (cfg%beta_S /= LEGACY_TRACER_BETA_S) then
-         call logger%error("&tracer_nml beta_S is RETIRED on the ocean path: it only ever "// &
+         call logger%error("[tracer] beta_S is RETIRED on the ocean path: it only ever "// &
                            "reached tracer_t%eos_coeff, which no ocean kernel reads, so "// &
-                           "setting it changed nothing. Use &ocean_ic_nml beta_S "// &
+                           "setting it changed nothing. Use [ocean.ic] beta_S "// &
                            "(kg/m^3 per PSU) instead, or delete the key.")
          has_error = .true.
       end if
       if (cfg%T_ref /= LEGACY_TRACER_T_REF) then
-         call logger%error("&tracer_nml T_ref is RETIRED on the ocean path: it only ever "// &
+         call logger%error("[tracer] T_ref is RETIRED on the ocean path: it only ever "// &
                            "reached tracer_t%eos_ref, which no ocean kernel reads, so "// &
-                           "setting it changed nothing. Use &ocean_ic_nml T_ref (degC) "// &
+                           "setting it changed nothing. Use [ocean.ic] T_ref (degC) "// &
                            "instead, or delete the key.")
          has_error = .true.
       end if
       if (cfg%S_ref /= LEGACY_TRACER_S_REF) then
-         call logger%error("&tracer_nml S_ref is RETIRED on the ocean path: it only ever "// &
+         call logger%error("[tracer] S_ref is RETIRED on the ocean path: it only ever "// &
                            "reached tracer_t%eos_ref, which no ocean kernel reads, so "// &
-                           "setting it changed nothing. Use &ocean_ic_nml S_ref (PSU) "// &
+                           "setting it changed nothing. Use [ocean.ic] S_ref (PSU) "// &
                            "instead, or delete the key.")
          has_error = .true.
       end if
@@ -385,7 +385,7 @@ contains
       ! so exactly one non-zero is a silently-uniform column — the same
       ! class of bug the retired knobs above were.
       if ((cfg%S_init_surface /= 0.0_wp) .neqv. (cfg%S_init_bottom /= 0.0_wp)) then
-         call logger%error("&tracer_nml S_init_surface / S_init_bottom must BOTH be "// &
+         call logger%error("[tracer] S_init_surface / S_init_bottom must BOTH be "// &
                            "non-zero to build the linear S(z) IC (they gate together, "// &
                            "exactly as T_init_surface/T_init_bottom do); one alone is "// &
                            "ignored and the column stays uniform at initial_salinity.")
@@ -401,7 +401,7 @@ contains
       ! ~0.03 degC, which is enough to flip the sign of an ice-shelf
       ! basal melt rate — a mistyped liquidus must stop the run.
       if (parse_tfreeze_set(cfg%ocean%eos%tfreeze_set) == TFREEZE_SET_INVALID) then
-         call logger%error("&ocean_eos_nml tfreeze_set = '"// &
+         call logger%error("[ocean.eos] tfreeze_set = '"// &
                            trim(cfg%ocean%eos%tfreeze_set)// &
                            "' is not recognised (allowed: seaice, isomip). "// &
                            "'seaice' is the SIS2/MOM6 sea-ice liquidus "// &
@@ -411,33 +411,33 @@ contains
          has_error = .true.
       end if
 
-      ! ---- TEOS-10 tracer convention + liquidus form (`&ocean_eos_nml`) ----
+      ! ---- TEOS-10 tracer convention + liquidus form (`[ocean.eos]`) ----
       ! Fail-loud matrix.  Every refusal names the knob and the reason; none
       ! is a silent downgrade.  `cons_abs` flips the meaning of the T/S
       ! tracers everywhere, so each place that would still read them as
       ! theta/SP must be refused until it converts (PR-3 initial conditions).  Sea ice converts at
       ! the coupler boundary (theta/SP on the ice side), so it is allowed.
       if (parse_ts_convention(cfg%ocean%eos%ts_convention) == TS_INVALID) then
-         call logger%error("&ocean_eos_nml ts_convention = '"// &
+         call logger%error("[ocean.eos] ts_convention = '"// &
                            trim(cfg%ocean%eos%ts_convention)// &
                            "' is not recognised (allowed: pot_prac, cons_abs).")
          has_error = .true.
       end if
       if (parse_tfreeze_form(cfg%ocean%eos%tfreeze_form) == TFREEZE_FORM_INVALID) then
-         call logger%error("&ocean_eos_nml tfreeze_form = '"// &
+         call logger%error("[ocean.eos] tfreeze_form = '"// &
                            trim(cfg%ocean%eos%tfreeze_form)// &
                            "' is not recognised (allowed: linear, teos_poly).")
          has_error = .true.
       end if
       if (cfg%ocean%eos%c_p < 3000.0_wp .or. cfg%ocean%eos%c_p > 4500.0_wp) then
-         call logger%error("&ocean_eos_nml c_p is outside the physical seawater range "// &
+         call logger%error("[ocean.eos] c_p is outside the physical seawater range "// &
                            "3000-4500 J kg-1 K-1 (MOM6 C_P is ~3992).")
          has_error = .true.
       end if
       if (parse_ts_convention(cfg%ocean%eos%ts_convention) == TS_CONS_ABS) then
          if (parse_eos_variant(cfg%ocean%eos%eos) /= EOS_VARIANT_ROQUET_SPV .and. &
              parse_eos_variant(cfg%ocean%eos%eos) /= EOS_VARIANT_ROQUET_RHO) then
-            call logger%error("&ocean_eos_nml ts_convention='cons_abs' requires "// &
+            call logger%error("[ocean.eos] ts_convention='cons_abs' requires "// &
                               "eos='roquet_rho' or 'roquet_spv' (got '"// &
                               trim(cfg%ocean%eos%eos)//"'): the linear and Wright "// &
                               "EOS are fits in potential temperature / practical "// &
@@ -446,8 +446,8 @@ contains
             has_error = .true.
          end if
          if (cfg%ocean%cavity_melt%enable) then
-            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
-                              "&ocean_cavity_melt_nml enable=.true.: the "// &
+            call logger%error("[ocean.eos] ts_convention='cons_abs' is refused with "// &
+                              "[ocean.cavity_melt] enable=true: the "// &
                               "three-equation melt liquidus is linear in SP and "// &
                               "in-situ/potential temperature, and its CT/SA form is "// &
                               "undecided.")
@@ -456,22 +456,22 @@ contains
       end if
       if (trim(adjustl(cfg%ocean%zinit%input_convention)) /= "pot_prac" .and. &
           trim(adjustl(cfg%ocean%zinit%input_convention)) /= "cons_abs") then
-         call logger%error("&ocean_zinit_nml input_convention = '"// &
+         call logger%error("[ocean.zinit] input_convention = '"// &
                            trim(cfg%ocean%zinit%input_convention)// &
                            "' is not recognised (allowed: pot_prac, cons_abs).")
          has_error = .true.
       end if
       if (parse_ts_convention(cfg%ocean%eos%ts_convention) /= TS_CONS_ABS .and. &
           trim(adjustl(cfg%ocean%zinit%input_convention)) == "cons_abs") then
-         call logger%error("&ocean_zinit_nml input_convention='cons_abs' requires "// &
-                           "&ocean_eos_nml ts_convention='cons_abs': there is no "// &
+         call logger%error("[ocean.zinit] input_convention='cons_abs' requires "// &
+                           "[ocean.eos] ts_convention='cons_abs': there is no "// &
                            "CT/SA -> theta/SP initial-condition path, so a CT/SA "// &
                            "file would be read as theta/SP silently.")
          has_error = .true.
       end if
       if (parse_tfreeze_form(cfg%ocean%eos%tfreeze_form) == TFREEZE_FORM_TEOS_POLY .and. &
           parse_ts_convention(cfg%ocean%eos%ts_convention) /= TS_CONS_ABS) then
-         call logger%error("&ocean_eos_nml tfreeze_form='teos_poly' requires "// &
+         call logger%error("[ocean.eos] tfreeze_form='teos_poly' requires "// &
                            "ts_convention='cons_abs': the TEOS-10 liquidus is "// &
                            "CT_freezing(SA, p) by construction, so evaluating it on "// &
                            "theta/SP would silently skip the conversion.")
@@ -511,7 +511,7 @@ contains
                                           trim(cfg%ocean%diag%diags), &
                                           cfg%ocean%diag%n_rho_levels, &
                                           cfg%ocean%diag%rho_levels)) then
-            call logger%error("&ocean_diag_nml vgrid='density' (or a ':density'/':rho' "// &
+            call logger%error("[ocean.diag] vgrid='density' (or a ':density'/':rho' "// &
                               "entry in diags) requires n_rho_levels > 0, "// &
                               "rho_levels(1:n_rho_levels) strictly increasing, and "// &
                               "n_rho_levels <= "//to_string(MAX_OCEAN_DIAG_Z_LEVELS))
@@ -519,7 +519,7 @@ contains
          end if
          if (cfg%ocean%diag%enabled .and. cfg%ocean%diag%dt_out <= 0.0_wp) then
             call logger%error("ocean_diag_dt_out must be > 0 when "// &
-                              "ocean_diag_enabled = .true.")
+                              "ocean_diag_enabled = true")
             has_error = .true.
          end if
          if (cfg%ocean%diag%enabled .and. cfg%ocean%diag%dt_out > cfg%t_end) then
@@ -558,7 +558,7 @@ contains
          if (trim(cfg%ocean%topo%topo_config) == "file" .and. &
              len_trim(cfg%bathymetry_file) == 0) then
             call logger%error("topo_config = 'file' requires bathymetry_file "// &
-                              "to be set in &output_nml")
+                              "to be set in [output]")
             has_error = .true.
          end if
          if (trim(cfg%ocean%topo%wind_config) /= "constant" .and. &
@@ -595,7 +595,7 @@ contains
          if (trim(cfg%thickness_config) == "uniform_z" .and. &
              cfg%ocean%wetdry%enable) then
             call logger%error("thickness_config = 'uniform_z' is incompatible with "// &
-                              "&ocean_wetdry_nml enable = .true.: the emerged-column "// &
+                              "[ocean.wetdry] enable = true: the emerged-column "// &
                               "seed invariant (bt_h = nz*2*H_VANISHED) assumes the "// &
                               "'sigma' even split")
             has_error = .true.
@@ -612,7 +612,7 @@ contains
             real(wp), allocatable :: zf_dz(:)
             zf_code = parse_z_fixed_profile(cfg%z_fixed_profile)
             if (zf_code == ZFIXED_PROFILE_INVALID) then
-               call logger%error("&vcoord_nml z_fixed_profile = '"// &
+               call logger%error("[vcoord] z_fixed_profile = '"// &
                                  trim(cfg%z_fixed_profile)//"' is not one of "// &
                                  "'uniform', 'list', 'tanh'")
                has_error = .true.
@@ -620,7 +620,7 @@ contains
                if (parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_Z_FIXED .and. &
                    parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_ZSTAR .and. &
                    parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_HYCOM) then
-                  call logger%error("&vcoord_nml z_fixed_profile = '"// &
+                  call logger%error("[vcoord] z_fixed_profile = '"// &
                                     trim(cfg%z_fixed_profile)//"' is only read by "// &
                                     "vcoord_type = 'z_fixed', 'zstar' or 'hycom' (got '"// &
                                     trim(cfg%vcoord_type)//"'); it would be silently ignored")
@@ -632,29 +632,29 @@ contains
                                           cfg%z_fixed_tanh_center, cfg%z_fixed_tanh_width, &
                                           zf_dz, zf_ierr)
                   if (zf_ierr == ZFIXED_DZ_ERR_COUNT) then
-                     call logger%error("&vcoord_nml z_fixed_profile = 'list' needs exactly "// &
+                     call logger%error("[vcoord] z_fixed_profile = 'list' needs exactly "// &
                                        "nz_layers = "//to_string(cfg%nz_layers)// &
                                        " leading positive z_fixed_dz entries (surface first, "// &
                                        "no gaps), got "//to_string(count(cfg%z_fixed_dz > 0.0_wp)))
                      has_error = .true.
                   else if (zf_ierr == ZFIXED_DZ_ERR_TOO_DEEP) then
-                     call logger%error("&vcoord_nml z_fixed_profile = 'tanh': nz_layers * "// &
+                     call logger%error("[vcoord] z_fixed_profile = 'tanh': nz_layers * "// &
                                        "z_fixed_dz_top = "// &
                                        to_string(real(cfg%nz_layers, wp)*cfg%z_fixed_dz_top)// &
-                                       " m is not below &ocean_topo_nml max_depth = "// &
+                                       " m is not below [ocean.topo] max_depth = "// &
                                        to_string(cfg%ocean%topo%max_depth)// &
                                        " m — there is no depth left to stretch into")
                      has_error = .true.
                   else if (zf_ierr /= ZFIXED_DZ_OK) then
-                     call logger%error("&vcoord_nml z_fixed_profile = 'tanh' needs "// &
-                                       "&ocean_topo_nml max_depth > 0, z_fixed_dz_top > 0, "// &
+                     call logger%error("[vcoord] z_fixed_profile = 'tanh' needs "// &
+                                       "[ocean.topo] max_depth > 0, z_fixed_dz_top > 0, "// &
                                        "z_fixed_tanh_width > 0 and 0 <= z_fixed_tanh_center <= 1")
                      has_error = .true.
                   else if (zf_code == ZFIXED_PROFILE_LIST .and. &
                            sum(zf_dz) < cfg%ocean%topo%max_depth) then
-                     call logger%warning("&vcoord_nml z_fixed_dz sums to "// &
+                     call logger%warning("[vcoord] z_fixed_dz sums to "// &
                                          to_string(sum(zf_dz))//" m, shallower than "// &
-                                         "&ocean_topo_nml max_depth = "// &
+                                         "[ocean.topo] max_depth = "// &
                                          to_string(cfg%ocean%topo%max_depth)// &
                                          " m: columns deeper than the profile carry the "// &
                                          "excess in their bed layer")
@@ -673,13 +673,13 @@ contains
             vc_code = parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z)
             if (trim(cfg%rho_target_profile) /= "uniform" .and. &
                 trim(cfg%rho_target_profile) /= "list") then
-               call logger%error("&vcoord_nml rho_target_profile = '"// &
+               call logger%error("[vcoord] rho_target_profile = '"// &
                                  trim(cfg%rho_target_profile)//"' is not one of "// &
                                  "'uniform', 'list'")
                has_error = .true.
             else if (trim(cfg%rho_target_profile) == "list") then
                if (vc_code /= VCOORD_RHO .and. vc_code /= VCOORD_HYCOM) then
-                  call logger%error("&vcoord_nml rho_target_profile = 'list' is only "// &
+                  call logger%error("[vcoord] rho_target_profile = 'list' is only "// &
                                     "read by vcoord_type = 'rho' or 'hycom' (got '"// &
                                     trim(cfg%vcoord_type)//"'); it would be silently ignored")
                   has_error = .true.
@@ -700,7 +700,7 @@ contains
                      end do
                   end if
                   if (.not. rho_ok) then
-                     call logger%error("&vcoord_nml rho_target_profile = 'list' needs "// &
+                     call logger%error("[vcoord] rho_target_profile = 'list' needs "// &
                                        "exactly nz_layers+1 = "// &
                                        to_string(cfg%nz_layers + 1)// &
                                        " leading positive, strictly increasing "// &
@@ -710,7 +710,7 @@ contains
                   end if
                end if
             else if (count(cfg%rho_target_list > 0.0_wp) > 0) then
-               call logger%error("&vcoord_nml rho_target_list is set but "// &
+               call logger%error("[vcoord] rho_target_list is set but "// &
                                  "rho_target_profile = 'uniform' ignores it; set "// &
                                  "rho_target_profile = 'list'")
                has_error = .true.
@@ -719,7 +719,7 @@ contains
 
          if (trim(cfg%remap_kernel) /= "stream" .and. &
              trim(cfg%remap_kernel) /= "reference") then
-            call logger%error("&vcoord_nml remap_kernel = '"//trim(cfg%remap_kernel)// &
+            call logger%error("[vcoord] remap_kernel = '"//trim(cfg%remap_kernel)// &
                               "' is not one of 'stream', 'reference'")
             has_error = .true.
          end if
@@ -731,7 +731,7 @@ contains
          ! `rdb_ocean_vcoord :: ocean_vcoord_compute_target_h_impl`), but the
          ! ONLY writer of that array anywhere in `src/` is the DIMENSIONLESS
          ! `z_ref_global(k) = k/nz` init in `ocean_vcoord_init` — nothing on
-         ! the namelist path or the Python path ever replaces it with metres.
+         ! the input path or the Python path ever replaces it with metres.
          ! So every z-level interval is `1/nz` metres, every layer collapses,
          ! and the whole column is dumped into `target_h(:,:,1)` (the BED
          ! layer) by the deficit line.  `Sum target_h = H + eta` still holds,
@@ -742,7 +742,7 @@ contains
          ! in the top 90 cm of a 1000 m column).
          !
          ! Refuse it rather than silently running a broken coordinate.  No
-         ! shipped namelist selects it.  Follow-up: fill `z_ref_global` in
+         ! shipped input selects it.  Follow-up: fill `z_ref_global` in
          ! metres (the family is the natural seat for a sigma-near-the-top /
          ! z-below HYBRID), then delete this refusal and the `documents_*`
          ! test with it.  `VCOORD_ZSTAR_SIGMA` consumes the same table
@@ -751,7 +751,7 @@ contains
          ! is numerically indistinguishable from SIGMA.
          if (parse_vcoord_type(cfg%vcoord_type, default_code=VCOORD_EULERIAN_Z) &
              == VCOORD_ZSIGMA) then
-            call logger%error("&vcoord_nml vcoord_type = 'zsigma' is refused on the "// &
+            call logger%error("[vcoord] vcoord_type = 'zsigma' is refused on the "// &
                               "ocean path: its deep branch reads `z_ref_global` as "// &
                               "absolute depths in METRES, but the only writer of that "// &
                               "table is the dimensionless `k/nz` init, so every "// &
@@ -763,7 +763,7 @@ contains
             has_error = .true.
          end if
 
-         ! `&vcoord_nml zstar_h_min` carries TWO different contracts, picked
+         ! `[vcoord] zstar_h_min` carries TWO different contracts, picked
          ! by the coordinate family rather than by the value (see
          ! `rdb_vcoord :: vcoord_h_min_role`).  On the GEOMETRIC families
          ! (ZSTAR_FULL / Z_FIXED) it is the anti-zero thickness of below-bed
@@ -787,7 +787,7 @@ contains
          ! own Python worked example (`python/tests/test_worked_example.py`,
          ! `ZStarFull(h_min=1.0e-3)`), corrected in the same change.
          !
-         ! NOTE the boundary this must NOT move: five shipped namelists set
+         ! NOTE the boundary this must NOT move: five shipped inputs set
          ! `zstar_h_min = 1.5e-4`, H_VANISHED EXACTLY, which is legal —
          ! `vcoord_h_min_is_coherent` is a strict `>` and every downstream
          ! vanish test is a strict `> H_VANISHED`, so a layer on the marker
@@ -803,12 +803,12 @@ contains
                                                  default_code=VCOORD_EULERIAN_Z)
             if (.not. vcoord_h_min_is_coherent(hmin_vcoord_code, cfg%zstar_h_min)) then
                if (cfg%zstar_h_min <= 0.0_wp) then
-                  call logger%error("&vcoord_nml zstar_h_min = "// &
+                  call logger%error("[vcoord] zstar_h_min = "// &
                                     to_string(cfg%zstar_h_min)//" must be > 0: it exists "// &
                                     "so a vanishing layer's target thickness is never "// &
                                     "exactly zero (kernels that divide by h_layer)")
                else
-                  call logger%error("&vcoord_nml zstar_h_min = "// &
+                  call logger%error("[vcoord] zstar_h_min = "// &
                                     to_string(cfg%zstar_h_min)//" m exceeds H_VANISHED = "// &
                                     to_string(H_VANISHED)//" m under vcoord_type = '"// &
                                     trim(cfg%vcoord_type)//"': that family uses the knob "// &
@@ -818,14 +818,14 @@ contains
                                     "while the coordinate still treats them as "// &
                                     "throwaway.  Use a value <= "// &
                                     to_string(H_VANISHED)//"; for a genuinely live "// &
-                                    "minimum layer thickness use &ocean_isopycnal_nml "// &
+                                    "minimum layer thickness use [ocean.isopycnal] "// &
                                     "angstrom_h (the D4 floor knob); the rho/hycom "// &
                                     "regrid has its own keep-alive floor")
                end if
                has_error = .true.
             end if
             ! NOTE the boundary, deliberately NOT warned about at runtime:
-            ! the five shipped namelists set `zstar_h_min = 1.5e-4`, which is
+            ! the five shipped inputs set `zstar_h_min = 1.5e-4`, which is
             ! H_VANISHED EXACTLY.  That is legal — every downstream vanish
             ! test is a strict `> H_VANISHED`, so a layer sitting on the
             ! marker still reads as vanished — but it carries zero margin,
@@ -841,8 +841,8 @@ contains
          ! pure/device and cannot fail loud); a silent no-op would hide a
          ! misconfigured GM run.
          if (cfg%ocean%gm%enable .and. .not. cfg%ocean%slopes%enable) then
-            call logger%error("&ocean_gm_nml enable=.true. requires "// &
-                              "&ocean_slopes_nml enable=.true. (GM reads the stored slope)")
+            call logger%error("[ocean.gm] enable=true requires "// &
+                              "[ocean.slopes] enable=true (GM reads the stored slope)")
             has_error = .true.
          end if
          ! The EBT vertical structure of KhTh (`use_ebt_struct`) is read from
@@ -850,13 +850,13 @@ contains
          ! `use_ebt`; and it is a GM option.  Refused loud, never ignored.
          if (cfg%ocean%gm%use_ebt_struct) then
             if (.not. cfg%ocean%gm%enable) then
-               call logger%error("&ocean_gm_nml use_ebt_struct=.true. requires "// &
-                                 "&ocean_gm_nml enable=.true. (it shapes the GM thickness diffusivity)")
+               call logger%error("[ocean.gm] use_ebt_struct=true requires "// &
+                                 "[ocean.gm] enable=true (it shapes the GM thickness diffusivity)")
                has_error = .true.
             end if
             if (.not. cfg%ocean%wavespeed%enable .or. .not. cfg%ocean%wavespeed%use_ebt) then
-               call logger%error("&ocean_gm_nml use_ebt_struct=.true. requires "// &
-                                 "&ocean_wavespeed_nml enable=.true. and use_ebt=.true. "// &
+               call logger%error("[ocean.gm] use_ebt_struct=true requires "// &
+                                 "[ocean.wavespeed] enable=true and use_ebt=true "// &
                                  "(the structure is the wave-speed slot's ebt_struct)")
                has_error = .true.
             end if
@@ -864,7 +864,7 @@ contains
          ! khth_slope_max enters as 1/slope_max^2 in the safe-streamfunction
          ! limiter; a zero/negative value divides by zero.
          if (cfg%ocean%gm%enable .and. cfg%ocean%gm%khth_slope_max <= 0.0_wp) then
-            call logger%error("&ocean_gm_nml khth_slope_max must be > 0 "// &
+            call logger%error("[ocean.gm] khth_slope_max must be > 0 "// &
                               "(enters the safe-streamfunction limiter as 1/slope_max^2)")
             has_error = .true.
          end if
@@ -872,8 +872,8 @@ contains
          ! gm_src_form = "work" replaces the GM PE-release source by the work
          ! of the final bolus transports: needs the GM operator to exist.
          if (trim(cfg%ocean%gm%gm_src_form) == "work" .and. .not. cfg%ocean%gm%enable) then
-            call logger%error("&ocean_gm_nml gm_src_form='work' requires "// &
-                              "&ocean_gm_nml enable=.true.")
+            call logger%error("[ocean.gm] gm_src_form='work' requires "// &
+                              "[ocean.gm] enable=true")
             has_error = .true.
          end if
 
@@ -882,25 +882,25 @@ contains
          ! the BVP coefficients must keep the tridiagonal system SPD.
          if (cfg%ocean%gm%use_fgnv) then
             if (.not. cfg%ocean%gm%enable) then
-               call logger%error("&ocean_gm_nml use_fgnv=.true. requires "// &
-                                 "&ocean_gm_nml enable=.true. (FGNV replaces the GM streamfunction)")
+               call logger%error("[ocean.gm] use_fgnv=true requires "// &
+                                 "[ocean.gm] enable=true (FGNV replaces the GM streamfunction)")
                has_error = .true.
             end if
             if (.not. cfg%ocean%wavespeed%enable) then
-               call logger%error("&ocean_gm_nml use_fgnv=.true. requires "// &
-                                 "&ocean_wavespeed_nml enable=.true. (FGNV needs cg1)")
+               call logger%error("[ocean.gm] use_fgnv=true requires "// &
+                                 "[ocean.wavespeed] enable=true (FGNV needs cg1)")
                has_error = .true.
             end if
             if (cfg%ocean%gm%fgnv_filter_scale <= 0.0_wp) then
-               call logger%error("&ocean_gm_nml fgnv_filter_scale must be > 0")
+               call logger%error("[ocean.gm] fgnv_filter_scale must be > 0")
                has_error = .true.
             end if
             if (cfg%ocean%gm%fgnv_strat_floor <= 0.0_wp) then
-               call logger%error("&ocean_gm_nml fgnv_strat_floor must be > 0")
+               call logger%error("[ocean.gm] fgnv_strat_floor must be > 0")
                has_error = .true.
             end if
             if (cfg%ocean%gm%fgnv_c_min < 0.0_wp) then
-               call logger%error("&ocean_gm_nml fgnv_c_min must be >= 0")
+               call logger%error("[ocean.gm] fgnv_c_min must be >= 0")
                has_error = .true.
             end if
          end if
@@ -909,7 +909,7 @@ contains
          ! discontinuous (regula-falsi) path is deferred (R4).  Loud
          ! invariant — the device kernel cannot fail loud.
          if (cfg%ocean%redi%enable .and. .not. cfg%ocean%redi%continuous) then
-            call logger%error("&ocean_redi_nml continuous=.false. (discontinuous "// &
+            call logger%error("[ocean.redi] continuous=false (discontinuous "// &
                               "variant) is not implemented yet (deferred R4)")
             has_error = .true.
          end if
@@ -918,8 +918,8 @@ contains
          ! a single-operator configuration (ACCESS-OM3 runs kappa_h = 0);
          ! running both double-counts lateral tracer diffusion.  Warn only.
          if (cfg%ocean%redi%enable .and. cfg%ocean%hdiff%kappa_h > 0.0_wp) then
-            call logger%warning("&ocean_hdiff_nml kappa_h > 0 together with "// &
-                                "&ocean_redi_nml enable: the along-coordinate "// &
+            call logger%warning("[ocean.hdiff] kappa_h > 0 together with "// &
+                                "[ocean.redi] enable: the along-coordinate "// &
                                 "Laplacian AUGMENTS neutral diffusion. Neutral "// &
                                 "diffusion normally replaces it (OM3 parity: kappa_h = 0)")
          end if
@@ -928,19 +928,19 @@ contains
          ! for the Eady term AND the first-mode cg1 (wavespeed slot) for the
          ! resolution function.  Loud invariant — the kernel is pure/device.
          if (cfg%ocean%varmix%enable .and. .not. cfg%ocean%slopes%enable) then
-            call logger%error("&ocean_varmix_nml enable=.true. requires "// &
-                              "&ocean_slopes_nml enable=.true. (VarMix reads the stored slope + N^2)")
+            call logger%error("[ocean.varmix] enable=true requires "// &
+                              "[ocean.slopes] enable=true (VarMix reads the stored slope + N^2)")
             has_error = .true.
          end if
          if (cfg%ocean%varmix%enable .and. .not. cfg%ocean%wavespeed%enable) then
-            call logger%error("&ocean_varmix_nml enable=.true. requires "// &
-                              "&ocean_wavespeed_nml enable=.true. (the resolution function needs cg1)")
+            call logger%error("[ocean.varmix] enable=true requires "// &
+                              "[ocean.wavespeed] enable=true (the resolution function needs cg1)")
             has_error = .true.
          end if
          ! `mono_n2` (N^2 monotonisation of the EBT path) is not implemented;
          ! a silently ignored knob is a trap, so refuse it with `use_ebt`.
          if (cfg%ocean%wavespeed%use_ebt .and. cfg%ocean%wavespeed%mono_n2 >= 0.0_wp) then
-            call logger%error("&ocean_wavespeed_nml mono_n2 >= 0 with use_ebt=.true.: "// &
+            call logger%error("[ocean.wavespeed] mono_n2 >= 0 with use_ebt=true: "// &
                               "N^2 monotonisation of the EBT mode is not implemented yet")
             has_error = .true.
          end if
@@ -948,7 +948,7 @@ contains
          ! form `s^p/(s^p + (alpha*cg1)^p)`); p < 1 has no meaning and would
          ! divide by zero or invert the limits.  Refused regardless of enable.
          if (cfg%ocean%varmix%kh_res_fn_power < 1) then
-            call logger%error("&ocean_varmix_nml kh_res_fn_power must be >= 1 "// &
+            call logger%error("[ocean.varmix] kh_res_fn_power must be >= 1 "// &
                               "(the resolution-function power p; 2 is the production form)")
             has_error = .true.
          end if
@@ -957,8 +957,8 @@ contains
          ! resolution function `Res_fn`, so VarMix MUST be enabled.  Loud
          ! invariant — the lateral-mix kernel is pure/device.
          if (cfg%ocean%hvisc%resoln_scaled_visc .and. .not. cfg%ocean%varmix%enable) then
-            call logger%error("&ocean_hvisc_nml resoln_scaled_visc=.true. requires "// &
-                              "&ocean_varmix_nml enable=.true. (the resolution function lives in VarMix)")
+            call logger%error("[ocean.hvisc] resoln_scaled_visc=true requires "// &
+                              "[ocean.varmix] enable=true (the resolution function lives in VarMix)")
             has_error = .true.
          end if
 
@@ -969,20 +969,20 @@ contains
          ! but `meke%kh` has no face accumulator to feed — documented, not an
          ! error.)
          if (cfg%ocean%meke%enable .and. .not. cfg%ocean%gm%enable) then
-            call logger%error("&ocean_meke_nml enable=.true. requires "// &
-                              "&ocean_gm_nml enable=.true. (MEKE sources from gm_src)")
+            call logger%error("[ocean.meke] enable=true requires "// &
+                              "[ocean.gm] enable=true (MEKE sources from gm_src)")
             has_error = .true.
          end if
 
          ! ---- Lateral-mixing closure: fail loud on unimplemented tags ----
-         ! `parse_lateral_closure` maps the &ocean_hvisc_nml string to an
+         ! `parse_lateral_closure` maps the [ocean.hvisc] string to an
          ! LMIX_* code; a mistyped/garbage string yields LMIX_INVALID and a
          ! tag with no dispatcher path is not implemented.  Either case must
          ! ABORT here — never silently fall through to background-only
          ! viscosity (the original silent-wrong-answer foot-gun).
          lateral_closure_code = parse_lateral_closure(cfg%ocean%hvisc%lateral_closure)
          if (.not. lateral_closure_is_implemented(lateral_closure_code)) then
-            call logger%error("Invalid/unimplemented &ocean_hvisc_nml lateral_closure = '"// &
+            call logger%error("Invalid/unimplemented [ocean.hvisc] lateral_closure = '"// &
                               trim(cfg%ocean%hvisc%lateral_closure)//"': must be one of "// &
                               "'none', 'leith', 'smagorinsky'/'smag', 'biharmonic', "// &
                               "'leith_biharm' — a closure with no kernel must not "// &
@@ -997,8 +997,8 @@ contains
          ! silently win (MOM6 max-combines them; we do not).
          if (lateral_closure_conflicts_smag_ah(lateral_closure_code, &
                                                cfg%ocean%hvisc%smag_ah)) then
-            call logger%error("&ocean_hvisc_nml lateral_closure='leith_biharm' and "// &
-                              "smag_ah=.true. are both flow-aware biharmonic closures "// &
+            call logger%error("[ocean.hvisc] lateral_closure='leith_biharm' and "// &
+                              "smag_ah=true are both flow-aware biharmonic closures "// &
                               "filling nu4_face — smag_ah would overwrite the "// &
                               "Leith-biharmonic fill; enable only one")
             has_error = .true.
@@ -1009,43 +1009,43 @@ contains
          ! floor needs real latitudes: `geolat` is identically zero on a
          ! cartesian grid (same stance as `bkgnd_henyey`).
          if (cfg%ocean%hvisc%bound_coriolis_biharm .and. .not. cfg%ocean%hvisc%smag_ah) then
-            call logger%error("&ocean_hvisc_nml bound_coriolis_biharm=.true. requires "// &
-                              "smag_ah=.true. - the Coriolis bound is a term of the "// &
+            call logger%error("[ocean.hvisc] bound_coriolis_biharm=true requires "// &
+                              "smag_ah=true - the Coriolis bound is a term of the "// &
                               "Smagorinsky biharmonic and would be silently ignored")
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%ah_vel_scale > 0.0_wp .and. .not. cfg%ocean%hvisc%smag_ah) then
-            call logger%error("&ocean_hvisc_nml ah_vel_scale > 0 requires smag_ah=.true. - "// &
+            call logger%error("[ocean.hvisc] ah_vel_scale > 0 requires smag_ah=true - "// &
                               "it is the background floor of the Smagorinsky biharmonic "// &
                               "and would be silently ignored")
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%ah_vel_scale < 0.0_wp .or. cfg%ocean%hvisc%kh_sin_lat < 0.0_wp) then
-            call logger%error("&ocean_hvisc_nml ah_vel_scale and kh_sin_lat must be >= 0")
+            call logger%error("[ocean.hvisc] ah_vel_scale and kh_sin_lat must be >= 0")
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%bound_coriolis_biharm .and. &
              .not. (cfg%ocean%hvisc%bound_coriolis_vel > 0.0_wp)) then
-            call logger%error("&ocean_hvisc_nml bound_coriolis_vel must be > 0 "// &
-                              "when bound_coriolis_biharm=.true.")
+            call logger%error("[ocean.hvisc] bound_coriolis_vel must be > 0 "// &
+                              "when bound_coriolis_biharm=true")
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%kh_sin_lat > 0.0_wp .and. &
              trim(cfg%ocean%grid%grid_config) == "cartesian") then
-            call logger%error("&ocean_hvisc_nml kh_sin_lat > 0 requires a non-cartesian "// &
+            call logger%error("[ocean.hvisc] kh_sin_lat > 0 requires a non-cartesian "// &
                               "grid_config - geolat is identically zero on cartesian, so "// &
                               "the |sin(lat)| floor would vanish everywhere")
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%bound_thin_layer .and. .not. cfg%ocean%hvisc%stress_tensor) then
-            call logger%error("&ocean_hvisc_nml bound_thin_layer=.true. requires "// &
-                              "stress_tensor=.true. - the thin-layer ratio and harmonic "// &
+            call logger%error("[ocean.hvisc] bound_thin_layer=true requires "// &
+                              "stress_tensor=true - the thin-layer ratio and harmonic "// &
                               "corner thickness act only in the stress-form assembly")
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%biharm_stress) then
             if (cfg%nghost < 4) then
-               call logger%error("&ocean_hvisc_nml biharm_stress=.true. needs nghost >= 4 "// &
+               call logger%error("[ocean.hvisc] biharm_stress=true needs nghost >= 4 "// &
                                  "(got "//to_string(cfg%nghost)//"): the stress-form biharmonic "// &
                                  "chains strain -> Laplacian -> strain -> divergence, a stencil "// &
                                  "four cells deep; with fewer ghost rows a decomposed run reads "// &
@@ -1053,44 +1053,44 @@ contains
                has_error = .true.
             end if
             if (.not. cfg%ocean%hvisc%stress_tensor) then
-               call logger%error("&ocean_hvisc_nml biharm_stress=.true. requires "// &
-                                 "stress_tensor=.true. - the biharmonic is folded into "// &
+               call logger%error("[ocean.hvisc] biharm_stress=true requires "// &
+                                 "stress_tensor=true - the biharmonic is folded into "// &
                                  "the stress tensor assembly")
                has_error = .true.
             end if
             if (cfg%ocean%hvisc%no_slip) then
-               call logger%error("&ocean_hvisc_nml biharm_stress=.true. is incompatible "// &
-                                 "with no_slip=.true. (the biharmonic is free-slip only)")
+               call logger%error("[ocean.hvisc] biharm_stress=true is incompatible "// &
+                                 "with no_slip=true (the biharmonic is free-slip only)")
                has_error = .true.
             end if
             if (lateral_closure_code == LMIX_LEITH_BIHARM) then
-               call logger%error("&ocean_hvisc_nml biharm_stress=.true. is incompatible "// &
+               call logger%error("[ocean.hvisc] biharm_stress=true is incompatible "// &
                                  "with lateral_closure='leith_biharm' (its nu4 field "// &
                                  "is not consumed by the stress-form biharmonic)")
                has_error = .true.
             end if
             if (.not. (cfg%ocean%hvisc%nu_4 > 0.0_wp .or. &
                        (cfg%ocean%hvisc%smag_ah .and. cfg%ocean%hvisc%smag_bi_const > 0.0_wp))) then
-               call logger%error("&ocean_hvisc_nml biharm_stress=.true. needs a biharmonic "// &
-                                 "coefficient: nu_4>0 or smag_ah=.true. with smag_bi_const>0")
+               call logger%error("[ocean.hvisc] biharm_stress=true needs a biharmonic "// &
+                                 "coefficient: nu_4>0 or smag_ah=true with smag_bi_const>0")
                has_error = .true.
             end if
          end if
          if (cfg%ocean%hvisc%kh_bg_at_points .and. .not. cfg%ocean%hvisc%stress_tensor) then
-            call logger%error("&ocean_hvisc_nml kh_bg_at_points=.true. requires "// &
-                              "stress_tensor=.true. - the point statics seed the "// &
+            call logger%error("[ocean.hvisc] kh_bg_at_points=true requires "// &
+                              "stress_tensor=true - the point statics seed the "// &
                               "T/corner coefficients that only the stress path reads")
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%kh_bg_at_points .and. cfg%ocean%hvisc%kh_vel_scale < 0.0_wp) then
-            call logger%error("&ocean_hvisc_nml kh_vel_scale must be >= 0")
+            call logger%error("[ocean.hvisc] kh_vel_scale must be >= 0")
             has_error = .true.
          end if
          ! Only anisotropy mode 0 (grid-relative `aniso_dir`) has an
          ! implemented direction tensor; a requested-but-unimplemented mode
          ! must abort, not silently fall back to the grid-i default.
          if (.not. aniso_mode_is_implemented(cfg%ocean%hvisc%aniso_mode)) then
-            call logger%error("&ocean_hvisc_nml aniso_mode must be 0 "// &
+            call logger%error("[ocean.hvisc] aniso_mode must be 0 "// &
                               "(grid-relative aniso_dir) — other modes are not "// &
                               "implemented and must not silently fall back to grid-i")
             has_error = .true.
@@ -1108,10 +1108,10 @@ contains
                                            lateral_closure_code, &
                                            cfg%ocean%hvisc%c_leith_bi, &
                                            cfg%ocean%hvisc%nu_4_bg)) then
-            call logger%error("&ocean_meke_nml backscatter=.true. requires a "// &
+            call logger%error("[ocean.meke] backscatter=true requires a "// &
                               "biharmonic backstop with a NON-ZERO coefficient "// &
-                              "(&ocean_hvisc_nml nu_4>0 with no flow-aware "// &
-                              "closure selected, or smag_ah=.true. with "// &
+                              "([ocean.hvisc] nu_4>0 with no flow-aware "// &
+                              "closure selected, or smag_ah=true with "// &
                               "smag_bi_const>0, or lateral_closure='leith_biharm' "// &
                               "with c_leith_bi>0 — or nu_4_bg>0 as a floor in "// &
                               "either flow-aware case) — the negative harmonic "// &
@@ -1131,7 +1131,7 @@ contains
          ! run enstrophy-only Sadourny — a different conservation law.
          if (.not. pv_variant_is_implemented( &
              parse_pv_variant(cfg%ocean%coriolis%form))) then
-            call logger%error("&ocean_coriolis_nml form = '"// &
+            call logger%error("[ocean.coriolis] form = '"// &
                               trim(cfg%ocean%coriolis%form)//"' is not implemented — "// &
                               "must be 'sadourny', 'sadourny_hk' or 'sadourny_energy' "// &
                               "('al81' is reserved but its Arakawa-Lamb kernel is not "// &
@@ -1142,7 +1142,7 @@ contains
          ! silently fall back to centred.
          if (.not. pv_adv_scheme_is_implemented( &
              parse_pv_adv_scheme(cfg%ocean%coriolis%pv_adv_scheme))) then
-            call logger%error("&ocean_coriolis_nml pv_adv_scheme = '"// &
+            call logger%error("[ocean.coriolis] pv_adv_scheme = '"// &
                               trim(cfg%ocean%coriolis%pv_adv_scheme)//"' is not recognised — "// &
                               "must be 'centered', 'weno3', 'weno5' or 'weno7'")
             has_error = .true.
@@ -1153,7 +1153,7 @@ contains
          ! tracer-WENO ladder's per-rung nghost gate.
          if (cfg%nghost < pv_adv_required_nghost( &
              parse_pv_adv_scheme(cfg%ocean%coriolis%pv_adv_scheme))) then
-            call logger%error("&ocean_coriolis_nml pv_adv_scheme='"// &
+            call logger%error("[ocean.coriolis] pv_adv_scheme='"// &
                               trim(cfg%ocean%coriolis%pv_adv_scheme)//"' requires nghost >= "// &
                               to_string(pv_adv_required_nghost( &
                                         parse_pv_adv_scheme(cfg%ocean%coriolis%pv_adv_scheme)))// &
@@ -1165,7 +1165,7 @@ contains
          ! centred interpolation those kernels hard-code.
          if (trim(cfg%ocean%coriolis%pv_adv_scheme) /= "centered" .and. &
              trim(cfg%ocean%coriolis%form) /= "sadourny") then
-            call logger%error("&ocean_coriolis_nml pv_adv_scheme='"// &
+            call logger%error("[ocean.coriolis] pv_adv_scheme='"// &
                               trim(cfg%ocean%coriolis%pv_adv_scheme)// &
                               "' is only wired into form='sadourny'; got form='"// &
                               trim(cfg%ocean%coriolis%form)//"'")
@@ -1175,18 +1175,18 @@ contains
          ! sadourny_energy transport form consumes uh/vh, and only the
          ! mom6 corrector has a predictor continuity solve to be
          ! consistent WITH — any other combination would silently run
-         ! the recompute path while the namelist promised otherwise.
+         ! the recompute path while the input promised otherwise.
          if (cfg%ocean%coriolis%use_state_fluxes) then
             if (trim(cfg%ocean%coriolis%form) /= "sadourny_energy") then
-               call logger%error("&ocean_coriolis_nml use_state_fluxes requires "// &
+               call logger%error("[ocean.coriolis] use_state_fluxes requires "// &
                                  "form='sadourny_energy' (the transport form is what "// &
                                  "consumes uh/vh); got form='"// &
                                  trim(cfg%ocean%coriolis%form)//"'")
                has_error = .true.
             end if
             if (trim(cfg%ocean%bt%split_scheme) /= "pred_corr") then
-               call logger%error("&ocean_coriolis_nml use_state_fluxes requires "// &
-                                 "&ocean_bt_nml split_scheme='pred_corr' (the corrector "// &
+               call logger%error("[ocean.coriolis] use_state_fluxes requires "// &
+                                 "[ocean.bt] split_scheme='pred_corr' (the corrector "// &
                                  "consumes the predictor chain's fluxes); got "// &
                                  "split_scheme='"//trim(cfg%ocean%bt%split_scheme)//"'")
                has_error = .true.
@@ -1202,7 +1202,7 @@ contains
              bound_coriolis_is_supported( &
              parse_pv_variant(cfg%ocean%coriolis%form), &
              parse_pv_adv_scheme(cfg%ocean%coriolis%pv_adv_scheme))) then
-            call logger%error("&ocean_coriolis_nml bound_coriolis is implemented for "// &
+            call logger%error("[ocean.coriolis] bound_coriolis is implemented for "// &
                               "form='sadourny_energy' and for form='sadourny' with "// &
                               "pv_adv_scheme='centered' only; got form='"// &
                               trim(cfg%ocean%coriolis%form)//"', pv_adv_scheme='"// &
@@ -1214,7 +1214,7 @@ contains
          ! enstrophy/hk are separate kernels — v1 covers the audit target).
          if (trim(cfg%ocean%coriolis%corner_h) == "mom6_area" .and. &
              trim(cfg%ocean%coriolis%form) /= "sadourny_energy") then
-            call logger%error("&ocean_coriolis_nml corner_h='mom6_area' is implemented for "// &
+            call logger%error("[ocean.coriolis] corner_h='mom6_area' is implemented for "// &
                               "form='sadourny_energy' only; got form='"// &
                               trim(cfg%ocean%coriolis%form)//"'")
             has_error = .true.
@@ -1224,7 +1224,7 @@ contains
          ! quadratic default.
          if (.not. bdrag_variant_is_implemented( &
              parse_bdrag_variant(cfg%ocean%bdrag%form))) then
-            call logger%error("&ocean_bdrag_nml form = '"// &
+            call logger%error("[ocean.bdrag] form = '"// &
                               trim(cfg%ocean%bdrag%form)//"' is not implemented — "// &
                               "must be 'linear'/'rayleigh' or 'quadratic'/'cd'")
             has_error = .true.
@@ -1234,8 +1234,8 @@ contains
          ! other layers.  Config-time check against nz_layers (not nz_ml).
          if (.not. gprime_nz_is_supported( &
              parse_opgf_variant(cfg%ocean%pgf%form), cfg%nz_layers)) then
-            call logger%error("&ocean_pgf_nml form = 'gprime' requires "// &
-                              "&nonhydrostatic_nml nz_layers = 2 (the reduced-gravity "// &
+            call logger%error("[ocean.pgf] form = 'gprime' requires "// &
+                              "[nonhydrostatic] nz_layers = 2 (the reduced-gravity "// &
                               "form writes only the top + bottom layer; use "// &
                               "the default form='mont' for a general-nz PGF)")
             has_error = .true.
@@ -1244,7 +1244,7 @@ contains
          ! linear in c_leith_bi) — the user asked for biharmonic dissipation
          ! and got none.  Promoted from a configure-time warning to an abort.
          if (leith_biharm_is_inert(lateral_closure_code, cfg%ocean%hvisc%c_leith_bi)) then
-            call logger%error("&ocean_hvisc_nml lateral_closure='leith_biharm' with "// &
+            call logger%error("[ocean.hvisc] lateral_closure='leith_biharm' with "// &
                               "c_leith_bi <= 0 is inert (ν₄ is linear in c_leith_bi) — "// &
                               "set c_leith_bi > 0 or choose a different closure")
             has_error = .true.
@@ -1255,9 +1255,9 @@ contains
          if (tidal_mixing_is_inert(cfg%ocean%tidal_mixing%enable, &
                                    cfg%ocean%tidal_mixing%e_uniform, &
                                    cfg%ocean%tidal_mixing%e_compute)) then
-            call logger%error("&ocean_tidal_mixing_nml enable=.true. with e_uniform <= 0 "// &
-                              "and e_compute=.false. supplies no energy — Kd is "// &
-                              "identically zero; set e_uniform > 0 or e_compute=.true.")
+            call logger%error("[ocean.tidal_mixing] enable=true with e_uniform <= 0 "// &
+                              "and e_compute=false supplies no energy — Kd is "// &
+                              "identically zero; set e_uniform > 0 or e_compute=true")
             has_error = .true.
          end if
          ! OBC edge strings bypass the schema (external group), so a typo
@@ -1265,24 +1265,24 @@ contains
          ! naming which edge (the guard runs before configure_ocean_bc, so an
          ! invalid tag never reaches the setup path).
          if (ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_INVALID) then
-            call logger%error("&ocean_bc_nml west = '"//trim(cfg%ocean%bc%west)// &
+            call logger%error("[ocean.bc] west = '"//trim(cfg%ocean%bc%west)// &
                               "' is not a recognised boundary type (wall/open/tidal/"// &
                               "nested/inflow/discharge/clamped/sponge/chapman/periodic/"// &
                               "tripolar_fold)")
             has_error = .true.
          end if
          if (ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_INVALID) then
-            call logger%error("&ocean_bc_nml east = '"//trim(cfg%ocean%bc%east)// &
+            call logger%error("[ocean.bc] east = '"//trim(cfg%ocean%bc%east)// &
                               "' is not a recognised boundary type")
             has_error = .true.
          end if
          if (ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_INVALID) then
-            call logger%error("&ocean_bc_nml south = '"//trim(cfg%ocean%bc%south)// &
+            call logger%error("[ocean.bc] south = '"//trim(cfg%ocean%bc%south)// &
                               "' is not a recognised boundary type")
             has_error = .true.
          end if
          if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_INVALID) then
-            call logger%error("&ocean_bc_nml north = '"//trim(cfg%ocean%bc%north)// &
+            call logger%error("[ocean.bc] north = '"//trim(cfg%ocean%bc%north)// &
                               "' is not a recognised boundary type")
             has_error = .true.
          end if
@@ -1300,9 +1300,9 @@ contains
              ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_PERIODIC) then
             if (cfg%ocean%topo%coriolis_beta /= 0.0_wp .or. &
                 trim(cfg%ocean%grid%grid_config) /= "cartesian") then
-               call logger%error("&ocean_bc_nml south/north = 'periodic' needs a "// &
+               call logger%error("[ocean.bc] south/north = 'periodic' needs a "// &
                                  "y-uniform grid: grid_config = 'cartesian' and "// &
-                                 "&ocean_topo_nml coriolis_beta = 0 (an f-plane).  "// &
+                                 "[ocean.topo] coriolis_beta = 0 (an f-plane).  "// &
                                  "A beta plane or a lon-lat / supergrid sector has "// &
                                  "f and metrics that differ between the south and "// &
                                  "north edge, which the periodic wrap does not "// &
@@ -1312,7 +1312,7 @@ contains
             end if
          end if
 
-         ! Along-coordinate tracer Laplacian (`&ocean_hdiff_nml kappa_h`):
+         ! Along-coordinate tracer Laplacian (`[ocean.hdiff] kappa_h`):
          ! the explicit forward-Euler stability bound
          ! kappa_h*dt_therm*(1/dx^2+1/dy^2) <= 0.5 used to be checked HERE
          ! with the nominal `cfg%dx`/`cfg%dy` — broken on non-Cartesian
@@ -1326,7 +1326,7 @@ contains
 
       ! ---- Implicit vdiff stress/drag folding (mutual exclusions) ----
       ! `implicit_drag` (fold into the vdiff bed diagonal) is mutually
-      ! exclusive with the legacy `&ocean_bdrag_nml implicit` split-apply
+      ! exclusive with the legacy `[ocean.bdrag] implicit` split-apply
       ! path (both would damp the bed velocity ⇒ double drag), and the
       ! bed-only fold cannot represent HBBL-distributed drag (`hbbl > 0`)
       ! — that needs a per-layer rate (follow-up PR).  Fail loud.  (Not a
@@ -1357,8 +1357,8 @@ contains
       ! meaningful with a top drag configured.
       if (cfg%ocean%vdiff%implicit_top_drag) then
          if (.not. cfg%ocean%tdrag%enable) then
-            call logger%error("&ocean_vdiff_nml implicit_top_drag=.true. requires "// &
-                              "&ocean_tdrag_nml enable=.true.  The fold consumes the "// &
+            call logger%error("[ocean.vdiff] implicit_top_drag=true requires "// &
+                              "[ocean.tdrag] enable=true  The fold consumes the "// &
                               "top-drag slot's lambda_top_u/v and its face cover "// &
                               "masks; with the slot disabled those are placeholder "// &
                               "arrays and the knob would silently do nothing except "// &
@@ -1366,8 +1366,8 @@ contains
             has_error = .true.
          end if
          if (cfg%ocean%tdrag%implicit) then
-            call logger%error("&ocean_vdiff_nml implicit_top_drag is mutually "// &
-                              "exclusive with &ocean_tdrag_nml implicit: both damp "// &
+            call logger%error("[ocean.vdiff] implicit_top_drag is mutually "// &
+                              "exclusive with [ocean.tdrag] implicit: both damp "// &
                               "the top layer, so running both is a DOUBLE COUNT, not "// &
                               "a stronger drag.  Pick one — the vdiff fold if the "// &
                               "column also has real vertical viscosity to couple "// &
@@ -1375,12 +1375,12 @@ contains
             has_error = .true.
          end if
          if (cfg%ocean%tdrag%htbl > 0.0_wp) then
-            call logger%error("&ocean_vdiff_nml implicit_top_drag does not support "// &
-                              "the HTBL-distributed top drag (&ocean_tdrag_nml htbl "// &
+            call logger%error("[ocean.vdiff] implicit_top_drag does not support "// &
+                              "the HTBL-distributed top drag ([ocean.tdrag] htbl "// &
                               "> 0): the fold is a SINGLE k = nz Rayleigh rate on the "// &
                               "diagonal and cannot represent a band spread over "// &
                               "several layers (the mirror of the implicit_drag/HBBL "// &
-                              "restriction).  Use &ocean_tdrag_nml implicit for a "// &
+                              "restriction).  Use [ocean.tdrag] implicit for a "// &
                               "distributed top drag.")
             has_error = .true.
          end if
@@ -1388,13 +1388,13 @@ contains
       ! `bbl_glue` (MOM6 BOTTOMDRAGLAW) needs the height-above-bed stack
       ! that only the hvel_mom6 path accumulates.  It composes with every
       ! drag form and fold: its piston IS the bed sink (the explicit apply,
-      ! the `&ocean_bdrag_nml implicit` split-apply and the `implicit_drag`
+      ! the `[ocean.bdrag] implicit` split-apply and the `implicit_drag`
       ! fold are all skipped on the layers; the explicit tendency still
       ! feeds the barotropic F_slow, as under `implicit_drag`), which is
       ! also why `implicit_drag` + `hbbl > 0` is accepted under it.
       if (cfg%ocean%vdiff%bbl_glue) then
          if (.not. cfg%ocean%vdiff%hvel_mom6) then
-            call logger%error("ocean_vdiff bbl_glue requires hvel_mom6=.true. — the "// &
+            call logger%error("ocean_vdiff bbl_glue requires hvel_mom6=true — the "// &
                               "botfn glue reads the height-above-bed stack that only "// &
                               "the hvel_mom6 face-thickness build accumulates")
             has_error = .true.
@@ -1416,7 +1416,7 @@ contains
       ! correction fold is not energy-conserving on any column whose
       ! (open) layers differ in thickness — which is every column of a
       ! stretched z_fixed stack — and MOM6 has no such fold.  Refused,
-      ! never silently ignored, so a namelist that relied on it learns
+      ! never silently ignored, so an input that relied on it learns
       ! that its answer changes.  See `apply_bt_correction`.
       if (cfg%ocean%bt%correction_h_weighted) then
          ! Pushed to the error ring as well as logged, so a C/Python
@@ -1424,14 +1424,14 @@ contains
          ! specific reason, not only the generic validation rollup.
          block
             character(len=*), parameter :: msg = &
-                                           "&ocean_bt_nml correction_h_weighted is RETIRED: the h-weighted "// &
+                                           "[ocean.bt] correction_h_weighted is RETIRED: the h-weighted "// &
                                            "barotropic-correction fold was energy-non-conserving (beyond the "// &
                                            "barotropic KE change it adds a positive source 0.5*D^2*H*(kappa-1), "// &
                                            "kappa = sum(h^3)sum(h)/sum(h^2)^2 >= 1, plus a shear feedback that grew "// &
                                            "stretched z_fixed runs non-finite). MOM6 has no h-weighted fold; the "// &
                                            "uniform fold is the default and MOM6's own one (accel_layer_u applies "// &
                                            "the BT acceleration uniformly). For drag-aware damping use "// &
-                                           "visc_rem_chain=.true. (with &ocean_vdiff_nml implicit_drag or "// &
+                                           "visc_rem_chain=true (with [ocean.vdiff] implicit_drag or "// &
                                            "bbl_glue) -- it does NOT re-weight this fold (correction_visc_rem, "// &
                                            "the knob that used to, is itself retired), it feeds visc_rem into "// &
                                            "bt_rem/av_rem instead. Else delete the key."
@@ -1457,9 +1457,9 @@ contains
       ! separate producer knob any more.
       if (ocean_bt_visc_rem_producer_on(cfg) .and. .not. &
           (cfg%ocean%vdiff%implicit_drag .or. cfg%ocean%vdiff%bbl_glue)) then
-         call logger%warning("&ocean_bt_nml forcing_visc_rem/renorm_visc_rem/"// &
+         call logger%warning("[ocean.bt] forcing_visc_rem/renorm_visc_rem/"// &
                              "bt_rem_from_visc_rem/visc_rem_chain is on but neither "// &
-                             "&ocean_vdiff_nml implicit_drag nor bbl_glue is: the vdiff "// &
+                             "[ocean.vdiff] implicit_drag nor bbl_glue is: the vdiff "// &
                              "operator then carries no drag, so visc_rem = 1 identically "// &
                              "and every consumer is a no-op")
       end if
@@ -1474,8 +1474,8 @@ contains
       ! GPRIME runs the fast loop at the reduced `g_FS`.
       if (cfg%ocean%bt%correction_bc_pgf .and. &
           parse_opgf_variant(cfg%ocean%pgf%form) /= OPGF_VARIANT_FV_MOM6) then
-         call logger%error("&ocean_bt_nml correction_bc_pgf=.true. requires "// &
-                           "&ocean_pgf_nml form='fv_mom6' (got '"// &
+         call logger%error("[ocean.bt] correction_bc_pgf=true requires "// &
+                           "[ocean.pgf] form='fv_mom6' (got '"// &
                            trim(adjustl(cfg%ocean%pgf%form))//"'). compute_pbce "// &
                            "builds the per-layer pressure response from the FV_MOM6 "// &
                            "interface-height stack (pgf%e_face), which no other PGF "// &
@@ -1497,7 +1497,7 @@ contains
       if (trim(cfg%ocean%bt%split_scheme) == "pred_corr") then
          if (parse_vcoord_type(cfg%vcoord_type, &
                                default_code=VCOORD_EULERIAN_Z) == VCOORD_EULERIAN_Z) then
-            call logger%error("&ocean_bt_nml split_scheme='pred_corr' requires an ALE "// &
+            call logger%error("[ocean.bt] split_scheme='pred_corr' requires an ALE "// &
                               "vertical coordinate (lagrangian/sigma/zstar/zsigma/"// &
                               "zstar_sigma/zstar_full) — the legacy 'eulerian_z' "// &
                               "per-stage vertical-advection + h-rescale path is not "// &
@@ -1507,8 +1507,8 @@ contains
             has_error = .true.
          end if
          if (cfg%ocean%wetdry%enable) then
-            call logger%error("&ocean_bt_nml split_scheme='pred_corr' is incompatible "// &
-                              "with &ocean_wetdry_nml enable (v1 envelope). pred_corr "// &
+            call logger%error("[ocean.bt] split_scheme='pred_corr' is incompatible "// &
+                              "with [ocean.wetdry] enable (v1 envelope). pred_corr "// &
                               "is the DEFAULT, so set split_scheme='ssp_rk2' to keep "// &
                               "this configuration.")
             has_error = .true.
@@ -1530,13 +1530,13 @@ contains
          ! the walls masked.  The mask is the DEFAULT; refused rather than
          ! silently overridden.
          if (cfg%zfixed_closed_faces .and. .not. cfg%ocean%bc%mask_wall_velocity) then
-            call logger%error("&ocean_bt_nml split_scheme='pred_corr' with "// &
-                              "&vcoord_nml zfixed_closed_faces=.true. requires "// &
-                              "&ocean_bc_nml mask_wall_velocity=.true. (the default): "// &
+            call logger%error("[ocean.bt] split_scheme='pred_corr' with "// &
+                              "[vcoord] zfixed_closed_faces=true requires "// &
+                              "[ocean.bc] mask_wall_velocity=true (the default): "// &
                               "an unmasked solid-wall face carries a baroclinic layer "// &
                               "velocity that pred_corr's u_av-evaluated Coriolis never "// &
                               "rotates, so it grows without bound. Set "// &
-                              "mask_wall_velocity=.true., or split_scheme='ssp_rk2'.")
+                              "mask_wall_velocity=true, or split_scheme='ssp_rk2'.")
             has_error = .true.
          end if
       end if
@@ -1546,14 +1546,14 @@ contains
       ! cavity coupling is interleaved with the in-stage surface-flux apply.
       if (.not. cfg%ocean%vmix%diabatic_first .and. cfg%ocean%vmix%dt_therm_ratio > 1) then
          if (trim(cfg%ocean%bt%split_scheme) /= "pred_corr") then
-            call logger%error("&ocean_vmix_nml diabatic_first=.false. with dt_therm_ratio > 1 "// &
+            call logger%error("[ocean.vmix] diabatic_first=false with dt_therm_ratio > 1 "// &
                               "requires split_scheme='pred_corr' (the deferred thermo applies "// &
                               "run once per outer step; the ssp_rk2 budget weight assumes two).")
             has_error = .true.
          end if
          if (cfg%ocean%cavity_melt%enable) then
-            call logger%error("&ocean_vmix_nml diabatic_first=.false. with dt_therm_ratio > 1 "// &
-                              "is not supported with &ocean_cavity_melt_nml enable (the cavity "// &
+            call logger%error("[ocean.vmix] diabatic_first=false with dt_therm_ratio > 1 "// &
+                              "is not supported with [ocean.cavity_melt] enable (the cavity "// &
                               "mass step is coupled to the in-stage surface-flux apply).")
             has_error = .true.
          end if
@@ -1573,12 +1573,12 @@ contains
       if (cfg%ocean%vdiff%accel_visc_rem) then
          block
             character(len=*), parameter :: msg = &
-                                           "&ocean_vdiff_nml accel_visc_rem is RETIRED: PR-3's audit found no "// &
+                                           "[ocean.vdiff] accel_visc_rem is RETIRED: PR-3's audit found no "// &
                                            "MOM6 state-update equivalent -- MOM6's btstep_layer_accel applies "// &
                                            "the depth-mean barotropic acceleration uniformly across every "// &
                                            "layer, with no visc_rem weight. The real MOM6 mechanisms that "// &
                                            "multiply a velocity correction by visc_rem are "// &
-                                           "&ocean_bt_nml renorm_visc_rem (continuity u_cor = u + du*visc_rem) "// &
+                                           "[ocean.bt] renorm_visc_rem (continuity u_cor = u + du*visc_rem) "// &
                                            "and rescale_strong_drag. Use one of those, or delete the key."
             call error_ring_push(msg)
             call logger%error(msg)
@@ -1601,7 +1601,7 @@ contains
       ! (`probes/pr3_producer_only`): `hvel_mom6`+`bbl_glue`+
       ! `implicit_drag` alone runs clean; adding ONLY `correction_visc_rem`
       ! NaNs at step 38.  Under D1 ("exactly MOM6's set") this fold is not
-      ! part of the chain and has no standalone namelist path of its own;
+      ! part of the chain and has no standalone input path of its own;
       ! refused, never silently ignored.  The kernel itself
       ! (`apply_bt_correction`'s `use_visc_rem` dispatch) and its direct
       ! unit tests (`tests/test_ocean_bt_correction_weight.F90`
@@ -1611,7 +1611,7 @@ contains
       if (cfg%ocean%bt%correction_visc_rem) then
          block
             character(len=*), parameter :: msg = &
-                                           "&ocean_bt_nml correction_visc_rem is RETIRED: MOM6's accel_layer_u "// &
+                                           "[ocean.bt] correction_visc_rem is RETIRED: MOM6's accel_layer_u "// &
                                            "applies the barotropic acceleration UNIFORMLY across every layer, "// &
                                            "before vertvisc distributes it via "// &
                                            "the SAME implicit friction the glue uses -- this fold re-weights it "// &
@@ -1629,9 +1629,9 @@ contains
       ! bed drag into bt_rem — composing them double-counts it (once via
       ! the glue/implicit_drag fold inside visc_rem, once via the piston).
       if (ocean_bt_rem_from_visc_rem_on(cfg) .and. cfg%ocean%bt%substep_drag) then
-         call logger%error("&ocean_bt_nml bt_rem_from_visc_rem=.true. (or "// &
-                           "visc_rem_chain=.true.) is mutually exclusive with "// &
-                           "substep_drag=.true. (bed drag would be double-counted: once "// &
+         call logger%error("[ocean.bt] bt_rem_from_visc_rem=true (or "// &
+                           "visc_rem_chain=true) is mutually exclusive with "// &
+                           "substep_drag=true (bed drag would be double-counted: once "// &
                            "inside the visc_rem producer via the bbl_glue/implicit_drag "// &
                            "fold, once again via the linear piston law)")
          has_error = .true.
@@ -1641,8 +1641,8 @@ contains
       ! the wide-halo BT clone's metrics_w/halo-widened arrays carry no
       ! av_rem/visc_rem ghost width yet — same posture as porous.
       if (ocean_bt_rem_from_visc_rem_on(cfg) .and. cfg%ocean%bt%bt_halo > 0) then
-         call logger%error("&ocean_bt_nml bt_rem_from_visc_rem=.true. (or "// &
-                           "visc_rem_chain=.true.) is mutually exclusive with "// &
+         call logger%error("[ocean.bt] bt_rem_from_visc_rem=true (or "// &
+                           "visc_rem_chain=true) is mutually exclusive with "// &
                            "bt_halo > 0 (the wide-halo BT clone carries no "// &
                            "av_rem/visc_rem ghost-width statistics, like porous)")
          has_error = .true.
@@ -1650,25 +1650,25 @@ contains
       ! D3: BT_STRONG_DRAG / RESCALE_STRONG_DRAG are refinements OF the
       ! av_rem chain, not independent knobs.
       if (cfg%ocean%bt%strong_drag .and. .not. ocean_bt_rem_from_visc_rem_on(cfg)) then
-         call logger%error("&ocean_bt_nml strong_drag=.true. requires "// &
-                           "bt_rem_from_visc_rem=.true. (or visc_rem_chain=.true.) — "// &
+         call logger%error("[ocean.bt] strong_drag=true requires "// &
+                           "bt_rem_from_visc_rem=true (or visc_rem_chain=true) — "// &
                            "the rational-approximation bt_rem form is only defined in "// &
                            "terms of av_rem")
          has_error = .true.
       end if
       if (cfg%ocean%bt%rescale_strong_drag .and. .not. cfg%ocean%bt%strong_drag) then
-         call logger%error("&ocean_bt_nml rescale_strong_drag=.true. requires "// &
-                           "strong_drag=.true. — the rescale corrects for the rational "// &
+         call logger%error("[ocean.bt] rescale_strong_drag=true requires "// &
+                           "strong_drag=true — the rescale corrects for the rational "// &
                            "form's bt_rem**n_inner /= av_rem gap, which the plain power "// &
                            "form does not have")
          has_error = .true.
       end if
       if (substep_drag_ignores_bdrag_form(cfg)) then
-         call logger%warning("&ocean_bt_nml substep_drag=.true. with "// &
-                             "&ocean_bdrag_nml form='"// &
+         call logger%warning("[ocean.bt] substep_drag=true with "// &
+                             "[ocean.bdrag] form='"// &
                              trim(adjustl(cfg%ocean%bdrag%form))//"': the "// &
                              "barotropic substep damping is built from the "// &
-                             "LINEAR coefficient &ocean_bdrag_nml r (times hbbl) "// &
+                             "LINEAR coefficient [ocean.bdrag] r (times hbbl) "// &
                              "only, so it does NOT follow this bottom drag — "// &
                              "with r = 0 (the default) substep_drag is a no-op, "// &
                              "otherwise it damps the barotropic mode with a "// &
@@ -1681,13 +1681,13 @@ contains
       ! silently forcing a flat basin.
       if (cfg%ocean%tides%enable .and. &
           trim(cfg%ocean%grid%grid_config) == "cartesian") then
-         call logger%error("ocean_tides_nml: enable=.true. requires a "// &
+         call logger%error("[ocean.tides]: enable=true requires a "// &
                            "non-cartesian grid_config (spherical/tripolar/"// &
                            "supergrid) — the equilibrium tide needs lat/lon")
          has_error = .true.
       end if
       if (cfg%ocean%tides%enable .and. len_trim(cfg%ocean%tides%constituents) == 0) then
-         call logger%error("ocean_tides_nml: enable=.true. but constituents "// &
+         call logger%error("[ocean.tides]: enable=true but constituents "// &
                            "list is empty")
          has_error = .true.
       end if
@@ -1695,14 +1695,14 @@ contains
       ! Interior closure selector: unknown/reserved spellings fail loud, and
       ! "none" selects inside the closure pipeline so it needs use_closure.
       if (parse_vmix_interior_closure(trim(cfg%ocean%vmix%interior_closure)) < 0) then
-         call logger%error("&ocean_vmix_nml interior_closure='"// &
+         call logger%error("[ocean.vmix] interior_closure='"// &
                            trim(cfg%ocean%vmix%interior_closure)// &
                            "' not recognised; valid: pp81, none (large94/cvmix are reserved)")
          has_error = .true.
       else if (parse_vmix_interior_closure(trim(cfg%ocean%vmix%interior_closure)) == &
                VMIX_INTERIOR_NONE .and. .not. cfg%ocean%vmix%use_closure) then
-         call logger%error("&ocean_vmix_nml interior_closure='none' requires "// &
-                           "use_closure=.true.")
+         call logger%error("[ocean.vmix] interior_closure='none' requires "// &
+                           "use_closure=true")
          has_error = .true.
       end if
 
@@ -1718,8 +1718,8 @@ contains
       ! the knob off, so refuse at configure.
       if (cfg%ocean%vmix%bkgnd_henyey .and. &
           trim(cfg%ocean%grid%grid_config) == "cartesian") then
-         call logger%error("&ocean_vmix_nml bkgnd_henyey=.true. requires a "// &
-                           "non-cartesian &ocean_grid_nml grid_config (spherical/"// &
+         call logger%error("[ocean.vmix] bkgnd_henyey=true requires a "// &
+                           "non-cartesian [ocean.grid] grid_config (spherical/"// &
                            "tripolar/supergrid) — geolatT is meaningless on cartesian, "// &
                            "so every column would take the equatorial L(0 deg)=0 and "// &
                            "the background would flatten to a uniform bkgnd_kd_min")
@@ -1730,7 +1730,7 @@ contains
       ! Bryan-Lewis" and would now silently resolve to 1 -- refuse it.
       if (cfg%ocean%vmix%bkgnd_prandtl /= -1.0_wp .and. &
           cfg%ocean%vmix%bkgnd_prandtl <= 0.0_wp) then
-         call logger%error("&ocean_vmix_nml bkgnd_prandtl = "// &
+         call logger%error("[ocean.vmix] bkgnd_prandtl = "// &
                            to_string(cfg%ocean%vmix%bkgnd_prandtl)// &
                            " is not legal: use -1 (off) or a positive Prandtl number")
          has_error = .true.
@@ -1743,7 +1743,7 @@ contains
       ! scaling describes.
       if (bkgnd_henyey_conflicts_profile(cfg%ocean%vmix%bkgnd_henyey, &
                                          cfg%ocean%vmix%bkgnd_profile)) then
-         call logger%error("&ocean_vmix_nml bkgnd_henyey and bkgnd_profile are "// &
+         call logger%error("[ocean.vmix] bkgnd_henyey and bkgnd_profile are "// &
                            "mutually exclusive background schemes — pick ONE "// &
                            "(Bryan-Lewis depth profile, or the Henyey latitude "// &
                            "factor on the scalar background)")
@@ -1757,36 +1757,36 @@ contains
       ! stale device read on the mem:separate GPU build).
       if (cfg%ocean%psurf%enable) then
          if (.not. cfg%ocean%forcing%enable_components) then
-            call logger%error("&ocean_psurf_nml enable=.true. requires "// &
-                              "&ocean_forcing_nml enable_components=.true. "// &
+            call logger%error("[ocean.psurf] enable=true requires "// &
+                              "[ocean.forcing] enable_components=true "// &
                               "(p_surf is allocated only with the component set)")
             has_error = .true.
          end if
          if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
-            call logger%error("&ocean_psurf_nml enable=.true. requires the "// &
-                              "split-explicit solver (&ocean_bt_nml n_inner >= 1 "// &
-                              "or auto_n_inner=.true.) — the eta_forcing seam "// &
+            call logger%error("[ocean.psurf] enable=true requires the "// &
+                              "split-explicit solver ([ocean.bt] n_inner >= 1 "// &
+                              "or auto_n_inner=true) — the eta_forcing seam "// &
                               "lives in the barotropic substep")
             has_error = .true.
          end if
          ! A UNIFORM surface pressure has no gradient => provably inert
          ! (gauge invariance).  A user enabling p_surf with only a uniform
          ! constant and no file/override path gets nothing — say so rather
-         ! than repeat the &ocean_tidal_mixing_nml e_uniform silent-no-op.
+         ! than repeat the [ocean.tidal_mixing] e_uniform silent-no-op.
          if (cfg%ocean%psurf%p_surf_const /= 0.0_wp) then
             if (cfg%ocean%psurf%in_eos) then
                ! With in_eos the gauge argument does NOT apply to the EOS:
                ! it is nonlinear in pressure, so a spatially UNIFORM load
                ! still changes the IN-SITU densities it reaches.  Say so
                ! instead of the (then wrong) "provably inert" warning.
-               call logger%info("&ocean_psurf_nml in_eos=.true.: a uniform "// &
+               call logger%info("[ocean.psurf] in_eos=true: a uniform "// &
                                 "p_surf_const is inert on the barotropic seam "// &
                                 "(only grad(p_surf) is physical there) but NOT "// &
                                 "in the IN-SITU EOS pressure — it compresses "// &
                                 "the water. The potential density ms%rho_layer "// &
                                 "is unaffected either way (uniform p_ref).")
             else
-               call logger%warning("&ocean_psurf_nml enable=.true. with a uniform "// &
+               call logger%warning("[ocean.psurf] enable=true with a uniform "// &
                                    "p_surf_const and no file/override path: only "// &
                                    "grad(p_surf) is physical, so a spatially "// &
                                    "constant load is inert (gauge invariance). "// &
@@ -1800,19 +1800,19 @@ contains
       ! the load would depress the sea surface under the ice with nothing to balance it.
       if (cfg%ocean%psurf%ice_load) then
          if (.not. cfg%ocean%psurf%enable) then
-            call logger%error("&ocean_psurf_nml ice_load=.true. requires enable=.true. "// &
+            call logger%error("[ocean.psurf] ice_load=true requires enable=true "// &
                               "(the load rides the eta_forcing seam)")
             has_error = .true.
          end if
          if (.not. (cfg%ocean%ice%enable .and. ice_scheme_is_cice(cfg))) then
-            call logger%error("&ocean_psurf_nml ice_load=.true. requires sea ice with "// &
-                              "&ocean_ice_nml scheme='cice' (the CICE-port aggregates supply "// &
+            call logger%error("[ocean.psurf] ice_load=true requires sea ice with "// &
+                              "[ocean.ice] scheme='cice' (the CICE-port aggregates supply "// &
                               "the ice and snow volumes)")
             has_error = .true.
          end if
          if (parse_surface_freshwater(cfg%ocean%forcing%freshwater) /= SURF_FW_MASS) then
-            call logger%error("&ocean_psurf_nml ice_load=.true. requires "// &
-                              "&ocean_forcing_nml freshwater='mass': without real fresh-water "// &
+            call logger%error("[ocean.psurf] ice_load=true requires "// &
+                              "[ocean.forcing] freshwater='mass': without real fresh-water "// &
                               "mass the growing ice takes no water from the ocean, so its "// &
                               "weight would depress the sea surface under the ice for nothing.")
             has_error = .true.
@@ -1822,13 +1822,13 @@ contains
       ! `psl` is the one writer of `p_surf_atm`, so without it the knob would add a uniform seed.
       if (cfg%ocean%psurf%atm_load) then
          if (.not. cfg%ocean%psurf%enable) then
-            call logger%error("&ocean_psurf_nml atm_load=.true. requires enable=.true. "// &
+            call logger%error("[ocean.psurf] atm_load=true requires enable=true "// &
                               "(the load rides the eta_forcing seam)")
             has_error = .true.
          end if
          if (.not. cfg%ocean%bulk_flux%enable) then
-            call logger%error("&ocean_psurf_nml atm_load=.true. requires "// &
-                              "&ocean_bulk_flux_nml enable=.true.: the bulk forcing's sea-level "// &
+            call logger%error("[ocean.psurf] atm_load=true requires "// &
+                              "[ocean.bulk_flux] enable=true: the bulk forcing's sea-level "// &
                               "pressure is the only writer of the atmospheric pressure field.")
             has_error = .true.
          end if
@@ -1837,7 +1837,7 @@ contains
       ! `in_eos` offsets the EOS's IN-SITU pressure arguments by
       ! `ms%p_top`.  v1 ports exactly one: the FV_WRIGHT Picard column
       ! sweep.  It does NOT touch `ms%rho_layer`, which is a potential
-      ! density at the horizontally uniform `&ocean_eos_nml p_ref` and must
+      ! density at the horizontally uniform `[ocean.eos] p_ref` and must
       ! stay that way.  Every OTHER in-situ consumer builds its own
       ! surface-relative hydrostatic pressure starting at 0 Pa at the free
       ! surface and has NOT been ported; running them against a loaded
@@ -1848,7 +1848,7 @@ contains
       if (cfg%ocean%psurf%in_eos) then
          ! Inert-configuration warning, not a refusal: with no in-situ
          ! consumer selected the knob legitimately does nothing, and the
-         ! house rule (cf. &ocean_tidal_mixing_nml e_uniform) is to SAY so
+         ! house rule (cf. [ocean.tidal_mixing] e_uniform) is to SAY so
          ! rather than let a user believe a cavity load reached the EOS.
          ! E4 adds a THIRD ported consumer: `buoyancy_coeffs="eos"` seeds
          ! the KPP B_0 coefficients at `p_top` and the double-diffusion
@@ -1857,22 +1857,22 @@ contains
          if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_wright" .and. &
              .not. cfg%ocean%epbl%enable .and. &
              trim(adjustl(cfg%ocean%vmix%buoyancy_coeffs)) /= "eos") then
-            call logger%warning("&ocean_psurf_nml in_eos=.true. is INERT for "// &
-                                "&ocean_pgf_nml form='"// &
+            call logger%warning("[ocean.psurf] in_eos=true is INERT for "// &
+                                "[ocean.pgf] form='"// &
                                 trim(adjustl(cfg%ocean%pgf%form))//"' with no "// &
                                 "other ported in-situ consumer: the ported ones "// &
                                 "are the FV_WRIGHT Picard column sweep, the "// &
-                                "EPBL column stack (&ocean_epbl_nml) and the "// &
+                                "EPBL column stack ([ocean.epbl]) and the "// &
                                 "EOS-derived buoyancy coefficients "// &
-                                "(&ocean_vmix_nml buoyancy_coeffs='eos'). The "// &
+                                "([ocean.vmix] buoyancy_coeffs='eos'). The "// &
                                 "other PGF forms read the POTENTIAL density "// &
                                 "ms%rho_layer, which is referenced to the "// &
-                                "uniform &ocean_eos_nml p_ref BY DESIGN and is "// &
+                                "uniform [ocean.eos] p_ref BY DESIGN and is "// &
                                 "not offset by the load.")
          end if
          if (.not. cfg%ocean%psurf%enable) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. requires "// &
-                              "enable=.true. (p_top is filled from the "// &
+            call logger%error("[ocean.psurf] in_eos=true requires "// &
+                              "enable=true (p_top is filled from the "// &
                               "assembled sf%p_surf the seam owns)")
             has_error = .true.
          end if
@@ -1883,36 +1883,36 @@ contains
          ! `dmass*p_mid*dsv`) together.  Gate:
          ! `test_ocean_bl_under_ice` (`epbl_p_top_*`).
          if (cfg%ocean%kshear%enable) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with &ocean_kappa_shear_nml enable=.true. — "// &
+            call logger%error("[ocean.psurf] in_eos=true is not supported "// &
+                              "with [ocean.kappa_shear] enable=true — "// &
                               "ks_solve_column builds its own interface pressure "// &
                               "from 0 Pa at the surface; not yet ported to p_top")
             has_error = .true.
          end if
          if (cfg%ocean%tidal_mixing%enable) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with &ocean_tidal_mixing_nml enable=.true. — "// &
+            call logger%error("[ocean.psurf] in_eos=true is not supported "// &
+                              "with [ocean.tidal_mixing] enable=true — "// &
                               "tidal_mixing_column_kernel builds its own interface "// &
                               "pressure from 0 Pa at the surface; not yet ported")
             has_error = .true.
          end if
          if (cfg%ocean%redi%enable) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with &ocean_redi_nml enable=.true. — "// &
+            call logger%error("[ocean.psurf] in_eos=true is not supported "// &
+                              "with [ocean.redi] enable=true — "// &
                               "redi_build_column seeds Pint(1)=0 at the surface; "// &
                               "not yet ported to p_top")
             has_error = .true.
          end if
          if (cfg%ocean%slopes%enable) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with &ocean_slopes_nml enable=.true. — "// &
+            call logger%error("[ocean.psurf] in_eos=true is not supported "// &
+                              "with [ocean.slopes] enable=true — "// &
                               "pressure_above_x sums g*rho0*h down from 0 Pa at "// &
                               "the surface; not yet ported to p_top")
             has_error = .true.
          end if
          if (cfg%ocean%pgf%reconstruct_for_pressure) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with &ocean_pgf_nml reconstruct_for_pressure=.true. "// &
+            call logger%error("[ocean.psurf] in_eos=true is not supported "// &
+                              "with [ocean.pgf] reconstruct_for_pressure=true "// &
                               "— boole_dpa_intz_layer builds the EOS pressure as "// &
                               "p = -g*rho0*z from the surface-relative interface "// &
                               "height; not yet ported to p_top")
@@ -1922,30 +1922,30 @@ contains
              .not. cfg%ocean%pgf%reconstruct_for_pressure .and. &
              cfg%ocean%pgf%insitu_density .and. &
              trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with the FV_MOM6 in-situ PCM density (&ocean_pgf_nml "// &
-                              "insitu_density=.true., the default, under a "// &
+            call logger%error("[ocean.psurf] in_eos=true is not supported "// &
+                              "with the FV_MOM6 in-situ PCM density ([ocean.pgf] "// &
+                              "insitu_density=true, the default, under a "// &
                               "pressure-dependent EOS) — boole_dpa_intz_layer builds "// &
                               "the EOS pressure as p = -g*rho0*z; not yet ported to "// &
-                              "p_top.  Set insitu_density=.false. for the legacy "// &
+                              "p_top.  Set insitu_density=false for the legacy "// &
                               "potential-density integral")
             has_error = .true.
          end if
          if (cfg%ocean%ice%enable) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with &ocean_ice_nml enable=.true. — the freezing "// &
+            call logger%error("[ocean.psurf] in_eos=true is not supported "// &
+                              "with [ocean.ice] enable=true — the freezing "// &
                               "point is evaluated at p=0 in the frazil / basal-flux "// &
                               "kernels, and the liquidus pressure depression is "// &
                               "exactly what an ice-shelf load changes; not yet ported")
             has_error = .true.
          end if
       end if
-      ! ---- Z-level T/S initial-condition overlay (`&ocean_zinit_nml`) ----
+      ! ---- Z-level T/S initial-condition overlay (`[ocean.zinit]`) ----
       if (cfg%ocean%zinit%enable) then
          select case (trim(adjustl(cfg%ocean%zinit%source)))
          case ("file")
             if (len_trim(cfg%ocean%zinit%file) == 0) then
-               call logger%error("&ocean_zinit_nml enable=.true. with "// &
+               call logger%error("[ocean.zinit] enable=true with "// &
                                  "source='file' requires a non-blank file= path.")
                has_error = .true.
             end if
@@ -1953,7 +1953,7 @@ contains
             ! An analytic profile plus a file path is ambiguous: the file
             ! would be silently ignored.  Say so rather than pick one.
             if (len_trim(cfg%ocean%zinit%file) > 0) then
-               call logger%error("&ocean_zinit_nml source='linear' takes the "// &
+               call logger%error("[ocean.zinit] source='linear' takes the "// &
                                  "analytic lin_* profile and opens NOTHING, so the "// &
                                  "file='"//trim(adjustl(cfg%ocean%zinit%file))// &
                                  "' you also set would be silently ignored.  Pick "// &
@@ -1961,7 +1961,7 @@ contains
                has_error = .true.
             end if
          case default
-            call logger%error("&ocean_zinit_nml source='"// &
+            call logger%error("[ocean.zinit] source='"// &
                               trim(adjustl(cfg%ocean%zinit%source))// &
                               "' is not a known profile source; expected 'file' "// &
                               "(pre-regridded NetCDF) or 'linear' (analytic "// &
@@ -1978,7 +1978,7 @@ contains
       ! the user believes is carrying an ice load.
       if (cfg%ocean%pgf%p_top_in_bc) then
          if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_mom6") then
-            call logger%error("&ocean_pgf_nml p_top_in_bc=.true. requires "// &
+            call logger%error("[ocean.pgf] p_top_in_bc=true requires "// &
                               "form='fv_mom6' (got '"// &
                               trim(adjustl(cfg%ocean%pgf%form))//"'). Only the "// &
                               "FV_MOM6 family builds the pa(nz+1) pressure-stack "// &
@@ -1988,11 +1988,11 @@ contains
             has_error = .true.
          end if
          ! Inert-configuration warning, not a refusal (the house rule, cf.
-         ! &ocean_psurf_nml in_eos and &ocean_tidal_mixing_nml e_uniform).
+         ! [ocean.psurf] in_eos and [ocean.tidal_mixing] e_uniform).
          ! `ms%p_top = metrics%p_ice_ref + sf%p_surf` has TWO producers,
          ! and the warning must name both or it is a lie: the
-         ! &ocean_psurf_nml seam (the atmospheric half, `sf%p_surf`) and
-         ! the &ocean_cavity_dyn_nml ice-shelf load (the static half,
+         ! [ocean.psurf] seam (the atmospheric half, `sf%p_surf`) and
+         ! the [ocean.cavity_dyn] ice-shelf load (the static half,
          ! `p_ice_ref = rho_ref*g*z_draft`, assembled in
          ! `configure_ocean_cavity`).  Under a cavity `p_top` carries the
          ! ice load and `p_top_in_bc` is not merely live — it is REQUIRED
@@ -2001,15 +2001,15 @@ contains
          ! one case in which `p_top` really is the zero array it was
          ! allocated as.
          if (.not. p_top_has_producer(cfg)) then
-            call logger%warning("&ocean_pgf_nml p_top_in_bc=.true. is INERT "// &
+            call logger%warning("[ocean.pgf] p_top_in_bc=true is INERT "// &
                                 "without a producer for ms%p_top: enable "// &
-                                "&ocean_psurf_nml (the atmospheric surface-pressure "// &
-                                "seam) or &ocean_cavity_dyn_nml (the static "// &
+                                "[ocean.psurf] (the atmospheric surface-pressure "// &
+                                "seam) or [ocean.cavity_dyn] (the static "// &
                                 "ice-shelf load), else p_top is the zero array and "// &
                                 "pa(nz+1) is unchanged.")
          end if
       end if
-      ! ---- Static ice-shelf cavity geometry (&ocean_cavity_dyn_nml, P5.1) ----
+      ! ---- Static ice-shelf cavity geometry ([ocean.cavity_dyn], P5.1) ----
       ! The draft is absorbed into the barotropic DATUM (bt_H_ref =
       ! b - z_draft), so every consumer of the water-column thickness
       ! D = bt_H_ref + bt_eta is correct with no cavity branch of its own.
@@ -2020,14 +2020,14 @@ contains
       ! un-reconciled surface load, a wide-halo BT clone with no draft).
       if (cfg%ocean%cavity_dyn%trim_ic_for_p_surf .and. &
           .not. cfg%ocean%cavity_dyn%enable) then
-         call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
-                           "requires enable=.true. (there is no ice load to "// &
+         call logger%error("[ocean.cavity_dyn] trim_ic_for_p_surf=true "// &
+                           "requires enable=true (there is no ice load to "// &
                            "trim the initial column against)")
          has_error = .true.
       end if
       if (cfg%ocean%cavity_dyn%enable) then
          if (trim(cfg%sim_type) /= "ocean") then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
+            call logger%error("[ocean.cavity_dyn] enable=true requires "// &
                               "sim_type='ocean'")
             has_error = .true.
          end if
@@ -2042,19 +2042,19 @@ contains
             ! this source (unproven on a decomposed domain) and the seed
             ! re-asserts it.
             if (len_trim(cfg%ocean%cavity_dyn%draft_file) == 0) then
-               call logger%error("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+               call logger%error("[ocean.cavity_dyn] draft_config='file' requires "// &
                                  "draft_file")
                has_error = .true.
             end if
             if (len_trim(cfg%ocean%cavity_dyn%draft_var) == 0) then
-               call logger%error("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+               call logger%error("[ocean.cavity_dyn] draft_config='file' requires "// &
                                  "draft_var (the 2-D variable name; ISOMIP+ ships "// &
                                  "'iceDraft')")
                has_error = .true.
             end if
             if (parse_cavity_draft_sign(cfg%ocean%cavity_dyn%draft_sign) == &
                 CAVITY_SIGN_INVALID) then
-               call logger%error("&ocean_cavity_dyn_nml draft_sign='"// &
+               call logger%error("[ocean.cavity_dyn] draft_sign='"// &
                                  trim(adjustl(cfg%ocean%cavity_dyn%draft_sign))// &
                                  "' is not recognised (depth|positive_down|"// &
                                  "elevation|positive_up).  There is no default that "// &
@@ -2064,7 +2064,7 @@ contains
                has_error = .true.
             end if
          case default
-            call logger%error("&ocean_cavity_dyn_nml draft_config='"// &
+            call logger%error("[ocean.cavity_dyn] draft_config='"// &
                               trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
                               "' is not recognised (none|flat|linear|file)")
             has_error = .true.
@@ -2073,7 +2073,7 @@ contains
          case ("draft", "thickness")
             continue
          case ("in_situ")
-            call logger%error("&ocean_cavity_dyn_nml draft_source='in_situ' (true "// &
+            call logger%error("[ocean.cavity_dyn] draft_source='in_situ' (true "// &
                               "isostasy, p_ice = g*int(rho)) is not implemented: it "// &
                               "needs a per-column root find and does NOT admit exact "// &
                               "discrete rest in the split solver.  Use 'draft' "// &
@@ -2081,7 +2081,7 @@ contains
                               "prescribes) or 'thickness'.")
             has_error = .true.
          case default
-            call logger%error("&ocean_cavity_dyn_nml draft_source='"// &
+            call logger%error("[ocean.cavity_dyn] draft_source='"// &
                               trim(adjustl(cfg%ocean%cavity_dyn%draft_source))// &
                               "' is not recognised (draft|thickness|in_situ)")
             has_error = .true.
@@ -2091,33 +2091,33 @@ contains
          ! and the whole shelf depth an artefact of 1e30*slope.
          if (trim(adjustl(cfg%ocean%cavity_dyn%draft_config)) == "linear" .and. &
              abs(cfg%ocean%cavity_dyn%draft_x0) >= 1.0e29_wp) then
-            call logger%error("&ocean_cavity_dyn_nml draft_config='linear' requires "// &
+            call logger%error("[ocean.cavity_dyn] draft_config='linear' requires "// &
                               "a finite draft_x0: it is the ANCHOR of the profile "// &
                               "(draft_depth is the draft AT draft_x0), not just the "// &
                               "western edge of the box.")
             has_error = .true.
          end if
          if (cfg%ocean%cavity_dyn%draft_depth < 0.0_wp) then
-            call logger%error("&ocean_cavity_dyn_nml draft_depth must be >= 0 "// &
+            call logger%error("[ocean.cavity_dyn] draft_depth must be >= 0 "// &
                               "(it is a DEPTH below z = 0, positive down)")
             has_error = .true.
          end if
          if (cfg%ocean%cavity_dyn%h_min_cavity <= 0.0_wp) then
-            call logger%error("&ocean_cavity_dyn_nml h_min_cavity must be > 0 "// &
+            call logger%error("[ocean.cavity_dyn] h_min_cavity must be > 0 "// &
                               "(the grounding cutoff; 0 would admit a zero-thickness "// &
                               "water column under the ice)")
             has_error = .true.
          end if
          if (cfg%ocean%cavity_dyn%grounded_max_frac <= 0.0_wp .or. &
              cfg%ocean%cavity_dyn%grounded_max_frac > 1.0_wp) then
-            call logger%error("&ocean_cavity_dyn_nml grounded_max_frac must be in "// &
+            call logger%error("[ocean.cavity_dyn] grounded_max_frac must be in "// &
                               "(0, 1] (the fraction of interior columns allowed to "// &
                               "ground)")
             has_error = .true.
          end if
          if (trim(adjustl(cfg%ocean%cavity_dyn%draft_source)) == "thickness" .and. &
              cfg%ocean%cavity_dyn%rho_ice <= 0.0_wp) then
-            call logger%error("&ocean_cavity_dyn_nml draft_source='thickness' "// &
+            call logger%error("[ocean.cavity_dyn] draft_source='thickness' "// &
                               "requires rho_ice > 0")
             has_error = .true.
          end if
@@ -2131,23 +2131,23 @@ contains
          ! the (trimmed) ice base.
          if (cfg%ocean%cavity_dyn%trim_ic_for_p_surf) then
             if (trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
-               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
-                                 "requires &ocean_eos_nml eos='linear' (the trim "// &
+               call logger%error("[ocean.cavity_dyn] trim_ic_for_p_surf=true "// &
+                                 "requires [ocean.eos] eos='linear' (the trim "// &
                                  "depth is the closed-form root for a density "// &
                                  "affine in z; a nonlinear-EOS trim is not wired)")
                has_error = .true.
             end if
             if (.not. cfg%ocean%zinit%enable .or. &
                 trim(adjustl(cfg%ocean%zinit%source)) /= "linear") then
-               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
-                                 "requires &ocean_zinit_nml enable=.true., "// &
+               call logger%error("[ocean.cavity_dyn] trim_ic_for_p_surf=true "// &
+                                 "requires [ocean.zinit] enable=true, "// &
                                  "source='linear': the analytic T(z)/S(z) profile "// &
                                  "is what defines the density of the water the "// &
                                  "ice displaces")
                has_error = .true.
             end if
             if (trim(cfg%thickness_config) == "uniform_z") then
-               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+               call logger%error("[ocean.cavity_dyn] trim_ic_for_p_surf=true "// &
                                  "is incompatible with thickness_config='uniform_z'")
                has_error = .true.
             end if
@@ -2167,13 +2167,13 @@ contains
          ! whose wind is silently restored to its unmasked file value on
          ! the first bracket read looks entirely plausible and is wrong.
          if (cfg%ocean%dataovr%enable) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_dataovr_nml enable=.true.  The "// &
+            call logger%error("[ocean.cavity_dyn] enable=true is mutually "// &
+                              "exclusive with [ocean.dataovr] enable=true  The "// &
                               "ice-cover mask on the atmospheric forcing is applied "// &
                               "to the wind pair at configure and to the surface-flux "// &
                               "components in the assembler; the data-override reader "// &
                               "rewrites tau_x/tau_y (and Q_heat, unless "// &
-                              "heat_to_component=.true.) per time bracket without "// &
+                              "heat_to_component=true) per time bracket without "// &
                               "the cover, which would restore the unmasked "// &
                               "atmosphere under the shelf.  Follow-up: thread "// &
                               "cover_frac through ocean_data_forcing_apply and the "// &
@@ -2182,8 +2182,8 @@ contains
          end if
          ! --- pressure-gradient envelope ---
          if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_mom6") then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
-                              "&ocean_pgf_nml form='fv_mom6' (got '"// &
+            call logger%error("[ocean.cavity_dyn] enable=true requires "// &
+                              "[ocean.pgf] form='fv_mom6' (got '"// &
                               trim(adjustl(cfg%ocean%pgf%form))//"'). Only the "// &
                               "FV_MOM6 family builds the pa(nz+1) pressure-stack "// &
                               "boundary condition the ice load is injected into; "// &
@@ -2199,7 +2199,7 @@ contains
          ! g*grad(z_draft), and a non-uniform BT-correction weight turns the
          ! uncancelled depth-uniform force into a real per-layer shear.
          ! REFUSED rather than auto-enabled: an answer-changing knob that
-         ! a second namelist group switches on behind the user's back is
+         ! a second input group switches on behind the user's back is
          ! exactly the class of silent coupling this file exists to
          ! prevent.  A UNIFORM draft is exempt — a load with no gradient
          ! is bit-identically inert in the top BC (the theorem in
@@ -2212,9 +2212,9 @@ contains
                character(len=:), allocatable :: dcfg
                dcfg = trim(adjustl(cfg%ocean%cavity_dyn%draft_config))
                if (.not. cavity_draft_is_uniform(cfg)) then
-                  call logger%error("&ocean_cavity_dyn_nml enable=.true. with "// &
+                  call logger%error("[ocean.cavity_dyn] enable=true with "// &
                                     "draft_config='"//dcfg//"' requires "// &
-                                    "&ocean_pgf_nml p_top_in_bc=.true.  That knob is "// &
+                                    "[ocean.pgf] p_top_in_bc=true  That knob is "// &
                                     "the ONLY route by which the isostatic load "// &
                                     "rho_ref*g*z_draft reaches the FV_MOM6 pa(nz+1) "// &
                                     "surface boundary condition; without it a draft "// &
@@ -2228,8 +2228,8 @@ contains
             end block
          end if
          if (cfg%ocean%pgf%gfs_scale /= 1.0_wp) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
-                              "&ocean_pgf_nml gfs_scale=1: the datum "// &
+            call logger%error("[ocean.cavity_dyn] enable=true requires "// &
+                              "[ocean.pgf] gfs_scale=1: the datum "// &
                               "(bt_H_ref, which the barotropic substep feels "// &
                               "through g_bt = gfs_scale*GRAVITY) and the load "// &
                               "(rho_ref*GRAVITY*z_draft, which the PGF feels "// &
@@ -2320,7 +2320,7 @@ contains
                                "column top, so under a shelf that band is "// &
                                "draft-FOLLOWING and must not be quoted as z-like"
                end select
-               call logger%error("&ocean_cavity_dyn_nml enable=.true. accepts "// &
+               call logger%error("[ocean.cavity_dyn] enable=true accepts "// &
                                  "vcoord_type='sigma' or 'z_fixed' ONLY — the family "// &
                                  "that rescales the live column and so follows the "// &
                                  "ice base for free, plus the one that has been "// &
@@ -2353,7 +2353,7 @@ contains
                ! leg's resting pressure-gradient residual at step 1 and
                ! ends in a non-finite state on day 18 (gfortran) or a
                ! saturated En = 3.8E-04 (nvfortran GPU).  That is the
-               ! knob-OFF state.  `&vcoord_nml zfixed_closed_faces`
+               ! knob-OFF state.  `[vcoord] zfixed_closed_faces`
                ! (Adcroft, Hill & Marshall 1997 partial steps) closes the
                ! staircase faces, and with it the same file completes 30
                ! days and ISOMIP+ Ocean0 runs 30 days — but the residual on
@@ -2366,12 +2366,12 @@ contains
                ! the user must not do is walk into it silently.
                if (.not. cavity_draft_is_uniform(cfg)) then
                   if (cfg%zfixed_closed_faces) then
-                     call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
-                                         "&ocean_cavity_dyn_nml with a draft that VARIES "// &
+                     call logger%warning("[vcoord] vcoord_type='z_fixed' under "// &
+                                         "[ocean.cavity_dyn] with a draft that VARIES "// &
                                          "(draft_config='"// &
                                          trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
-                                         "') is EXPERIMENTAL.  &vcoord_nml "// &
-                                         "zfixed_closed_faces=.true. closes the ice-base "// &
+                                         "') is EXPERIMENTAL.  [vcoord] "// &
+                                         "zfixed_closed_faces=true closes the ice-base "// &
                                          "STAIRCASE faces, which is what makes this "// &
                                          "configuration runnable: the sloping-lid rest "// &
                                          "case completes 30 days and ISOMIP+ Ocean0 runs "// &
@@ -2385,11 +2385,11 @@ contains
                                          "two decades more spurious energy than its sigma "// &
                                          "leg.  Only a UNIFORM draft is bit-zero at rest.")
                   else
-                     call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
-                                         "&ocean_cavity_dyn_nml with a draft that VARIES "// &
+                     call logger%warning("[vcoord] vcoord_type='z_fixed' under "// &
+                                         "[ocean.cavity_dyn] with a draft that VARIES "// &
                                          "(draft_config='"// &
                                          trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
-                                         "') and &vcoord_nml zfixed_closed_faces=.false. "// &
+                                         "') and [vcoord] zfixed_closed_faces=false "// &
                                          "is NOT VALIDATED.  Only a UNIFORM draft is: "// &
                                          "there every column vanishes the same layers and "// &
                                          "cuts at the same depth, so the answer is "// &
@@ -2399,7 +2399,7 @@ contains
                                          "the open ice-base STAIRCASE drives a spurious "// &
                                          "flow: measured at rest, 47x the sigma leg's "// &
                                          "step-1 residual, and the run does not survive "// &
-                                         "30 days.  Set zfixed_closed_faces=.true. (the "// &
+                                         "30 days.  Set zfixed_closed_faces=true (the "// &
                                          "partial-step face closure, with which a varying "// &
                                          "draft does survive 30 days), or use "// &
                                          "vcoord_type='sigma' for a sloping lid.")
@@ -2430,8 +2430,8 @@ contains
                ! vanished `k = nz` and are left alone.  What follows is
                ! everything that acts ON the ice-adjacent layer itself,
                ! and so is not masked by anything.
-               ! NOTE `&ocean_cavity_melt_nml enable` and
-               ! `&ocean_tdrag_nml enable` used to be refused HERE, and
+               ! NOTE `[ocean.cavity_melt] enable` and
+               ! `[ocean.tdrag] enable` used to be refused HERE, and
                ! are not any more: both are routed through the shared
                ! first-live-layer index `ms%k_top` (and its two face
                ! twins) — P6.3/P6.4.  The melt heat/salt deposit and the
@@ -2442,20 +2442,20 @@ contains
                ! vdiff diagonal adds it to.  `k_top ≡ nz` off a rigid
                ! top, so nothing else moved.
                if (cfg%ocean%vmix%use_kpp) then
-                  call logger%error("&ocean_vmix_nml use_kpp=.true. is refused with "// &
+                  call logger%error("[ocean.vmix] use_kpp=true is refused with "// &
                                     "vcoord_type='z_fixed' under a cavity: KPP's "// &
                                     "surface reference column is k = nz "// &
                                     "(b_ref = -g*rho_layer(nz)/rho_0, "// &
                                     "d_centre_ref = h(nz)/2), which on a covered "// &
                                     "column is the filler — a spurious buoyancy jump "// &
                                     "at the very first interface and a reference "// &
-                                    "depth of ~1e-4 m.  Set use_kpp=.false. (an "// &
+                                    "depth of ~1e-4 m.  Set use_kpp=false (an "// &
                                     "adiabatic cavity run is the v1 envelope).  "// &
                                     "Needs the shared k_top: follow-up P6.4.")
                   has_error = .true.
                end if
                if (cfg%ocean%epbl%enable) then
-                  call logger%error("&ocean_epbl_nml enable=.true. is refused with "// &
+                  call logger%error("[ocean.epbl] enable=true is refused with "// &
                                     "vcoord_type='z_fixed' under a cavity: the EPBL "// &
                                     "column captures the surface at k = nz and gates "// &
                                     "on `h > 0` rather than on H_VANISHED, so a "// &
@@ -2465,7 +2465,7 @@ contains
                   has_error = .true.
                end if
                if (cfg%ocean%tracers%enable_ideal_age) then
-                  call logger%error("&ocean_tracers_nml enable_ideal_age=.true. is "// &
+                  call logger%error("[ocean.tracers] enable_ideal_age=true is "// &
                                     "refused with vcoord_type='z_fixed' under a "// &
                                     "cavity: the young-band reset writes "// &
                                     "c_age(:,:,nz) = young_eff, which on a "// &
@@ -2475,7 +2475,7 @@ contains
                   has_error = .true.
                end if
                if (cfg%ocean%gm%enable) then
-                  call logger%error("&ocean_gm_nml enable=.true. is refused with "// &
+                  call logger%error("[ocean.gm] enable=true is refused with "// &
                                     "vcoord_type='z_fixed' under a cavity: without "// &
                                     "zfixed_closed_faces the non-divergence closure "// &
                                     "dumps the residual streamfunction transport "// &
@@ -2488,8 +2488,8 @@ contains
                   has_error = .true.
                end if
                if (cfg%ocean%redi%enable .or. cfg%ocean%slopes%enable) then
-                  call logger%error("&ocean_redi_nml / &ocean_slopes_nml enable="// &
-                                    ".true. is refused with vcoord_type='z_fixed' "// &
+                  call logger%error("[ocean.redi] / [ocean.slopes] enable="// &
+                                    "true is refused with vcoord_type='z_fixed' "// &
                                     "under a cavity: the isopycnal-slope surface "// &
                                     "fill is built from h(:,:,nz), the filler on a "// &
                                     "covered column.  Unvalidated with a cavity on "// &
@@ -2507,7 +2507,7 @@ contains
                ! carries no mass-availability limiter, so it can drive a
                ! vanished cell's c strongly negative in one step.
                !
-               ! But `&vcoord_nml zfixed_closed_faces` already answers
+               ! But `[vcoord] zfixed_closed_faces` already answers
                ! it, from the other end: `ocean_hdiff_tracer_step`
                ! multiplies every face flux by `metrics%open_u/open_v`,
                ! which is exactly zero wherever the layer is a filler on
@@ -2523,9 +2523,9 @@ contains
                ! threshold alone would leave open on the thick side.
                if (cfg%ocean%hdiff%kappa_h /= 0.0_wp .and. &
                    .not. cfg%zfixed_closed_faces) then
-                  call logger%error("&ocean_hdiff_nml kappa_h /= 0 is refused with "// &
+                  call logger%error("[ocean.hdiff] kappa_h /= 0 is refused with "// &
                                     "vcoord_type='z_fixed' under a cavity UNLESS "// &
-                                    "&vcoord_nml zfixed_closed_faces=.true.: the "// &
+                                    "[vcoord] zfixed_closed_faces=true: the "// &
                                     "along-coordinate tracer diffusion gates its "// &
                                     "flux on `h > 0` (1/0 armour), "// &
                                     "not on H_VANISHED, weights the face flux by the "// &
@@ -2536,11 +2536,11 @@ contains
                                     "step.  With the partial-step face mask on, "// &
                                     "every face touching a filler is CLOSED and the "// &
                                     "flux is exactly zero, which answers all three.  "// &
-                                    "Set zfixed_closed_faces=.true., or kappa_h=0.")
+                                    "Set zfixed_closed_faces=true, or kappa_h=0.")
                   has_error = .true.
                end if
                if (cfg%ocean%kshear%enable) then
-                  call logger%error("&ocean_kappa_shear_nml enable=.true. is refused "// &
+                  call logger%error("[ocean.kappa_shear] enable=true is refused "// &
                                     "with vcoord_type='z_fixed' under a cavity: the "// &
                                     "JHL08 column solve closes its SURFACE row on "// &
                                     "k = nz (u_c/v_c/t_c/s_c(nz)), which on a "// &
@@ -2553,7 +2553,7 @@ contains
                   has_error = .true.
                end if
                if (cfg%ocean%tidal_mixing%enable) then
-                  call logger%error("&ocean_tidal_mixing_nml enable=.true. is "// &
+                  call logger%error("[ocean.tidal_mixing] enable=true is "// &
                                     "refused with vcoord_type='z_fixed' under a "// &
                                     "cavity: the N^2 column sets its top boundary "// &
                                     "at k = nz and forms the k = nz-1 interface "// &
@@ -2565,7 +2565,7 @@ contains
                   has_error = .true.
                end if
                if (cfg%regrid_time_scale > 0.0_wp) then
-                  call logger%error("&vcoord_nml regrid_time_scale > 0 is refused "// &
+                  call logger%error("[vcoord] regrid_time_scale > 0 is refused "// &
                                     "with vcoord_type='z_fixed' under a cavity: the "// &
                                     "grid time-filter is a per-layer convex blend "// &
                                     "that does not respect the vanish marker, so a "// &
@@ -2594,7 +2594,7 @@ contains
                ! warning: the spurious flow is there within 3 hours.
                ! (`cavity_rest_growth_diagnosis.md` §Q.0 item 9.)
                if (cfg%ocean%pgf%reconstruct_for_pressure) then
-                  call logger%error("&ocean_pgf_nml reconstruct_for_pressure=.true. "// &
+                  call logger%error("[ocean.pgf] reconstruct_for_pressure=true "// &
                                     "is refused with vcoord_type='z_fixed' under a "// &
                                     "cavity: the in-layer PLM/PPM T/S edge build "// &
                                     "reads the layer means of the inert top-side "// &
@@ -2603,7 +2603,7 @@ contains
                                     "up a spurious En ~ 1E-03 m2/s2 within hours, "// &
                                     "19 000x the layer-mean-density run.  Pending the "// &
                                     "filler-aware reconstruction that skips vanished "// &
-                                    "layers; set reconstruct_for_pressure=.false. "// &
+                                    "layers; set reconstruct_for_pressure=false "// &
                                     "(the layer-mean PCM density) until it lands.")
                   has_error = .true.
                end if
@@ -2614,7 +2614,7 @@ contains
                ! But a user who sets nu_h below the envelope should be
                ! told.  See `zfixed_cavity_nu_h_below_envelope`.
                if (zfixed_cavity_nu_h_below_envelope(cfg)) then
-                  call logger%warning("&ocean_hvisc_nml nu_h = "// &
+                  call logger%warning("[ocean.hvisc] nu_h = "// &
                                       to_string(cfg%ocean%hvisc%nu_h)// &
                                       " m2/s is below the "// &
                                       to_string(ZFIXED_CAVITY_NU_H_MIN)// &
@@ -2640,7 +2640,7 @@ contains
                ! and nz-1 fillers, and every column-walking consumer then
                ! operates on a single cell.  `h_nominal` is
                ! `max_depth/nz` — Z_FIXED's spacing is written from
-               ! `&ocean_topo_nml max_depth`, deliberately with no second
+               ! `[ocean.topo] max_depth`, deliberately with no second
                ! spelling.
                cav_h_nominal = 0.0_wp
                if (cfg%nz_layers > 0) then
@@ -2666,7 +2666,7 @@ contains
                                              cfg%z_fixed_tanh_width, cav_dz, cav_ierr)
                      if (cav_ierr == ZFIXED_DZ_OK .and. &
                          cfg%ocean%cavity_dyn%h_min_cavity < 2.0_wp*maxval(cav_dz)) then
-                        call logger%warning("&ocean_cavity_dyn_nml h_min_cavity = "// &
+                        call logger%warning("[ocean.cavity_dyn] h_min_cavity = "// &
                                             to_string(cfg%ocean%cavity_dyn%h_min_cavity)// &
                                             " m is below twice the thickest nominal "// &
                                             "z_fixed layer ("//to_string(maxval(cav_dz))// &
@@ -2681,11 +2681,11 @@ contains
                end if
                if (cav_h_nominal > 0.0_wp .and. &
                    cfg%ocean%cavity_dyn%h_min_cavity < 2.0_wp*cav_h_nominal) then
-                  call logger%error("&ocean_cavity_dyn_nml h_min_cavity = "// &
+                  call logger%error("[ocean.cavity_dyn] h_min_cavity = "// &
                                     to_string(cfg%ocean%cavity_dyn%h_min_cavity)// &
                                     " m is below 2*h_nominal = "// &
                                     to_string(2.0_wp*cav_h_nominal)//" m "// &
-                                    "(h_nominal = &ocean_topo_nml max_depth / "// &
+                                    "(h_nominal = [ocean.topo] max_depth / "// &
                                     "nz_layers = "//to_string(cav_h_nominal)// &
                                     " m), which vcoord_type='z_fixed' requires under "// &
                                     "a cavity: a thinner water column carries a "// &
@@ -2700,14 +2700,14 @@ contains
             end if
          end block
          if (trim(cfg%thickness_config) == "uniform_z") then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+            call logger%error("[ocean.cavity_dyn] enable=true is mutually "// &
                               "exclusive with thickness_config='uniform_z': that "// &
                               "seed lays uniform z interfaces from z = 0 down, so "// &
                               "under a draft it would fill the ice with water.  Use "// &
                               "the default sigma-style split.")
             has_error = .true.
          end if
-         ! NOTE: `&ocean_zinit_nml enable` used to be refused here — the
+         ! NOTE: `[ocean.zinit] enable` used to be refused here — the
          ! overlay measured depth from the COLUMN TOP, which under a
          ! draft is `z_draft` metres below `z = 0`, so a geopotential
          ! profile landed systematically too shallow.  `build_z_ctr` now
@@ -2715,8 +2715,8 @@ contains
          ! `metrics%z_draft`, so the two compose and the refusal is gone.
          ! --- solver envelope ---
          if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires the "// &
-                              "SPLIT solver (&ocean_bt_nml n_inner >= 1, or "// &
+            call logger%error("[ocean.cavity_dyn] enable=true requires the "// &
+                              "SPLIT solver ([ocean.bt] n_inner >= 1, or "// &
                               "auto_n_inner): the unsplit driver has neither the "// &
                               "barotropic correction nor the eta_forcing seam, so it "// &
                               "carries no barotropic response to a surface load and "// &
@@ -2724,8 +2724,8 @@ contains
             has_error = .true.
          end if
          if (cfg%ocean%bt%bt_halo > 0) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_bt_nml bt_halo > 0: the "// &
+            call logger%error("[ocean.cavity_dyn] enable=true is mutually "// &
+                              "exclusive with [ocean.bt] bt_halo > 0: the "// &
                               "wide-halo BT clone rebuilds its own metrics from the "// &
                               "grid formula and carries no z_draft, so its reference "// &
                               "depth would be the bed and its solve would ignore the "// &
@@ -2734,30 +2734,30 @@ contains
          end if
          ! --- mutually exclusive capabilities ---
          if (cfg%ocean%wetdry%enable) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_wetdry_nml enable: both decide "// &
+            call logger%error("[ocean.cavity_dyn] enable=true is mutually "// &
+                              "exclusive with [ocean.wetdry] enable: both decide "// &
                               "whether a column can carry water, from different "// &
                               "thresholds, and wet/dry also forces split_scheme="// &
                               "'ssp_rk2'.")
             has_error = .true.
          end if
          if (cfg%ocean%porous%enable) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_porous_nml enable: both narrow "// &
+            call logger%error("[ocean.cavity_dyn] enable=true is mutually "// &
+                              "exclusive with [ocean.porous] enable: both narrow "// &
                               "the same faces from static geometry and the "// &
                               "combination is unvalidated.")
             has_error = .true.
          end if
          if (cfg%ocean%ice%enable) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_ice_nml enable: sea ice is a "// &
+            call logger%error("[ocean.cavity_dyn] enable=true is mutually "// &
+                              "exclusive with [ocean.ice] enable: sea ice is a "// &
                               "SECOND surface load on the same column, and the two "// &
                               "are not reconciled in v1.")
             has_error = .true.
          end if
          if (cfg%ocean%tides%enable .and. cfg%ocean%tides%use_sal) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_tides_nml use_sal: the scalar "// &
+            call logger%error("[ocean.cavity_dyn] enable=true is mutually "// &
+                              "exclusive with [ocean.tides] use_sal: the scalar "// &
                               "SAL elevation is beta_sal*bt_eta, and under the cavity "// &
                               "datum bt_eta is the departure from the LOADED "// &
                               "equilibrium, not the sea-surface elevation the SAL "// &
@@ -2767,7 +2767,7 @@ contains
          end if
          ! --- honest-inertness warnings (the house rule: warn, do not refuse) ---
          if (trim(adjustl(cfg%ocean%cavity_dyn%draft_config)) == "none") then
-            call logger%warning("&ocean_cavity_dyn_nml enable=.true. with "// &
+            call logger%warning("[ocean.cavity_dyn] enable=true with "// &
                                 "draft_config='none': z_draft is identically zero, so "// &
                                 "bt_H_ref = b and the run is bit-identical to a "// &
                                 "cavity-free one.")
@@ -2780,10 +2780,10 @@ contains
          ! inert and there is nothing to warn about.
          if (.not. cfg%ocean%psurf%in_eos .and. &
              trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
-            call logger%warning("&ocean_cavity_dyn_nml enable=.true. with a "// &
-                                "NONLINEAR equation of state (&ocean_eos_nml eos='"// &
+            call logger%warning("[ocean.cavity_dyn] enable=true with a "// &
+                                "NONLINEAR equation of state ([ocean.eos] eos='"// &
                                 trim(adjustl(cfg%ocean%eos%eos))//"') but without "// &
-                                "&ocean_psurf_nml in_eos=.true.: the in-situ EOS "// &
+                                "[ocean.psurf] in_eos=true: the in-situ EOS "// &
                                 "pressure still starts at 0 Pa at the ice base, so "// &
                                 "the EOS ignores up to ~5e6 Pa of ice load (wrong "// &
                                 "thermobaricity, wrong freezing point).  Harmless "// &
@@ -2801,16 +2801,16 @@ contains
       ! the melt liquidus is its third consumer.
       if (cfg%ocean%cavity_melt%enable) then
          if (.not. cfg%ocean%cavity_dyn%enable) then
-            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
-                              "&ocean_cavity_dyn_nml enable=.true.  The melt "// &
+            call logger%error("[ocean.cavity_melt] enable=true requires "// &
+                              "[ocean.cavity_dyn] enable=true  The melt "// &
                               "interface stands on that group's geometry: without a "// &
                               "draft there is no ice base, cover_frac is identically "// &
                               "zero and the kernel would never be called.")
             has_error = .true.
          end if
          if (trim(adjustl(cfg%ocean%eos%tfreeze_set)) /= "isomip") then
-            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
-                              "&ocean_eos_nml tfreeze_set='isomip' (got '"// &
+            call logger%error("[ocean.cavity_melt] enable=true requires "// &
+                              "[ocean.eos] tfreeze_set='isomip' (got '"// &
                               trim(adjustl(cfg%ocean%eos%tfreeze_set))//"').  The "// &
                               "two shipped liquidi differ by ~0.03 degC at S = 34.5, "// &
                               "which is enough to flip the SIGN of the basal melt "// &
@@ -2820,8 +2820,8 @@ contains
             has_error = .true.
          end if
          if (.not. cfg%ocean%forcing%enable_components) then
-            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
-                              "&ocean_forcing_nml enable_components=.true.  The melt "// &
+            call logger%error("[ocean.cavity_melt] enable=true requires "// &
+                              "[ocean.forcing] enable_components=true  The melt "// &
                               "fluxes are delivered as the OWNED components "// &
                               "heat_cavity/salt_cavity, which are allocated only "// &
                               "with the component set, and only "// &
@@ -2838,13 +2838,13 @@ contains
             case (CAVITY_LAW_CONST_GAMMA, CAVITY_LAW_HJ99, CAVITY_LAW_YUNG25)
                continue
             case (CAVITY_LAW_INVALID)
-               call logger%error("&ocean_cavity_melt_nml exchange_law = '"// &
+               call logger%error("[ocean.cavity_melt] exchange_law = '"// &
                                  trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
                                  "' is not recognised (shipped: const_gamma, hj99, "// &
                                  "yung25).")
                has_error = .true.
             case default
-               call logger%error("&ocean_cavity_melt_nml exchange_law = '"// &
+               call logger%error("[ocean.cavity_melt] exchange_law = '"// &
                                  trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
                                  "' is RESERVED, not implemented "// &
                                  "(CAVITY_MELT_NOT_IMPLEMENTED).  Its enum value is "// &
@@ -2864,12 +2864,12 @@ contains
             if (melt_law_code == CAVITY_LAW_HJ99) then
                if (cfg%coriolis_f == 0.0_wp .and. &
                    cfg%ocean%topo%coriolis_beta == 0.0_wp) then
-                  call logger%error("&ocean_cavity_melt_nml exchange_law='hj99' on an "// &
+                  call logger%error("[ocean.cavity_melt] exchange_law='hj99' on an "// &
                                     "f = 0 grid (coriolis_f = 0, coriolis_beta = 0). "// &
                                     "Holland & Jenkins (1999) eq. (15) takes "// &
                                     "ln(.../|f| h_nu) and eq. (18) divides by f*L_O, "// &
                                     "so the law has no value there — the same "// &
-                                    "fail-loud stance &ocean_vmix_nml bkgnd_henyey "// &
+                                    "fail-loud stance [ocean.vmix] bkgnd_henyey "// &
                                     "takes on a cartesian grid.  Use "// &
                                     "exchange_law='const_gamma' or set a Coriolis "// &
                                     "parameter.")
@@ -2881,13 +2881,13 @@ contains
             case (CAVITY_ICE_INSULATING, CAVITY_ICE_ADV_DIFF)
                continue
             case (CAVITY_ICE_INVALID)
-               call logger%error("&ocean_cavity_melt_nml ice_conduction = '"// &
+               call logger%error("[ocean.cavity_melt] ice_conduction = '"// &
                                  trim(adjustl(cfg%ocean%cavity_melt%ice_conduction))// &
                                  "' is not recognised (shipped: insulating, "// &
                                  "adv_diff).")
                has_error = .true.
             case default
-               call logger%error("&ocean_cavity_melt_nml ice_conduction = '"// &
+               call logger%error("[ocean.cavity_melt] ice_conduction = '"// &
                                  trim(adjustl(cfg%ocean%cavity_melt%ice_conduction))// &
                                  "' is RESERVED, not implemented "// &
                                  "(CAVITY_MELT_NOT_IMPLEMENTED).  The steady "// &
@@ -2899,22 +2899,22 @@ contains
             end select
          end block
          if (cfg%ocean%cavity_melt%gamma_t <= 0.0_wp) then
-            call logger%error("&ocean_cavity_melt_nml gamma_t must be > 0 (it "// &
+            call logger%error("[ocean.cavity_melt] gamma_t must be > 0 (it "// &
                               "multiplies u* to give the heat exchange velocity; "// &
                               "zero is identically zero melt, which is what "// &
-                              "enable=.false. is for).")
+                              "enable=false is for).")
             has_error = .true.
          end if
          if (cfg%ocean%cavity_melt%gamma_s >= 0.0_wp .and. &
              cfg%ocean%cavity_melt%gamma_s <= 0.0_wp) then
-            call logger%error("&ocean_cavity_melt_nml gamma_s = 0 is refused: the "// &
+            call logger%error("[ocean.cavity_melt] gamma_s = 0 is refused: the "// &
                               "three-equation form divides by gamma_s.  Leave it "// &
                               "NEGATIVE (the default) to take the ISOMIP+ "// &
                               "gamma_t/35, or set a positive value.")
             has_error = .true.
          end if
          if (cfg%ocean%cavity_melt%far_field_depth <= 0.0_wp) then
-            call logger%error("&ocean_cavity_melt_nml far_field_depth must be > 0 m "// &
+            call logger%error("[ocean.cavity_melt] far_field_depth must be > 0 m "// &
                               "(it is the thickness the far-field T/S/u are averaged "// &
                               "over; zero would sample nothing).")
             has_error = .true.
@@ -2939,13 +2939,13 @@ contains
             fw_code = parse_cavity_freshwater(cfg%ocean%cavity_melt%freshwater)
             vc_code = parse_cavity_volume_comp(cfg%ocean%cavity_melt%volume_compensation)
             if (fw_code == CAVITY_FW_INVALID) then
-               call logger%error("&ocean_cavity_melt_nml freshwater = '"// &
+               call logger%error("[ocean.cavity_melt] freshwater = '"// &
                                  trim(adjustl(cfg%ocean%cavity_melt%freshwater))// &
                                  "' is not recognised (shipped: virtual, mass).")
                has_error = .true.
             end if
             if (vc_code == CAVITY_VC_INVALID) then
-               call logger%error("&ocean_cavity_melt_nml volume_compensation = '"// &
+               call logger%error("[ocean.cavity_melt] volume_compensation = '"// &
                                  trim(adjustl(cfg%ocean%cavity_melt%volume_compensation))// &
                                  "' is not recognised (shipped: none, "// &
                                  "uniform_open_ocean).")
@@ -2953,8 +2953,8 @@ contains
             end if
             if (fw_code == CAVITY_FW_MASS) then
                if (cfg%ocean%wetdry%enable) then
-                  call logger%error("&ocean_cavity_melt_nml freshwater='mass' is "// &
-                                    "refused with &ocean_wetdry_nml enable=.true.  "// &
+                  call logger%error("[ocean.cavity_melt] freshwater='mass' is "// &
+                                    "refused with [ocean.wetdry] enable=true  "// &
                                     "Wet/dry owns the other top-layer thickness "// &
                                     "source (its positive-definite outflow limiter) "// &
                                     "and re-decides per step which columns hold "// &
@@ -2964,8 +2964,8 @@ contains
                   has_error = .true.
                end if
                if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1) then
-                  call logger%error("&ocean_cavity_melt_nml freshwater='mass' is "// &
-                                    "refused with &ocean_vmix_nml "// &
+                  call logger%error("[ocean.cavity_melt] freshwater='mass' is "// &
+                                    "refused with [ocean.vmix] "// &
                                     "dt_tracer_advect_ratio > 1.  The windowed drain "// &
                                     "holds c fixed for the window while h keeps "// &
                                     "moving, so the dilution the mass form relies on "// &
@@ -2976,7 +2976,7 @@ contains
                end if
             end if
             if (vc_code == CAVITY_VC_UNIFORM_OPEN .and. fw_code /= CAVITY_FW_MASS) then
-               call logger%error("&ocean_cavity_melt_nml volume_compensation="// &
+               call logger%error("[ocean.cavity_melt] volume_compensation="// &
                                  "'uniform_open_ocean' requires freshwater='mass'.  "// &
                                  "The virtual form adds no volume, so there is "// &
                                  "nothing to compensate and the sink would be a "// &
@@ -3006,12 +3006,12 @@ contains
          !   * shortwave penetration and surface restoring carry the
          !     factor themselves (they do not route through `Q_*`).
          !
-         ! `&ocean_psurf_nml enable` was never refused here: the cavity
+         ! `[ocean.psurf] enable` was never refused here: the cavity
          ! is the `ms%p_top` producer (P5.2: `p_ice_ref + sf%p_surf`), so
          ! the seam composes with the ice load rather than clobbering it.
          if (cfg%ocean%ice%enable) then
-            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_ice_nml enable=.true.  Sea ice "// &
+            call logger%error("[ocean.cavity_melt] enable=true is mutually "// &
+                              "exclusive with [ocean.ice] enable=true  Sea ice "// &
                               "full-overwrites heat_added/salt_flux and runs its own "// &
                               "instant-relaxation basal flux with a DIFFERENT "// &
                               "liquidus set; two interface thermodynamics in one "// &
@@ -3021,21 +3021,21 @@ contains
          ! (E4) Constant α/β under a NONLINEAR EOS in a cavity — a WARNING,
          ! deliberately, not a refusal.  ISOMIP+ prescribes the LINEAR EOS
          ! (Asay-Davis et al. 2016 Table 4), and there the constants ARE
-         ! that EOS's exact coefficients, so every shipped cavity namelist
+         ! that EOS's exact coefficients, so every shipped cavity input
          ! is unaffected and must keep running untouched.  Under Wright or
          ! Roquet the pair is a constant stand-in for a coefficient that
          ! collapses toward zero at the freezing point and roughly doubles
          ! by 1000 dbar — exactly the corner a cavity sits in.
          if (trim(adjustl(cfg%ocean%vmix%buoyancy_coeffs)) == "constant" .and. &
              trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
-            call logger%warning("&ocean_cavity_melt_nml enable=.true. with a "// &
-                                "NONLINEAR EOS (&ocean_eos_nml eos='"// &
+            call logger%warning("[ocean.cavity_melt] enable=true with a "// &
+                                "NONLINEAR EOS ([ocean.eos] eos='"// &
                                 trim(adjustl(cfg%ocean%eos%eos))//"') but "// &
-                                "&ocean_vmix_nml buoyancy_coeffs='constant'.  The "// &
+                                "[ocean.vmix] buoyancy_coeffs='constant'.  The "// &
                                 "KPP surface buoyancy flux B_0 and the "// &
                                 "double-diffusion density ratio will size the "// &
                                 "melt-driven buoyancy with the SCALAR "// &
-                                "&ocean_ic_nml alpha_T/beta_S, not with the "// &
+                                "[ocean.ic] alpha_T/beta_S, not with the "// &
                                 "derivatives of the density this run actually "// &
                                 "integrates.  Near the freezing point thermal "// &
                                 "expansion is several times smaller than at 10 degC "// &
@@ -3046,7 +3046,7 @@ contains
                                 "constant-coefficient reference.")
          end if
       end if
-      ! ---- Ice-shelf TOP drag (&ocean_tdrag_nml, Phase 4a) ----
+      ! ---- Ice-shelf TOP drag ([ocean.tdrag], Phase 4a) ----
       ! Default off ⇒ this whole block is skipped and every path is
       ! bit-identical.  Every restriction below fails loud: a top drag
       ! that is silently inert (no cover, no coefficient) is worse than
@@ -3054,13 +3054,13 @@ contains
       ! frictionless at the ice and LOOK like it was damped.
       if (cfg%ocean%tdrag%enable) then
          if (.not. cfg%ocean%cavity_dyn%enable) then
-            call logger%error("&ocean_tdrag_nml enable=.true. requires "// &
-                              "&ocean_cavity_dyn_nml enable=.true.  The top drag "// &
+            call logger%error("[ocean.tdrag] enable=true requires "// &
+                              "[ocean.cavity_dyn] enable=true  The top drag "// &
                               "stands on that group's geometry: without a draft "// &
                               "there is no ice base, cover_frac is identically zero, "// &
                               "and every face mask would be zero — an inert kernel "// &
                               "with a cost.  An OPEN surface's momentum boundary "// &
-                              "condition is the wind stress (&ocean_topo_nml "// &
+                              "condition is the wind stress ([ocean.topo] "// &
                               "wind_config), not a drag.")
             has_error = .true.
          end if
@@ -3068,7 +3068,7 @@ contains
             integer :: tdrag_code
             tdrag_code = parse_tdrag_variant(cfg%ocean%tdrag%form)
             if (.not. tdrag_variant_is_implemented(tdrag_code)) then
-               call logger%error("&ocean_tdrag_nml form = '"// &
+               call logger%error("[ocean.tdrag] form = '"// &
                                  trim(adjustl(cfg%ocean%tdrag%form))// &
                                  "' is not recognised (quadratic|linear).  The two "// &
                                  "forms take coefficients of DIFFERENT dimensions "// &
@@ -3076,15 +3076,15 @@ contains
                                  "defaulted.")
                has_error = .true.
             else if (tdrag_code == TDRAG_QUADRATIC .and. cfg%ocean%tdrag%cd <= 0.0_wp) then
-               call logger%error("&ocean_tdrag_nml form='quadratic' requires cd > 0 "// &
+               call logger%error("[ocean.tdrag] form='quadratic' requires cd > 0 "// &
                                  "(ISOMIP+ prescribes 2.5e-3).  cd = 0 is an "// &
-                                 "identically zero drag, which is what enable=.false. "// &
+                                 "identically zero drag, which is what enable=false "// &
                                  "is for.")
                has_error = .true.
             else if (tdrag_code == TDRAG_LINEAR .and. cfg%ocean%tdrag%r <= 0.0_wp) then
-               call logger%error("&ocean_tdrag_nml form='linear' requires r > 0 "// &
+               call logger%error("[ocean.tdrag] form='linear' requires r > 0 "// &
                                  "(1/s).  r = 0 is an identically zero drag, which "// &
-                                 "is what enable=.false. is for.")
+                                 "is what enable=false is for.")
                has_error = .true.
             end if
             ! ---- ONE drag coefficient for momentum and melt ----
@@ -3099,22 +3099,22 @@ contains
             ! silently overridden.
             if (cfg%ocean%cavity_melt%enable .and. tdrag_code == TDRAG_QUADRATIC) then
                if (cfg%ocean%cavity_melt%cdrag_top /= cfg%ocean%tdrag%cd) then
-                  call logger%error("&ocean_tdrag_nml cd = "// &
+                  call logger%error("[ocean.tdrag] cd = "// &
                                     to_string(cfg%ocean%tdrag%cd)//" and "// &
-                                    "&ocean_cavity_melt_nml cdrag_top = "// &
+                                    "[ocean.cavity_melt] cdrag_top = "// &
                                     to_string(cfg%ocean%cavity_melt%cdrag_top)// &
                                     " disagree.  There is ONE ice-base drag "// &
                                     "coefficient in this model: the same C_d sets "// &
                                     "the momentum sink and the melt friction "// &
                                     "velocity u* = sqrt(C_d*(U^2 + u_tide^2)).  Set "// &
                                     "them equal (or leave cdrag_top at its default "// &
-                                    "and set &ocean_tdrag_nml cd alone).")
+                                    "and set [ocean.tdrag] cd alone).")
                   has_error = .true.
                end if
             end if
             if (cfg%ocean%cavity_melt%enable .and. tdrag_code == TDRAG_LINEAR) then
-               call logger%warning("&ocean_tdrag_nml form='linear' with "// &
-                                   "&ocean_cavity_melt_nml enable=.true.: the melt "// &
+               call logger%warning("[ocean.tdrag] form='linear' with "// &
+                                   "[ocean.cavity_melt] enable=true: the melt "// &
                                    "friction velocity is quadratic by construction "// &
                                    "(u* = sqrt(C_d*(U^2 + u_tide^2))), so it keeps "// &
                                    "its own cdrag_top and the momentum sink uses r. "// &
@@ -3129,7 +3129,7 @@ contains
       if (cfg%ocean%wetdry%enable) then
          if (.not. (cfg%ocean%wetdry%rewet_depth > cfg%ocean%wetdry%dry_depth &
                     .and. cfg%ocean%wetdry%dry_depth > 0.0_wp)) then
-            call logger%error("&ocean_wetdry_nml requires rewet_depth > dry_depth > 0 "// &
+            call logger%error("[ocean.wetdry] requires rewet_depth > dry_depth > 0 "// &
                               "(hysteresis band; equal thresholds flip-flop the front)")
             has_error = .true.
          end if
@@ -3151,7 +3151,7 @@ contains
             wd_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
                                                default_code=VCOORD_EULERIAN_Z)
             if (.not. (wd_vcoord_code == VCOORD_SIGMA)) then
-               call logger%error("&ocean_wetdry_nml enable=.true. supports "// &
+               call logger%error("[ocean.wetdry] enable=true supports "// &
                                  "vcoord_type='sigma' only — got '"// &
                                  trim(cfg%vcoord_type)//"' (ZSTAR_FULL bed layers "// &
                                  "pinch independently; 'zstar' is MOM6 z* with bed "// &
@@ -3165,17 +3165,17 @@ contains
          ! positivity machineries have not been reconciled (v1) — fail loud
          ! rather than run both over the same faces.
          if (cfg%ocean%continuity%positive_definite) then
-            call logger%error("&ocean_wetdry_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_continuity_nml "// &
-                              "positive_definite=.true. (wet/dry owns its own "// &
+            call logger%error("[ocean.wetdry] enable=true is mutually "// &
+                              "exclusive with [ocean.continuity] "// &
+                              "positive_definite=true (wet/dry owns its own "// &
                               "barotropic limiter; composition deferred)")
             has_error = .true.
          end if
          ! Layer-side positivity is the continuity-PPM limiter's job — the BT
          ! limiter bounds the column, ppm_limit_pos bounds each layer.
          if (.not. cfg%ocean%continuity%ppm_limit_pos) then
-            call logger%error("&ocean_wetdry_nml enable=.true. requires "// &
-                              "&ocean_continuity_nml ppm_limit_pos=.true. "// &
+            call logger%error("[ocean.wetdry] enable=true requires "// &
+                              "[ocean.continuity] ppm_limit_pos=true "// &
                               "(per-layer positivity under drying transports)")
             has_error = .true.
          end if
@@ -3183,17 +3183,17 @@ contains
          ! with the wet/dry upwind+limiter branch in v1 (each replaces the
          ! same face-thickness logic).
          if (cfg%ocean%bt%use_cont_type .or. cfg%ocean%bt%upstream_h_face) then
-            call logger%error("&ocean_wetdry_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_bt_nml use_cont_type / "// &
+            call logger%error("[ocean.wetdry] enable=true is mutually "// &
+                              "exclusive with [ocean.bt] use_cont_type / "// &
                               "upstream_h_face (all three replace the BT Pass-1 "// &
                               "face thickness; composition deferred)")
             has_error = .true.
          end if
          ! Wet/dry needs the split solver: the limiter lives in the BT substep.
          if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
-            call logger%error("&ocean_wetdry_nml enable=.true. requires the "// &
-                              "split-explicit solver (&ocean_bt_nml n_inner >= 1 "// &
-                              "or auto_n_inner=.true.)")
+            call logger%error("[ocean.wetdry] enable=true requires the "// &
+                              "split-explicit solver ([ocean.bt] n_inner >= 1 "// &
+                              "or auto_n_inner=true)")
             has_error = .true.
          end if
          ! Surface-flux composition: only the MAIN heat/salt deposit is
@@ -3204,74 +3204,74 @@ contains
          ! blow up on a ~0-thickness sliver.  All three mis-compose:
          ! fail loud, defer the gated variants.
          if (cfg%ocean%thermo%sw_pen_frac > 0.0_wp) then
-            call logger%error("&ocean_wetdry_nml enable=.true. does not yet "// &
+            call logger%error("[ocean.wetdry] enable=true does not yet "// &
                               "compose with shortwave penetration "// &
-                              "(&ocean_thermo_nml sw_pen_frac > 0): the additive "// &
+                              "([ocean.thermo] sw_pen_frac > 0): the additive "// &
                               "correction would withdraw a surface deposit the "// &
                               "dry-column mask never made")
             has_error = .true.
          end if
          if (cfg%ocean%restore%enable_restore_temp .or. &
              cfg%ocean%restore%enable_restore_salt) then
-            call logger%error("&ocean_wetdry_nml enable=.true. does not yet "// &
-                              "compose with surface restoring (&ocean_restore_nml): "// &
+            call logger%error("[ocean.wetdry] enable=true does not yet "// &
+                              "compose with surface restoring ([ocean.restore]): "// &
                               "the piston rate lambda = piston/h_top diverges on a "// &
                               "drying column")
             has_error = .true.
          end if
          if (cfg%ocean%geothermal%enable) then
-            call logger%error("&ocean_wetdry_nml enable=.true. does not yet "// &
+            call logger%error("[ocean.wetdry] enable=true does not yet "// &
                               "compose with geothermal heating "// &
-                              "(&ocean_geothermal_nml): the bed deposit blows up "// &
+                              "([ocean.geothermal]): the bed deposit blows up "// &
                               "a dried column's vanished bed layer")
             has_error = .true.
          end if
       end if
-      ! ---- &ocean_restore_nml: file-based SSS restoring ----
+      ! ---- [ocean.restore]: file-based SSS restoring ----
       ! Every sss_* knob is inert without `sss_file`; a knob that would be
       ! silently ignored is refused instead.
       if (len_trim(cfg%ocean%restore%sss_file) > 0) then
 #ifdef RDB_NO_NETCDF
-         call logger%error("&ocean_restore_nml sss_file requires a NetCDF build "// &
+         call logger%error("[ocean.restore] sss_file requires a NetCDF build "// &
                            "(RDB_ENABLE_NETCDF=ON); the reader is compiled out here")
          has_error = .true.
 #endif
          if (.not. cfg%ocean%restore%enable_restore_salt) then
-            call logger%error("&ocean_restore_nml sss_file is set but "// &
-                              "enable_restore_salt = .false.")
+            call logger%error("[ocean.restore] sss_file is set but "// &
+                              "enable_restore_salt = false")
             has_error = .true.
          end if
          if (cfg%ocean%restore%piston_s <= 0.0_wp) then
-            call logger%error("&ocean_restore_nml sss_file needs piston_s > 0 "// &
+            call logger%error("[ocean.restore] sss_file needs piston_s > 0 "// &
                               "(OM3 FLUXCONST, m/day)")
             has_error = .true.
          end if
          if (len_trim(cfg%ocean%restore%sss_var) == 0) then
-            call logger%error("&ocean_restore_nml sss_file is set but sss_var is blank")
+            call logger%error("[ocean.restore] sss_file is set but sss_var is blank")
             has_error = .true.
          end if
          if (.not. cfg%ocean%restore%sss_as_sflux) then
-            call logger%error("&ocean_restore_nml sss_file needs sss_as_sflux = .true.: "// &
+            call logger%error("[ocean.restore] sss_file needs sss_as_sflux = true: "// &
                               "the salt-flux form is the only file restoring form "// &
                               "(there is no virtual-precipitation form)")
             has_error = .true.
          end if
          if (cfg%ocean%restore%sss_time_cyclic .and. &
              cfg%ocean%restore%sss_cycle_period <= 0.0_wp) then
-            call logger%error("&ocean_restore_nml sss_time_cyclic = .true. needs "// &
+            call logger%error("[ocean.restore] sss_time_cyclic = true needs "// &
                               "sss_cycle_period > 0")
             has_error = .true.
          end if
          if (cfg%ocean%restore%sss_adjust_by_scaling .and. &
              .not. cfg%ocean%restore%sss_adjust_net_zero) then
-            call logger%error("&ocean_restore_nml sss_adjust_by_scaling = .true. "// &
-                              "needs sss_adjust_net_zero = .true.")
+            call logger%error("[ocean.restore] sss_adjust_by_scaling = true "// &
+                              "needs sss_adjust_net_zero = true")
             has_error = .true.
          end if
          select case (trim(cfg%ocean%restore%sss_convention))
          case ("model", "practical")
          case default
-            call logger%error("&ocean_restore_nml sss_convention = '"// &
+            call logger%error("[ocean.restore] sss_convention = '"// &
                               trim(cfg%ocean%restore%sss_convention)// &
                               "' is not recognised (allowed: model, practical)")
             has_error = .true.
@@ -3280,7 +3280,7 @@ contains
          if (cfg%ocean%restore%sss_adjust_net_zero .or. &
              cfg%ocean%restore%sss_adjust_by_scaling .or. &
              cfg%ocean%restore%max_delta_sss < 999.0_wp) then
-            call logger%error("&ocean_restore_nml max_delta_sss / sss_adjust_net_zero / "// &
+            call logger%error("[ocean.restore] max_delta_sss / sss_adjust_net_zero / "// &
                               "sss_adjust_by_scaling act on the file restoring only; "// &
                               "set sss_file (the scalar target path ignores them)")
             has_error = .true.
@@ -3296,8 +3296,8 @@ contains
       ! than silently ship a lying diagnostic.
       if (pseudo_salt_conflicts_restore(cfg%ocean%tracers%enable_pseudo_salt, &
                                         cfg%ocean%restore%enable_restore_salt)) then
-         call logger%error("&ocean_tracers_nml enable_pseudo_salt=.true. does not "// &
-                           "compose with &ocean_restore_nml enable_restore_salt=.true. "// &
+         call logger%error("[ocean.tracers] enable_pseudo_salt=true does not "// &
+                           "compose with [ocean.restore] enable_restore_salt=true "// &
                            "(SSS piston restoring): the deviation diagnostic would "// &
                            "measure the un-mirrored restoring term, not the "// &
                            "passive-transport-path error")
@@ -3305,16 +3305,16 @@ contains
       end if
       if (pseudo_salt_conflicts_ice(cfg%ocean%tracers%enable_pseudo_salt, &
                                     cfg%ocean%ice%enable)) then
-         call logger%error("&ocean_tracers_nml enable_pseudo_salt=.true. does not "// &
-                           "compose with &ocean_ice_nml enable=.true.: sea-ice "// &
+         call logger%error("[ocean.tracers] enable_pseudo_salt=true does not "// &
+                           "compose with [ocean.ice] enable=true: sea-ice "// &
                            "frazil/basal salt exchange is an un-mirrored salinity "// &
                            "source that would corrupt the deviation diagnostic")
          has_error = .true.
       end if
       if (pseudo_salt_needs_thermo_warning(cfg%ocean%tracers%enable_pseudo_salt, &
                                            cfg%ocean%thermo%enable_thermodynamics)) then
-         call logger%warning("&ocean_tracers_nml enable_pseudo_salt=.true. with "// &
-                             "&ocean_thermo_nml enable_thermodynamics=.false.: "// &
+         call logger%warning("[ocean.tracers] enable_pseudo_salt=true with "// &
+                             "[ocean.thermo] enable_thermodynamics=false: "// &
                              "pseudo-salt will never receive the surface salt flux "// &
                              "or KPP non-local mirrors, so it measures pure "// &
                              "advection/diffusion transport only — a legitimate "// &
@@ -3332,7 +3332,7 @@ contains
          ! performance-tuned; expect a large throughput hit.  Warn loudly
          ! so it is never mistaken for a free rider on a coastal run.
          call logger%warning("=====================================================")
-         call logger%warning("&ocean_ice_nml enable=.true.: SEA ICE IS ON.")
+         call logger%warning("[ocean.ice] enable=true: SEA ICE IS ON.")
          call logger%warning("Sea ice is tuned for GLOBAL, ice-covered simulations "// &
                              "and is NOT performance-tuned. Expect it to be VERY "// &
                              "SLOW on regional/coastal domains where most of the "// &
@@ -3340,29 +3340,29 @@ contains
          call logger%warning("=====================================================")
       end if
       if (cfg%ocean%ice%pressure_dependent_frazil .and. .not. cfg%ocean%ice%frazil_column) then
-         call logger%error("&ocean_ice_nml pressure_dependent_frazil=.true. requires "// &
-                           "frazil_column=.true. (the surface-only clamp is at p=0 by "// &
+         call logger%error("[ocean.ice] pressure_dependent_frazil=true requires "// &
+                           "frazil_column=true (the surface-only clamp is at p=0 by "// &
                            "construction)")
          has_error = .true.
       end if
       if (cfg%ocean%ice%hfreeze /= -1.0_wp) then
          if (.not. (cfg%ocean%ice%hfreeze > 0.0_wp)) then
-            call logger%error("&ocean_ice_nml hfreeze must be > 0 (m) or exactly -1 (off)")
+            call logger%error("[ocean.ice] hfreeze must be > 0 (m) or exactly -1 (off)")
             has_error = .true.
          else if (.not. cfg%ocean%ice%enable) then
-            call logger%error("&ocean_ice_nml hfreeze > 0 requires enable=.true. "// &
+            call logger%error("[ocean.ice] hfreeze > 0 requires enable=true "// &
                               "(the melt potential is handed to the ice model)")
             has_error = .true.
          else if (cfg%ocean%cavity_dyn%enable) then
-            call logger%error("&ocean_ice_nml hfreeze > 0 is refused with "// &
-                              "&ocean_cavity_dyn_nml enable=.true.: the melt potential "// &
+            call logger%error("[ocean.ice] hfreeze > 0 is refused with "// &
+                              "[ocean.cavity_dyn] enable=true: the melt potential "// &
                               "of the water under an ice shelf must not be offered to "// &
                               "sea ice")
             has_error = .true.
          end if
       end if
       if (cfg%ocean%ice%frazil_column .and. .not. cfg%ocean%ice%enable) then
-         call logger%error("&ocean_ice_nml frazil_column=.true. requires enable=.true. "// &
+         call logger%error("[ocean.ice] frazil_column=true requires enable=true "// &
                            "(frazil is handed to the ice model)")
          has_error = .true.
       end if
@@ -3373,12 +3373,12 @@ contains
       ! wrong/unstable answer.
       if (cfg%ocean%ice%transport) then
          if (.not. cfg%ocean%ice%enable) then
-            call logger%error("&ocean_ice_nml transport=.true. requires "// &
-                              "enable=.true. (the ice slot must be live)")
+            call logger%error("[ocean.ice] transport=true requires "// &
+                              "enable=true (the ice slot must be live)")
             has_error = .true.
          end if
          if (cfg%ocean%ice%ncat <= 1) then
-            call logger%error("&ocean_ice_nml transport=.true. requires ncat > 1 "// &
+            call logger%error("[ocean.ice] transport=true requires ncat > 1 "// &
                               "(ncat==1 is the frozen legacy lumped mode — no ITD, "// &
                               "nothing to transport by category)")
             has_error = .true.
@@ -3388,8 +3388,8 @@ contains
          ! `transport=.true.` with thermo off is a WORDLESS no-op — fail
          ! loud (house rule) instead.
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call logger%error("&ocean_ice_nml transport=.true. requires "// &
-                              "&ocean_thermo_nml enable_thermodynamics=.true. "// &
+            call logger%error("[ocean.ice] transport=true requires "// &
+                              "[ocean.thermo] enable_thermodynamics=true "// &
                               "(the transport call fires only on the thermo cadence)")
             has_error = .true.
          end if
@@ -3398,7 +3398,7 @@ contains
          ! wrapped) at the top of every advective substep, and a seam face
          ! is never zeroed as a wall (`rdb_ice_transport`).
          if (cfg%ocean%ice%adv_substeps < 1) then
-            call logger%error("&ocean_ice_nml adv_substeps must be >= 1")
+            call logger%error("[ocean.ice] adv_substeps must be >= 1")
             has_error = .true.
          end if
       end if
@@ -3414,8 +3414,8 @@ contains
       ! Multi-rank: the ice velocity is halo-exchanged every subcycle.
       if (cfg%ocean%ice%dynamics) then
          if (.not. cfg%ocean%ice%enable) then
-            call logger%error("&ocean_ice_nml dynamics=.true. requires "// &
-                              "enable=.true. (the ice slot must be live)")
+            call logger%error("[ocean.ice] dynamics=true requires "// &
+                              "enable=true (the ice slot must be live)")
             has_error = .true.
          end if
          ! v1 envelope: every edge must be WALL or PERIODIC — no OBC/tidal/
@@ -3429,8 +3429,8 @@ contains
                        [OBC_WALL, OBC_PERIODIC]) .or. &
              .not. any(ocean_bc_type_from_string(cfg%ocean%bc%north) == &
                        [OBC_WALL, OBC_PERIODIC, OBC_TRIPOLAR_FOLD])) then
-            call logger%error("&ocean_ice_nml dynamics=.true. requires every "// &
-                              "&ocean_bc_nml edge to be 'wall' or 'periodic' (the north "// &
+            call logger%error("[ocean.ice] dynamics=true requires every "// &
+                              "[ocean.bc] edge to be 'wall' or 'periodic' (the north "// &
                               "edge may also be 'tripolar_fold'; v1: no "// &
                               "OBC/tidal/sponge/clamped/Chapman edges for ice dynamics)")
             has_error = .true.
@@ -3439,13 +3439,13 @@ contains
          ! ice velocity every subcycle and recomputes its stencil one row past
          ! the seam, which needs two ghost rows.
          if (trim(cfg%ocean%bc%north) == "tripolar_fold" .and. cfg%nghost < 2) then
-            call logger%error("&ocean_ice_nml dynamics=.true. with north='tripolar_fold' "// &
+            call logger%error("[ocean.ice] dynamics=true with north='tripolar_fold' "// &
                               "needs nghost >= 2 (the EVP stencil reads one row past "// &
                               "the fold line); nghost = "//to_string(cfg%nghost))
             has_error = .true.
          end if
          if (cfg%ocean%ice%evp_sub_steps < 1) then
-            call logger%error("&ocean_ice_nml evp_sub_steps must be >= 1")
+            call logger%error("[ocean.ice] evp_sub_steps must be >= 1")
             has_error = .true.
          end if
          ! Physical-parameter positivity guards — fail loud on a typo/garbage
@@ -3455,29 +3455,29 @@ contains
          ! `tdamp` is legitimately sign-free (`< 0` selects the
          ! fraction-of-slow-step form) — no guard.
          if (cfg%ocean%ice%p0 <= 0.0_wp) then
-            call logger%error("&ocean_ice_nml p0 (ice-strength P*) must be > 0")
+            call logger%error("[ocean.ice] p0 (ice-strength P*) must be > 0")
             has_error = .true.
          end if
          if (cfg%ocean%ice%c0 <= 0.0_wp) then
-            call logger%error("&ocean_ice_nml c0 (ice-strength C*) must be > 0")
+            call logger%error("[ocean.ice] c0 (ice-strength C*) must be > 0")
             has_error = .true.
          end if
          if (cfg%ocean%ice%ec < 0.0_wp) then
-            call logger%error("&ocean_ice_nml ec (yield ellipticity) must be >= 0 "// &
+            call logger%error("[ocean.ice] ec (yield ellipticity) must be >= 0 "// &
                               "(0 = cavitating-fluid rheology)")
             has_error = .true.
          end if
          if (cfg%ocean%ice%cdw <= 0.0_wp) then
-            call logger%error("&ocean_ice_nml cdw (ice-ocean drag coefficient) must be > 0")
+            call logger%error("[ocean.ice] cdw (ice-ocean drag coefficient) must be > 0")
             has_error = .true.
          end if
          if (cfg%ocean%ice%rho_ocean <= 0.0_wp) then
-            call logger%error("&ocean_ice_nml rho_ocean (ice-drag reference density) "// &
+            call logger%error("[ocean.ice] rho_ocean (ice-drag reference density) "// &
                               "must be > 0")
             has_error = .true.
          end if
          if (cfg%ocean%ice%del_sh_min_scale <= 0.0_wp) then
-            call logger%error("&ocean_ice_nml del_sh_min_scale (viscosity-floor scale) "// &
+            call logger%error("[ocean.ice] del_sh_min_scale (viscosity-floor scale) "// &
                               "must be > 0")
             has_error = .true.
          end if
@@ -3486,8 +3486,8 @@ contains
          ! guard. Warn (NOT error — the envelope is unchanged); this
          ! combination is unvalidated.
          if (.not. cfg%ocean%ice%transport) then
-            call logger%warning("&ocean_ice_nml dynamics=.true. without "// &
-                                "transport=.true.: drift-only mode has no CFL backstop "// &
+            call logger%warning("[ocean.ice] dynamics=true without "// &
+                                "transport=true: drift-only mode has no CFL backstop "// &
                                 "on u_ice (transport's positivity abort is the only "// &
                                 "ice-velocity guard) and is unvalidated")
          end if
@@ -3496,14 +3496,14 @@ contains
          ! .and. dt_slow>0`) makes this combination a silent no-op; fail
          ! loud instead of silently reproducing SIS2's silence.
          if (cfg%ocean%ice%cfl_trunc_dyn_its .and. cfg%ocean%ice%cfl_trunc <= 0.0_wp) then
-            call logger%error("&ocean_ice_nml cfl_trunc_dyn_its=.true. requires "// &
+            call logger%error("[ocean.ice] cfl_trunc_dyn_its=true requires "// &
                               "cfl_trunc > 0 (the per-iteration check needs a ceiling)")
             has_error = .true.
          end if
          ! SIS2 permits cfl_trunc > 1 but calls it unwise ("instability can
          ! occur past 0.5") — warn, do not fail loud.
          if (cfg%ocean%ice%cfl_trunc > 1.0_wp) then
-            call logger%warning("&ocean_ice_nml cfl_trunc > 1.0 is permitted but unwise "// &
+            call logger%warning("[ocean.ice] cfl_trunc > 1.0 is permitted but unwise "// &
                                 "(SIS2: 'instability can occur past 0.5')")
          end if
       end if
@@ -3514,38 +3514,38 @@ contains
       ! a_face_stress below). Deliberately OUTSIDE the `if (dynamics)`
       ! envelope above: it must fire precisely when `dynamics` is false.
       if (cfg%ocean%ice%cfl_trunc > 0.0_wp .and. .not. cfg%ocean%ice%dynamics) then
-         call logger%error("&ocean_ice_nml cfl_trunc > 0 requires dynamics=.true. "// &
+         call logger%error("[ocean.ice] cfl_trunc > 0 requires dynamics=true "// &
                            "(the knob only reaches the EVP velocity solve)")
          has_error = .true.
       end if
       if (cfg%ocean%ice%cfl_trunc_dyn_its .and. .not. cfg%ocean%ice%dynamics) then
-         call logger%error("&ocean_ice_nml cfl_trunc_dyn_its=.true. requires "// &
-                           "dynamics=.true. (the knob only reaches the EVP velocity solve)")
+         call logger%error("[ocean.ice] cfl_trunc_dyn_its=true requires "// &
+                           "dynamics=true (the knob only reaches the EVP velocity solve)")
          has_error = .true.
       end if
       if (cfg%ocean%ice%project_ci .and. .not. cfg%ocean%ice%dynamics) then
-         call logger%error("&ocean_ice_nml project_ci=.true. requires dynamics=.true. "// &
+         call logger%error("[ocean.ice] project_ci=true requires dynamics=true "// &
                            "(the knob only reaches the EVP subcycle loop)")
          has_error = .true.
       end if
 
-      ! ---- Map-driven sponge (&ocean_sponge_nml, PR-23) ----
+      ! ---- Map-driven sponge ([ocean.sponge], PR-23) ----
       if (cfg%ocean%sponge%enable) then
          if (.not. sponge_source_is_implemented(cfg%ocean%sponge%damp_source)) then
-            call logger%error("&ocean_sponge_nml enable=.true. with unimplemented "// &
+            call logger%error("[ocean.sponge] enable=true with unimplemented "// &
                               "damp_source = '"//trim(cfg%ocean%sponge%damp_source)// &
                               "': must be 'band' ('file' is PR-23b, needs the PR-14 reader)")
             has_error = .true.
          end if
          if (.not. sponge_target_is_implemented(cfg%ocean%sponge%target_source)) then
-            call logger%error("&ocean_sponge_nml enable=.true. with unimplemented "// &
+            call logger%error("[ocean.sponge] enable=true with unimplemented "// &
                               "target_source = '"//trim(cfg%ocean%sponge%target_source)// &
                               "': must be 'ic' or 'linear_z' "// &
                               "('file' is PR-23b, needs the PR-14 reader)")
             has_error = .true.
          end if
          if (.not. sponge_ramp_is_valid(cfg%ocean%sponge%ramp)) then
-            call logger%error("&ocean_sponge_nml ramp = '"//trim(cfg%ocean%sponge%ramp)// &
+            call logger%error("[ocean.sponge] ramp = '"//trim(cfg%ocean%sponge%ramp)// &
                               "': must be 'cosine' (default, the legacy band shape) "// &
                               "or 'linear' (ISOMIP+ Eq. 20)")
             has_error = .true.
@@ -3557,7 +3557,7 @@ contains
              cfg%ocean%sponge%lin_t_ref == 0.0_wp .and. &
              cfg%ocean%sponge%lin_dt_dz == 0.0_wp .and. &
              cfg%ocean%sponge%lin_ds_dz == 0.0_wp) then
-            call logger%warning("&ocean_sponge_nml target_source='linear_z' with "// &
+            call logger%warning("[ocean.sponge] target_source='linear_z' with "// &
                                 "lin_t_ref = lin_dt_dz = lin_ds_dz = 0: the sponge will "// &
                                 "relax toward a uniform T = 0 degC column. Set the "// &
                                 "lin_* profile knobs.")
@@ -3567,21 +3567,21 @@ contains
          ! plan's §14 Q1 recommendation). Abort unconditionally rather than
          ! silently ignore the knob.
          if (cfg%ocean%sponge%relax_h) then
-            call logger%error("&ocean_sponge_nml relax_h=.true. is not implemented "// &
+            call logger%error("[ocean.sponge] relax_h=true is not implemented "// &
                               "in PR-23 v1 (interior-interface thickness damping is "// &
                               "deferred to PR-23b; see docs/plans/PLAN_PR23_real_sponge.md "// &
-                              "§14 Q1) — leave relax_h=.false.")
+                              "§14 Q1) — leave relax_h=false")
             has_error = .true.
          end if
          ! The sponge is dispatched only from run_stage_split (the split
          ! barotropic solver); the unsplit run_stage never receives bc or sp.
          ! With auto_n_inner=.true. n_inner resolves later at setup, so only
          ! a HARD n_inner < 1 with auto off is an error here (mirrors the
-         ! &ocean_wetdry_nml n_inner precedent above).
+         ! [ocean.wetdry] n_inner precedent above).
          if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
-            call logger%error("&ocean_sponge_nml enable=.true. requires the "// &
-                              "split-explicit solver (&ocean_bt_nml n_inner >= 1 "// &
-                              "or auto_n_inner=.true.) — the sponge is dispatched only "// &
+            call logger%error("[ocean.sponge] enable=true requires the "// &
+                              "split-explicit solver ([ocean.bt] n_inner >= 1 "// &
+                              "or auto_n_inner=true) — the sponge is dispatched only "// &
                               "from the split barotropic path")
             has_error = .true.
          end if
@@ -3592,8 +3592,8 @@ contains
                 trim(cfg%ocean%bc%east) /= "sponge" .and. &
                 trim(cfg%ocean%bc%south) /= "sponge" .and. &
                 trim(cfg%ocean%bc%north) /= "sponge") then
-               call logger%error("&ocean_sponge_nml enable=.true., damp_source='band' "// &
-                                 "requires at least one &ocean_bc_nml edge = 'sponge' "// &
+               call logger%error("[ocean.sponge] enable=true, damp_source='band' "// &
+                                 "requires at least one [ocean.bc] edge = 'sponge' "// &
                                  "(otherwise idamp_h/u/v would build all-zero)")
                has_error = .true.
             end if
@@ -3603,91 +3603,91 @@ contains
          ! paired with a zero strength is a silent no-op sponge.
          if (cfg%ocean%sponge%west_width < -1 .or. cfg%ocean%sponge%east_width < -1 .or. &
              cfg%ocean%sponge%south_width < -1 .or. cfg%ocean%sponge%north_width < -1) then
-            call logger%error("&ocean_sponge_nml *_width overrides must be >= -1 "// &
-                              "(-1 = inherit &ocean_bc_nml sponge_width)")
+            call logger%error("[ocean.sponge] *_width overrides must be >= -1 "// &
+                              "(-1 = inherit [ocean.bc] sponge_width)")
             has_error = .true.
          end if
          if ((cfg%ocean%sponge%west_width > 0 .and. cfg%ocean%sponge%west_strength == 0.0_wp) .or. &
              (cfg%ocean%sponge%east_width > 0 .and. cfg%ocean%sponge%east_strength == 0.0_wp) .or. &
              (cfg%ocean%sponge%south_width > 0 .and. cfg%ocean%sponge%south_strength == 0.0_wp) .or. &
              (cfg%ocean%sponge%north_width > 0 .and. cfg%ocean%sponge%north_strength == 0.0_wp)) then
-            call logger%error("&ocean_sponge_nml a positive *_width override with "// &
+            call logger%error("[ocean.sponge] a positive *_width override with "// &
                               "*_strength == 0.0 would build an all-zero band on that "// &
                               "edge — set a nonzero *_strength or leave *_width at -1")
             has_error = .true.
          end if
       end if
-      ! &ocean_bt_nml dtbt: the OM3-style substep definition REPLACES the
+      ! [ocean.bt] dtbt: the OM3-style substep definition REPLACES the
       ! n_inner derivation, so it may not be combined with the other one.
       if (bt_dtbt_is_set(cfg%ocean%bt)) then
          if (cfg%ocean%bt%auto_n_inner) then
-            call logger%error("&ocean_bt_nml dtbt and auto_n_inner = .true. are "// &
+            call logger%error("[ocean.bt] dtbt and auto_n_inner = true are "// &
                               "mutually exclusive: dtbt replaces auto_n_inner/cfl_bt_safety")
             has_error = .true.
          end if
          if (cfg%ocean%bt%cfl_bt_safety /= CFL_BT_SAFETY_DEFAULT) then
-            call logger%error("&ocean_bt_nml dtbt and cfl_bt_safety are mutually "// &
+            call logger%error("[ocean.bt] dtbt and cfl_bt_safety are mutually "// &
                               "exclusive: dtbt replaces cfl_bt_safety (drop one)")
             has_error = .true.
          end if
          if (cfg%dt_fixed <= 0.0_wp) then
-            call logger%error("&ocean_bt_nml dtbt requires a positive fixed time step")
+            call logger%error("[ocean.bt] dtbt requires a positive fixed time step")
             has_error = .true.
          end if
          if (cfg%ocean%bt%dtbt < -1.0_wp) then
-            call logger%error("&ocean_bt_nml dtbt < -1 would exceed the stable step "// &
+            call logger%error("[ocean.bt] dtbt < -1 would exceed the stable step "// &
                               "(|dtbt| is a fraction of the largest stable substep)")
             has_error = .true.
          end if
       else if (cfg%ocean%bt%dtbt_reset_period >= 0.0_wp) then
-         call logger%error("&ocean_bt_nml dtbt_reset_period >= 0 has no effect without "// &
+         call logger%error("[ocean.bt] dtbt_reset_period >= 0 has no effect without "// &
                            "dtbt (set dtbt, or leave dtbt_reset_period < 0)")
          has_error = .true.
       end if
 
-      ! ---- Barotropic linear wave drag (&ocean_bt_nml wave_drag) ----
+      ! ---- Barotropic linear wave drag ([ocean.bt] wave_drag) ----
       ! `wave_drag_form` is an `nml_enum` (allowed = uniform/roughness_proxy/
       ! file), so a garbage tag is already rejected at nml-apply time; the
       ! one form-specific case left to catch here is "file", which is
       ! REGISTERED but has no reader yet (PR-14) — fail loud rather than
       ! silently no-op (the audit's trap #12: a named-but-dead option).
       if (trim(cfg%ocean%bt%wave_drag_form) == "file") then
-         call logger%error("&ocean_bt_nml wave_drag_form='file' is not "// &
+         call logger%error("[ocean.bt] wave_drag_form='file' is not "// &
                            "implemented — the NetCDF map reader is PR-14; "// &
                            "use wave_drag_form='uniform' or 'roughness_proxy'")
          has_error = .true.
       end if
       if (cfg%ocean%bt%wave_drag_scale < 0.0_wp) then
-         call logger%error("&ocean_bt_nml wave_drag_scale must be >= 0 "// &
+         call logger%error("[ocean.bt] wave_drag_scale must be >= 0 "// &
                            "(negative r_H makes bt_rem > 1, exponentially "// &
                            "growing the barotropic mode)")
          has_error = .true.
       end if
       if (cfg%ocean%bt%wave_drag_r_uniform < 0.0_wp) then
-         call logger%error("&ocean_bt_nml wave_drag_r_uniform must be >= 0")
+         call logger%error("[ocean.bt] wave_drag_r_uniform must be >= 0")
          has_error = .true.
       end if
       if (cfg%ocean%bt%wave_drag_kappa <= 0.0_wp) then
-         call logger%error("&ocean_bt_nml wave_drag_kappa must be > 0")
+         call logger%error("[ocean.bt] wave_drag_kappa must be > 0")
          has_error = .true.
       end if
       if (cfg%ocean%bt%wave_drag_n_bot < 0.0_wp) then
-         call logger%error("&ocean_bt_nml wave_drag_n_bot must be >= 0")
+         call logger%error("[ocean.bt] wave_drag_n_bot must be >= 0")
          has_error = .true.
       end if
       if (cfg%ocean%bt%wave_drag_h2_max <= 0.0_wp) then
-         call logger%error("&ocean_bt_nml wave_drag_h2_max must be > 0")
+         call logger%error("[ocean.bt] wave_drag_h2_max must be > 0")
          has_error = .true.
       end if
       if (cfg%ocean%bt%wave_drag) then
          if (trim(cfg%ocean%bt%wave_drag_form) == "uniform" .and. &
              cfg%ocean%bt%wave_drag_r_uniform <= 0.0_wp) then
-            call logger%warning("&ocean_bt_nml wave_drag=.true. with "// &
+            call logger%warning("[ocean.bt] wave_drag=true with "// &
                                 "wave_drag_form='uniform' and wave_drag_r_uniform <= 0 "// &
                                 "=> inert (r_H == 0 everywhere)")
          end if
          if (trim(cfg%ocean%bt%wave_drag_form) == "roughness_proxy") then
-            call logger%warning("&ocean_bt_nml wave_drag_form='roughness_proxy' derives "// &
+            call logger%warning("[ocean.bt] wave_drag_form='roughness_proxy' derives "// &
                                 "<h^2> from RESOLVED bathymetry variance — it is a "// &
                                 "placeholder for a real subgrid roughness map "// &
                                 "(PR-14/PR-30), not a substitute")
@@ -3701,7 +3701,7 @@ contains
       ! be read on a cadence it never reaches, and `hlim` has no such gate.
       if (ice_hlim_count(cfg%ocean%ice%hlim) > 0) then
          if (.not. cfg%ocean%ice%enable) then
-            call logger%error("&ocean_ice_nml hlim=... requires enable=.true. "// &
+            call logger%error("[ocean.ice] hlim=... requires enable=true "// &
                               "(the ice slot must be live for the override to apply)")
             has_error = .true.
          end if
@@ -3710,7 +3710,7 @@ contains
             character(len=:), allocatable :: reason
             call ice_hlim_spec_is_valid(cfg%ocean%ice%hlim, cfg%ocean%ice%ncat, hlim_ok, reason)
             if (.not. hlim_ok) then
-               call logger%error("&ocean_ice_nml hlim: "//reason)
+               call logger%error("[ocean.ice] hlim: "//reason)
                has_error = .true.
             end if
          end block
@@ -3725,15 +3725,15 @@ contains
       if (trim(cfg%ocean%ice_ic%conc_config) /= "zero") then
          ! V1: mirrors "transport=.true. requires enable=.true." above.
          if (.not. cfg%ocean%ice%enable) then
-            call logger%error("&ocean_ice_ic_nml conc_config /= 'zero' requires "// &
-                              "&ocean_ice_nml enable=.true. (the ice slot must be live)")
+            call logger%error("[ocean.ice_ic] conc_config /= 'zero' requires "// &
+                              "[ocean.ice] enable=true (the ice slot must be live)")
             has_error = .true.
          end if
          ! V2: an IC with no thickness is a wordless no-op; h_ice > 0
          ! also keeps the pack above h_lim(1) = 1e-10 m so the ITD cat-1
          ! compress cannot fire on the very first thermo window.
          if (cfg%ocean%ice_ic%h_ice <= 0.0_wp) then
-            call logger%error("&ocean_ice_ic_nml conc_config /= 'zero' requires "// &
+            call logger%error("[ocean.ice_ic] conc_config /= 'zero' requires "// &
                               "h_ice > 0 (an IC with no thickness is a wordless no-op, "// &
                               "and h_ice must clear the category-1 floor)")
             has_error = .true.
@@ -3742,7 +3742,7 @@ contains
          ! for transport above.
          if (trim(cfg%ocean%ice_ic%conc_config) == "uniform" .and. &
              cfg%ocean%ice_ic%conc <= 0.0_wp) then
-            call logger%error("&ocean_ice_ic_nml conc_config='uniform' requires "// &
+            call logger%error("[ocean.ice_ic] conc_config='uniform' requires "// &
                               "conc > 0 (conc <= 0 is a wordless open-water no-op)")
             has_error = .true.
          end if
@@ -3752,8 +3752,8 @@ contains
          ! silently ice the whole basin or none of it.
          if (trim(cfg%ocean%ice_ic%conc_config) == "latitudes" .and. &
              trim(cfg%ocean%grid%grid_config) == "cartesian") then
-            call logger%error("&ocean_ice_ic_nml conc_config='latitudes' requires a "// &
-                              "non-cartesian &ocean_grid_nml grid_config (spherical/"// &
+            call logger%error("[ocean.ice_ic] conc_config='latitudes' requires a "// &
+                              "non-cartesian [ocean.grid] grid_config (spherical/"// &
                               "tripolar/supergrid) — geolatT is meaningless on cartesian")
             has_error = .true.
          end if
@@ -3763,8 +3763,8 @@ contains
          if (cfg%ocean%ice%ncat == 1 .and. &
              trim(cfg%ocean%ice_ic%conc_config) == "uniform" .and. &
              cfg%ocean%ice_ic%conc /= 1.0_wp) then
-            call logger%error("&ocean_ice_ic_nml conc_config='uniform' with "// &
-                              "&ocean_ice_nml ncat==1 requires conc == 1.0 (the legacy "// &
+            call logger%error("[ocean.ice_ic] conc_config='uniform' with "// &
+                              "[ocean.ice] ncat==1 requires conc == 1.0 (the legacy "// &
                               "lumped mode has no partial-cover representation — "// &
                               "ice_cell_concentration_impl returns a BINARY ci)")
             has_error = .true.
@@ -3774,7 +3774,7 @@ contains
          ! enthalpy says "this is water" and melt out on the first
          ! thermo step, silently.
          if (cfg%ocean%ice_ic%t_ice >= ice_t_freeze(cfg%ocean%ice_ic%s_ice)) then
-            call logger%error("&ocean_ice_ic_nml conc_config /= 'zero' requires "// &
+            call logger%error("[ocean.ice_ic] conc_config /= 'zero' requires "// &
                               "t_ice < the liquidus at s_ice (t_ice >= t_freeze(s_ice) "// &
                               "silently yields LIQUID-WATER enthalpy — the pack would "// &
                               "melt out on the first thermo step)")
@@ -3784,7 +3784,7 @@ contains
          ! ice_adjust_categories' massless-cleanup step would silently
          ! absorb snow-with-no-ice into the "massless" taxonomy.
          if (cfg%ocean%ice_ic%h_snow > 0.0_wp .and. cfg%ocean%ice_ic%h_ice <= 0.0_wp) then
-            call logger%error("&ocean_ice_ic_nml h_snow > 0 requires h_ice > 0 "// &
+            call logger%error("[ocean.ice_ic] h_snow > 0 requires h_ice > 0 "// &
                               "(orphan snow with no ice is silently absorbed as "// &
                               "'massless' by the ITD restore)")
             has_error = .true.
@@ -3793,7 +3793,7 @@ contains
          ! unrecognised conc_config string even if the schema layer is
          ! ever bypassed.
          if (ice_ic_parse_conc_config(cfg%ocean%ice_ic%conc_config) == ICE_IC_CONC_INVALID) then
-            call logger%error("&ocean_ice_ic_nml conc_config='"// &
+            call logger%error("[ocean.ice_ic] conc_config='"// &
                               trim(cfg%ocean%ice_ic%conc_config)// &
                               "' is not recognised (allowed: zero, uniform, latitudes)")
             has_error = .true.
@@ -3802,10 +3802,10 @@ contains
          ! merges) — warn, don't abort, so the legitimate "same nml, cold
          ! then warm" workflow still works.
          if (len_trim(cfg%restart_file) > 0) then
-            call logger%warning("&ocean_ice_ic_nml conc_config /= 'zero' with "// &
+            call logger%warning("[ocean.ice_ic] conc_config /= 'zero' with "// &
                                 "restart_file set: the ice IC is SKIPPED on a warm "// &
                                 "restart (the restart replaces it, it does not merge "// &
-                                "with it) — this namelist's ice IC knobs have no effect "// &
+                                "with it) — this input's ice IC knobs have no effect "// &
                                 "on this run")
          end if
       end if
@@ -3819,13 +3819,13 @@ contains
       ! envelope above).
       if (cfg%ocean%ice%snowfall > 0.0_wp) then
          if (.not. cfg%ocean%ice%enable) then
-            call logger%error("&ocean_ice_nml snowfall > 0 requires "// &
-                              "enable=.true. (the ice slot must be live)")
+            call logger%error("[ocean.ice] snowfall > 0 requires "// &
+                              "enable=true (the ice slot must be live)")
             has_error = .true.
          end if
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call logger%error("&ocean_ice_nml snowfall > 0 requires "// &
-                              "&ocean_thermo_nml enable_thermodynamics=.true. "// &
+            call logger%error("[ocean.ice] snowfall > 0 requires "// &
+                              "[ocean.thermo] enable_thermodynamics=true "// &
                               "(the atmospheric-forcing fill and the column "// &
                               "snow add both fire only on the thermo cadence)")
             has_error = .true.
@@ -3838,7 +3838,7 @@ contains
       ! (house rule).  Deliberately OUTSIDE the `if (dynamics)` envelope
       ! above: it must fire precisely when `dynamics` is false.
       if (cfg%ocean%ice%a_face_stress .and. .not. cfg%ocean%ice%dynamics) then
-         call logger%error("&ocean_ice_nml a_face_stress=.true. requires dynamics=.true. "// &
+         call logger%error("[ocean.ice] a_face_stress=true requires dynamics=true "// &
                            "(the knob only reaches the EVP momentum solve)")
          has_error = .true.
       end if
@@ -3853,13 +3853,13 @@ contains
       ! above).
       if (cfg%ocean%ice%snow_ice) then
          if (.not. cfg%ocean%ice%enable) then
-            call logger%error("&ocean_ice_nml snow_ice=.true. requires "// &
-                              "enable=.true. (the ice slot must be live)")
+            call logger%error("[ocean.ice] snow_ice=true requires "// &
+                              "enable=true (the ice slot must be live)")
             has_error = .true.
          end if
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call logger%error("&ocean_ice_nml snow_ice=.true. requires "// &
-                              "&ocean_thermo_nml enable_thermodynamics=.true. "// &
+            call logger%error("[ocean.ice] snow_ice=true requires "// &
+                              "[ocean.thermo] enable_thermodynamics=true "// &
                               "(the column runs only on the thermo cadence)")
             has_error = .true.
          end if
@@ -3868,28 +3868,28 @@ contains
       ! ---- BT wide-halo march-in (bt_halo > 0) exclusions ----
       if (cfg%ocean%bt%bt_halo > 0) then
          if (cfg%ocean%wetdry%enable) then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with &ocean_wetdry_nml enable (wd arrays not widened in v1)")
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
+                              "with [ocean.wetdry] enable (wd arrays not widened in v1)")
             has_error = .true.
          end if
          if (cfg%ocean%bt%use_cont_type) then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
                               "with use_cont_type (BTCL arrays not widened in v1)")
             has_error = .true.
          end if
          if (cfg%ocean%bt%upstream_h_face) then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
                               "with upstream_h_face (upstream h-face arrays not widened in v1)")
             has_error = .true.
          end if
          if (cfg%ocean%tides%enable) then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with &ocean_tides_nml enable (wide eta_forcing copy deferred)")
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
+                              "with [ocean.tides] enable (wide eta_forcing copy deferred)")
             has_error = .true.
          end if
          if (cfg%ocean%psurf%enable) then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with &ocean_psurf_nml enable (wide eta_forcing copy deferred)")
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
+                              "with [ocean.psurf] enable (wide eta_forcing copy deferred)")
             has_error = .true.
          end if
          if (cfg%ocean%porous%enable) then
@@ -3900,8 +3900,8 @@ contains
             ! the porous-aware barotropic solve and giving an answer that
             ! is neither the porous one nor the baseline.  Fail loud until
             ! the wide shadow carries `dy_cu_bt` / `dx_cv_bt` too.
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with &ocean_porous_nml enable (the wide-halo "// &
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
+                              "with [ocean.porous] enable (the wide-halo "// &
                               "metrics shadow carries no porous statistics, so the "// &
                               "BT solve would silently transport on un-narrowed widths)")
             has_error = .true.
@@ -3911,8 +3911,8 @@ contains
             ! `bt_eta` on the device, and the march-in's wide clone is not
             ! bit-identical with open boundaries (the wide band evolves
             ! under array-edge closures the OBC target does not see).
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with a chapman &ocean_bc_nml edge (the Chapman "// &
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
+                              "with a chapman [ocean.bc] edge (the Chapman "// &
                               "target is gathered from the normal-width barotropic "// &
                               "state; the wide-halo march-in is not bit-identical "// &
                               "with open boundaries)")
@@ -3925,15 +3925,15 @@ contains
             ! and solve a column that is twice as deep as the cavity's.
             ! (The cavity block above refuses this from its own side too —
             ! the knob that is "wrong" depends on which one the user meant.)
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with &ocean_cavity_dyn_nml enable (the wide-halo "// &
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
+                              "with [ocean.cavity_dyn] enable (the wide-halo "// &
                               "metrics shadow carries no ice draft, so the BT solve "// &
                               "would reference the bed instead of the ice base)")
             has_error = .true.
          end if
          if (trim(cfg%ocean%grid%grid_config) == "supergrid" .or. &
              trim(cfg%ocean%grid%grid_config) == "tripolar") then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
                               "with grid_config='"//trim(cfg%ocean%grid%grid_config)// &
                               "' (file-based metrics cannot be re-filled on a wide grid; "// &
                               "cartesian/spherical formula fills supported)")
@@ -3942,11 +3942,11 @@ contains
          if (ocean_bt_rem_from_visc_rem_on(cfg)) then
             ! Same check as above, from the bt_halo side — belt-and-
             ! braces so the error fires regardless of which knob a reader
-            ! finds first in the namelist.  PR-3 (D1): reads through the
+            ! finds first in the input.  PR-3 (D1): reads through the
             ! helper, so visc_rem_chain = .true. is caught too.
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with bt_rem_from_visc_rem=.true. (or "// &
-                              "visc_rem_chain=.true.; the wide-halo BT clone carries "// &
+            call logger%error("[ocean.bt] bt_halo > 0 is mutually exclusive "// &
+                              "with bt_rem_from_visc_rem=true (or "// &
+                              "visc_rem_chain=true; the wide-halo BT clone carries "// &
                               "no av_rem/visc_rem ghost-width statistics, like porous)")
             has_error = .true.
          end if
@@ -3954,51 +3954,51 @@ contains
       ! ---- BT in-halo march (inhalo_march) exclusions (EXPERIMENTAL) ----
       if (cfg%ocean%bt%inhalo_march) then
          if (cfg%ocean%bt%bt_halo > 0) then
-            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+            call logger%error("[ocean.bt] inhalo_march is mutually exclusive with "// &
                               "bt_halo > 0 (two different ways of skipping the "// &
                               "per-substep exchange)")
             has_error = .true.
          end if
          if (cfg%ocean%wetdry%enable) then
-            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
-                              "&ocean_wetdry_nml enable (the outflow limiter and the "// &
+            call logger%error("[ocean.bt] inhalo_march is mutually exclusive with "// &
+                              "[ocean.wetdry] enable (the outflow limiter and the "// &
                               "wet mask carry no ghost-reach analysis)")
             has_error = .true.
          end if
          if (cfg%ocean%bt%use_cont_type .or. cfg%ocean%bt%upstream_h_face) then
-            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+            call logger%error("[ocean.bt] inhalo_march is mutually exclusive with "// &
                               "use_cont_type / upstream_h_face (their ghost bands are "// &
                               "built once per stage, not proven images)")
             has_error = .true.
          end if
          if (cfg%ocean%tides%enable .or. cfg%ocean%psurf%enable) then
-            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+            call logger%error("[ocean.bt] inhalo_march is mutually exclusive with "// &
                               "tides / psurf (eta_forcing ghost band not exchanged)")
             has_error = .true.
          end if
          if (any_chapman_edge(cfg)) then
-            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
-                              "a chapman &ocean_bc_nml edge (the collective edge "// &
+            call logger%error("[ocean.bt] inhalo_march is mutually exclusive with "// &
+                              "a chapman [ocean.bc] edge (the collective edge "// &
                               "mean inside the fast loop is untested with the "// &
                               "skipped exchanges)")
             has_error = .true.
          end if
          if (cfg%ocean%bt%inhalo_stride < 0) then
-            call logger%error("&ocean_bt_nml inhalo_stride must be >= 0")
+            call logger%error("[ocean.bt] inhalo_stride must be >= 0")
             has_error = .true.
          end if
          if (cfg%ocean%bt%inhalo_stride > cfg%nghost - 1) then
-            call logger%error("&ocean_bt_nml inhalo_stride exceeds the bound "// &
+            call logger%error("[ocean.bt] inhalo_stride exceeds the bound "// &
                               "nghost - 1 (the top-level nghost): the ghost "// &
                               "band shrinks one ring per substep, so a longer "// &
                               "stride leaves the owned cells inexact")
             has_error = .true.
          end if
       else if (cfg%ocean%bt%inhalo_stride /= 0) then
-         call logger%warning("&ocean_bt_nml inhalo_stride is set but inhalo_march "// &
+         call logger%warning("[ocean.bt] inhalo_stride is set but inhalo_march "// &
                              "= .false.; the stride is ignored")
       end if
-      ! ---- Porous barriers (&ocean_porous_nml) exclusions ----
+      ! ---- Porous barriers ([ocean.porous]) exclusions ----
       if (cfg%ocean%porous%enable) then
          if (cfg%ocean%wetdry%enable) then
             ! A drying column drives every layer's face thickness below
@@ -4008,8 +4008,8 @@ contains
             ! two schemes each own part of the same "can this face carry
             ! transport" decision.  Refuse the combination rather than ship
             ! an unvalidated interaction.
-            call logger%error("&ocean_porous_nml enable is mutually exclusive with "// &
-                              "&ocean_wetdry_nml enable (the vanishing-column "// &
+            call logger%error("[ocean.porous] enable is mutually exclusive with "// &
+                              "[ocean.wetdry] enable (the vanishing-column "// &
                               "interaction between the open fractions and the "// &
                               "wet/dry outflow limiter is unvalidated)")
             has_error = .true.
@@ -4021,7 +4021,7 @@ contains
       ! and the default (0/0) must not trip either guard.
       if (cfg%ocean%tracers%ideal_age_sfc_growth_rate /= 0.0_wp .and. &
           cfg%ocean%tracers%ideal_age_young_val == 0.0_wp) then
-         call logger%warning("&ocean_tracers_nml ideal_age_sfc_growth_rate is nonzero but "// &
+         call logger%warning("[ocean.tracers] ideal_age_sfc_growth_rate is nonzero but "// &
                              "ideal_age_young_val = 0: young_val*exp(...) is identically 0, "// &
                              "so the growth-rate knob is silently inert (MOM6 seeds its "// &
                              "vintage tracer with young_val = 1e-20 for exactly this reason)")
@@ -4029,9 +4029,9 @@ contains
       if (.not. cfg%ocean%tracers%enable_ideal_age .and. &
           (cfg%ocean%tracers%ideal_age_young_val /= 0.0_wp .or. &
            cfg%ocean%tracers%ideal_age_sfc_growth_rate /= 0.0_wp)) then
-         call logger%warning("&ocean_tracers_nml ideal_age_young_val / "// &
+         call logger%warning("[ocean.tracers] ideal_age_young_val / "// &
                              "ideal_age_sfc_growth_rate are set but enable_ideal_age = "// &
-                             ".false.: no age tracer is registered, so both knobs are "// &
+                             "false: no age tracer is registered, so both knobs are "// &
                              "silently inert")
       end if
 
@@ -4043,14 +4043,14 @@ contains
       ! for nothing.
       if (forcing_components_need_thermo(cfg%ocean%forcing%enable_components, &
                                          cfg%ocean%thermo%enable_thermodynamics)) then
-         call logger%error("&ocean_forcing_nml enable_components=.true. requires "// &
-                           "&ocean_thermo_nml enable_thermodynamics=.true. "// &
+         call logger%error("[ocean.forcing] enable_components=true requires "// &
+                           "[ocean.thermo] enable_thermodynamics=true "// &
                            "(the component set feeds the tracer path; it is inert "// &
-                           "under enable_thermodynamics=.false.)")
+                           "under enable_thermodynamics=false)")
          has_error = .true.
       end if
 
-      ! ---- &ocean_forcing_nml freshwater (surface fresh-water mass fluxes) ----
+      ! ---- [ocean.forcing] freshwater (surface fresh-water mass fluxes) ----
       ! 'virtual' turns lprec/fprec/evap/lrunoff/frunoff into the virtual salt
       ! flux `salt_fw`, a component only the component set allocates.  'mass'
       ! (the real Boussinesq flux) is a reserved value: refused until it ships.
@@ -4059,8 +4059,8 @@ contains
          continue
       case (SURF_FW_VIRTUAL)
          if (.not. cfg%ocean%forcing%enable_components) then
-            call logger%error("&ocean_forcing_nml freshwater='virtual' requires "// &
-                              "enable_components=.true. (the virtual salt flux is a "// &
+            call logger%error("[ocean.forcing] freshwater='virtual' requires "// &
+                              "enable_components=true (the virtual salt flux is a "// &
                               "component of the surface-flux set)")
             has_error = .true.
          end if
@@ -4072,16 +4072,16 @@ contains
          ! through the ice's salt flux, while the bulk `fprec` is the same snow again.
          if (cfg%ocean%ice%enable .and. .not. ice_scheme_is_cice(cfg)) then
             if (cfg%ocean%ice%ncat == 1) then
-               call logger%error("&ocean_forcing_nml freshwater='virtual' is refused with "// &
-                                 "SIS2-derived sea ice at &ocean_ice_nml ncat = 1: the lumped mode "// &
+               call logger%error("[ocean.forcing] freshwater='virtual' is refused with "// &
+                                 "SIS2-derived sea ice at [ocean.ice] ncat = 1: the lumped mode "// &
                                  "keeps the open-water fraction at 1 under any cover, so the whole "// &
                                  "cell's P - E would enter the ocean while the ice also stores the "// &
                                  "snow.  Use ncat >= 2 or scheme = 'cice'.")
                has_error = .true.
             end if
             if (cfg%ocean%ice%snowfall /= 0.0_wp) then
-               call logger%error("&ocean_forcing_nml freshwater='virtual' is refused with "// &
-                                 "&ocean_ice_nml snowfall /= 0 under SIS2-derived ice: "// &
+               call logger%error("[ocean.forcing] freshwater='virtual' is refused with "// &
+                                 "[ocean.ice] snowfall /= 0 under SIS2-derived ice: "// &
                                  "ice_snowfall_ocean_share already dilutes the ocean by the "// &
                                  "open-water snow (and charges its latent heat), and the bulk "// &
                                  "fprec is the same snow, so it would count twice.  Set snowfall = 0.")
@@ -4093,71 +4093,71 @@ contains
          ! set (`fw_net`, `Q_salt_tracer` are components).  Envelope holes are refused BY NAME:
          call fw_mass_validate(cfg, has_error)
       case default
-         call logger%error("&ocean_forcing_nml freshwater = '"// &
+         call logger%error("[ocean.forcing] freshwater = '"// &
                            trim(adjustl(cfg%ocean%forcing%freshwater))// &
                            "' is not recognised (shipped: none, virtual, mass)")
          has_error = .true.
       end select
 
-      ! ---- &ocean_dataovr_nml (PR-15 file-backed surface forcing) ----
+      ! ---- [ocean.dataovr] (PR-15 file-backed surface forcing) ----
       !
       ! Validated HERE, not at registration, on the "a broken config must
       ! not run at all" principle: `ocean_data_forcing_configure` runs
       ! deep in the driver's setup phase, AFTER the grid, bathymetry,
       ! initial condition and a dozen slots are built.  Catching a
-      ! namelist typo there means the user pays for all of that first.
+      ! input typo there means the user pays for all of that first.
       ! Everything below is decidable from `cfg` alone, so it costs
       ! nothing to decide it before any work happens.
       !
       ! The fail-loud guards inside `rdb_ocean_data_forcing` STAY: they
       ! are the gate for a programmatic caller (a future Python driver
-      ! registers fields directly and never parses a namelist), and this
+      ! registers fields directly and never parses an input), and this
       ! block is unreachable for that path.
       if (cfg%ocean%dataovr%enable) then
 #ifdef RDB_NO_NETCDF
-         call logger%error("&ocean_dataovr_nml enable=.true. requires a NetCDF build "// &
+         call logger%error("[ocean.dataovr] enable=true requires a NetCDF build "// &
                            "(RDB_ENABLE_NETCDF=ON); the reader is compiled out here")
          has_error = .true.
 #endif
          ! D1: a named file with no variable name.  No guessed fallbacks
          ! for forcing — an unintended variable is worse than a stop.
          if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%tau_x)) then
-            call logger%error("&ocean_dataovr_nml tau_x_file is set but tau_x_var is blank")
+            call logger%error("[ocean.dataovr] tau_x_file is set but tau_x_var is blank")
             has_error = .true.
          end if
          if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%tau_y)) then
-            call logger%error("&ocean_dataovr_nml tau_y_file is set but tau_y_var is blank")
+            call logger%error("[ocean.dataovr] tau_y_file is set but tau_y_var is blank")
             has_error = .true.
          end if
          if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%heat)) then
-            call logger%error("&ocean_dataovr_nml heat_file is set but heat_var is blank")
+            call logger%error("[ocean.dataovr] heat_file is set but heat_var is blank")
             has_error = .true.
          end if
          if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%evap)) then
-            call logger%error("&ocean_dataovr_nml evap_file is set but evap_var is blank")
+            call logger%error("[ocean.dataovr] evap_file is set but evap_var is blank")
             has_error = .true.
          end if
          if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%lprec)) then
-            call logger%error("&ocean_dataovr_nml lprec_file is set but lprec_var is blank")
+            call logger%error("[ocean.dataovr] lprec_file is set but lprec_var is blank")
             has_error = .true.
          end if
          if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%salt)) then
-            call logger%error("&ocean_dataovr_nml salt_file is set but salt_var is blank")
+            call logger%error("[ocean.dataovr] salt_file is set but salt_var is blank")
             has_error = .true.
          end if
          if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%lrunoff)) then
-            call logger%error("&ocean_dataovr_nml lrunoff_file is set but lrunoff_var is blank")
+            call logger%error("[ocean.dataovr] lrunoff_file is set but lrunoff_var is blank")
             has_error = .true.
          end if
          if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%frunoff)) then
-            call logger%error("&ocean_dataovr_nml frunoff_file is set but frunoff_var is blank")
+            call logger%error("[ocean.dataovr] frunoff_file is set but frunoff_var is blank")
             has_error = .true.
          end if
 
          ! D2: cyclic climatology with no period is undecidable, not
          ! defaultable — there is no sane fallback for "one year".
          if (.not. dataovr_time_is_valid(cfg%ocean%dataovr)) then
-            call logger%error("&ocean_dataovr_nml time_mode='cyclic' requires cycle_period > 0")
+            call logger%error("[ocean.dataovr] time_mode='cyclic' requires cycle_period > 0")
             has_error = .true.
          end if
 
@@ -4165,8 +4165,8 @@ contains
          ! component set; without it there is no slot to write into.
          if (dataovr_freshwater_needs_components(cfg%ocean%dataovr, &
                                                  cfg%ocean%forcing%enable_components)) then
-            call logger%error("&ocean_dataovr_nml evap/lprec/lrunoff/frunoff file forcing requires "// &
-                              "&ocean_forcing_nml enable_components=.true. "// &
+            call logger%error("[ocean.dataovr] evap/lprec/lrunoff/frunoff file forcing requires "// &
+                              "[ocean.forcing] enable_components=true "// &
                               "(there is no non-component freshwater slot to write into)")
             has_error = .true.
          end if
@@ -4180,9 +4180,9 @@ contains
          if (dataovr_heat_salt_clobbers_ice(cfg%ocean%dataovr, &
                                             cfg%ocean%forcing%enable_components, &
                                             cfg%ocean%ice%enable)) then
-            call logger%error("&ocean_dataovr_nml heat/salt file forcing with "// &
-                              "&ocean_ice_nml enable=.true. requires "// &
-                              "&ocean_forcing_nml enable_components=.true. (without it the "// &
+            call logger%error("[ocean.dataovr] heat/salt file forcing with "// &
+                              "[ocean.ice] enable=true requires "// &
+                              "[ocean.forcing] enable_components=true (without it the "// &
                               "reader and the ice coupler overwrite the same Q_heat/Q_salt "// &
                               "and the ice's heat, brine and shortwave never reach the ocean)")
             has_error = .true.
@@ -4211,11 +4211,11 @@ contains
          ! never see it), so the file would be silently inert: refuse it by name.  `"virtual"`
          ! accepts it (it enters the virtual salt flux `salt_fw`, the dilution without volume);
          ! `"mass"` spends it as real volume.  No atmosphere prerequisite: the runoff tags
-         ! are not among the ones `&ocean_atm_forcing_nml` conflicts with (it writes none).
+         ! are not among the ones `[ocean.atm_forcing]` conflicts with (it writes none).
          if (dataovr_runoff_needs_freshwater(cfg%ocean%dataovr, &
                                              parse_surface_freshwater(cfg%ocean%forcing%freshwater))) then
-            call logger%error("&ocean_dataovr_nml lrunoff/frunoff file forcing requires "// &
-                              "&ocean_forcing_nml freshwater = 'virtual' or 'mass' (under 'none' "// &
+            call logger%error("[ocean.dataovr] lrunoff/frunoff file forcing requires "// &
+                              "[ocean.forcing] freshwater = 'virtual' or 'mass' (under 'none' "// &
                               "no consumer reads the runoff slots, so the file would be silently inert)")
             has_error = .true.
          end if
@@ -4227,8 +4227,8 @@ contains
          ! (a sub-shelf outflow) exists.
          if ((len_trim(cfg%ocean%dataovr%lrunoff%file) > 0 .or. len_trim(cfg%ocean%dataovr%frunoff%file) > 0) .and. &
              (cfg%ocean%cavity_dyn%enable .or. cfg%ocean%cavity_melt%enable)) then
-            call logger%error("&ocean_dataovr_nml lrunoff/frunoff file forcing is refused with an "// &
-                              "ice-shelf cavity (&ocean_cavity_dyn_nml / &ocean_cavity_melt_nml): the "// &
+            call logger%error("[ocean.dataovr] lrunoff/frunoff file forcing is refused with an "// &
+                              "ice-shelf cavity ([ocean.cavity_dyn] / [ocean.cavity_melt]): the "// &
                               "assembler's open-fraction twin would drop the runoff on covered cells "// &
                               "silently")
             has_error = .true.
@@ -4237,16 +4237,16 @@ contains
          ! D5: enabled but nothing driven is a wordless no-op — the
          ! house "silent no-op => fail loud" rule (cf. V2/V3 above).
          if (.not. dataovr_any_tag_set(cfg%ocean%dataovr)) then
-            call logger%error("&ocean_dataovr_nml enable=.true. but no <tag>_file is set — "// &
-                              "either name a forcing file or set enable=.false.")
+            call logger%error("[ocean.dataovr] enable=true but no <tag>_file is set — "// &
+                              "either name a forcing file or set enable=false")
             has_error = .true.
          end if
       end if
 
-      ! ---- &ocean_atm_forcing_nml (PR-C2c: JRA55-do prescribed atm state) ----
+      ! ---- [ocean.atm_forcing] (PR-C2c: JRA55-do prescribed atm state) ----
       if (cfg%ocean%atm_forcing%enable) then
 #ifdef RDB_NO_NETCDF
-         call logger%error("&ocean_atm_forcing_nml enable=.true. requires a NetCDF "// &
+         call logger%error("[ocean.atm_forcing] enable=true requires a NetCDF "// &
                            "build (RDB_ENABLE_NETCDF=ON); the reader is compiled out here")
          has_error = .true.
 #endif
@@ -4260,15 +4260,15 @@ contains
       ! bulk-flux consumer (`bulk_forcing_apply`) into the engine -- the
       ! generic "not yet wired" refusal that used to block this group is
       ! gone (`atm_forcing_prereq_code` above already requires
-      ! `&ocean_bulk_flux_nml enable` whenever `&ocean_atm_forcing_nml
-      ! enable` is set). `&ocean_bulk_flux_nml enable` on its OWN has no
+      ! `[ocean.bulk_flux] enable` whenever `[ocean.atm_forcing]
+      ! enable` is set). `[ocean.bulk_flux] enable` on its OWN has no
       ! atmospheric state to act on -- the ocean consumer reads `atm%tas`
       ! etc, which stay unallocated unless the provider is configured --
       ! so that combination is still refused, honestly, rather than
       ! silently running as a no-op.
       if (cfg%ocean%bulk_flux%enable .and. .not. cfg%ocean%atm_forcing%enable) then
-         call logger%error("&ocean_bulk_flux_nml enable=.true. requires "// &
-                           "&ocean_atm_forcing_nml enable=.true. -- the bulk-flux "// &
+         call logger%error("[ocean.bulk_flux] enable=true requires "// &
+                           "[ocean.atm_forcing] enable=true -- the bulk-flux "// &
                            "kernel has no atmospheric state to act on standalone")
          has_error = .true.
       end if
@@ -4290,7 +4290,7 @@ contains
    end subroutine validate_config
 
    subroutine fw_mass_validate(cfg, has_error)
-      !! Configure-time envelope of `&ocean_forcing_nml freshwater = "mass"` (real Boussinesq
+      !! Configure-time envelope of `[ocean.forcing] freshwater = "mass"` (real Boussinesq
       !! fresh-water volume, `rdb_ocean_surface_fw_mass`).  Every refusal names its reason: a
       !! silent composition here would be a wrong answer, not a crash.
       use rdb_vcoord, only: parse_vcoord_type
@@ -4302,60 +4302,60 @@ contains
       logical :: deferred
 
       if (.not. cfg%ocean%forcing%enable_components) then
-         call logger%error("&ocean_forcing_nml freshwater='mass' requires enable_components=.true. "// &
+         call logger%error("[ocean.forcing] freshwater='mass' requires enable_components=true "// &
                            "(fw_net and Q_salt_tracer are assembler outputs of the component set)")
          has_error = .true.
       end if
       if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-         call logger%error("&ocean_forcing_nml freshwater='mass' requires "// &
-                           "&ocean_thermo_nml enable_thermodynamics=.true. (the mass step rides "// &
+         call logger%error("[ocean.forcing] freshwater='mass' requires "// &
+                           "[ocean.thermo] enable_thermodynamics=true (the mass step rides "// &
                            "the thermo-cadence surface-flux application)")
          has_error = .true.
       end if
       if (.not. (cfg%ocean%forcing%fw_evap_cfl_limit > 0.0_wp .and. &
                  cfg%ocean%forcing%fw_evap_cfl_limit < 1.0_wp)) then
-         call logger%error("&ocean_forcing_nml fw_evap_cfl_limit must lie in (0, 1): a "// &
+         call logger%error("[ocean.forcing] fw_evap_cfl_limit must lie in (0, 1): a "// &
                            "limit of 1 would let one withdrawal empty a layer and take its "// &
                            "dissolved content with it")
          has_error = .true.
       end if
       if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
-         call logger%error("&ocean_forcing_nml freshwater='mass' requires the split-explicit "// &
-                           "solver (&ocean_bt_nml n_inner >= 1 or auto_n_inner=.true.): the "// &
+         call logger%error("[ocean.forcing] freshwater='mass' requires the split-explicit "// &
+                           "solver ([ocean.bt] n_inner >= 1 or auto_n_inner=true): the "// &
                            "unsplit stepper has no ALE remap and no bt_eta re-derive, so the "// &
                            "added volume would pile up in the top layer for ever")
          has_error = .true.
       end if
       vc = parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z)
       if (vc == VCOORD_EULERIAN_Z) then
-         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the 'eulerian_z' "// &
+         call logger%error("[ocean.forcing] freshwater='mass' is refused with the 'eulerian_z' "// &
                            "vertical coordinate: its remap returns early and its target ignores "// &
                            "eta, so the added volume would pile up in the top layer for ever.  "// &
                            "Use sigma, zstar, zstar_full, zstar_sigma, z_fixed, rho or hycom.")
          has_error = .true.
       end if
       if (vc == VCOORD_LAGRANGIAN) then
-         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the 'lagrangian' "// &
+         call logger%error("[ocean.forcing] freshwater='mass' is refused with the 'lagrangian' "// &
                            "vertical coordinate: it has no remap, so the top layer would grow "// &
                            "without bound under a persistent P - E.  Use sigma, zstar, zstar_full, "// &
                            "zstar_sigma, z_fixed, rho or hycom.")
          has_error = .true.
       end if
       if (cfg%ocean%wetdry%enable) then
-         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with &ocean_wetdry_nml "// &
-                           "enable=.true.: its positive-definite outflow limiter is the other "// &
+         call logger%error("[ocean.forcing] freshwater='mass' is refused with [ocean.wetdry] "// &
+                           "enable=true: its positive-definite outflow limiter is the other "// &
                            "writer of the top-layer thickness and would have to see the volume.")
          has_error = .true.
       end if
       if (cfg%ocean%cavity_dyn%enable .or. cfg%ocean%cavity_melt%enable) then
-         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the ice-shelf "// &
-                           "cavity (&ocean_cavity_dyn_nml / &ocean_cavity_melt_nml): the "// &
+         call logger%error("[ocean.forcing] freshwater='mass' is refused with the ice-shelf "// &
+                           "cavity ([ocean.cavity_dyn] / [ocean.cavity_melt]): the "// &
                            "cover-masked mass twin is untested.")
          has_error = .true.
       end if
       if (cfg%ocean%ice%enable) then
          if (.not. ice_scheme_is_cice(cfg)) then
-            call logger%error("&ocean_forcing_nml freshwater='mass' is refused with sea ice "// &
+            call logger%error("[ocean.forcing] freshwater='mass' is refused with sea ice "// &
                               "scheme='sis2': the SIS2-derived brine coupler has no mass slot.")
             has_error = .true.
          else
@@ -4367,22 +4367,22 @@ contains
             ! under the ice only and a metre-scale sea-surface step at the ice edge drives a
             ! spurious barotropic flow (Campin et al. 2008; Adcroft et al. 2019).
             if (.not. cfg%ocean%ice_thermo%update_ocn_f) then
-               call logger%error("&ocean_forcing_nml freshwater='mass' with sea ice requires "// &
-                                 "&ocean_ice_thermo_nml update_ocn_f=.true.: with .false. the "// &
+               call logger%error("[ocean.forcing] freshwater='mass' with sea ice requires "// &
+                                 "[ocean.ice_thermo] update_ocn_f=true: with .false. the "// &
                                  "frazil water and salt never reach the hand-off, so the ice "// &
                                  "gains mass the ocean does not lose and the coupled water "// &
                                  "ledger cannot close.")
                has_error = .true.
             end if
             if (.not. cfg%ocean%psurf%enable) then
-               call logger%error("&ocean_forcing_nml freshwater='mass' with sea ice requires "// &
-                                 "&ocean_psurf_nml enable=.true. (the ice mass loading rides the "// &
+               call logger%error("[ocean.forcing] freshwater='mass' with sea ice requires "// &
+                                 "[ocean.psurf] enable=true (the ice mass loading rides the "// &
                                  "surface-pressure seam).")
                has_error = .true.
             end if
             if (.not. cfg%ocean%psurf%ice_load) then
-               call logger%error("&ocean_forcing_nml freshwater='mass' with sea ice requires "// &
-                                 "&ocean_psurf_nml ice_load=.true.: without the ice's weight on "// &
+               call logger%error("[ocean.forcing] freshwater='mass' with sea ice requires "// &
+                                 "[ocean.psurf] ice_load=true: without the ice's weight on "// &
                                  "the surface pressure the water frozen out is removed from "// &
                                  "under the ice only, a sea-surface step of the ice thickness "// &
                                  "that drives a spurious barotropic flow.")
@@ -4392,9 +4392,9 @@ contains
       end if
       deferred = cfg%ocean%vmix%dt_therm_ratio > 1 .and. .not. cfg%ocean%vmix%diabatic_first
       if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. .not. deferred) then
-         call logger%error("&ocean_forcing_nml freshwater='mass' with &ocean_vmix_nml "// &
+         call logger%error("[ocean.forcing] freshwater='mass' with [ocean.vmix] "// &
                            "dt_tracer_advect_ratio > 1 requires the deferred thermo order "// &
-                           "(dt_therm_ratio > 1 and diabatic_first=.false.): an in-window source "// &
+                           "(dt_therm_ratio > 1 and diabatic_first=false): an in-window source "// &
                            "on a frozen tracer breaks the window drain's thickness reconstruction.")
          has_error = .true.
       end if
@@ -4412,13 +4412,13 @@ contains
       real(wp) :: dmax, dtdz_min, y_lo, y_hi, f_lo, f_hi
 
       if (trim(cfg%ocean%eos%eos) /= "linear") then
-         call logger%error("ic_config='balanced_vortex' requires &ocean_eos_nml "// &
+         call logger%error("ic_config='balanced_vortex' requires [ocean.eos] "// &
                            "eos='linear' (the analytic pressure anomaly uses "// &
                            "rho' = -alpha_T*dT); got '"//trim(cfg%ocean%eos%eos)//"'")
          has_error = .true.
       end if
       if (trim(cfg%ocean%grid%grid_config) /= "cartesian") then
-         call logger%error("ic_config='balanced_vortex' requires &ocean_grid_nml "// &
+         call logger%error("ic_config='balanced_vortex' requires [ocean.grid] "// &
                            "grid_config='cartesian'")
          has_error = .true.
       end if
@@ -4493,7 +4493,7 @@ contains
    end subroutine validate_balanced_vortex
 
    ! ======================================================================
-   ! &ocean_dataovr_nml predicates (PR-15).
+   ! [ocean.dataovr] predicates (PR-15).
    !
    ! Pure and non-aborting by design: a `pure` function cannot `error
    ! stop`, which is exactly what makes these testable from both sides
@@ -4517,7 +4517,7 @@ contains
       if (len_trim(e%file) == 0) return
       inquire (file=trim(e%file), exist=exists)
       if (.not. exists) then
-         call logger%error("&ocean_dataovr_nml "//tag//"_file not found: '"// &
+         call logger%error("[ocean.dataovr] "//tag//"_file not found: '"// &
                            trim(e%file)//"'")
          has_error = .true.
       end if
@@ -4562,7 +4562,7 @@ contains
       use rdb_ocean_surface_flux, only: SURF_FW_NONE
       type(ocean_dataovr_config_t), intent(in) :: cfg
       integer, intent(in) :: fw_mode
-         !! `parse_surface_freshwater` of `&ocean_forcing_nml freshwater`.
+         !! `parse_surface_freshwater` of `[ocean.forcing] freshwater`.
       logical :: bad
       bad = (len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0) &
             .and. fw_mode == SURF_FW_NONE
@@ -4580,7 +4580,7 @@ contains
    end function dataovr_heat_salt_clobbers_ice
 
    pure module function atm_forcing_prereq_code(cfg) result(code)
-      !! First failing prerequisite of `&ocean_atm_forcing_nml enable` as an
+      !! First failing prerequisite of `[ocean.atm_forcing] enable` as an
       !! `ATM_PREREQ_*` code (`ATM_PREREQ_OK` when all hold). Independent of
       !! the NetCDF build and of the engine-wiring refusal, so each reason
       !! is testable on every toolchain.
@@ -4629,34 +4629,34 @@ contains
 
       select case (code)
       case (ATM_PREREQ_START_DATE)
-         msg = "&ocean_atm_forcing_nml enable=.true. requires &time_nml start_date "// &
+         msg = "[ocean.atm_forcing] enable=true requires [time] start_date "// &
                "(absolute file-time axes need a model-clock epoch)"
       case (ATM_PREREQ_COMPONENTS)
-         msg = "&ocean_atm_forcing_nml enable=.true. requires &ocean_forcing_nml "// &
-               "enable_components=.true. (the bulk-flux outputs land on the component set)"
+         msg = "[ocean.atm_forcing] enable=true requires [ocean.forcing] "// &
+               "enable_components=true (the bulk-flux outputs land on the component set)"
       case (ATM_PREREQ_CARTESIAN)
-         msg = "&ocean_atm_forcing_nml enable=.true. requires a non-cartesian "// &
-               "&ocean_grid_nml grid_config (spherical/supergrid/tripolar) -- a "// &
+         msg = "[ocean.atm_forcing] enable=true requires a non-cartesian "// &
+               "[ocean.grid] grid_config (spherical/supergrid/tripolar) -- a "// &
                "cartesian grid has no geographic lon/lat to regrid the atmosphere onto"
       case (ATM_PREREQ_FILELIST)
-         msg = "&ocean_atm_forcing_nml enable=.true. requires all nine filelist_<field> "// &
+         msg = "[ocean.atm_forcing] enable=true requires all nine filelist_<field> "// &
                "paths (tas/huss/uas/vas/psl/rlds/rsds/prra/prsn) -- a blank one is a "// &
                "fail-loud setup, never a silently-skipped field"
       case (ATM_PREREQ_SW_SOURCE)
-         msg = "&ocean_atm_forcing_nml enable=.true. with &ocean_thermo_nml "// &
+         msg = "[ocean.atm_forcing] enable=true with [ocean.thermo] "// &
                "sw_pen_frac > 0 requires sw_source='q_sw' (the atmosphere writes "// &
                "q_sw, not net_heat)"
       case (ATM_PREREQ_DATAOVR)
-         msg = "&ocean_atm_forcing_nml enable=.true. conflicts with &ocean_dataovr_nml "// &
+         msg = "[ocean.atm_forcing] enable=true conflicts with [ocean.dataovr] "// &
                "tau_x/tau_y/heat/evap/lprec -- both would write the same surface-flux "// &
                "components (a salt_file MAY coexist: SSS restoring is independent)"
       case (ATM_PREREQ_BULK_FLUX)
-         msg = "&ocean_atm_forcing_nml enable=.true. requires &ocean_bulk_flux_nml "// &
-               "enable=.true. (set it explicitly)"
+         msg = "[ocean.atm_forcing] enable=true requires [ocean.bulk_flux] "// &
+               "enable=true (set it explicitly)"
       case (ATM_PREREQ_N_ITER)
-         msg = "&ocean_bulk_flux_nml n_iter must be >= 1"
+         msg = "[ocean.bulk_flux] n_iter must be >= 1"
       case (ATM_PREREQ_ORB_YEAR)
-         msg = "&ocean_atm_forcing_nml orb_year is not wired yet (the coszen kernel "// &
+         msg = "[ocean.atm_forcing] orb_year is not wired yet (the coszen kernel "// &
                "uses fixed Spencer (1971) coefficients); leave it at the default 1990"
       case default
          msg = ""
@@ -4676,7 +4676,7 @@ contains
 
    pure module function ice_hlim_count(hlim) result(n)
       !! Length of the LEADING run of non-sentinel (>= 0) entries in
-      !! `&ocean_ice_nml hlim` (PR-58). Contiguity matters here (unlike
+      !! `[ocean.ice] hlim` (PR-58). Contiguity matters here (unlike
       !! `apply_layer_rho_init`'s bare `count(>= 0)`): a value AFTER the
       !! first sentinel is silently dropped by this count, so
       !! `ice_hlim_spec_is_valid` checks contiguity explicitly rather than
@@ -4693,7 +4693,7 @@ contains
    end function ice_hlim_count
 
    pure module subroutine ice_hlim_spec_is_valid(hlim, ncat, ok, reason)
-      !! Shape/monotonicity predicate for a supplied `&ocean_ice_nml hlim`
+      !! Shape/monotonicity predicate for a supplied `[ocean.ice] hlim`
       !! list (PR-58). A SUBROUTINE, not a function — a pure FUNCTION may
       !! not carry an `intent(out)` dummy (`reason`); pure SUBROUTINES
       !! can. `n = ice_hlim_count(hlim)`; `ok` iff ALL of:
@@ -4760,7 +4760,7 @@ contains
    end subroutine ice_hlim_spec_is_valid
 
    pure module function resolve_bt_halo(requested, compute_size, exclusion_active) result(width)
-      !! Resolve the `&ocean_bt_nml bt_halo` sentinel to a concrete march-in
+      !! Resolve the `[ocean.bt] bt_halo` sentinel to a concrete march-in
       !! width.
       !!   requested == BT_HALO_AUTO_SENTINEL (-1, the default) => AUTO: 0.
       !!     The march-in used to switch itself on (BT_HALO_AUTO_WIDTH) on
@@ -4777,7 +4777,7 @@ contains
       !! stay so the call site (and its exclusion log) keeps its shape for the
       !! day the march-in is exact again.
       integer, intent(in) :: requested
-         !! The namelist value: BT_HALO_AUTO_SENTINEL (-1) for auto, else >= 0.
+         !! The input value: BT_HALO_AUTO_SENTINEL (-1) for auto, else >= 0.
       integer, intent(in) :: compute_size
          !! Number of compute ranks (1 = serial).  Unused by AUTO (see above).
       logical, intent(in) :: exclusion_active
@@ -4790,7 +4790,7 @@ contains
    end function resolve_bt_halo
 
    pure function any_chapman_edge(cfg) result(any_ch)
-      !! True iff any of the four `&ocean_bc_nml` edges is `chapman`.
+      !! True iff any of the four `[ocean.bc]` edges is `chapman`.
       use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_CHAPMAN
       type(config_t), intent(in) :: cfg
       logical :: any_ch
@@ -4826,7 +4826,7 @@ contains
       else if (cfg%ocean%porous%enable) then
          reason = "porous enable"
       else if (any_chapman_edge(cfg)) then
-         reason = "chapman &ocean_bc_nml edge"
+         reason = "chapman [ocean.bc] edge"
       else if (cfg%ocean%cavity_dyn%enable) then
          ! The wide BT clone rebuilds `metrics_w` from the grid formula and
          ! carries no `z_draft`, so its reference depth would be the BED —
@@ -4850,16 +4850,16 @@ contains
       !! `p_top = metrics%p_ice_ref + sf%p_surf` has exactly two
       !! producers, and both halves count:
       !!
-      !!   * `&ocean_psurf_nml enable` — the atmospheric surface-pressure
+      !!   * `[ocean.psurf] enable` — the atmospheric surface-pressure
       !!     seam, which fills `sf%p_surf` and refreshes `p_top` once per
       !!     outer step in `ocean_dyn_step_split`;
-      !!   * `&ocean_cavity_dyn_nml enable` — the STATIC ice-shelf load
+      !!   * `[ocean.cavity_dyn] enable` — the STATIC ice-shelf load
       !!     `p_ice_ref = rho_ref*GRAVITY*z_draft`, assembled into
       !!     `p_top` by `configure_ocean_cavity`.  Static is not the same
       !!     as absent: the draft never changes, so the configure-time
       !!     assembly is the final value and there is nothing to refresh.
       !!
-      !! Used by the `&ocean_pgf_nml p_top_in_bc` inert-knob warning,
+      !! Used by the `[ocean.pgf] p_top_in_bc` inert-knob warning,
       !! which must name both — a cavity run is precisely the case where
       !! `p_top_in_bc` is not merely live but REQUIRED (for a draft that
       !! varies), so warning that it is inert there was telling the user
@@ -4870,7 +4870,7 @@ contains
    end function p_top_has_producer
 
    pure module function bbl_glue_is_effective(cfg) result(on)
-      !! Will `&ocean_vdiff_nml bbl_glue` actually be ON after setup?
+      !! Will `[ocean.vdiff] bbl_glue` actually be ON after setup?
       !!
       !! `vdiff_bbl_configure` (`rdb_ocean_vdiff.F90`) turns a requested
       !! glue OFF when its effective drag coefficient or BBL thickness is
@@ -4878,7 +4878,7 @@ contains
       !! `cd = r·hbbl/bg_vel`) or `r <= 0`, or `hbbl` and its `hbbl_visc`
       !! fallback both `<= 0`.  This is the same predicate on `cfg`, so a
       !! configure check that only holds while the glue is on (the
-      !! `implicit_drag` + `hbbl > 0` exception) cannot accept a namelist
+      !! `implicit_drag` + `hbbl > 0` exception) cannot accept an input
       !! the setup then runs without it.  Keep the two in step.
       type(config_t), intent(in) :: cfg
       logical :: on
@@ -4899,12 +4899,12 @@ contains
    end function bbl_glue_is_effective
 
    pure module function substep_drag_ignores_bdrag_form(cfg) result(ignores)
-      !! Is `&ocean_bt_nml substep_drag` blind to the configured bottom
+      !! Is `[ocean.bt] substep_drag` blind to the configured bottom
       !! drag?
       !!
       !! `compute_bt_rem` builds the barotropic substep damping
       !! `Htot/(Htot + r·hbbl·dt_inner)` from the LINEAR coefficient
-      !! `&ocean_bdrag_nml r` alone.  Under any `form` other than
+      !! `[ocean.bdrag] r` alone.  Under any `form` other than
       !! `"linear"` the slow bottom drag is not that operator, so the
       !! knob either does nothing at all (`r = 0`, the default — the
       !! factor is identically 1) or damps the barotropic mode with a
@@ -4969,7 +4969,7 @@ contains
       !! Is the configured ice-shelf draft UNIFORM over the whole array?
       !!
       !! The one predicate, so the two rules that turn on it cannot drift
-      !! apart: the `&ocean_pgf_nml p_top_in_bc` REFUSAL (a load with a
+      !! apart: the `[ocean.pgf] p_top_in_bc` REFUSAL (a load with a
       !! gradient must have a consumer — a uniform load is bit-identically
       !! inert in the FV_MOM6 top BC, which is the theorem in
       !! `compute_fv_mom6_impl`'s docstring), and the `z_fixed` x cavity
@@ -4980,7 +4980,7 @@ contains
       !! zero.  `"flat"` is uniform only when NO box bound clips it —
       !! a clipped flat draft has a calving front, which is a step, and a
       !! step is the largest gradient in the domain.  `"linear"` and
-      !! `"file"` are never assumed uniform: this is a NAMELIST-level
+      !! `"file"` are never assumed uniform: this is an input-level
       !! predicate and cannot see the filled array (the configure-time
       !! twin in `configure_ocean_cavity` tests `maxval /= minval` on the
       !! field itself, which is the stricter check and runs later).
@@ -5046,8 +5046,8 @@ contains
 
    pure logical module function forcing_components_need_thermo(enable_components, &
                                                                enable_thermodynamics) result(bad)
-      !! `&ocean_forcing_nml enable_components=.true.` with
-      !! `&ocean_thermo_nml enable_thermodynamics=.false.` is a
+      !! `[ocean.forcing] enable_components=true` with
+      !! `[ocean.thermo] enable_thermodynamics=false` is a
       !! configuration that validates but does nothing (the component
       !! set only feeds the assembler->apply_tracers thermo path) —
       !! named predicate per the `lateral_closure_is_implemented` idiom
@@ -5099,7 +5099,7 @@ contains
    end function diag_density_levels_ok
 
    pure logical module function sponge_source_is_implemented(tag) result(ok)
-      !! .true. iff `&ocean_sponge_nml damp_source` names a source that is
+      !! .true. iff `[ocean.sponge] damp_source` names a source that is
       !! actually filled. `"file"` is a recognised name (PR-23b, needs the
       !! PR-14 reader) but has no kernel yet — a source with no filler
       !! must abort, not silently build an all-zero map (the
@@ -5120,7 +5120,7 @@ contains
    end function sponge_source_is_implemented
 
    pure logical module function sponge_target_is_implemented(tag) result(ok)
-      !! .true. iff `&ocean_sponge_nml target_source` names a reference
+      !! .true. iff `[ocean.sponge] target_source` names a reference
       !! state that is actually filled: `"ic"` (snapshot of the seeded
       !! initial condition) or `"linear_z"` (analytic affine geopotential
       !! profile, re-evaluated on the live layer geometry). `"file"` is
@@ -5135,7 +5135,7 @@ contains
    end function sponge_target_is_implemented
 
    pure logical module function sponge_ramp_is_valid(tag) result(ok)
-      !! .true. iff `&ocean_sponge_nml ramp` names a band shape the
+      !! .true. iff `[ocean.sponge] ramp` names a band shape the
       !! `damp_source="band"` filler implements.
       character(len=*), intent(in) :: tag
       select case (trim(tag))

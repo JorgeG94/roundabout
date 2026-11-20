@@ -14,9 +14,9 @@ to choose them. :ref:`running_simulations` has the short version, under
 Roundabout reports in two places:
 
 * the **diagnostic stream**: NetCDF files, one per rank, configured by
-  ``&ocean_diag_nml``;
+  ``[ocean.diag]``;
 * the **console status line**: conservation and stability numbers printed to
-  the log every ``&logging_nml status_interval``.
+  the log every ``[logging] status_interval``.
 
 There are also some log-only forensic probes, covered at the end.
 
@@ -24,24 +24,21 @@ There are also some log-only forensic probes, covered at the end.
 Quick start
 ===========
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &time_nml
+   [time]
       time_unit = "day"
-   /
 
-   &ocean_diag_nml
-      enabled  = .true.
+   [ocean.diag]
+      enabled = true
       filename = "tasman"
-      dt_out   = 1.0                     ! in time_unit: one frame per day
-      diags    = "KE:off  vorticity_z  temperature:6h:max  transport_x:mean"
-   /
+      dt_out = 1.0  # in time_unit: one frame per day
+      diags = "KE:off  vorticity_z  temperature:6h:max  transport_x:mean"
 
-   &output_nml
-      output_dir      = "./out_tasman"
-      compress_output = .true.
-      compress_level  = 1
-   /
+   [output]
+      output_dir = "./out_tasman"
+      compress_output = true
+      compress_level = 1
 
 This writes the default set without ``KE``. It adds a daily snapshot of
 ``vorticity_z``, a 6-hourly maximum of ``temperature`` and a daily mean of
@@ -50,7 +47,7 @@ the rank number zero-padded to six digits.
 
 .. note::
 
-   Diagnostics are **on by default** (``enabled = .true.``), and the default
+   Diagnostics are **on by default** (``enabled = true``), and the default
    cadence is ``dt_out = 3600`` **in your** ``time_unit``. With
    ``time_unit = "day"`` that is one frame every 3600 days. Set ``dt_out``
    explicitly. The model warns when ``dt_out`` is longer than ``t_end``.
@@ -76,25 +73,25 @@ It also includes every canonical field whose feature is switched on:
    * - Fields added
      - When this is on
    * - ``age``
-     - ``&ocean_tracers_nml enable_ideal_age``
+     - ``[ocean.tracers] enable_ideal_age``
    * - ``pseudo_salt``, ``pseudo_salt_diff``
-     - ``&ocean_tracers_nml enable_pseudo_salt``
+     - ``[ocean.tracers] enable_pseudo_salt``
    * - ``MLD_EPBL``, ``Kd_EPBL``
-     - ``&ocean_epbl_nml enable``
+     - ``[ocean.epbl] enable``
    * - ``Kd_KSHEAR``
-     - ``&ocean_kappa_shear_nml enable``
+     - ``[ocean.kappa_shear] enable``
    * - ``Kd_TIDAL``
-     - ``&ocean_tidal_mixing_nml enable``
+     - ``[ocean.tidal_mixing] enable``
    * - ``Kd_BBL``
-     - ``&ocean_bbl_mixing_nml enable``
+     - ``[ocean.bbl_mixing] enable``
    * - ``aice``, ``hi``, ``hs``, ``Tsfc``
-     - ``&ocean_ice_nml enable``
+     - ``[ocean.ice] enable``
    * - ``congel``, ``frazil``, ``snoice``, ``meltt``, ``meltb``, ``meltl``,
        ``dvidtt``
-     - ``&ocean_ice_nml enable`` and ``&ocean_thermo_nml
+     - ``[ocean.ice] enable`` and ``[ocean.thermo]
        enable_thermodynamics`` (default on)
    * - ``atm_tas`` … ``atm_cosz`` (ten fields)
-     - ``&ocean_atm_forcing_nml enable`` (NetCDF build)
+     - ``[ocean.atm_forcing] enable`` (NetCDF build)
 
 Every other field in the catalogue is **opt-in**: it is written only if you
 name it in ``diags``. That covers the derived fields, the ``ice_conc`` and
@@ -103,7 +100,7 @@ name it in ``diags``. That covers the derived fields, the ``ice_conc`` and
 The ``diags`` selection list
 ----------------------------
 
-``&ocean_diag_nml diags`` is a single string of **entries**. Separate entries
+``[ocean.diag] diags`` is a single string of **entries**. Separate entries
 with spaces or commas. Each entry has the form::
 
    name[:attribute[:attribute...]]
@@ -240,7 +237,7 @@ step, so the average is formed on the output grid.
      - ``rho_levels`` + ``n_rho_levels``, which must be set and must
        increase strictly
      - Target potential densities in kg m\ :sup:`-3`, light to dense. The
-       potential density is taken at ``&vcoord_nml rho_ref_pressure``
+       potential density is taken at ``[vcoord] rho_ref_pressure``
        (default :math:`2\times10^7` Pa).
 
 On every **remapped** grid, output index 1 is the **shallowest** (or
@@ -255,11 +252,11 @@ column sum is preserved. It averages every other field. The reconstruction is
 set by ``diag_remap_scheme``:
 
 * ``pcm``, ``plm``, ``ppm`` (the default) and ``ppm_h4`` work.
-* ``pqm`` is accepted by the namelist but has no diagnostic mapping. It
+* ``pqm`` is accepted by the input but has no diagnostic mapping. It
   silently falls back to PLM, so do not use it here.
 
 Cells below the bottom of a shallow column read **0** by default. Set
-``mask_vanished_layers = .true.`` to write the missing value there instead.
+``mask_vanished_layers = true`` to write the missing value there instead.
 That applies to every grid except ``density``.
 
 
@@ -299,7 +296,7 @@ Core ocean state (always registered)
    * - ``temperature``
      - degC
      - layer
-     - Potential temperature. Under ``&ocean_eos_nml ts_convention =
+     - Potential temperature. Under ``[ocean.eos] ts_convention =
        "cons_abs"`` it is conservative temperature, with the CF metadata to
        match.
    * - ``salinity``
@@ -338,18 +335,18 @@ Passive tracers
      - s
      - layer
      - Ideal age of sea water.
-     - ``&ocean_tracers_nml enable_ideal_age``
+     - ``[ocean.tracers] enable_ideal_age``
    * - ``pseudo_salt``
      - psu
      - layer
      - The pseudo-salt verification tracer (Shao 2016).
-     - ``&ocean_tracers_nml enable_pseudo_salt``
+     - ``[ocean.tracers] enable_pseudo_salt``
    * - ``pseudo_salt_diff``
      - psu
      - layer
      - ``pseudo_salt`` minus salinity: how far the passive-tracer transport
        has drifted from the active-tracer transport.
-     - ``&ocean_tracers_nml enable_pseudo_salt``
+     - ``[ocean.tracers] enable_pseudo_salt``
 
 Vertical-mixing closures
 ------------------------
@@ -371,32 +368,32 @@ total diffusivity that is actually applied to temperature, see
      - m
      - 2-D
      - Depth of the EPBL active mixing layer.
-     - ``&ocean_epbl_nml enable``
+     - ``[ocean.epbl] enable``
    * - ``Kd_EPBL``
      - m2 s-1
      - interface
      - EPBL diffusivity.
-     - ``&ocean_epbl_nml enable``
+     - ``[ocean.epbl] enable``
    * - ``Kd_KSHEAR``
      - m2 s-1
      - interface
      - Kappa-shear diffusivity.
-     - ``&ocean_kappa_shear_nml enable``
+     - ``[ocean.kappa_shear] enable``
    * - ``Kd_TIDAL``
      - m2 s-1
      - interface
      - Internal-tide (tidal mixing) diffusivity.
-     - ``&ocean_tidal_mixing_nml enable``
+     - ``[ocean.tidal_mixing] enable``
    * - ``Kd_BBL``
      - m2 s-1
      - interface
      - Law-of-the-wall bottom-boundary-layer diffusivity.
-     - ``&ocean_bbl_mixing_nml enable``
+     - ``[ocean.bbl_mixing] enable``
 
 Sea ice
 -------
 
-These fields need ``&ocean_ice_nml enable``. They follow CICE's history
+These fields need ``[ocean.ice] enable``. They follow CICE's history
 names, and all are 2-D at the cell centre. See :doc:`sea_ice` for the model
 behind them.
 
@@ -504,7 +501,7 @@ The console also prints a sea-ice line (see `Console status line`_).
 Prescribed atmosphere
 ---------------------
 
-These fields need ``&ocean_atm_forcing_nml enable`` and a NetCDF build. They
+These fields need ``[ocean.atm_forcing] enable`` and a NetCDF build. They
 are the prescribed forcing fields copied through as they are, all 2-D.
 
 .. list-table::
@@ -666,62 +663,62 @@ Asking for one without its prerequisite is a configure-time error.
    * - ``melt``
      - kg m-2 s-1
      - Basal melt mass flux, positive for melting.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``melt_m_per_yr``
      - m yr-1
      - Basal melt rate in the ISOMIP+ reporting unit: metres of ice-equivalent
        freshwater per year, using a freshwater density of
        1000 kg m\ :sup:`-3` and a 365-day year.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``thermal_driving``
      - degC
      - Far-field temperature above the in-situ freezing point at the
        interface pressure. A positive value drives melting.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``haline_driving``
      - g kg-1
      - Far-field salinity minus the interface salinity.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``tbdry``
      - degC
      - Interface temperature, on the liquidus at the interface salinity.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``sbdry``
      - g kg-1
      - Interface salinity.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``tfreeze_ib``
      - degC
      - In-situ freezing point of the far field at the ice base.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``exch_vel_t``
      - m s-1
      - Thermal exchange velocity the melt solve converged on.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``exch_vel_s``
      - m s-1
      - Haline exchange velocity the melt solve converged on.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``ustar_shelf``
      - m s-1
      - Friction velocity in the melt law. It drives no drag, and KPP and EPBL
        do not read it.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``cavity_melt_status``
      - 1
      - Melt-solver status code for each column. 0 is OK. Any other value
        means the column fell back to zero melt.
-     - ``&ocean_cavity_melt_nml enable``
+     - ``[ocean.cavity_melt] enable``
    * - ``z_draft``
      - m
      - Ice-shelf draft below the geoid, positive down.
-     - ``&ocean_cavity_dyn_nml enable``
+     - ``[ocean.cavity_dyn] enable``
    * - ``water_column``
      - m
      - Thickness of the water column under the shelf.
-     - ``&ocean_cavity_dyn_nml enable``
+     - ``[ocean.cavity_dyn] enable``
 
-``&ocean_cavity_melt_nml`` itself requires ``&ocean_cavity_dyn_nml``.
+``[ocean.cavity_melt]`` itself requires ``[ocean.cavity_dyn]``.
 
 Counting names, not distinct quantities, the catalogue has **37 canonical**
 and **32 derived** names. Four of them are aliases: ``ice_conc``,
@@ -763,7 +760,7 @@ Each file is CF-1.8 and is laid out as follows:
   outside the cover in the cavity fields;
 * **1.0e20**: advertised as ``_FillValue`` and ``missing_value`` on
   ``vorticity_z``, on the cavity fields, and on remapped fields when
-  ``mask_vanished_layers = .true.``.
+  ``mask_vanished_layers = true``.
 
 Precision and compression
 -------------------------
@@ -772,7 +769,7 @@ Precision and compression
 and halves the bytes per frame. Time axes, restarts and console totals stay
 at working precision.
 
-``&output_nml compress_output = .true.`` turns on deflate compression, with
+``[output] compress_output = true`` turns on deflate compression, with
 ``compress_level`` from 1 to 9. Level 1 is usually the best trade-off.
 
 Merging per-rank files
@@ -803,7 +800,7 @@ Console status line
 ===================
 
 Separately from the NetCDF stream, rank 0 prints a status block every
-``&logging_nml status_interval``. The interval is in ``time_unit``, and 0
+``[logging] status_interval``. The interval is in ``time_unit``, and 0
 means every 100 steps. The block contains:
 
 .. list-table::
@@ -841,7 +838,7 @@ means every 100 steps. The block contains:
 The run **aborts** if any console total is NaN, or if ``MaxCFL`` exceeds 0.9.
 The last good line is printed before the abort.
 
-With ``&ocean_diag_nml reproducing_sums = .true.`` (the default), the totals
+With ``[ocean.diag] reproducing_sums = true`` (the default), the totals
 and budget terms are summed in fixed point. The console then prints the
 **same digits on any rank count**, and a non-finite value anywhere shows up
 as NaN rather than a plausible-looking number. Set it to ``.false.`` to use
@@ -851,7 +848,7 @@ ordinary floating-point sums.
 Forensic probes (log only)
 ==========================
 
-``&ocean_debug_nml`` holds three heavy debugging probes, all off by default.
+``[ocean.debug]`` holds three heavy debugging probes, all off by default.
 They print greppable rows to the log and write nothing to NetCDF:
 
 .. list-table::
@@ -881,7 +878,7 @@ They print greppable rows to the log and write nothing to NetCDF:
 Knob reference
 ==============
 
-``&ocean_diag_nml``:
+``[ocean.diag]``:
 
 .. list-table::
    :header-rows: 1
@@ -944,28 +941,28 @@ Related knobs in other groups:
    * - Knob
      - Default
      - Meaning
-   * - ``&output_nml output_dir``
+   * - ``[output] output_dir``
      - ``"./output"``
      - Directory for the per-rank files.
-   * - ``&output_nml compress_output``
+   * - ``[output] compress_output``
      - ``.false.``
      - Deflate compression for NetCDF.
-   * - ``&output_nml compress_level``
+   * - ``[output] compress_level``
      - ``1``
      - Deflate level, 1 to 9.
-   * - ``&logging_nml status_interval``
+   * - ``[logging] status_interval``
      - ``0``
      - Console cadence in ``time_unit``. 0 means every 100 steps.
-   * - ``&time_nml time_unit``
+   * - ``[time] time_unit``
      - ``"s"``
      - Unit for ``dt_out``, ``status_interval`` and ``t_end``.
 
-The diagnostic stream does not read ``&output_nml output_to_file``. It is
-controlled only by ``&ocean_diag_nml enabled``. ``use_io_server`` is not
+The diagnostic stream does not read ``[output] output_to_file``. It is
+controlled only by ``[ocean.diag] enabled``. ``use_io_server`` is not
 supported on the ocean path, and the model warns if it is set.
 
 From Python, :doc:`python_interface` covers ``rdb.available_diagnostics()``
-and the ``Diagnostics`` object, which writes this namelist group for you.
+and the ``Diagnostics`` object, which writes this input group for you.
 
 
 Adding a diagnostic

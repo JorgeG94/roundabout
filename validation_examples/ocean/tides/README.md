@@ -8,15 +8,15 @@ fit explains essentially all the variance (R² → 1), the modelled signal *is* 
 
 | Case | nml | Forcing | Grid | Validates |
 |------|-----|---------|------|-----------|
-| Body tide | `body_tide_basin.nml` | equilibrium potential (`&ocean_tides_nml`) | **spherical** closed basin | C1 (+C2 SAL, optional) |
-| OBC tide | `seamount_tidal_obc.nml` | M2 prescribed at the west open boundary | cartesian seamount | C3 |
+| Body tide | `body_tide_basin.toml` | equilibrium potential (`[ocean.tides]`) | **spherical** closed basin | C1 (+C2 SAL, optional) |
+| OBC tide | `seamount_tidal_obc.toml` | M2 prescribed at the west open boundary | cartesian seamount | C3 |
 
 ## Run
 
 ```bash
 # from a scratch working dir (output lands in ./out_<name>/)
-rdb validation_examples/ocean/tides/body_tide_basin.nml
-rdb validation_examples/ocean/tides/seamount_tidal_obc.nml
+rdb validation_examples/ocean/tides/body_tide_basin.toml
+rdb validation_examples/ocean/tides/seamount_tidal_obc.toml
 
 # check the M2 signal
 python validation_examples/ocean/tides/analyze_m2.py out_body_tide_basin/body_tide_basin_rank_000000.nc --spinup-days 3
@@ -47,23 +47,23 @@ Both run serially on a CPU build in well under a minute (`RDB_ENABLE_GPU=OFF`,
 ## Config notes (load-bearing)
 
 - **The body tide is fail-loud on cartesian grids** — the astronomical potential
-  needs real lat/lon, so `body_tide_basin` uses `&ocean_grid_nml
+  needs real lat/lon, so `body_tide_basin` uses `[ocean.grid]
   grid_config="spherical"`. Its amplitude is physical/built-in; you only choose
   `constituents` (a whitespace/comma string, e.g. `"M2 S2 K1 O1"`).
-- **The ocean C-grid reads `&ocean_bc_nml` only** — the coastal `&boundary_nml`
+- **The ocean C-grid reads `[ocean.bc]` only** — the coastal `[boundary]`
   block does *not* reach the ocean path.
 - **OBC tidal constituents are keyed by angular frequency (rad/s), not name.**
   M2 = `1.4051890e-4`; amplitude in metres, phase in radians. With
-  `obc_tidal_nodal=.true.` the C3 astronomical/nodal correction is folded in
-  (then a parseable `&ocean_tides_nml ref_date` is required and the frequency
+  `obc_tidal_nodal=true` the C3 astronomical/nodal correction is folded in
+  (then a parseable `[ocean.tides] ref_date` is required and the frequency
   must match the catalog within 1e-4 or it aborts).
 
 ## Variations
 
-- **Exercise C2 SAL:** in `body_tide_basin.nml` set `use_sal=.true.`,
+- **Exercise C2 SAL:** in `body_tide_basin.toml` set `use_sal=true`,
   `beta_sal=0.09` — the effective gravity becomes `−g(1−β)∇η` and the response
   amplitude shifts accordingly.
-- **Nodal correction:** set `add_nodal=.true.` (body) / `obc_tidal_nodal=.true.`
+- **Nodal correction:** set `add_nodal=true` (body) / `obc_tidal_nodal=true`
   (OBC) to fold in the 18.6-yr nodal `f/u` factors.
 - **Full resolution:** both nmls are shrunk for CPU turnaround; scale
   `nx/ny/nz_layers` up for a GPU run.

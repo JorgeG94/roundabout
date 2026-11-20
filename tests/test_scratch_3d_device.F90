@@ -5,7 +5,7 @@
 !! treat an untouched buffer as zero — and some deliberately do: a
 !! producer may be SKIPPED for a step and leave its buffer to be read as
 !! "whatever the previous step produced" (MOM6's predictor reuses
-!! `diffu(u[n-1])`; `&ocean_bt_nml split_scheme = "pred_corr"` skips the
+!! `diffu(u[n-1])`; `[ocean.bt] split_scheme = "pred_corr"` skips the
 !! viscous recompute in stage 1, and on step 1 there is no previous
 !! producer).  `enter_data` attaches with `create`, which allocates
 !! device memory and copies NOTHING, so before this contract was

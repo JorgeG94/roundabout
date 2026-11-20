@@ -39,7 +39,7 @@ try:
 except ImportError:
     sys.exit("compare_epbl_kpp.py needs the netCDF4 python module")
 
-ALPHA_T = 0.2        # kg/m3/K — matches &ocean_ic_nml alpha_T
+ALPHA_T = 0.2        # kg/m3/K — matches [ocean.ic] alpha_T
 DRHO_CRIT = 0.03     # kg/m3 MLD threshold
 MAX_DEPTH = 600.0    # m, flat bottom
 NZ = 30
@@ -144,7 +144,7 @@ def main():
         print(f"[ok]   {label}: {path}  frames={entry['mld'].shape[0]}")
 
     if not results:
-        sys.exit("no runs found — run the three namelists first")
+        sys.exit("no runs found — run the three inputs first")
 
     # ---- summary table ----
     print("\n  run        day-1 mean   final mean   final max   (interior MLD, m)")

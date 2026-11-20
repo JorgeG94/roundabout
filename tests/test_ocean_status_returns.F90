@@ -86,7 +86,7 @@ contains
 
    subroutine test_bad_nml_returns_config_parse(error)
       !! `read_config_from_toml_string` with `ierr` PRESENT on an unknown
-      !! namelist key must return `ERR_CONFIG_PARSE`, not `error stop`.
+      !! input key must return `ERR_CONFIG_PARSE`, not `error stop`.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
@@ -99,7 +99,7 @@ contains
       ierr = -999
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_PARSE, &
-                 "unknown namelist key returns ERR_CONFIG_PARSE")
+                 "unknown input key returns ERR_CONFIG_PARSE")
    end subroutine test_bad_nml_returns_config_parse
 
    subroutine test_bad_crossknob_returns_config_validate(error)
@@ -154,7 +154,7 @@ contains
    end subroutine test_missing_supergrid_file_returns_io
 
    subroutine test_good_config_returns_ok(error)
-      !! The success path: a well-formed namelist string + a valid config
+      !! The success path: a well-formed input string + a valid config
       !! must both report `OCEAN_STATUS_OK` through `ierr`, not merely
       !! "no abort" — the ABSENT-`ierr` legacy tests never assert the
       !! numeric value on success either.
@@ -177,7 +177,7 @@ contains
             "dt_fixed = 300.0"//new_line("a")
       ierr = -999
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "well-formed namelist parses to OCEAN_STATUS_OK")
+      call check(error, ierr == OCEAN_STATUS_OK, "well-formed input parses to OCEAN_STATUS_OK")
       if (allocated(error)) return
 
       ierr = -999

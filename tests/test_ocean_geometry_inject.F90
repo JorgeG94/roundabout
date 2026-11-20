@@ -162,7 +162,7 @@ contains
    end subroutine collect_ocean_geometry_inject_tests
 
    function seamount_nml() result(txt)
-      !! Namelist form of the SAME seamount this file builds directly via
+      !! Input form of the SAME seamount this file builds directly via
       !! `set_bathymetry_seamount` below — the "two routes, same field"
       !! reference trajectory.
       character(len=:), allocatable :: txt

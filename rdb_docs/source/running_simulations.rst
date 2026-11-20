@@ -7,49 +7,47 @@ Running simulations
 .. contents::
    :local:
 
-Everything about a Roundabout run is in its namelist. This page covers how
+Everything about a Roundabout run is in its input. This page covers how
 that file is organised, then walks through three real cases.
 
 
-Anatomy of a namelist
+Anatomy of an input
 =====================
 
-A Roundabout namelist is a sequence of Fortran namelist groups. Order does
+A Roundabout input is a sequence of TOML tables, one per parameter group. Order does
 not matter, and any group you leave out takes its defaults:
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &sim_nml
+   [sim]
       sim_type = "ocean"
-   /
 
-   &grid_nml
-      nx     = 50
-      ny     = 50
-      dx     = 2000.0
-      dy     = 2000.0
+   [grid]
+      nx = 50
+      ny = 50
+      dx = 2000.0
+      dy = 2000.0
       nghost = 2
-   /
 
 Groups fall into three families.
 
-**Core groups** describe the run itself: ``&sim_nml`` (``sim_type``, whose
-only accepted value is ``"ocean"``), ``&grid_nml`` (cell counts, spacing,
-halo width), ``&time_nml``, ``&physics_nml``, ``&nonhydrostatic_nml``
-(which, despite the name, is where ``nz_layers`` lives), ``&vcoord_nml``,
-``&tracer_nml``, ``&output_nml`` and ``&logging_nml``.
+**Core groups** describe the run itself: ``[sim]`` (``sim_type``, whose
+only accepted value is ``"ocean"``), ``[grid]`` (cell counts, spacing,
+halo width), ``[time]``, ``[physics]``, ``[nonhydrostatic]``
+(which, despite the name, is where ``nz_layers`` lives), ``[vcoord]``,
+``[tracer]``, ``[output]`` and ``[logging]``.
 
-**Ocean groups** are named ``&ocean_<concern>_nml`` and hold the physics:
-``&ocean_grid_nml``, ``&ocean_topo_nml``, ``&ocean_ic_nml``,
-``&ocean_bc_nml``, ``&ocean_coriolis_nml``, ``&ocean_pgf_nml``,
-``&ocean_eos_nml``, ``&ocean_hvisc_nml``, ``&ocean_vmix_nml``,
-``&ocean_vdiff_nml``, ``&ocean_bdrag_nml``, ``&ocean_bt_nml``,
-``&ocean_thermo_nml``, ``&ocean_continuity_nml``, ``&ocean_diag_nml``, and
-one per optional closure — ``&ocean_epbl_nml``, ``&ocean_gm_nml``,
-``&ocean_meke_nml``, ``&ocean_foxkemper_nml``, and so on.
+**Ocean groups** are named ``[ocean.<concern>]`` and hold the physics:
+``[ocean.grid]``, ``[ocean.topo]``, ``[ocean.ic]``,
+``[ocean.bc]``, ``[ocean.coriolis]``, ``[ocean.pgf]``,
+``[ocean.eos]``, ``[ocean.hvisc]``, ``[ocean.vmix]``,
+``[ocean.vdiff]``, ``[ocean.bdrag]``, ``[ocean.bt]``,
+``[ocean.thermo]``, ``[ocean.continuity]``, ``[ocean.diag]``, and
+one per optional closure — ``[ocean.epbl]``, ``[ocean.gm]``,
+``[ocean.meke]``, ``[ocean.foxkemper]``, and so on.
 
 The naming rule is that the ``ocean_`` prefix is dropped from each key
-inside its group: the viscosity knob is ``&ocean_hvisc_nml nu_h``, not
+inside its group: the viscosity knob is ``[ocean.hvisc] nu_h``, not
 ``ocean_nu_h``.
 
 **Groups you will rarely touch** exist for machinery — the schema carries
@@ -65,16 +63,16 @@ inside its group: the viscosity knob is ``&ocean_hvisc_nml nu_h``, not
 Units and time
 --------------
 
-``&time_nml time_unit`` — accepting ``"s"`` (the default), ``"min"``,
+``[time] time_unit`` — accepting ``"s"`` (the default), ``"min"``,
 ``"hr"``, ``"day"`` and ``"year"`` — scales several time-valued knobs:
-``t_end``, ``&logging_nml status_interval`` and ``&ocean_diag_nml dt_out``.
+``t_end``, ``[logging] status_interval`` and ``[ocean.diag] dt_out``.
 
 .. warning::
 
    ``dt_fixed`` is **always seconds**, regardless of ``time_unit``. A
-   namelist with ``time_unit = "day"`` and ``t_end = 10.0`` runs for ten
+   input with ``time_unit = "day"`` and ``t_end = 10.0`` runs for ten
    days with a ``dt_fixed = 1200.0`` step of twenty minutes. Mixing the two
-   conventions up is the most common namelist error.
+   conventions up is the most common input error.
 
 The driver requires ``dt_fixed > 0``; there is no adaptive-CFL helper.
 
@@ -94,46 +92,40 @@ options it names is one the code actually supports.
 Case 1: an at-rest test
 =======================
 
-``validation_examples/ocean/seamount/seamount.nml``
+``validation_examples/ocean/seamount/seamount.toml``
 
 The most informative kind of test: one where the right answer is *nothing*.
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &grid_nml
-      nx     = 50
-      ny     = 50
-      dx     = 2000.0
-      dy     = 2000.0
+   [grid]
+      nx = 50
+      ny = 50
+      dx = 2000.0
+      dy = 2000.0
       nghost = 2
-   /
 
-   &time_nml
-      t_end        = 2592000.0   ! 30 days
-      dt_fixed     = 300.0       ! 5 min outer
+   [time]
+      t_end = 2592000.0  # 30 days
+      dt_fixed = 300.0  # 5 min outer
       cfl_interval = 1
-   /
 
-   &physics_nml
-      coriolis_f    = 0.0
+   [physics]
+      coriolis_f = 0.0
       wind_stress_x = 0.0
       wind_stress_y = 0.0
-   /
 
-   &nonhydrostatic_nml
+   [nonhydrostatic]
       nz_layers = 15
-   /
 
-   &vcoord_nml
+   [vcoord]
       vcoord_type = "zstar_sigma"
-   /
 
-   &tracer_nml
+   [tracer]
       initial_temperature = 15.0
-      initial_salinity    = 35.0
-      T_init_surface      = 0.0
-      T_init_bottom       = 0.0
-   /
+      initial_salinity = 35.0
+      T_init_surface = 0.0
+      T_init_bottom = 0.0
 
 A 100 km closed basin with a single Gaussian seamount rising from 4000 m to
 200 m over a 25 km half-width — a maximum slope of about 150 m/km,
@@ -155,17 +147,15 @@ error — and the current code sits about an order of magnitude under it.
 The two settings that make it a *dynamical-core* test rather than a physics
 test are worth noting:
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &ocean_hvisc_nml
+   [ocean.hvisc]
       nu_h = 0.0
       nu_4 = 0.0
-   /
 
-   &ocean_vmix_nml
-      use_closure = .false.
-      use_kpp     = .false.
-   /
+   [ocean.vmix]
+      use_closure = false
+      use_kpp = false
 
 With viscosity and mixing off, nothing can damp an artefact into
 invisibility.
@@ -174,29 +164,27 @@ invisibility.
 Case 2: an analytical benchmark
 ===============================
 
-``validation_examples/ocean/eady/eady.nml``
+``validation_examples/ocean/eady/eady.toml``
 
 The classical Eady (1949) front: a 250 km × 250 km reentrant channel,
 50 × 50 cells at 5 km, ten layers over a 1000 m flat bottom, on an
 :math:`f`-plane at :math:`f = 10^{-4}\ \mathrm{s^{-1}}`.
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &ocean_bc_nml
+   [ocean.bc]
       west = "periodic"
       east = "periodic"
-   /
 
-   &ocean_ic_nml
-      ic_config      = "eady"
-      alpha_T        = 0.17
-      rho_0          = 1035.0
-      eady_dT_dz     = 0.01
-      eady_dT_dy     = -2.0e-5
-      eady_T_ref     = 10.0
-      eady_pert_amp  = 1.0e-3
+   [ocean.ic]
+      ic_config = "eady"
+      alpha_T = 0.17
+      rho_0 = 1035.0
+      eady_dT_dz = 0.01
+      eady_dT_dy = -2.0e-5
+      eady_T_ref = 10.0
+      eady_pert_amp = 1.0e-3
       eady_pert_seed = 12345
-   /
 
 The initial condition is a meridional temperature gradient in thermal-wind
 balance with a vertically sheared zonal jet, seeded with
@@ -240,39 +228,35 @@ validated envelope at this resolution and time step. This is a
 Case 3: a reference reproduction
 ================================
 
-``validation_examples/ocean/double_gyre/double_gyre_mom6.nml``
+``validation_examples/ocean/double_gyre/double_gyre_mom6.toml``
 
 A wind-driven double gyre mirroring the MOM6 ``ocean_only/double_gyre``
 example: 44 × 40 cells over 22° × 20° at mid-latitude, two layers,
 2000 m deep, spoon bathymetry, a two-gyre wind stress of 0.1 Pa,
 :math:`\Delta t = 1200\ \mathrm{s}`, ten days.
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &ocean_grid_nml
+   [ocean.grid]
       axis_units = "degrees"
-      len_lon    = 22.0
-      len_lat    = 20.0
-      rad_earth  = 6.378e6
-   /
+      len_lon = 22.0
+      len_lat = 20.0
+      rad_earth = 6.378e6
 
-   &time_nml
-      t_end        = 10.0
-      time_unit    = "day"
-      dt_fixed     = 1200.0
+   [time]
+      t_end = 10.0
+      time_unit = "day"
+      dt_fixed = 1200.0
       cfl_interval = 1
-   /
 
-   &nonhydrostatic_nml
+   [nonhydrostatic]
       nz_layers = 2
-   /
 
-   &ocean_pgf_nml
-      form        = "gprime"
-      gprime_gfs  = 0.98
+   [ocean.pgf]
+      form = "gprime"
+      gprime_gfs = 0.98
       gprime_gint = 0.0098
-      maxvel      = 6.0
-   /
+      maxvel = 6.0
 
 Note the grid. ``dx`` and ``dy`` are **derived** from the degree extent, not
 stated — pinning them by hand once produced a 16 700 km basin that ran
@@ -305,19 +289,17 @@ does not enumerate where it cannot is not a validation.
 Output and diagnostics
 ======================
 
-``&ocean_diag_nml`` controls what is written.
+``[ocean.diag]`` controls what is written.
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &ocean_diag_nml
-      enabled  = .true.
+   [ocean.diag]
+      enabled = true
       filename = "double_gyre"
-      dt_out   = 1.0        ! time_unit = "day" above
-   /
+      dt_out = 1.0  # time_unit = "day" above
 
-   &output_nml
+   [output]
       output_dir = "./out_double_gyre_mom6"
-   /
 
 Files are written **per rank** as
 ``<output_dir>/<filename>_rank_NNNNNN.nc``, with no gather;
@@ -326,7 +308,7 @@ Files are written **per rank** as
 Selecting fields
 ----------------
 
-``&ocean_diag_nml diags`` takes a token list naming what to output. Each
+``[ocean.diag] diags`` takes a token list naming what to output. Each
 token may carry suffixes selecting a time operation and an output vertical
 grid, so a single knob covers instantaneous values, time means, extrema and
 integrals, on layers or remapped to :math:`z`, sigma, z\* or density bins.
@@ -354,12 +336,12 @@ as much.
    of that fill a disk. Set ``dt_out`` from how much output you can store,
    not from how much you would like.
 
-``&ocean_diag_nml output_precision = "single"`` halves the bytes per frame
+``[ocean.diag] output_precision = "single"`` halves the bytes per frame
 on the diagnostic stream, which is write-bandwidth-bound. It is deliberately
 scoped to that one stream: restarts and the console conservation totals stay
 at working precision, so a lossy restart is not requestable. Opting in means
 regenerating any baseline that byte-compares diagnostic NetCDF.
 
-Compression is available as ``&output_nml compress_output`` with
+Compression is available as ``[output] compress_output`` with
 ``compress_level`` from 1 to 9, typically giving three- to five-fold
 reduction.

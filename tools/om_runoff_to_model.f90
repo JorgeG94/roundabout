@@ -1,6 +1,6 @@
 !! Lon-lat runoff product -> model-grid runoff file (offline helper).
 program om_runoff_to_model
-   !! Offline preprocessing helper for `&ocean_dataovr_nml lrunoff / frunoff`.  Not part of the
+   !! Offline preprocessing helper for `[ocean.dataovr] lrunoff / frunoff`.  Not part of the
    !! model, which reads runoff only from a file ALREADY on its grid with every value on a wet
    !! cell (a value on a land cell aborts, because that mass would vanish silently).
    !!

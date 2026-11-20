@@ -1,5 +1,5 @@
 !! Analytical + contract tests for the static ice-shelf cavity GEOMETRY
-!! and the barotropic DATUM that absorbs it (`&ocean_cavity_dyn_nml`).
+!! and the barotropic DATUM that absorbs it (`[ocean.cavity_dyn]`).
 module test_ocean_cavity_draft
    !! The whole capability is three equations:
    !!
@@ -87,13 +87,13 @@ contains
    ! ------------------------------------------------------------------
 
    function nml_case(cavity, topo, vcoord, bt, pgf, extra) result(nml)
-      !! A minimal cavity-capable ocean namelist: flat 1000 m bed, sigma,
+      !! A minimal cavity-capable ocean input: flat 1000 m bed, sigma,
       !! FV-MOM6 PGF, split solver — i.e. inside the v1 envelope, so any
       !! refusal a test sees comes from the line that test changed.
       !!
       !! Each group that a test might need to REPLACE is an optional
       !! argument rather than something appended to a fixed prefix: a
-      !! namelist carrying the same group twice is a trap (the second
+      !! input carrying the same group twice is a trap (the second
       !! read wins silently, or does not, depending on the reader), and a
       !! test that accidentally relied on that would be testing the
       !! reader, not the cavity.
@@ -176,9 +176,9 @@ contains
 
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
-      ! Take dx/dy FROM the namelist, never from the module constants:
+      ! Take dx/dy FROM the input, never from the module constants:
       ! the spherical case ships degrees there, and a grid built in
-      ! metres against a degrees namelist is exactly the units bug the
+      ! metres against a degrees input is exactly the units bug the
       ! `cavity_draft_units_are_grid_units` case exists to catch.
       call grid%init(NX_PHYS, NY_PHYS, NGHOST, cfg%dx, cfg%dy)
       call state%init_from_config(cfg, grid)
@@ -356,7 +356,7 @@ contains
       !! degrees — about 1.8 deg — and NOT at "200000 degrees", which
       !! would cover the whole planet and hide the front entirely.
       !!
-      !! This is the same failure mode `&ocean_topo_nml slope_scale`
+      !! This is the same failure mode `[ocean.topo] slope_scale`
       !! documents (a metres length against a degrees position collapsed
       !! the seamount to a flat basin); here it would silently delete the
       !! open ocean.
@@ -407,7 +407,7 @@ contains
             "output_to_file = false"//new_line("a")
 
       call build_seeded(cfg, grid, state, nml, ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "spherical cavity namelist must seed")
+      call check(error, ierr == OCEAN_STATUS_OK, "spherical cavity input must seed")
       if (allocated(error)) return
 
       front_deg = 200.0e3_wp/M_PER_DEG
@@ -723,7 +723,7 @@ contains
       integer :: ierr
 
       call build_configured(cfg, grid, state, nml_case(""), ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "default namelist must configure")
+      call check(error, ierr == OCEAN_STATUS_OK, "default input must configure")
       if (allocated(error)) return
       call check(error,.not. state%metrics%use_cavity, "use_cavity must default off")
       if (allocated(error)) return
@@ -770,9 +770,9 @@ contains
 
    subroutine test_restart_registry(error)
       !! The draft is PRESCRIBED STATIC geometry, rebuilt at configure
-      !! from the namelist — like `b` and `bt_H_ref`, and excluded from
+      !! from the input — like `b` and `bt_H_ref`, and excluded from
       !! the restart registry for the same reason: checkpointing it would
-      !! create a file-vs-namelist ambiguity, and a resume whose draft
+      !! create a file-vs-input ambiguity, and a resume whose draft
       !! disagreed with its datum would be silently wrong.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg_on, cfg_off
@@ -841,7 +841,7 @@ contains
       if (allocated(error)) return
 
       ! --- the load must have a consumer once it has a gradient (P5.2) ---
-      ! A draft that VARIES needs `&ocean_pgf_nml p_top_in_bc`: that knob
+      ! A draft that VARIES needs `[ocean.pgf] p_top_in_bc`: that knob
       ! is the only route by which rho_ref*g*z_draft reaches the FV_MOM6
       ! pa(nz+1) surface BC.  Refused, not auto-enabled.
       call expect_invalid(error, nml_case("enable = true"//new_line('a')// &
@@ -972,7 +972,7 @@ contains
                                           "enable = true"//new_line('a')// &
                                           "use_sal = true"//new_line('a')), "tidal SAL")
       if (allocated(error)) return
-      ! `&ocean_zinit_nml` was refused here until `build_z_ctr` learned to
+      ! `[ocean.zinit]` was refused here until `build_z_ctr` learned to
       ! measure the layer-centre depth from `z = 0` rather than from the
       ! column top.  It now COMPOSES with a cavity, so the row is a
       ! POSITIVE one — and the analytic `source='linear'` profile is the
@@ -1012,7 +1012,7 @@ contains
       integer :: ierr
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
-         call check(error, .false., what//": namelist must parse")
+         call check(error, .false., what//": input must parse")
          return
       end if
       ierr = -999

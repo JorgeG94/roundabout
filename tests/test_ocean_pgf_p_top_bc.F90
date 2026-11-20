@@ -1,4 +1,4 @@
-!! Analytical unit tests for `&ocean_pgf_nml p_top_in_bc` — the
+!! Analytical unit tests for `[ocean.pgf] p_top_in_bc` — the
 !! top-of-column load `multilayer_state_t%p_top` (Pa) in the FV_MOM6
 !! pressure-stack surface boundary condition,
 !! `pa(nz+1) = rho_ref*g*eta_geo + p_top`.
@@ -498,11 +498,11 @@ contains
          call run_pgf(grid, ms, pgf_loaded, b)
 
          call check(error, all(pgf_loaded%dpdx_face%data == dpdx_zero), &
-                    "p_top_in_bc=.false. with a non-zero p_top must leave PFu "// &
+                    "p_top_in_bc=false with a non-zero p_top must leave PFu "// &
                     "bit-identical")
          if (allocated(error)) exit checks
          call check(error, all(pgf_loaded%dpdy_face%data == dpdy_zero), &
-                    "p_top_in_bc=.false. with a non-zero p_top must leave PFv "// &
+                    "p_top_in_bc=false with a non-zero p_top must leave PFv "// &
                     "bit-identical")
       end block checks
       call pgf_zero%destroy(); call pgf_loaded%destroy(); call ms%destroy()
@@ -632,12 +632,12 @@ contains
          ierr = -999
          call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_OK, &
-                    "the default p_top_in_bc=.false. must validate for any form")
+                    "the default p_top_in_bc=false must validate for any form")
       end block checks
    end subroutine test_validate_config
 
    subroutine test_validate_bc_pgf(error)
-      !! `&ocean_bt_nml correction_bc_pgf` needs the FV_MOM6 interface stack
+      !! `[ocean.bt] correction_bc_pgf` needs the FV_MOM6 interface stack
       !! `pgf%e_face` (`compute_pbce`).  It used to be accepted at configure
       !! with any form and `error stop` inside step 1; found by the pairwise
       !! compatibility matrix (row `bc_pgf_needs_fv_mom6`).  Now every other
@@ -670,12 +670,12 @@ contains
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
-                 "correction_bc_pgf=.false. must validate under form='mont'")
+                 "correction_bc_pgf=false must validate under form='mont'")
    end subroutine test_validate_bc_pgf
 
    subroutine parse_bc_pgf(cfg, form, on)
       !! `parse_case`'s base domain with the PGF form and the bc-PGF knob
-      !! set in ONE `&ocean_bt_nml` group (gprime needs nz = 2).
+      !! set in ONE `[ocean.bt]` group (gprime needs nz = 2).
       type(config_t), intent(out) :: cfg
       character(len=*), intent(in) :: form
       logical, intent(in) :: on
@@ -707,7 +707,7 @@ contains
       !! inert-knob warning.
       !!
       !! `p_top = metrics%p_ice_ref + sf%p_surf` has TWO producers.  The
-      !! warning used to name only the `&ocean_psurf_nml` seam, so a
+      !! warning used to name only the `[ocean.psurf]` seam, so a
       !! configuration with an ice-shelf cavity — where `p_top` carries
       !! the full `rho_ref*g*z_draft` ice load, and where `p_top_in_bc`
       !! is not merely live but REQUIRED for a varying draft — was told

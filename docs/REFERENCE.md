@@ -1,7 +1,7 @@
 # Roundabout — Physics & Numerics Reference
 
 Canonical reference for the physics, numerical schemes, boundary
-conditions, validation tests, and namelist configuration. **Codebase
+conditions, validation tests, and input configuration. **Codebase
 structure, build system, GPU programming model, and kernel API live in
 [`CLAUDE.md`](../CLAUDE.md) + [`docs/codebase/`](codebase/INDEX.md) —
 this file is the science-and-config view.** Ocean dynamical-core
@@ -35,7 +35,7 @@ backend:
 config schema's enum, and `validate_config` aborts fail-loud on anything
 else.
 
-Horizontal grids are selected by `&ocean_grid_nml grid_config`:
+Horizontal grids are selected by `[ocean.grid] grid_config`:
 `cartesian` (default), `spherical` lon-lat sector, `supergrid` (MOM6
 mosaic reader), and `tripolar` (Murray 1996 bipolar Arctic cap closed by
 a single-rank north fold).
@@ -80,9 +80,9 @@ projection anywhere in the dynamical core.
   SoA `(nx, ny, nz)` for coalesced GPU access.
 - **Continuity**: continuity-PPM (piecewise-parabolic thickness
   reconstruction with a positive-definite limiter) drives the per-layer
-  mass fluxes; tracers ride the same fluxes (`&ocean_continuity_nml`).
+  mass fluxes; tracers ride the same fluxes (`[ocean.continuity]`).
 - **Coriolis + advection**: Sadourny PV-flux vector-invariant form
-  (`&ocean_coriolis_nml form=`) — enstrophy-conserving (default,
+  (`[ocean.coriolis] form=`) — enstrophy-conserving (default,
   velocity form), energy transport form (`sadourny_energy`), or the
   Hollingsworth-Källén guard (`sadourny_hk`). The orthogonal
   `pv_adv_scheme=` selects the corner-vorticity→face interpolation:
@@ -91,14 +91,14 @@ projection anywhere in the dynamical core.
   `weno5`/`weno7` need `nghost ≥ 4`/`5` — stencil radius + 1, the
   halo at which a decomposed run is bit-identical to one rank (fail-loud
   via `pv_adv_required_nghost`).
-- **Pressure gradient**: finite-volume, `&ocean_pgf_nml form=` —
+- **Pressure gradient**: finite-volume, `[ocean.pgf] form=` —
   Montgomery potential (`mont`, **default**), z-corrected FV
   (`fv_lite`), FV + Wright in-situ
   Picard re-evaluation (`fv_wright`), the MOM6 `PressureForce_FV_Bouss`
   port (`fv_mom6`), or the NK=2-only reduced-gravity `gprime`. Optional
   in-layer PLM/PPM T/S reconstruction (Boole quadrature).
 - **Vertical**: ALE — advance Lagrangian, then conservatively remap onto
-  the target coordinate (`&vcoord_nml remap_method`, PPM by default).
+  the target coordinate (`[vcoord] remap_method`, PPM by default).
 
 ### Time integration
 
@@ -109,7 +109,7 @@ Split-explicit RK2. Each outer step:
    stress, tracer hdiff/vdiff, vertical advection.
 2. **Barotropic fast loop** — `n_inner` forward-backward-Euler substeps
    on `(η, u_bt, v_bt)` plus the nonlinear `ζ + KE` terms.
-   `&ocean_bt_nml auto_n_inner = .true.` derives `n_inner` from the
+   `[ocean.bt] auto_n_inner = true` derives `n_inner` from the
    gravity-wave CFL **once, at configure time** (`configure_ocean_bt_split`),
    writing the resolved value back into the config. The CFL is evaluated
    PER WET CELL — local depth with local cell size,
@@ -130,12 +130,12 @@ Split-explicit RK2. Each outer step:
    provisional velocity to `pc_be * dt`, and the corrector takes the full
    step with tendencies evaluated on the barotropic-window means.
 
-`&ocean_bt_nml split_scheme` selects the outer scheme: `pred_corr`
+`[ocean.bt] split_scheme` selects the outer scheme: `pred_corr`
 (default — the MOM6 predictor-corrector, which lifts the internal-wave
 `dt` ceiling) or `ssp_rk2` (experimental — widest envelope, but it grows
 internal gravity waves out of a stratified rest state; see
 [`CLOSURE_MATRIX.md`](CLOSURE_MATRIX.md)). The ALE remap and the thermodynamic kernels
-are gated on the thermo cadence (`&ocean_vmix_nml dt_therm_ratio`, MOM6
+are gated on the thermo cadence (`[ocean.vmix] dt_therm_ratio`, MOM6
 `DT_THERM`); horizontal tracer advection has its own window
 (`dt_tracer_advect_ratio`).
 
@@ -148,7 +148,7 @@ so the heat applied over the interval is `dt` times the sum of the per-step flux
 coupled-model treatment). The shortwave that penetrates (`sw_net`, with
 `sw_source = "q_sw"`) is formed from the same mean. Wind stress is per step, and so are the
 sea-ice and ice-shelf components, which are already interval quantities. The samples are those of
-the `N` dynamic steps that precede the assembly, and the assembly is spent by the NEXT thermo step: with `diabatic_first = .true.` that step leads the following interval, so the mean lags the interval it is spent over by a full `N*dt` (energy is conserved, the diurnal phase is shifted); with `diabatic_first = .false.` (the OM3 order) the lag is about one step and the first interval has `N-1` samples. The sums and the
+the `N` dynamic steps that precede the assembly, and the assembly is spent by the NEXT thermo step: with `diabatic_first = true` that step leads the following interval, so the mean lags the interval it is spent over by a full `N*dt` (energy is conserved, the diurnal phase is shifted); with `diabatic_first = false` (the OM3 order) the lag is about one step and the first interval has `N-1` samples. The sums and the
 count are restart state, so a checkpoint inside an interval resumes bit-identically. At
 `dt_therm_ratio = 1` none of this runs.
 
@@ -169,7 +169,7 @@ ALE remap a drop-in rather than a rewrite.
 
 ## 4. Boundary Conditions
 
-Per-edge tags via `&ocean_bc_nml` (`west` / `east` / `south` / `north`),
+Per-edge tags via `[ocean.bc]` (`west` / `east` / `south` / `north`),
 parsed onto the `OBC_*` taxonomy in `rdb_ocean_boundary_types`:
 
 | Type | Code | Description |
@@ -189,22 +189,22 @@ parsed onto the `OBC_*` taxonomy in `rdb_ocean_boundary_types`:
 Open edges carry a per-layer zero-gradient baroclinic anomaly on top of
 the barotropic Flather mean, plus per-edge tracer inflow values and
 asymmetric nudging. Boundary tides pick up the nodal correction when
-`&ocean_bc_nml obc_tidal_nodal` is set — it shares the `&ocean_tides_nml`
+`[ocean.bc] obc_tidal_nodal` is set — it shares the `[ocean.tides]`
 reference epoch with the interior body tide, so the two stay
 phase-consistent.
 
 The sponge has two implementations: the legacy `bc`-band relaxation
-(default) and the real per-cell sponge (`&ocean_sponge_nml enable`, with
+(default) and the real per-cell sponge (`[ocean.sponge] enable`, with
 per-edge `*_width` / `*_strength` overrides) which relaxes momentum
 toward `u_ref`/`v_ref` and every registered tracer toward `ref_tracer`,
 mirroring S/T into the sponge budget accumulators.
 
-Two reference states ship, selected by `&ocean_sponge_nml target_source`:
+Two reference states ship, selected by `[ocean.sponge] target_source`:
 
 | `target_source` | Reference |
 |---|---|
-| `"ic"` (default) | Snapshot of the seeded initial condition, taken once, before any restart read. A "nudge toward a parent climatology" is then reachable through `&ocean_zinit_nml` with no new reader. |
-| `"linear_z"` | ANALYTIC affine geopotential profile — `T(z) = lin_t_ref + lin_dt_dz·z`, `S(z) = lin_s_ref + lin_ds_dz·z`, **z positive UP**, the `&ocean_zinit_nml source="linear"` convention — **re-evaluated on the live layer geometry once per outer step**. Non-S/T tracers and `u_ref`/`v_ref` still come from the IC snapshot. |
+| `"ic"` (default) | Snapshot of the seeded initial condition, taken once, before any restart read. A "nudge toward a parent climatology" is then reachable through `[ocean.zinit]` with no new reader. |
+| `"linear_z"` | ANALYTIC affine geopotential profile — `T(z) = lin_t_ref + lin_dt_dz·z`, `S(z) = lin_s_ref + lin_ds_dz·z`, **z positive UP**, the `[ocean.zinit] source="linear"` convention — **re-evaluated on the live layer geometry once per outer step**. Non-S/T tracers and `u_ref`/`v_ref` still come from the IC snapshot. |
 | `"file"` | Recognised, aborts at `validate_config` (needs the static-2-D reader). |
 
 `"linear_z"` is what makes a restoring profile that DIFFERS from the
@@ -218,7 +218,7 @@ drift changes the experiment. The refresh walks the sponge cells only
 (`Idamp = 0` is the mask, for the refresh as for the relaxation), and
 measures depth from `z_draft` under a cavity.
 
-`&ocean_sponge_nml ramp` selects the band shape from the tagged wall
+`[ocean.sponge] ramp` selects the band shape from the tagged wall
 (`d = 0`) inward: `"cosine"` (default, `0.5·(1+cos(π·d/band))`, the
 legacy shape, bit-identical) or `"linear"`, `(band − d − 0.5)/band`.
 The linear form is the cell-centre evaluation of ISOMIP+ Eq. (20),
@@ -235,7 +235,7 @@ wired in the driver; only the constant backend ships), and live nesting.
 
 The layered C-grid state (`multilayer_state_t`) carries `h_layer`,
 `hu/hv_layer`, the tracer registry, `rho_layer`, and the budget
-accumulators. `&nonhydrostatic_nml nz_layers` sets the layer count;
+accumulators. `[nonhydrostatic] nz_layers` sets the layer count;
 `use_multilayer` enables the coupled vertical stack.
 
 ### Vertical layer convention (load-bearing)
@@ -248,25 +248,25 @@ assume it.
 
 ### Vertical coordinates
 
-Dispatched via `vcoord_type` (namelist) → `parse_vcoord_type` →
+Dispatched via `vcoord_type` (input) → `parse_vcoord_type` →
 `VCOORD_*` enum. Every family routes through the same ALE remap:
 
 | Tag | Coord | Status | Notes |
 |---|---|---|---|
 | `sigma` | Pure sigma | Production | Terrain-following; layers rescaled by `dsig(k) * H`. Default. |
-| `zsigma` | Smoothstep blend sigma→z | Production | Conservative remap. The blend depth/width are internal defaults on `ocean_vcoord_t`, not namelist knobs. |
-| `zstar` | MOM6 z* | Production (new 2026-10) | MOM6 `REGRIDDING_COORDINATE_MODE = "Z*"` (`build_zstar_column`): the `z_fixed` nominal profile (`max_depth/nz`, or `z_fixed_profile = "list"`/`"tanh"`) dilated per column by `(H + η)/H`, over `z_fixed`'s partial bed cell and `zstar_h_min` bed fillers. Liveness is decided at `η = 0`, so the pattern is exactly static for `η` of either sign and the `η = 0` target is `z_fixed`'s bit for bit; `zfixed_closed_faces` applies unchanged. Refused under a cavity and with wet/dry. Until 2026-10 this tag ran the sigma branch; every namelist that selects it changed answers. Alias `zstar_lite`. |
+| `zsigma` | Smoothstep blend sigma→z | Production | Conservative remap. The blend depth/width are internal defaults on `ocean_vcoord_t`, not input knobs. |
+| `zstar` | MOM6 z* | Production (new 2026-10) | MOM6 `REGRIDDING_COORDINATE_MODE = "Z*"` (`build_zstar_column`): the `z_fixed` nominal profile (`max_depth/nz`, or `z_fixed_profile = "list"`/`"tanh"`) dilated per column by `(H + η)/H`, over `z_fixed`'s partial bed cell and `zstar_h_min` bed fillers. Liveness is decided at `η = 0`, so the pattern is exactly static for `η` of either sign and the `η = 0` target is `z_fixed`'s bit for bit; `zfixed_closed_faces` applies unchanged. Refused under a cavity and with wet/dry. Until 2026-10 this tag ran the sigma branch; every input that selects it changed answers. Alias `zstar_lite`. |
 | `zstar_sigma` | Sigma + z*-lite hybrid | Production | Sigma shallow, a fractional rescale of the global reference table deep (NOT the `zstar` coordinate). Conserves by construction. |
 | `zstar_full` | Full per-column z* | Production w/ caveat | Per-column `z_ref(0:nz)` from local bathymetry; surface layer anchored at `zstar_h_surf_target` regardless of H. Bed-side layers can vanish (`zstar_h_min`). Operators that divide by `h_layer` gate on `H_VANISHED = 1.5e-4 m`, and `zstar_h_min` is deliberately kept at or below that marker so the below-bed filler layers stay inert — `validate_config` warns on a larger value (see `rdb_vcoord :: vcoord_h_min_role`). **Caveat**: geometry with frequent wet/dry cycling still leaks salt across the cycle; prefer sigma there. **Slated for retirement** in favour of `zstar` once that is proven on the 1-degree Southern Ocean and the global case. |
 | `eulerian_z` / `z` | Fixed z levels | Production | Static interface depths; the classic Eulerian z-coordinate. |
 | `z_fixed` / `gprime` | Fixed interface stack | Production | Prescribed interface depths — the reduced-gravity setups. |
-| `lagrangian` / `isopycnal` | No remap | Production | The layer *is* the coordinate; pair with `&ocean_isopycnal_nml` grounding controls. |
+| `lagrangian` / `isopycnal` | No remap | Production | The layer *is* the coordinate; pair with `[ocean.isopycnal]` grounding controls. |
 | `rho` | Isopycnal | Validation-grade | Places layer interfaces on prescribed potential-density surfaces `rho_target(0:nz)` (lightest→surface, densest→bed), referenced to `rho_ref_pressure` (Pa, default 2e7). PPM-reconstructs the column density profile (from T/S via the device EOS) and inverts (bracket sweep + fixed-8-iter Newton) for the depth where ρ equals each interior target; pre-compaction strips vanished source layers, MOM6 min-thickness inflation floors collapsed layers at `max(zstar_h_min, H_VANISHED)`. Conserves T·h / S·h to round-off. **Caveat**: weakly-stratified columns collapse — RHO alone is validation-grade; the `hycom` hybrid is the production follow-on. |
 | `hycom` | Hybrid z*/isopycnal | Production isopycnal coord | The `rho` inversion + a z* nominal floor (Bleck 2002 / MOM6 HYCOM1): after the density-space inversion, a top-down sweep enforces `z(k) ≥ Σ dz_k·(H+η)/H`, clamped to the bed, where `dz_k` is the z* coordinate resolution IN METRES — the `z_fixed_profile` table (`max_depth/nz_layers` under `"uniform"`, `z_fixed_dz` / the tanh ramp otherwise), as MOM6 HYCOM1 takes its `coordinateResolution` from `ALE_COORDINATE_CONFIG`. So the near-surface band has a fixed depth range in every column (a shallow column's deeper interfaces clamp onto its bed) while the deep interior tracks isopycnals. Until 2026-10-02 the floor was `Σ dsig·(H+η)` with `dsig ≡ 1/nz` — a column fraction, i.e. a SIGMA floor that set 95 % of the 1° Southern Ocean's interfaces. Reuses `rho_target` (`rho_target_profile`)/`rho_ref_pressure`; adds a bottom-up density monotonize before the inversion. Conserves to round-off; the z* floor is a *surface-side minimum* (deep interior may still collapse — by design). `only_improves` + interface-depth caps deferred. |
 
-`&vcoord_nml thickness_config` selects the **initial** layer-thickness
+`[vcoord] thickness_config` selects the **initial** layer-thickness
 profile, which is distinct from the running coordinate — see the note
-under `&vcoord_nml` in §7.
+under `[vcoord]` in §7.
 
 ### Tracer registry
 
@@ -286,7 +286,7 @@ surface-flux coupling and a diag `fill_<name>` need hand-wiring. Budget
 attribution is `tracer_t%budget_id` (`NONE`/`HEAT`/`SALT`), never an
 index comparison.
 
-Shipped packages: **ideal age** (`&ocean_tracers_nml enable_ideal_age`)
+Shipped packages: **ideal age** (`[ocean.tracers] enable_ideal_age`)
 and **pseudo-salt** (`enable_pseudo_salt`, Shao 2016 verification tracer
 — seeded to S, given S's surface salt flux and non-local mirror; the
 deviation measures the passive-vs-active transport-path error). Both
@@ -295,7 +295,7 @@ default off ⇒ bit-identical. Recipe:
 
 ### Equation of state
 
-`&ocean_eos_nml` selects the density kernel. The Wright (1997) nonlinear
+`[ocean.eos]` selects the density kernel. The Wright (1997) nonlinear
 rational fit is the production path; a Roquet et al. (2015) TEOS-10
 polynomial and a linear form are available for validation. The linear
 form is
@@ -334,7 +334,7 @@ expansion coefficient.
 
 
 The whole reference state — all five of `α_T`, `β_S`, `T_ref`, `S_ref`,
-`ρ_0` — is set from **`&ocean_ic_nml`**:
+`ρ_0` — is set from **`[ocean.ic]`**:
 
 | Knob | Default | Units |
 |---|---|---|
@@ -357,12 +357,12 @@ The whole reference state — all five of `α_T`, `β_S`, `T_ref`, `S_ref`,
 > ~1000× — a plausible but far too weakly stratified run. Locked by
 > `tests/test_ocean_linear_eos_knobs.F90`.
 
-#### The α/β a boundary-layer closure uses (`&ocean_vmix_nml buoyancy_coeffs`)
+#### The α/β a boundary-layer closure uses (`[ocean.vmix] buoyancy_coeffs`)
 
 The five knobs above are the LINEAR EOS's reference state. Under
 `eos="wright"` or `"roquet_spv"` the density is not that expression, and
 `alpha_T`/`beta_S` are not that EOS's coefficients — they are whatever
-the namelist happens to say. Seawater's real thermal expansion is
+the input happens to say. Seawater's real thermal expansion is
 strongly state-dependent: it collapses toward zero at the freezing point
 and grows with pressure (thermobaricity). Measured from the shipped
 Wright (1997) branch at `S = 34.5`:
@@ -385,9 +385,9 @@ convention as the knobs above — differentiated in closed form per variant
 `pure elemental` and `!$acc routine seq`, so they work on a host array
 sweep and inside a `do concurrent` kernel alike.
 
-| `&ocean_vmix_nml buoyancy_coeffs` | Meaning |
+| `[ocean.vmix] buoyancy_coeffs` | Meaning |
 |---|---|
-| `"constant"` (**default**) | The scalar `&ocean_ic_nml alpha_T`/`beta_S`, whatever the active EOS. Exact under `eos="linear"`; historical behaviour ⇒ bit-identical. |
+| `"constant"` (**default**) | The scalar `[ocean.ic] alpha_T`/`beta_S`, whatever the active EOS. Exact under `eos="linear"`; historical behaviour ⇒ bit-identical. |
 | `"eos"` | `eos_buoyancy_coeffs` from the active EOS, evaluated per column for the KPP `B_0` and per interface for the double-diffusion density ratio. |
 
 Under `eos="linear"` the two settings are **byte-identical** — that
@@ -397,7 +397,7 @@ through `−ρ²·dSV/dX` — so the knob only bites under a nonlinear EOS.
 Which pressure each consumer evaluates at:
 
 - **KPP `B_0`** — the top of the column: `ms%p_top` under
-  `&ocean_psurf_nml in_eos` (the ice/atmospheric load), else `eos%p_ref`
+  `[ocean.psurf] in_eos` (the ice/atmospheric load), else `eos%p_ref`
   (the pressure `ms%rho_layer` is already referenced to, so α stays
   consistent with the density field the rest of the closure differences).
   A surface flux has no depth of its own.
@@ -430,11 +430,11 @@ shipped cavity cases are unaffected. Locked by
 > in the same units; correcting the normalisation moves every KPP answer
 > and is a separate change.
 
-> **The `&tracer_nml` spellings are RETIRED.** `&tracer_nml alpha_T`,
+> **The `[tracer]` spellings are RETIRED.** `[tracer] alpha_T`,
 > `beta_S`, `T_ref` and `S_ref` only ever reached
 > `tracer_t%eos_coeff`/`eos_ref`, which no ocean kernel reads — setting
 > them was silent. Moving any of them off its historical default is now
-> a **fail-loud `validate_config` error** naming the `&ocean_ic_nml`
+> a **fail-loud `validate_config` error** naming the `[ocean.ic]`
 > replacement. Delete the key; it never did anything.
 
 The shipped defaults are deliberately small (they suppress baroclinic
@@ -443,10 +443,10 @@ density gradients); density-driven cases must set `alpha_T`/`beta_S`
 explicitly. Setting `α_T = β_S = 0` decouples the tracers from the
 dynamics entirely — though the adiabatic reduced-gravity setup used by
 the MOM6-reference double gyre gets there instead via
-`&ocean_thermo_nml enable_thermodynamics = .false.` plus the gprime PGF,
+`[ocean.thermo] enable_thermodynamics = false` plus the gprime PGF,
 which never calls the EOS at all.
 
-> **`&ocean_ic_nml rho_0` (default `1035.0` kg/m³) is the single ρ₀ of
+> **`[ocean.ic] rho_0` (default `1035.0` kg/m³) is the single ρ₀ of
 > record.** It is the linear-EOS reference density AND the Boussinesq divisor
 > the pressure gradient uses (`du/dt = −(1/ρ₀)∂p/∂x`), plus the FV-MOM6
 > anomaly baseline — `configure_ocean_pgf` copies `eos%rho0` into both PGF
@@ -466,14 +466,14 @@ which never calls the EOS at all.
 > hard-coded value; a run that sets `rho_0 /= 1035` is answer-changing by
 > `1035/ρ₀` on each of them, which is the bug being fixed, not a regression.
 >
-> Note `&nonhydrostatic_nml rho_0` is a DIFFERENT, dead knob (nothing reads
+> Note `[nonhydrostatic] rho_0` is a DIFFERENT, dead knob (nothing reads
 > it). Still NOT unified, deliberately: the `RHO_WATER` constant behind the
 > console mass/heat/salt diagnostics and the OBC `mass_out` accounting,
-> `&ocean_ice_nml rho_ocean` (the EVP ice-ocean drag reference), and the
+> `[ocean.ice] rho_ocean` (the EVP ice-ocean drag reference), and the
 > `ICE_RHO_*` constants. Those are separate physical constants with their own
 > call sites, not copies of ρ₀.
 
-#### Freezing point (liquidus) — `&ocean_eos_nml tfreeze_set`
+#### Freezing point (liquidus) — `[ocean.eos] tfreeze_set`
 
 `eos_freezing_point(eos, S, p)` evaluates the LINEAR liquidus
 
@@ -524,45 +524,45 @@ closure is active in which regime, and its tunable knobs, is tabulated in
 `tools/check_closure_matrix.py`). In brief:
 
 - **Vertical mixing** — PP81 interior + KPP boundary overlay (default
-  on), EPBL (`&ocean_epbl_nml`, mutually exclusive with KPP; `rivermix_depth` adds
+  on), EPBL (`[ocean.epbl]`, mutually exclusive with KPP; `rivermix_depth` adds
   the PE of mixing runoff over that depth to its surface energy, Reichl & Hallberg 2018),
-  kappa-shear (JHL08, `&ocean_kappa_shear_nml`), tidal mixing
-  (`&ocean_tidal_mixing_nml`), convective adjustment (`&ocean_conv_nml`),
-  double diffusion (`&ocean_ddiff_nml`), and two mutually exclusive
-  background schemes (`&ocean_vmix_nml bkgnd_profile` Bryan-Lewis **xor**
+  kappa-shear (JHL08, `[ocean.kappa_shear]`), tidal mixing
+  (`[ocean.tidal_mixing]`), convective adjustment (`[ocean.conv]`),
+  double diffusion (`[ocean.ddiff]`), and two mutually exclusive
+  background schemes (`[ocean.vmix] bkgnd_profile` Bryan-Lewis **xor**
   `bkgnd_henyey`). Every closure contributes into `kv`/`kt`, with
   `vmix_assemble` the single floors/ceilings/smoothing gate; `ks` is
   derived from `kt` by `vmix_split_kd_heat_salt` and equals it unless
   double diffusion is on.
 - **Lateral closures** — Leith, Smagorinsky KH+AH, Leith-biharmonic,
   constant floors + per-cell CFL clamps, resolution-scaled viscosity,
-  anisotropic + live velocity-scale (`&ocean_hvisc_nml`), MEKE
-  backscatter (`&ocean_meke_nml`), GM (`&ocean_gm_nml`), Redi
-  (`&ocean_redi_nml`), Fox-Kemper MLE (`&ocean_foxkemper_nml`), and the
-  along-coordinate tracer Laplacian (`&ocean_hdiff_nml kappa_h`). The
+  anisotropic + live velocity-scale (`[ocean.hvisc]`), MEKE
+  backscatter (`[ocean.meke]`), GM (`[ocean.gm]`), Redi
+  (`[ocean.redi]`), Fox-Kemper MLE (`[ocean.foxkemper]`), and the
+  along-coordinate tracer Laplacian (`[ocean.hdiff] kappa_h`). The
   dispatcher is fail-loud; a biharmonic backstop with a NON-ZERO
   dissipation coefficient is mandatory under backscatter.
-- **Bottom drag** (`&ocean_bdrag_nml`) — linear (Rayleigh) or quadratic
+- **Bottom drag** (`[ocean.bdrag]`) — linear (Rayleigh) or quadratic
   (log-layer, default), each with an HBBL-distributed mode.
-- **Implicit stress/drag fold** (`&ocean_vdiff_nml`) — folds wind stress
+- **Implicit stress/drag fold** (`[ocean.vdiff]`) — folds wind stress
   and bottom drag into the backward-Euler vertical-friction solve,
   killing thin-layer CFL blow-up.
 - **Surface forcing** — wind stress (2D `tau_x`/`tau_y`, with the MOM6
   `DIRECT_STRESS` distribution option), heat/salt flux and the
-  MOM6-shaped component set (`&ocean_forcing_nml enable_components`), its
-  virtual fresh-water salt flux (`freshwater = "virtual"`, `-S_surf*(P-E+runoff)`) or its real-mass form (`freshwater = "mass"`: `dh = (P-E+runoff)·dt/ρ₀` into / out of the first live layer, evaporation passed down the column at `fw_evap_cfl_limit`, Griffies et al. 2001; Campin et al. 2008; with the CICE-port sea ice the ice's water enters as `seaice_melt` and its weight loads `p_surf` via `&ocean_psurf_nml ice_load` (the cold start lowered by the displaced water, `ice_load_balance_ic`; the atmosphere's sea-level pressure joins only with `atm_load`), Adcroft et al. 2019),
-  shortwave penetration (`&ocean_thermo_nml sw_pen_frac`), surface
-  buoyancy restoring (`&ocean_restore_nml`), atmospheric pressure loading
-  (`&ocean_psurf_nml`), geothermal bottom heat
-  (`&ocean_geothermal_nml`), and time-varying NetCDF forcing
-  (`&ocean_dataovr_nml`, off the shared `rdb_ocean_data_input` reader; wind stress, heat, salt, `evap`, `lprec`, and the runoff mass fluxes `lrunoff`/`frunoff`, kg m-2 s-1 on wet cells of the model grid, with `frunoff` also charging its latent heat `q_fus_rof = -L_f*frunoff`; `tools/om_runoff_to_model.f90` builds such a file from a lon-lat product: conservative remap, land values moved to the nearest wet coastal cell, total preserved; Tsujino et al. 2018).
+  MOM6-shaped component set (`[ocean.forcing] enable_components`), its
+  virtual fresh-water salt flux (`freshwater = "virtual"`, `-S_surf*(P-E+runoff)`) or its real-mass form (`freshwater = "mass"`: `dh = (P-E+runoff)·dt/ρ₀` into / out of the first live layer, evaporation passed down the column at `fw_evap_cfl_limit`, Griffies et al. 2001; Campin et al. 2008; with the CICE-port sea ice the ice's water enters as `seaice_melt` and its weight loads `p_surf` via `[ocean.psurf] ice_load` (the cold start lowered by the displaced water, `ice_load_balance_ic`; the atmosphere's sea-level pressure joins only with `atm_load`), Adcroft et al. 2019),
+  shortwave penetration (`[ocean.thermo] sw_pen_frac`), surface
+  buoyancy restoring (`[ocean.restore]`), atmospheric pressure loading
+  (`[ocean.psurf]`), geothermal bottom heat
+  (`[ocean.geothermal]`), and time-varying NetCDF forcing
+  (`[ocean.dataovr]`, off the shared `rdb_ocean_data_input` reader; wind stress, heat, salt, `evap`, `lprec`, and the runoff mass fluxes `lrunoff`/`frunoff`, kg m-2 s-1 on wet cells of the model grid, with `frunoff` also charging its latent heat `q_fus_rof = -L_f*frunoff`; `tools/om_runoff_to_model.f90` builds such a file from a lon-lat product: conservative remap, land values moved to the nearest wet coastal cell, total preserved; Tsujino et al. 2018).
 - **Tides** — equilibrium body forcing + scalar SAL
-  (`&ocean_tides_nml`), the boundary-tide nodal correction, and
-  barotropic linear wave drag (`&ocean_bt_nml wave_drag`).
-- **Porous barriers** (`&ocean_porous_nml`, Adcroft 2013) — subgrid
+  (`[ocean.tides]`), the boundary-tide nodal correction, and
+  barotropic linear wave drag (`[ocean.bt] wave_drag`).
+- **Porous barriers** (`[ocean.porous]`, Adcroft 2013) — subgrid
   sill/strait blocking that narrows the continuity and barotropic face
   widths.
-- **Static ice-shelf cavity geometry + load** (`&ocean_cavity_dyn_nml`,
+- **Static ice-shelf cavity geometry + load** (`[ocean.cavity_dyn]`,
   default off ⇒ bit-identical) — a prescribed, time-constant ice draft
   `z_draft(i,j)` (m, positive down) absorbed into the barotropic DATUM,
   `bt_H_ref = b − z_draft`, so `bt_eta` is the deviation from the loaded
@@ -573,16 +573,16 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   the ice is LAND through the ordinary wet-mask seed, never a thin film.
   The isostatic load `p_ice_ref = (ρ_ref·g)·z_draft` is assembled into
   `multilayer_state_t%p_top = p_ice_ref + sf%p_surf` and consumed by the
-  FV-MOM6 `pa(nz+1)` top boundary condition (`&ocean_pgf_nml
+  FV-MOM6 `pa(nz+1)` top boundary condition (`[ocean.pgf]
   p_top_in_bc`, REQUIRED for a draft that varies) and the in-situ EOS
-  (`&ocean_psurf_nml in_eos` — ported consumers: the FV-Wright Picard
+  (`[ocean.psurf] in_eos` — ported consumers: the FV-Wright Picard
   column sweep and the EPBL column stack, the latter seeding both its
   in-situ EOS argument and its PE weight at `p_top`; the remaining
   in-situ builders are still refused fail-loud); it is never added to
   `sf%p_surf`, so the
   `eta_forcing` seam carries the load ANOMALY only and the datum carries
   the rest exactly once.  Single-rank, `fv_mom6` + sigma / z_fixed only.
-- **Ice-shelf basal melt** (`&ocean_cavity_melt_nml`, default off ⇒
+- **Ice-shelf basal melt** (`[ocean.cavity_melt]`, default off ⇒
   bit-identical) — the Holland & Jenkins (1999) three-equation
   interface on every ice-covered column, once per thermo step,
   delivered as the two OWNED surface-flux components `heat_cavity`
@@ -600,14 +600,14 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   liquidus is evaluated at `ms%p_top`, the assembled
   `p_ice_ref + sf%p_surf` above — the melt kernel is that field's
   THIRD consumer, after the FV-MOM6 top BC and the in-situ EOS.
-  Requires `&ocean_cavity_dyn_nml`, `tfreeze_set="isomip"` and the
+  Requires `[ocean.cavity_dyn]`, `tfreeze_set="isomip"` and the
   surface-flux component set. KPP/EPBL still do not see the shelf
   `u*` — they see `stress_mag`, which the cover mask below drives to
   exactly zero under a shelf; the ice-base MOMENTUM sink is the
-  separate `&ocean_tdrag_nml`. See
+  separate `[ocean.tdrag]`. See
   [`CAPABILITIES_AND_LIMITATIONS.md`](CAPABILITIES_AND_LIMITATIONS.md).
 - **Ice-cover mask on the atmospheric forcing** (follows
-  `&ocean_cavity_dyn_nml enable`; no knob of its own, cavity off ⇒
+  `[ocean.cavity_dyn] enable`; no knob of its own, cavity off ⇒
   byte-identical) — under `cover_frac = 1` there is no atmosphere, so
   wind stress, the surface heat/salt bands, the uniform scalar
   `q_heat`/`q_salt`, shortwave penetration and surface restoring are
@@ -617,24 +617,24 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   top-drag path and the MLE front sampler — all of which read `tau`
   raw — are covered too) with `stress_mag` refreshed in the same call
   ⇒ KPP/EPBL `u*` is exactly zero under cover. The FACE rule is the
-  same OR rule `&ocean_tdrag_nml` uses: a face is closed when EITHER
+  same OR rule `[ocean.tdrag]` uses: a face is closed when EITHER
   abutting cell is covered, `1 − max(cover(i−1,j), cover(i,j))`, so the
   calving-front face takes the drag and no wind. The heat/salt bands
   are masked in `ocean_surface_flux_assemble` — not at apply time — so
   that the `Q_heat`/`Q_salt` the boundary-layer schemes read for `B_0`
   are the masked values. Cover is binary (no partial calving-front
-  cells) and `&ocean_dataovr_nml` file forcing is refused alongside a
+  cells) and `[ocean.dataovr]` file forcing is refused alongside a
   cavity (it rewrites `tau`/`Q_heat` per bracket with no cover).
-- **Ice-shelf top drag** (`&ocean_tdrag_nml`, default off ⇒
+- **Ice-shelf top drag** (`[ocean.tdrag]`, default off ⇒
   bit-identical) — a quadratic (ISOMIP+ `C_d = 2.5e-3`) or linear
   (`form="linear"`, rate `r`) momentum sink at `k = nz` on ice-covered
-  faces: the mirror of `&ocean_bdrag_nml` about the middle of the
+  faces: the mirror of `[ocean.bdrag]` about the middle of the
   column. `htbl > 0` distributes the stress over the top boundary
   layer exactly as `hbbl` does at the bed. Two implicit forms, and
-  they differ: `implicit = .true.` makes the drag KERNEL
+  they differ: `implicit = true` makes the drag KERNEL
   backward-Euler (`u/(1 + dt·λ)`), unconditionally stable on the thin
   top layers a sigma coordinate leaves near a grounding line and
-  compatible with `htbl`; `&ocean_vdiff_nml implicit_top_drag` instead
+  compatible with `htbl`; `[ocean.vdiff] implicit_top_drag` instead
   folds `dt·λ_top` into the vertical-friction tridiagonal's `k = nz`
   DIAGONAL (layer-`nz` only), where it also scales the wind-stress RHS
   by `1 − cover_face` — belt and braces now that the cover mask zeroes
@@ -644,9 +644,9 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   (`cover_u = max(cover(i−1,j), cover(i,j))`), so the calving-front
   face feels the drag — the conservative choice, documented in
   `rdb_ocean_top_drag`, and the SAME rule the wind mask uses.
-  Requires `&ocean_cavity_dyn_nml enable`. With
-  `&ocean_cavity_melt_nml` on there is **one** ice-base drag
-  coefficient: the melt `u*` takes `&ocean_tdrag_nml cd`, and a
+  Requires `[ocean.cavity_dyn] enable`. With
+  `[ocean.cavity_melt]` on there is **one** ice-base drag
+  coefficient: the melt `u*` takes `[ocean.tdrag] cd`, and a
   disagreeing `cdrag_top` is refused at configure. The tendency
   reaches the barotropic mode through `F_slow`, like the bottom
   drag's. The slot publishes `stress_top` (cell-centred `|τ_top|`,
@@ -657,16 +657,16 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   disjoint support (the cover mask drives `stress_mag` to exactly
   zero under ice; `stress_top` is multiplied by `cover_frac`), so
   the sum is the total upper-boundary momentum flux, not a double
-  count. With `&ocean_cavity_melt_nml` on but this group OFF,
+  count. With `[ocean.cavity_melt]` on but this group OFF,
   `stress_shelf` is filled instead from the melt slot's own `u_*`
   as `ρ₀·u_*²` (the same `C_d`), at thermo cadence — that fallback
   lags the boundary-layer schemes by one outer step.  Without a
   cavity `stress_shelf` is the zero array, so every existing
   configuration is bit-identical.
 - **Interior land masking** (static free-slip walls via metric-zeroing)
-  and **dynamic wet/dry** (`&ocean_wetdry_nml`; sigma only,
+  and **dynamic wet/dry** (`[ocean.wetdry]`; sigma only,
   single-rank, positive-definite outflow limiter).
-- **Sea ice** (`&ocean_ice_nml`, default off) — SIS2 port: Winton column
+- **Sea ice** (`[ocean.ice]`, default off) — SIS2 port: Winton column
   thermodynamics, multi-category ITD, category transport, C-grid EVP
   dynamics, snowfall, Archimedes snow-ice flooding. Single-rank,
   wall/periodic edges, or a tripolar north fold (the SIS2 EVP and the CICE
@@ -680,7 +680,7 @@ test.
 
 ### Windowed tracer advection + the face-reconstruction ladder
 
-`&ocean_vmix_nml dt_tracer_advect_ratio > 1` decouples the horizontal
+`[ocean.vmix] dt_tracer_advect_ratio > 1` decouples the horizontal
 tracer drain from the per-step dynamics (MOM6 `DT_TRACER_ADVECT`); the
 drain runs a CW-PPM flux-form advection over the accumulated mass flux.
 Multi-rank (halo-exchanged drain fields, global pass count; the tripolar
@@ -695,13 +695,13 @@ the interval (steps `dt_therm_ratio, 2*dt_therm_ratio, ...`) right after the
 drain that closes the last window.  Without windowed advection the remap stays
 on the thermo step (unchanged).
 
-`&ocean_vmix_nml diabatic_first` (default `.true.`, unchanged behaviour)
+`[ocean.vmix] diabatic_first` (default `.true.`, unchanged behaviour)
 orders the interval at `dt_therm_ratio > 1`; `.false.` is ACCESS-OM3
 (`DIABATIC_FIRST = False`): the thermo work and the ALE remap close the
 interval (steps `N, 2N, ...`) while the GM coefficient chain keeps leading it.
 Lateral tracer diffusion (hdiff + Redi, full tracer dt) runs at the interval end, after the drain. Per-item placement table: `docs/howto/tracer_advect_cadence.md`.
 
-`&ocean_vmix_nml tracer_recon` selects the FACE-VALUE reconstruction used
+`[ocean.vmix] tracer_recon` selects the FACE-VALUE reconstruction used
 by that drain — the mass-flux split, the per-layer conservation shell and
 the downstream clamp are unchanged, only the upwind face value swaps:
 
@@ -733,7 +733,7 @@ information). Guaranteed in-bounds and conservative; tested in
 `test_ocean_tracer_weno`.
 
 **Per-scheme `nghost` is fail-loud at configure** (weno5→3, weno7→4,
-weno9→5): if `&grid_nml nghost` is smaller, `validate_config` aborts
+weno9→5): if `[grid] nghost` is smaller, `validate_config` aborts
 naming both numbers. The default `nghost = 3` already satisfies
 `ppm`/`weno5`; only `weno7`/`weno9` need an explicit extra column.
 
@@ -753,10 +753,10 @@ downstream conservative tracer clamp is the safety net. The WENO rungs
 overshoot two orders less and rely on the same clamp; no new limiter was
 added.
 
-> A separate `&tracer_nml tracer_recon` key survives from the coastal
+> A separate `[tracer] tracer_recon` key survives from the coastal
 > era. Its `weno*` rungs are rejected fail-loud on `sim_type='ocean'`, so
 > on this tree that key is effectively pinned to `ppm`. Use the
-> `&ocean_vmix_nml` knob above.
+> `[ocean.vmix]` knob above.
 
 ## 6. Validation Test Suite
 
@@ -798,11 +798,71 @@ applicable), and diagnostic interpretation of failure modes.
 
 ## 7. Runtime Configuration
 
-All runtime parameters via Fortran namelist. Each namelist block is
-optional — missing blocks fall back to defaults.
+All runtime parameters come from one TOML input file. Each table is
+optional — a missing table, or a missing key, falls back to its default.
 
-The tables below cover the **core** groups. The ~46 `&ocean_*_nml`
-sub-namelists (one per physics concern — `coriolis`, `pgf`, `bt`,
+### Input file format
+
+A run is configured by one TOML file: `./rdb case.toml`. The file name must end in
+`.toml`; any other name is refused (a Fortran-namelist file gets a message saying
+that namelist input is no longer read). Every shipped input is under
+`validation_examples/`.
+
+**Tables.** Each parameter group is one table. A group whose name starts with
+`ocean_` nests under `[ocean]`; every other group is a top-level table. The
+group names, and their knobs and defaults, are listed in
+[`docs/generated_nml_knobs.md`](generated_nml_knobs.md) under their table names.
+
+| Group | Table |
+|---|---|
+| `ocean_bt` | `[ocean.bt]` |
+| `ocean_ice_thermo` | `[ocean.ice_thermo]` |
+| `grid`, `time`, `vcoord`, `output`, ... | `[grid]`, `[time]`, `[vcoord]`, `[output]`, ... |
+
+```toml
+[time]
+t_end = 10.0              # in `time_unit`
+time_unit = "day"
+
+[ocean.bt]
+split_scheme = "pred_corr"
+auto_n_inner = true
+
+[ocean.ic]
+layer_rho_init = [1036.0, 1035.0]
+```
+
+**Values.**
+
+- Key and table names are exact-case; a misspelling is refused and the nearest
+  registered name is suggested.
+- Reals accept a float or an integer (`nu_h = 10000`); `inf` and `nan` are
+  accepted only for a key that has no range. Underscores (`1_000.5`) are allowed.
+  An integer key takes an integer: `nx = 24.0` is refused.
+- Booleans are `true` / `false`; strings and enum values are quoted (single or
+  double); an enum value is matched case-insensitively and stored in its
+  registered spelling.
+- Real-array keys take an array (`[1036.0, 1035.0]`); a lone number fills element
+  1 and leaves the others at their defaults.
+- A table, or a key within it, may appear only once. Dotted keys and inline tables
+  are accepted and mean what the `[table]` form means.
+
+**Refused.** Unknown tables and keys, a value of the wrong type, a value outside
+a key's range or allowed set, a string longer than its target, a control
+character in a string, hexadecimal/octal/binary integers, dates and times, and
+nested or empty arrays. `rdb --validate-only case.toml` runs every such check
+and every `validate_config` rule without stepping the model.
+
+**Errors** name the file and line (`case.toml:12: key 'bebt' in [ocean.bt] ...`)
+and are reported together, not one per run. A TOML syntax error is reported as
+such and stops further checking of that file. A `.toml` file that does not exist
+is not an error for the library entry points (the defaults stand); the `rdb`
+driver refuses it.
+
+The model's input used to be Fortran namelists; that reader has been removed.
+
+The tables below cover the **core** groups. The ~46 `[ocean.*]`
+sub-inputs (one per physics concern — `coriolis`, `pgf`, `bt`,
 `bdrag`, `hvisc`, `hdiff`, `vmix`, `vdiff`, `thermo`, `continuity`,
 `topo`, `grid`, `ic`, `diag`, `bc`, `sponge`, `tides`, `epbl`,
 `kappa_shear`, `meke`, `gm`, `redi`, `foxkemper`, `porous`, `wetdry`,
@@ -810,23 +870,22 @@ sub-namelists (one per physics concern — `coriolis`, `pgf`, `bt`,
 auto-generated
 [`docs/generated_nml_knobs.md`](generated_nml_knobs.md), which is
 regenerated from the live schema and is the authority for them.
-`tools/nml_split.py` migrates a legacy monolithic `&ocean_setup_nml`.
 
-### `&sim_nml`
+### `[sim]`
 
 | Parameter | Default | Description |
 |---|---|---|
 | `sim_type` | `"ocean"` | Simulation regime — `"ocean"` is the only value this build ships |
 
-### `&grid_nml`
+### `[grid]`
 
 | Parameter | Default | Description |
 |---|---|---|
 | `nx`, `ny` | 200, 1 | Physical cells in x/y |
-| `dx`, `dy` | 1.0, 1.0 | Cell size (m). **Derived** from `&ocean_grid_nml` when `axis_units = "degrees"` — do not pin them in that case. |
+| `dx`, `dy` | 1.0, 1.0 | Cell size (m). **Derived** from `[ocean.grid]` when `axis_units = "degrees"` — do not pin them in that case. |
 | `nghost` | 3 | Ghost cells per side (3 is the PPM-seam + wide-halo BT minimum) |
 
-### `&time_nml`
+### `[time]`
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -837,7 +896,7 @@ regenerated from the live schema and is the authority for them.
 | `cfl_interval` | 1 | Recompute CFL every N steps |
 | `time_unit` | `"s"` | Unit for the long-time fields: `s` / `min` / `hr` / `day` / `year` |
 
-### `&physics_nml`
+### `[physics]`
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -846,7 +905,7 @@ regenerated from the live schema and is the authority for them.
 | `wind_stress_y` | 0.0 | Wind stress y-component (Pa) |
 | `coriolis_f` | 0.0 | Coriolis parameter f (1/s) |
 
-### `&output_nml`
+### `[output]`
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -860,13 +919,13 @@ regenerated from the live schema and is the authority for them.
 | `restart_file` | `""` | Warm start from restart file |
 
 Snapshot output itself is driven by the diagnostics manager
-(`&ocean_diag_nml`: `enabled`, `filename`, `dt_out`, the `diags`
+(`[ocean.diag]`: `enabled`, `filename`, `dt_out`, the `diags`
 selection knob, per-diag output vcoord remap, `output_precision`).
 Per-rank files merge offline via `tools/merge_output.py`.
 
 **Sea-ice diagnostics, CICE names** (canonical set, default on when
-`&ocean_ice_nml enable`; the thickness-tendency rates also need
-`&ocean_thermo_nml enable_thermodynamics`): `aice` (area fraction), `hi`
+`[ocean.ice] enable`; the thickness-tendency rates also need
+`[ocean.thermo] enable_thermodynamics`): `aice` (area fraction), `hi`
 (grid-mean ice thickness, m), `hs` (grid-mean snow thickness, m), `Tsfc`
 (aggregate surface temperature, degC; open water at the seawater freezing
 point), and the rates `congel`, `frazil`, `snoice`, `meltt`, `meltb`,
@@ -898,8 +957,8 @@ ISOMIP+ reporting unit — `/ ρ_fw = 1000 kg m⁻³` × a 365-day year, i.e.
 (`T_far − T_f(S_far, p_top)`), `haline_driving` (`S_far − S_b`),
 `tbdry`, `sbdry`, `tfreeze_ib`, `exch_vel_t`, `exch_vel_s`,
 `ustar_shelf` and `cavity_melt_status` — all eleven need
-`&ocean_cavity_melt_nml enable` — plus `z_draft` and `water_column`
-(= `bt_H_ref + bt_eta`), which need only `&ocean_cavity_dyn_nml
+`[ocean.cavity_melt] enable` — plus `z_draft` and `water_column`
+(= `bt_H_ref + bt_eta`), which need only `[ocean.cavity_dyn]
 enable`. Outside the ice cover every one of them is the IEEE NaN
 missing-value sentinel rather than zero, so a domain mean is a mean
 over the CAVITY and the console line reports `missing=n/total`.
@@ -912,7 +971,7 @@ them to the MOM6/CMOR names noted below): `umo` / `vmo` (kg/s, 3-D,
 MOM6 `umo`/`vmo`) are `rho_0 ·` the per-layer face flux continuity
 ITSELF differences to advance `h_layer` (`mass_flux_x_layer` /
 `mass_flux_y_layer`) — not a re-derived cell-centre reconstruction —
-so they are registered `is_extensive=.true.` (a target layer/density
+so they are registered `is_extensive=true` (a target layer/density
 bin SUMS the source layers it spans, matching the physical meaning of
 a flux) and remap through every output vcoord including
 `DIAG_VGRID_DENSITY` (needed for overturning in density space). Both
@@ -932,11 +991,11 @@ consumes for temperature — not one closure's own piece (cf.
 value at the T-cell's WEST/SOUTH/bottom-interface index (the `u`/`KE`
 face→T-cell convention), unaveraged.
 
-### `&boundary_nml`
+### `[boundary]`
 
 | Parameter | Default | Description |
 |---|---|---|
-| `bc_west / east / south / north` | `"wall"` | BC type per edge (see §4; `&ocean_bc_nml` carries the per-edge ocean detail) |
+| `bc_west / east / south / north` | `"wall"` | BC type per edge (see §4; `[ocean.bc]` carries the per-edge ocean detail) |
 | `n_tidal_constituents` | 0 | Number of tidal constituents (0 = legacy single) |
 | `tidal_amp(10)` | 0.0 | Constituent amplitudes (m) |
 | `tidal_phase(10)` | 0.0 | Constituent phases (rad) |
@@ -946,7 +1005,7 @@ face→T-cell convention), unaveraged.
 | `sponge_width` | 0 | Sponge layer width (cells) |
 | `sponge_strength` | 0.0 | Sponge relaxation rate (1/s) |
 
-### `&nonhydrostatic_nml`
+### `[nonhydrostatic]`
 
 The group name is historical; on this tree it carries the layer-stack
 size and the PP81 / KPP constants.
@@ -955,13 +1014,13 @@ size and the PP81 / KPP constants.
 |---|---|---|
 | `nz_layers` | 2 | Number of vertical layers |
 | `use_multilayer` | `.false.` | Enable the coupled vertical layer stack |
-| `rho_0` | 1000.0 | Reference density (kg/m³). **Dead on the ocean path** — nothing reads `cfg%rho_0`. The live reference density is `&ocean_ic_nml rho_0` (default 1035), which feeds the EOS *and* both PGF reference densities. |
+| `rho_0` | 1000.0 | Reference density (kg/m³). **Dead on the ocean path** — nothing reads `cfg%rho_0`. The live reference density is `[ocean.ic] rho_0` (default 1035), which feeds the EOS *and* both PGF reference densities. |
 | `kpp_ri_crit` | 0.3 | Critical bulk Richardson number for the KPP boundary-layer depth |
 | `kpp_cs_nonlocal` | 6.3 | KPP non-local (counter-gradient) transport coefficient |
 | `kpp_c_vt2` | 1.8 | KPP `V_t²` unresolved-turbulence coefficient (0 = off) |
-| `hdiff_kappa` | 0.0 | Horizontal tracer diffusion (m²/s). The ocean along-coordinate equivalent is `&ocean_hdiff_nml kappa_h`. |
+| `hdiff_kappa` | 0.0 | Horizontal tracer diffusion (m²/s). The ocean along-coordinate equivalent is `[ocean.hdiff] kappa_h`. |
 
-### `&tracer_nml`
+### `[tracer]`
 
 Tracer initial conditions, linear-EOS coefficients, clamp bounds and
 background vertical diffusivities. Running without this block is fine —
@@ -970,24 +1029,24 @@ all fields have sensible defaults.
 | Parameter | Default | Description |
 |---|---|---|
 | `initial_salinity` | 35.0 | Initial salinity (PSU, uniform IC) |
-| `S_ref` | 0.0 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml S_ref`. |
-| `beta_S` | 0.78 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml beta_S`. |
+| `S_ref` | 0.0 | **RETIRED** — setting it fails loud; use `[ocean.ic] S_ref`. |
+| `beta_S` | 0.78 | **RETIRED** — setting it fails loud; use `[ocean.ic] beta_S`. |
 | `S_min` | 0.0 | Lower clamp (PSU) |
 | `S_max` | 40.0 | Upper clamp (PSU) |
 | `kappa_S_bg` | 1.0e-5 | Background vertical S diffusivity (m²/s) |
 | `S_init_surface`, `S_init_bottom` | 0.0 | Surface (k=nz) / bed (k=1) salinity for the linear-in-layer stratified IC. Both must be non-zero (one alone fails loud); both zero ⇒ uniform `initial_salinity`. Stable polarity is the INVERSE of temperature's — salty water belongs at the bed, so `S_init_bottom > S_init_surface`. |
 | `initial_temperature` | 15.0 | Initial potential temperature (°C, uniform IC) |
-| `T_ref` | 15.0 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml T_ref`. |
-| `alpha_T` | 0.17 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml alpha_T`. |
+| `T_ref` | 15.0 | **RETIRED** — setting it fails loud; use `[ocean.ic] T_ref`. |
+| `alpha_T` | 0.17 | **RETIRED** — setting it fails loud; use `[ocean.ic] alpha_T`. |
 | `T_min` | -2.0 | Lower clamp (°C); seawater freezing |
 | `T_max` | 40.0 | Upper clamp (°C) |
 | `kappa_T_bg` | 1.0e-5 | Background vertical T diffusivity (m²/s) |
 | `T_init_surface`, `T_init_bottom` | 0.0 | Surface (k=nz) / bed (k=1) temperature for the linear-in-layer stratified IC; both zero ⇒ uniform `initial_temperature` |
-| `tracer_recon` | `"ppm"` | Legacy face-reconstruction selector; `weno*` is rejected fail-loud on `sim_type='ocean'`. Use `&ocean_vmix_nml tracer_recon`. |
+| `tracer_recon` | `"ppm"` | Legacy face-reconstruction selector; `weno*` is rejected fail-loud on `sim_type='ocean'`. Use `[ocean.vmix] tracer_recon`. |
 
-The density kernel itself is selected by `&ocean_eos_nml`.
+The density kernel itself is selected by `[ocean.eos]`.
 
-### `&vcoord_nml`
+### `[vcoord]`
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -995,9 +1054,9 @@ The density kernel itself is selected by `&ocean_eos_nml`.
 | `thickness_config` | `"sigma"` | **Initial** layer thickness (distinct from `vcoord_type`, which selects the *running* coordinate). `sigma` = even split of the local depth, `h_layer = b/nz` (default ⇒ bit-identical). `uniform_z` = MOM6 `THICKNESS_CONFIG="uniform"` port: uniform z interfaces over the global `ocean_max_depth`, clipped bottom-up to the local bathymetry, sub-floor layers collapsed to `max(angstrom_h, 2·H_VANISHED)`. Exactly conservative (`Σh = b`). See the note below. |
 | `remap_method` | `"ppm"` | `pcm`, `plm`, `ppm`, `ppm_h4`, `pqm` (conservative remap reconstruction; `pqm` = piecewise-quartic, 4th–5th order, W&A 2008, falls back to PPM for nz<5) |
 | `zstar_h_surf_target` | 0.0 | Surface-anchored layer thickness for `zstar_full` (m; 0 = auto) |
-| `zstar_h_min` | 1.0e-4 | Vanishing-layer thickness for `zstar_full` / `z_fixed` (m). Anti-zero armour for BELOW-BED filler layers, **not** a positivity floor: it belongs ≤ `H_VANISHED` (1.5e-4) so those layers keep reading as vanished. `validate_config` **refuses** ≤ 0 and **warns** above `H_VANISHED` (above it the filler goes dynamically live in EOS/PGF/remap-drain/vdiff while the coordinate still treats it as throwaway; it warns rather than aborts only because the Python worked example currently sits in that band). The `rho`/`hycom` regrid reads the same knob under the opposite contract — its collapsed layers carry tracer mass, so it floors at `max(zstar_h_min, 2·H_VANISHED)`. For a genuinely *live* minimum thickness use `&ocean_isopycnal_nml angstrom_h`. |
-| `zfixed_closed_faces` | `.false.` | **Partial-step z-level face closure**, `z_fixed`, `zstar` (MOM6 z\*) and `zstar_full` (the name is historical; Adcroft, Hill & Marshall 1997; Losch 2008 §2.1).  Treats a velocity face whose layer `k` is an inert `zstar_h_min` FILLER on EITHER side as a WALL for that layer — no normal velocity, no mass or tracer flux, free-slip — instead of leaving it open for the FV pressure gradient to integrate across a staircase step.  Builds a STATIC per-layer 0/1 face mask at configure from the coordinate's target at `η = 0` (under `zstar` they are `z_fixed`'s fillers, decided at `η = 0` and exactly static under the dilation; under `zstar_full` the fillers are every layer below a column's partial cell where the column is shallower than the `zstar_h_surf_target` fine zone; on both the knob then also seeds `h_layer` on that target) and composes it multiplicatively with the land metrics and the porous open-area fraction: `dy_eff = dy_cu·por·open`.  Default off ⇒ byte-identical.  **Fails loud** on any other coordinate, without a resolved `z_fixed_h_ref` (`z_fixed`, `zstar`) or with `zstar_h_surf_target <= 0` (`zstar_full`), and with `&ocean_wetdry_nml enable`, `&ocean_bt_nml bt_halo > 0`, GM / Redi / Fox-Kemper MLE, `&ocean_hvisc_nml nu_4 > 0` or `stress_tensor`.  **Required over a stepped bed:** with `vcoord_type = "z_fixed"` and this knob `.false.`, configure fails loud wherever two wet columns' bed lies in different nominal layers (an open face would pair a live layer with a bed filler); flat / step-free beds stay accepted.  See `docs/CLOSURE_MATRIX.md` and `docs/CAPABILITIES_AND_LIMITATIONS.md`. |
-| `z_fixed_profile` | `"uniform"` | The z* coordinate resolution, read by `z_fixed` and `zstar` (their levels) and by `hycom` (its z* nominal floor — `"uniform"` there is `max_depth/nz_layers` METRES per layer). Nominal layer-thickness profile of `z_fixed` and of `zstar` (MOM6 z\* dilates this same profile per column by `(H + η)/H`): `"uniform"` (`max_depth/nz_layers` everywhere — default, byte-identical), `"list"` (`z_fixed_dz`, surface first, exactly `nz_layers` entries; a column deeper than their sum puts the excess in the bed layer) or `"tanh"` (a hyperbolic-tangent ramp in layer index from exactly `z_fixed_dz_top` at the surface, centred at `z_fixed_tanh_center` with width `z_fixed_tanh_width` — both fractions of the index span — and scaled to sum to `&ocean_topo_nml max_depth`; 6500 m / 50 levels / 2 m / 0.5 / 0.25 gives ~250 m at the bed).  Read by the `z_fixed` target builder, hence the closed-face mask, `k_top`, the partial top cell under a draft (threshold `0.1×` the straddling layer's own nominal thickness), the bed partial cell and the on-target IC seed (cavity, or `&ocean_zinit_nml`; under `zstar`, `&ocean_zinit_nml` or `zfixed_closed_faces`).  **Fails loud** on any coordinate but `z_fixed` / `zstar` / `hycom`, on a list of the wrong length, and on a tanh with `nz_layers·z_fixed_dz_top >= max_depth`.  Under a cavity the `h_min_cavity >= 2·h_nominal` rule becomes a WARNING against the thickest nominal layer. |
+| `zstar_h_min` | 1.0e-4 | Vanishing-layer thickness for `zstar_full` / `z_fixed` (m). Anti-zero armour for BELOW-BED filler layers, **not** a positivity floor: it belongs ≤ `H_VANISHED` (1.5e-4) so those layers keep reading as vanished. `validate_config` **refuses** ≤ 0 and **warns** above `H_VANISHED` (above it the filler goes dynamically live in EOS/PGF/remap-drain/vdiff while the coordinate still treats it as throwaway; it warns rather than aborts only because the Python worked example currently sits in that band). The `rho`/`hycom` regrid reads the same knob under the opposite contract — its collapsed layers carry tracer mass, so it floors at `max(zstar_h_min, 2·H_VANISHED)`. For a genuinely *live* minimum thickness use `[ocean.isopycnal] angstrom_h`. |
+| `zfixed_closed_faces` | `.false.` | **Partial-step z-level face closure**, `z_fixed`, `zstar` (MOM6 z\*) and `zstar_full` (the name is historical; Adcroft, Hill & Marshall 1997; Losch 2008 §2.1).  Treats a velocity face whose layer `k` is an inert `zstar_h_min` FILLER on EITHER side as a WALL for that layer — no normal velocity, no mass or tracer flux, free-slip — instead of leaving it open for the FV pressure gradient to integrate across a staircase step.  Builds a STATIC per-layer 0/1 face mask at configure from the coordinate's target at `η = 0` (under `zstar` they are `z_fixed`'s fillers, decided at `η = 0` and exactly static under the dilation; under `zstar_full` the fillers are every layer below a column's partial cell where the column is shallower than the `zstar_h_surf_target` fine zone; on both the knob then also seeds `h_layer` on that target) and composes it multiplicatively with the land metrics and the porous open-area fraction: `dy_eff = dy_cu·por·open`.  Default off ⇒ byte-identical.  **Fails loud** on any other coordinate, without a resolved `z_fixed_h_ref` (`z_fixed`, `zstar`) or with `zstar_h_surf_target <= 0` (`zstar_full`), and with `[ocean.wetdry] enable`, `[ocean.bt] bt_halo > 0`, GM / Redi / Fox-Kemper MLE, `[ocean.hvisc] nu_4 > 0` or `stress_tensor`.  **Required over a stepped bed:** with `vcoord_type = "z_fixed"` and this knob `.false.`, configure fails loud wherever two wet columns' bed lies in different nominal layers (an open face would pair a live layer with a bed filler); flat / step-free beds stay accepted.  See `docs/CLOSURE_MATRIX.md` and `docs/CAPABILITIES_AND_LIMITATIONS.md`. |
+| `z_fixed_profile` | `"uniform"` | The z* coordinate resolution, read by `z_fixed` and `zstar` (their levels) and by `hycom` (its z* nominal floor — `"uniform"` there is `max_depth/nz_layers` METRES per layer). Nominal layer-thickness profile of `z_fixed` and of `zstar` (MOM6 z\* dilates this same profile per column by `(H + η)/H`): `"uniform"` (`max_depth/nz_layers` everywhere — default, byte-identical), `"list"` (`z_fixed_dz`, surface first, exactly `nz_layers` entries; a column deeper than their sum puts the excess in the bed layer) or `"tanh"` (a hyperbolic-tangent ramp in layer index from exactly `z_fixed_dz_top` at the surface, centred at `z_fixed_tanh_center` with width `z_fixed_tanh_width` — both fractions of the index span — and scaled to sum to `[ocean.topo] max_depth`; 6500 m / 50 levels / 2 m / 0.5 / 0.25 gives ~250 m at the bed).  Read by the `z_fixed` target builder, hence the closed-face mask, `k_top`, the partial top cell under a draft (threshold `0.1×` the straddling layer's own nominal thickness), the bed partial cell and the on-target IC seed (cavity, or `[ocean.zinit]`; under `zstar`, `[ocean.zinit]` or `zfixed_closed_faces`).  **Fails loud** on any coordinate but `z_fixed` / `zstar` / `hycom`, on a list of the wrong length, and on a tanh with `nz_layers·z_fixed_dz_top >= max_depth`.  Under a cavity the `h_min_cavity >= 2·h_nominal` rule becomes a WARNING against the thickest nominal layer. |
 | `z_fixed_dz` | unset | `z_fixed_profile = "list"`: nominal thicknesses (m), surface first (MOM6 `PARAM:` / `vgrid` order). |
 | `z_fixed_dz_top` | 2.0 | `z_fixed_profile = "tanh"`: surface-layer thickness (m). |
 | `z_fixed_tanh_center` | 0.5 | `z_fixed_profile = "tanh"`: transition centre, fraction of the layer-index span (0 = surface). |
@@ -1013,8 +1072,8 @@ The density kernel itself is selected by `&ocean_eos_nml`.
 | `remap_vel_conserve_ke` | `.false.` | If true, rescale the remapped baroclinic velocity anomaly to conserve column KE (capped 1.25×; barotropic mean preserved) — MOM6 `REMAP_VEL_CONSERVE_KE`. Default off ⇒ momentum-only remap (bit-identical). |
 
 **When you need `thickness_config = "uniform_z"`.** Under a horizontally-uniform
-density stack — the linear density-coordinate IC (`&ocean_ic_nml rho_lightest` /
-`rho_range`, MOM6 `COORD_CONFIG="linear"`) with `enable_thermodynamics=.false.` —
+density stack — the linear density-coordinate IC (`[ocean.ic] rho_lightest` /
+`rho_range`, MOM6 `COORD_CONFIG="linear"`) with `enable_thermodynamics=false` —
 the layer index *is* the density, so the layer interfaces *are* the isopycnals.
 The default `"sigma"` seed then makes every isopycnal follow the bathymetry,
 which stands the full `rho_range` contrast up across each shelf break at t=0.
@@ -1024,10 +1083,10 @@ a ~1.3 m/s gravity current — over layers only `edge_depth/nz` thick. The rim
 layers drain, the non-conservative `angstrom_h` floor starts injecting mass, and
 the run grounds out. `"uniform_z"` seeds flat resting isopycnals instead, which
 is the layered-model resting state MOM6 starts from. Pair it with
-`vcoord_type="lagrangian"`. Mutually exclusive with `&ocean_wetdry_nml enable`
+`vcoord_type="lagrangian"`. Mutually exclusive with `[ocean.wetdry] enable`
 (fail-loud): that path pins its own emerged-column seed invariant.
 
-### `&ocean_isopycnal_nml`
+### `[ocean.isopycnal]`
 
 Grounding-stability controls for the Lagrangian (`vcoord_type="lagrangian"`)
 vertical coordinate. All knobs default OFF ⇒ bit-identical.
@@ -1036,18 +1095,18 @@ Gates test `coord_type == VCOORD_LAGRANGIAN` specifically; other vcoords
 
 | Parameter | Default | Description |
 |---|---|---|
-| `angstrom_h` | `0.0` | Minimum-thickness floor (m) on the Lagrangian continuity h-update — MOM6 GV%Angstrom_H analogue: `h_new = max(h - dt·div, angstrom_h)`. 0 = off (bit-identical). Recommended run value 1e-3..1e-2 m. **Non-conservative**: injects ≤ angstrom_h×cell-area per floored layer-cell; the mass `Error` diagnostic reflects the true divergence. The tracer update divides by the stored floored thickness, so tracer content is kept and c is diluted; an overdrawn cell (h_new ≤ `H_DIV_EPS`) keeps c, so the floor creates at most angstrom_h×c there. **Not yet supported** with `&ocean_vmix_nml dt_tracer_advect_ratio > 1` (the windowed drain does not carry the added thickness): `validate_config` refuses it unless `conservative_floor` is on (temporary limitation). |
+| `angstrom_h` | `0.0` | Minimum-thickness floor (m) on the Lagrangian continuity h-update — MOM6 GV%Angstrom_H analogue: `h_new = max(h - dt·div, angstrom_h)`. 0 = off (bit-identical). Recommended run value 1e-3..1e-2 m. **Non-conservative**: injects ≤ angstrom_h×cell-area per floored layer-cell; the mass `Error` diagnostic reflects the true divergence. The tracer update divides by the stored floored thickness, so tracer content is kept and c is diluted; an overdrawn cell (h_new ≤ `H_DIV_EPS`) keeps c, so the floor creates at most angstrom_h×c there. **Not yet supported** with `[ocean.vmix] dt_tracer_advect_ratio > 1` (the windowed drain does not carry the added thickness): `validate_config` refuses it unless `conservative_floor` is on (temporary limitation). |
 | `reset_vanished_u` | `.false.` | Zero the face velocity of a layer vanished on **both** adjacent cells (h ≤ max(angstrom_h, H_VANISHED) on both sides). One-sided faces — a massive-to-thin grounding front — are unchanged so the re-wetting flux survives. |
 | `cfl_ignore_vanished` | `.false.` | Exclude vanished layers (same both-sided criterion) from the console MaxCFL / CFL-panic / `apply_velocity_truncation`. A velocity spike in a vanished layer cannot falsely trigger an abort; the vanished face is zeroed (not CFL-clipped). |
 
-### `&ocean_cavity_dyn_nml`
+### `[ocean.cavity_dyn]`
 
 Static ice-shelf cavity geometry. Default off ⇒ bit-identical; the full
 knob list with defaults is in [`docs/generated_nml_knobs.md`](generated_nml_knobs.md).
 
 | Key | Meaning |
 |---|---|
-| `enable` | Master switch. Requires `sim_type='ocean'`, the split solver, `&ocean_pgf_nml form="fv_mom6"` with `gfs_scale = 1`, `vcoord_type` ∈ {sigma, z_fixed} (`zstar` — MOM6 z\* since 2026-10 — has no rigid-top branch and is refused), and a single rank; mutually exclusive with wet/dry, porous barriers, sea ice, `bt_halo > 0`, tidal SAL and the z-level T/S IC. Every one of those is a fail-loud configure error naming the knob and the reason. |
+| `enable` | Master switch. Requires `sim_type='ocean'`, the split solver, `[ocean.pgf] form="fv_mom6"` with `gfs_scale = 1`, `vcoord_type` ∈ {sigma, z_fixed} (`zstar` — MOM6 z\* since 2026-10 — has no rigid-top branch and is refused), and a single rank; mutually exclusive with wet/dry, porous barriers, sea ice, `bt_halo > 0`, tidal SAL and the z-level T/S IC. Every one of those is a fail-loud configure error naming the knob and the reason. |
 | `draft_config` | `none` (identity) / `flat` / `linear` / `file`. |
 | `draft_file`, `draft_var`, `draft_sign` | `draft_config="file"` only. Static 2-D NetCDF on the model grid, read once through the PR-14 static reader. The variable must be rank 3 in FORTRAN storage order `(x, y, t)` — `(nTime, ny, nx)` as `ncdump` spells it, which IS the ISOMIP+ file's layout — with a time coordinate variable; record 1 is read. **No horizontal interpolation**: regrid offline first, as for `bathymetry_file`. `draft_sign` is explicit with no data-sniffing default: `"depth"`/`"positive_down"` (values are `z_draft ≥ 0`, the default) or `"elevation"`/`"positive_up"` (values are `z_d ≤ 0`, negated on load — **what ISOMIP+'s `iceDraft` needs**). The wrong convention gives a negative draft and is rejected by the existing non-negativity guard. Single rank. |
 | `draft_source` | `draft` (the formula IS the ice-base depth) or `thickness` (an ice thickness, converted by flotation `ρ_ice·h/ρ₀`). `in_situ` is deferred. |
@@ -1056,9 +1115,9 @@ knob list with defaults is in [`docs/generated_nml_knobs.md`](generated_nml_knob
 | `h_min_cavity` | Grounding cutoff (m): less water than this under the ice ⇒ the column is LAND. |
 | `grounded_max_frac` | Fail loud if more than this fraction of the interior columns ground. |
 | `rho_ice` | Ice density, consulted only by `draft_source="thickness"`. |
-| `trim_ic_for_p_surf` | MOM6 `TRIM_IC_FOR_P_SURF` (default `.false.`). The `ρ₀·g·z_draft` load is lighter than the stratified water it displaces by `g∫(ρ−ρ₀)dz`, a depth-uniform bottom-pressure gradient the MOM6 barotropic split adjusts to. With the knob on, the load is kept and each loaded column's initial top moves to the depth `s` where `g∫_{−s}^0 ρ dz = p_ice_ref` (initial `η = z_draft − s`), with T/S evaluated at the trimmed layer centres, so the run starts at rest. Closed form: requires `&ocean_eos_nml eos="linear"` and `&ocean_zinit_nml enable, source="linear"`; fails loud otherwise. |
+| `trim_ic_for_p_surf` | MOM6 `TRIM_IC_FOR_P_SURF` (default `.false.`). The `ρ₀·g·z_draft` load is lighter than the stratified water it displaces by `g∫(ρ−ρ₀)dz`, a depth-uniform bottom-pressure gradient the MOM6 barotropic split adjusts to. With the knob on, the load is kept and each loaded column's initial top moves to the depth `s` where `g∫_{−s}^0 ρ dz = p_ice_ref` (initial `η = z_draft − s`), with T/S evaluated at the trimmed layer centres, so the run starts at rest. Closed form: requires `[ocean.eos] eos="linear"` and `[ocean.zinit] enable, source="linear"`; fails loud otherwise. |
 
-### `&ocean_cavity_melt_nml`
+### `[ocean.cavity_melt]`
 
 Ice-shelf basal-melt thermodynamics. Default off ⇒ bit-identical; the
 full knob list with defaults is in
@@ -1066,26 +1125,26 @@ full knob list with defaults is in
 
 | Key | Meaning |
 |---|---|
-| `enable` | Master switch. Requires `&ocean_cavity_dyn_nml enable`, `&ocean_eos_nml tfreeze_set="isomip"` and `&ocean_forcing_nml enable_components`; mutually exclusive with sea ice (two interface thermodynamics in one column, with different liquidi). Wind stress, `&ocean_restore_nml` restoring, `sw_pen_frac > 0` and a non-zero `q_heat`/`q_salt` were refused until the ice-cover mask shipped and are now ACCEPTED and masked; `&ocean_psurf_nml enable` composes (the cavity assembles `p_top = p_ice_ref + sf%p_surf`). The remaining refusal lives on the geometry group: `&ocean_dataovr_nml` file forcing rewrites `tau`/`Q_heat` per time bracket with no cover. Every one is a fail-loud configure error naming the knob and the follow-up. |
+| `enable` | Master switch. Requires `[ocean.cavity_dyn] enable`, `[ocean.eos] tfreeze_set="isomip"` and `[ocean.forcing] enable_components`; mutually exclusive with sea ice (two interface thermodynamics in one column, with different liquidi). Wind stress, `[ocean.restore]` restoring, `sw_pen_frac > 0` and a non-zero `q_heat`/`q_salt` were refused until the ice-cover mask shipped and are now ACCEPTED and masked; `[ocean.psurf] enable` composes (the cavity assembles `p_top = p_ice_ref + sf%p_surf`). The remaining refusal lives on the geometry group: `[ocean.dataovr]` file forcing rewrites `tau`/`Q_heat` per time bracket with no cover. Every one is a fail-loud configure error naming the knob and the follow-up. |
 | `exchange_law` | `const_gamma` (default, `γ = Γ·u*`, ISOMIP+) / `hj99` (needs a non-zero Coriolis under the cover) / `yung25`. The six reserved names parse and are refused by name (`CAVITY_MELT_NOT_IMPLEMENTED`). |
 | `gamma_t`, `gamma_s` | Dimensionless transfer coefficients. `gamma_s < 0` (default) resolves to the ISOMIP+ `gamma_t/35`; `gamma_s = 0` is refused (the three-equation form divides by it). `gamma_t = 2.2e-2` is the ISOMIP+ STARTING GUESS — re-derive it per vertical coordinate. |
 | `cdrag_top`, `u_tide`, `ustar_min` | The melt friction velocity `u* = max(√(C_d(u²+v²+u_tide²)), u*_min)`. The tidal term belongs to the melt `u*` ONLY (ISOMIP+ p. 2486); `cdrag_top` drives no momentum drag in this release. |
 | `ice_conduction`, `t_ice` | `insulating` (default, the ISOMIP+ prescription; `t_ice` unread) or `adv_diff` (H&J99 eq. 31, `q_ice = m·c_i·(T_b − T_ice)`, zero on freezing). `diffusive` is reserved and refused. |
 | `s_ice` | Ice salinity (g/kg), 0 by the protocol. Must stay strictly below the far-field salinity; a column violating it is counted and given zero melt. |
 | `far_field_depth` | Thickness (m) the far-field `T`/`S`/`u` are averaged over below the ice base — **metres, never layers**. Hold it FIXED across any vertical-coordinate comparison, or the comparison measures the sampling depth. |
-| `freshwater` | `"virtual"` (default ⇒ bit-identical) — the meltwater is the exact fixed-mass equivalent salt flux and adds no volume. `"mass"` — the meltwater is a REAL Boussinesq volume source on the top layer, `dh = m·dt/ρ₀` (ρ₀, not the freshwater density: the model's mass total is `ρ·volume` by construction), with `d(hS) = dh·s_ice` and `d(hT) = dh·T_b`, so salinity falls by dilution. The virtual flux is NOT also applied to the tracer but IS still assembled into `Q_salt`, because it is the dominant part of the surface buoyancy flux KPP/EPBL read for `B_0`; the mass kernel removes it again from salinity and from the pseudo-salt mirror in the same stage. Mass becomes a TRACKED budget source (`ms%mass_src`, the console's `src` on the `Mass` line). Refused with `&ocean_wetdry_nml enable` and with `dt_tracer_advect_ratio > 1`, each naming its follow-up. |
+| `freshwater` | `"virtual"` (default ⇒ bit-identical) — the meltwater is the exact fixed-mass equivalent salt flux and adds no volume. `"mass"` — the meltwater is a REAL Boussinesq volume source on the top layer, `dh = m·dt/ρ₀` (ρ₀, not the freshwater density: the model's mass total is `ρ·volume` by construction), with `d(hS) = dh·s_ice` and `d(hT) = dh·T_b`, so salinity falls by dilution. The virtual flux is NOT also applied to the tracer but IS still assembled into `Q_salt`, because it is the dominant part of the surface buoyancy flux KPP/EPBL read for `B_0`; the mass kernel removes it again from salinity and from the pseudo-salt mirror in the same stage. Mass becomes a TRACKED budget source (`ms%mass_src`, the console's `src` on the `Mass` line). Refused with `[ocean.wetdry] enable` and with `dt_tracer_advect_ratio > 1`, each naming its follow-up. |
 | `volume_compensation` | `"none"` (default) or `"uniform_open_ocean"`; requires `freshwater="mass"`. The domain-integrated melt volume is removed again each thermo step, uniformly per unit area over the wet cells the ice does NOT cover, each parcel carrying that cell's own `T` and `S` (so no concentration changes anywhere) and tracked as a sink in all three budgets. Without it a CLOSED domain fills — an ISOMIP+ Ocean0 box at metres per year. ISOMIP+ Sect. 3.1.3 leaves the restored Ocean0-2 uncompensated and allows compensation for the closed Ocean3/4, so the default matches the protocol. |
 
-### `&initial_condition_nml`
+### `[initial_condition]`
 
 | Parameter | Default | Description |
 |---|---|---|
 | `h0` | 1.0 | Background depth (m) |
 
-Ocean initial conditions proper are set by `&ocean_ic_nml`,
-`&ocean_zinit_nml` and `&ocean_topo_nml`.
+Ocean initial conditions proper are set by `[ocean.ic]`,
+`[ocean.zinit]` and `[ocean.topo]`.
 
-### Isolated balanced vortex (`&ocean_ic_nml ic_config = "balanced_vortex"`)
+### Isolated balanced vortex (`[ocean.ic] ic_config = "balanced_vortex"`)
 
 A single warm- or cold-core eddy in geostrophic (or gradient-wind) balance on
 a flat-bottom cartesian beta-plane, for beta-drift and vertical-tilt
@@ -1134,7 +1193,7 @@ baroclinic vortex move at different speeds, which tilts it
 (`analyze_vortex_tilt.py` measures the tilt and the surface-vorticity
 signature).
 
-### Formula bathymetry (`&ocean_topo_nml topo_config`)
+### Formula bathymetry (`[ocean.topo] topo_config`)
 
 | Value | Bed |
 |---|---|
@@ -1167,21 +1226,21 @@ places above sea level comes back as `b = 0`, i.e. land through the
 ordinary `LAND_DEPTH_THRESHOLD` path — never a negative depth. The
 protocol's **minimum water column** (their §3.1.5, value left to the
 modeller) is NOT applied here: Roundabout takes their "mark the column
-land" option, via `&ocean_cavity_dyn_nml h_min_cavity` acting on
+land" option, via `[ocean.cavity_dyn] h_min_cavity` acting on
 `b − z_draft`. Gate: `test_ocean_topo_isomip_plus` (hand-evaluated `Bx`,
 `By`, assembled bed, the deep clip, ghost fill and the `x_origin` shift).
 
-### `&mpi_nml`
+### `[mpi]`
 
 | Parameter | Default | Description |
 |---|---|---|
 | `px`, `py` | 1, 1 | MPI process grid dimensions (0 = auto-factor) |
 
-`&ocean_mpi_nml poison_ghosts` sentinel-NaNs the exchange-covered ghost
+`[ocean.mpi] poison_ghosts` sentinel-NaNs the exchange-covered ghost
 bands at each outer-step start, so consuming an unexchanged ghost becomes
 a loud NaN instead of a plausible number.
 
-### `&logging_nml`
+### `[logging]`
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -1191,98 +1250,83 @@ a loud NaN instead of a plausible number.
 ### Example
 
 Abridged from the canonical MOM6-reference double gyre
-(`validation_examples/ocean/double_gyre/double_gyre_mom6.nml`), which runs
+(`validation_examples/ocean/double_gyre/double_gyre_mom6.toml`), which runs
 stable past day 580 on a single V100:
 
-```fortran
-&sim_nml
+```toml
+[sim]
   sim_type = "ocean"
-/
 
-&grid_nml
+[grid]
   nx = 44
   ny = 40
-  nghost = 3          ! dx/dy are DERIVED from &ocean_grid_nml degrees
-/
+  nghost = 3  # dx/dy are DERIVED from [ocean.grid] degrees
 
-&ocean_grid_nml
+[ocean.grid]
   axis_units = "degrees"
-  len_lon    = 22.0
-  len_lat    = 20.0
-  rad_earth  = 6.378e6
-/
+  len_lon = 22.0
+  len_lat = 20.0
+  rad_earth = 6.378e6
 
-&time_nml
-  t_end     = 10.0
+[time]
+  t_end = 10.0
   time_unit = "day"
-  dt_fixed  = 1200.0
-/
+  dt_fixed = 1200.0
 
-&physics_nml
+[physics]
   coriolis_f = 9.4e-5
-/
 
-&nonhydrostatic_nml
-  nz_layers = 2       ! the gprime PGF below is NK=2-only
-/
+[nonhydrostatic]
+  nz_layers = 2  # the gprime PGF below is NK=2-only
 
-&ocean_topo_nml
-  topo_config    = "spoon"
-  max_depth      = 2000.0
-  edge_depth     = 100.0
-  slope_scale    = 400000.0
-  wind_config    = "2gyre"
+[ocean.topo]
+  topo_config = "spoon"
+  max_depth = 2000.0
+  edge_depth = 100.0
+  slope_scale = 400000.0
+  wind_config = "2gyre"
   taux_magnitude = 0.1
-  coriolis_beta  = 1.76e-11
-/
+  coriolis_beta = 1.76e-11
 
-&ocean_coriolis_nml
+[ocean.coriolis]
   form = "sadourny_energy"
-/
 
-&ocean_pgf_nml
-  form        = "gprime"
-  gprime_gfs  = 0.98
+[ocean.pgf]
+  form = "gprime"
+  gprime_gfs = 0.98
   gprime_gint = 0.0098
-  maxvel      = 6.0
-/
+  maxvel = 6.0
 
-&ocean_bdrag_nml
-  form   = "linear"
-  r      = 2.5e-5
-  hbbl   = 10.0
+[ocean.bdrag]
+  form = "linear"
+  r = 2.5e-5
+  hbbl = 10.0
   bg_vel = 0.1
-/
 
-&ocean_hvisc_nml
-  nu_h            = 10000.0
-  smag_ah         = .true.
+[ocean.hvisc]
+  nu_h = 10000.0
+  smag_ah = true
   lateral_closure = "smagorinsky"
-  c_smag          = 0.15
-/
+  c_smag = 0.15
 
-&ocean_bt_nml
-  auto_n_inner  = .true.
+[ocean.bt]
+  auto_n_inner = true
   cfl_bt_safety = 0.65
-  bebt          = 0.2
-/
+  bebt = 0.2
 
-&vcoord_nml
-  vcoord_type         = "zstar_full"
+[vcoord]
+  vcoord_type = "zstar_full"
   zstar_h_surf_target = 1000.0
-  zstar_h_min         = 1.5e-4
-/
+  zstar_h_min = 1.5e-4
 
-&ocean_diag_nml
-  enabled  = .true.
+[ocean.diag]
+  enabled = true
   filename = "double_gyre"
-  dt_out   = 1.0      ! one frame per day (time_unit = "day")
-/
+  dt_out = 1.0  # one frame per day (time_unit = "day")
 
-&logging_nml
-  log_level       = "info"
+[logging]
+  log_level = "info"
   status_interval = 1.0
-/
 ```
 
 ## 8. Key Design Decisions
@@ -1303,5 +1347,5 @@ stable past day 580 on a single V100:
 | Comm backend | One implementation in `src/comm/` | No stub twin; pic-mpi picks MPI vs its serial backend (`PIC_ENABLE_MPI`). Call sites must not reach point-to-point at one rank — see the `!!` header of `src/comm/rdb_ocean_halo.F90` |
 | I/O strategy | Per-rank files + offline merge (`tools/merge_output.py`) | Eliminates the MPI gather |
 | Build system | CMake | Multi-configuration support, industry standard |
-| Configuration | Fortran namelist, schema-validated | Zero dependencies, native to Fortran; the schema generates `docs/generated_nml_knobs.md` |
+| Configuration | TOML (toml-f), schema-validated | One strict schema validates every key, range and enum; the schema generates `docs/generated_nml_knobs.md` |
 | Dependencies | `pic`, `pic-mpi`, `test-drive`, NetCDF-Fortran | Reuse tested types, MPI wrappers, testing |

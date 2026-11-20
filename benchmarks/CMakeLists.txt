@@ -12,7 +12,7 @@ else()
   set(bench_core ${main_lib})
 endif()
 
-# Full ocean dyn-core throughput bench — reads an ocean namelist (default
+# Full ocean dyn-core throughput bench — reads an ocean input (default
 # double_gyre_mom6.toml) and drives the engine (`engine_setup` / `engine_step`)
 # -- the SAME lifecycle the driver runs (rdb_ocean_engine) -- but NetCDF-free,
 # so it builds with -DRDB_ENABLE_NETCDF=OFF for Intel/AMD portability +
@@ -23,10 +23,10 @@ target_include_directories(bench_ocean PRIVATE "${CMAKE_BINARY_DIR}/modules"
 target_link_libraries(bench_ocean PRIVATE ${bench_core})
 
 # Drift guard: bench_ocean runs the driver's own engine_setup/engine_step
-# lifecycle, so a short run of the canonical double-gyre namelist must stay
-# finite AND below the velocity clamp (the old hand-copied setup skipped steps
-# the driver ran and blew up here, at |u| = maxvel by step ~70). Only exists
-# when benchmarks are built (-DRDB_BUILD_BENCHMARKS=ON).
+# lifecycle, so a short run of the canonical double-gyre input must stay finite
+# AND below the velocity clamp (the old hand-copied setup skipped steps the
+# driver ran and blew up here, at |u| = maxvel by step ~70). Only exists when
+# benchmarks are built (-DRDB_BUILD_BENCHMARKS=ON).
 add_test(
   NAME rdb_bench_ocean_smoke
   COMMAND

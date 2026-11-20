@@ -106,12 +106,12 @@ module rdb_eos
    integer, parameter, public :: TS_CONS_ABS = 2
       !! Conservative temperature + absolute salinity (CT, SA), the
       !! TEOS-10 pair (IOC/SCOR/IAPSO 2010).  Selected by
-      !! `&ocean_eos_nml ts_convention = "cons_abs"`; only the two
+      !! `[ocean.eos] ts_convention = "cons_abs"`; only the two
       !! Roquet et al. (2015) variants accept it (`validate_config`
       !! refuses it elsewhere).  Under it the Roquet points take T as CT
       !! and S as SA DIRECTLY: no Reference-Salinity factor, no PT->CT
       !! conversion, unit Jacobian.  The heat capacity is the separate
-      !! `eos_t%c_p` (`&ocean_eos_nml c_p`); it does not follow the
+      !! `eos_t%c_p` (`[ocean.eos] c_p`); it does not follow the
       !! convention.
    integer, parameter, public :: TS_INVALID = 0
       !! Unrecognised `ts_convention` string (`validate_config` fails loud).
@@ -133,7 +133,7 @@ module rdb_eos
    !     T_f = lambda_1*S + lambda_2 + lambda_3*p
    !
    ! and differ only in their three numbers.  The set is selected by
-   ! `&ocean_eos_nml tfreeze_set` and lives on the EOS handle as
+   ! `[ocean.eos] tfreeze_set` and lives on the EOS handle as
    ! `eos%tfr_s` / `eos%tfr_0` / `eos%tfr_p`, so `eos_freezing_point`
    ! carries NO hard-coded liquidus and every holder of an `eos_t` copy
    ! (the ice slot's `engine%state%eos`, the vmix / EPBL / kappa-shear /
@@ -554,7 +554,7 @@ module rdb_eos
       real(wp) :: p_ref = 0.0_wp
          !! Reference pressure (Pa) at which `eos_compute_arrays` evaluates
          !! `ms%rho_layer` — i.e. the pressure the model's POTENTIAL
-         !! density is referenced to.  Set from `&ocean_eos_nml p_ref`
+         !! density is referenced to.  Set from `[ocean.eos] p_ref`
          !! (default 0 ⇒ surface/potential density, bit-identical to every
          !! run before the knob existed).  The Wright and Roquet branches
          !! read it; the linear branch has no pressure dependence and
@@ -568,7 +568,7 @@ module rdb_eos
          !! at the same geopotential depth differ by `∂ρ/∂p · Δp_ref` and
          !! manufacture an along-layer density gradient out of nothing.
          !! A surface load therefore belongs in the IN-SITU pressure
-         !! builders (`&ocean_psurf_nml in_eos` →
+         !! builders (`[ocean.psurf] in_eos` →
          !! `multilayer_state_t%p_top`), never here.
          !!
          !! What raising it DOES buy: the thermobaric state at which the
@@ -578,7 +578,7 @@ module rdb_eos
          !! referenced to a representative depth (2e7 Pa ≈ 2000 dbar) than
          !! to the surface — the usual σ₂ choice.
          !!
-         !! Distinct from `&vcoord_nml rho_ref_pressure`, which references
+         !! Distinct from `[vcoord] rho_ref_pressure`, which references
          !! the RHO / HYCOM target-density COORDINATE and the density-space
          !! diagnostic remap.  They are independent knobs; for a
          !! density-coordinate run they should normally be set to the SAME
@@ -594,7 +594,7 @@ module rdb_eos
       real(wp) :: tfr_s = TFR_S_COEFF
          !! Liquidus slope λ1 (degC per PSU) — the `S` coefficient of
          !! `eos_freezing_point`.  Selected as a NAMED SET by
-         !! `&ocean_eos_nml tfreeze_set` (`eos_apply_tfreeze_set`), never
+         !! `[ocean.eos] tfreeze_set` (`eos_apply_tfreeze_set`), never
          !! knob-by-knob: the three numbers are a fitted triple and
          !! mixing λ1 from one source with λ2 from another is a silent
          !! physics error.  Default = the SIS2 sea-ice set ⇒ bit-identical
@@ -608,20 +608,20 @@ module rdb_eos
       integer :: ts_convention = TS_POT_PRAC
          !! Tracer T/S convention this EOS expects (TS_POT_PRAC /
          !! TS_CONS_ABS), written at configure from
-         !! `&ocean_eos_nml ts_convention` by `eos_apply_ts_convention`.
+         !! `[ocean.eos] ts_convention` by `eos_apply_ts_convention`.
          !! Identity for linear + Wright.  This type is
          !! a flat POD — NO allocatable component — so it copies into
          !! registers for free when passed by value into the device
          !! point routines (`!$acc routine seq`).
       integer :: tfreeze_form = TFREEZE_FORM_LINEAR
          !! Liquidus functional form (`TFREEZE_FORM_*`), from
-         !! `&ocean_eos_nml tfreeze_form`.  Default linear (bit-identical).
+         !! `[ocean.eos] tfreeze_form`.  Default linear (bit-identical).
       real(wp) :: tfreeze_sat_frac = 0.0_wp
          !! Air-saturation fraction of the TEOS-10 polynomial liquidus
          !! (`TFREEZE_FORM_TEOS_POLY`); unused by the linear form.
       real(wp) :: c_p = SEAWATER_CP_DEFAULT
          !! Seawater heat capacity (J/(kg K)) for the ocean-side heat-flux
-         !! <-> temperature conversion, from `&ocean_eos_nml c_p` (MOM6
+         !! <-> temperature conversion, from `[ocean.eos] c_p` (MOM6
          !! `C_P`).  The default equals `SEAWATER_CP` (bit-identical).
    contains
       procedure, non_overridable :: init => eos_init
@@ -636,7 +636,7 @@ contains
       if (.false.) this%rho0 = real(grid%nx_total, wp)
       ! NOTE: the device-callable-variant gate is NOT run here anymore.
       ! `eos%variant` is still at its default at `init` time; the config
-      ! knob (`&ocean_eos_nml eos=...`) is applied later, in
+      ! knob (`[ocean.eos] eos=...`) is applied later, in
       ! `configure_ocean_pgf`, which calls `eos_validate` POST-config
       ! (so it sees the real variant) plus the FV_WRIGHT+Roquet fail-loud.
       this%is_init = .true.
@@ -674,7 +674,7 @@ contains
    end subroutine eos_destroy
 
    pure function parse_eos_variant(name) result(code)
-      !! Translate a `&ocean_eos_nml eos=...` string into an
+      !! Translate a `[ocean.eos] eos=...` string into an
       !! `EOS_VARIANT_*` code.  Unrecognised values fall back to
       !! `EOS_VARIANT_LINEAR` (the default = bit-identical to runs that
       !! omit the knob).  Membership in the device-callable set is
@@ -698,7 +698,7 @@ contains
    end function parse_eos_variant
 
    pure function parse_tfreeze_set(name) result(code)
-      !! Translate a `&ocean_eos_nml tfreeze_set=...` string into a
+      !! Translate a `[ocean.eos] tfreeze_set=...` string into a
       !! `TFREEZE_SET_*` code.  Unlike `parse_eos_variant` this one does
       !! NOT fall back to a default on a typo: it returns
       !! `TFREEZE_SET_INVALID` and `validate_config` aborts.  Silently
@@ -718,7 +718,7 @@ contains
    end function parse_tfreeze_set
 
    pure function parse_ts_convention(name) result(code)
-      !! `&ocean_eos_nml ts_convention` string -> `TS_*` code.  No default
+      !! `[ocean.eos] ts_convention` string -> `TS_*` code.  No default
       !! fallback: a typo returns `TS_INVALID` and `validate_config` aborts
       !! (silently running the wrong convention is a ~0.3 degC error).
       character(len=*), intent(in) :: name
@@ -734,7 +734,7 @@ contains
    end function parse_ts_convention
 
    pure function parse_tfreeze_form(name) result(code)
-      !! `&ocean_eos_nml tfreeze_form` string -> `TFREEZE_FORM_*` code; a
+      !! `[ocean.eos] tfreeze_form` string -> `TFREEZE_FORM_*` code; a
       !! typo returns `TFREEZE_FORM_INVALID` (fails loud in `validate_config`).
       character(len=*), intent(in) :: name
       integer :: code
@@ -804,7 +804,7 @@ contains
       !! registry arrays here.  Kept free of state-type dependencies so
       !! the dispatch stays callable from a bare array context.  All impls
       !! evaluate at the SINGLE, HORIZONTALLY UNIFORM reference pressure
-      !! `eos%p_ref` (`&ocean_eos_nml p_ref`, default 0 ⇒ surface/potential
+      !! `eos%p_ref` (`[ocean.eos] p_ref`, default 0 ⇒ surface/potential
       !! density) with the `H_VANISHED` vanishing-layer fallback to
       !! `eos%rho0`.
       !!
@@ -819,7 +819,7 @@ contains
       !! 2 kg/m³ across a calving front), i.e. a large, entirely spurious
       !! along-layer density gradient and therefore a spurious PGF.  The
       !! surface load belongs in the IN-SITU pressure builders instead
-      !! (`&ocean_psurf_nml in_eos` → `multilayer_state_t%p_top`, consumed
+      !! (`[ocean.psurf] in_eos` → `multilayer_state_t%p_top`, consumed
       !! by `eos_wright_pgf_column_sweep_impl`), never here.
       type(eos_t), intent(in) :: eos
       integer, intent(in) :: nx, ny, nz
@@ -875,7 +875,7 @@ contains
       !! any layer in `(0, H_VANISHED]`.  Bit-identical for any config whose
       !! layers all exceed H_VANISHED.  CAVEAT: ZSTAR_FULL floors vanishing
       !! bed layers to `zstar_h_min` (type default 1.0e-4; the shipped
-      !! namelists set 1.5e-4 == H_VANISHED exactly, and `validate_config`
+      !! inputs set 1.5e-4 == H_VANISHED exactly, and `validate_config`
       !! warns on anything above it for that family — see
       !! `rdb_vcoord :: vcoord_h_min_role`), so such a bed layer takes the
       !! rho_0 fallback instead of the computed density.  That is the
@@ -1062,7 +1062,7 @@ contains
       !!
       !! This is the ONE genuinely IN-SITU pressure the EOS core builds:
       !! `p_centre_seed` is a true per-layer hydrostatic pressure, so a
-      !! per-column `p_top(i,j)` belongs in it (`&ocean_psurf_nml in_eos`).
+      !! per-column `p_top(i,j)` belongs in it (`[ocean.psurf] in_eos`).
       !! It is NOT the potential-density trap that keeps `eos%p_ref` a
       !! scalar: `rho_insitu` is consumed only (a) as the integrand of
       !! THIS column's `p_edge` stack and (b) as `rho_face`, the
@@ -1092,7 +1092,7 @@ contains
       !! (`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`), so the uniform piece cancels
       !! identically and the seam keeps sole ownership of the barotropic
       !! response — the two are ORTHOGONAL, not additive.  That is what
-      !! `&ocean_pgf_nml p_top_in_bc` does for FV_MOM6 (theorem in
+      !! `[ocean.pgf] p_top_in_bc` does for FV_MOM6 (theorem in
       !! `compute_fv_mom6_impl`'s docstring).  It is NOT done here:
       !! FV_WRIGHT's `p_edge` seed is a separate follow-up, and this
       !! kernel's contract remains "EOS argument only".  What moves in
@@ -1687,7 +1687,7 @@ contains
          !! Pressure (Pa) at which to evaluate.  Which pressure is the
          !! CONSUMER's choice and is documented at each call site: a
          !! surface buoyancy flux wants the top of the column
-         !! (`multilayer_state_t%p_top` under `&ocean_psurf_nml in_eos`,
+         !! (`multilayer_state_t%p_top` under `[ocean.psurf] in_eos`,
          !! else `eos%p_ref`); an interior-interface closure wants the
          !! true in-situ hydrostatic pressure there.  Never a
          !! horizontally-varying value fed back into `ms%rho_layer` —
@@ -1881,7 +1881,7 @@ contains
       !!
       !! with the three coefficients carried ON THE HANDLE
       !! (`eos%tfr_s` / `eos%tfr_0` / `eos%tfr_p`) and selected as a
-      !! named set by `&ocean_eos_nml tfreeze_set`:
+      !! named set by `[ocean.eos] tfreeze_set`:
       !!
       !!   * `"seaice"` (DEFAULT) — SIS2/MOM6, λ = (−0.054, 0, −7.53e-8);
       !!     T_f(35 PSU, 0 Pa) = −1.89 °C.
@@ -1894,7 +1894,7 @@ contains
       !! branch.
       !!
       !! TEOS-10 FORM (`eos%tfreeze_form == TFREEZE_FORM_TEOS_POLY`,
-      !! `&ocean_eos_nml tfreeze_form = "teos_poly"`): returns
+      !! `[ocean.eos] tfreeze_form = "teos_poly"`): returns
       !! `ct_freezing_poly(SA = S, p/1e4 dbar, eos%tfreeze_sat_frac)` --
       !! the TEOS-10 manual section 3.33 polynomial (IOC/SCOR/IAPSO 2010;
       !! McDougall & Barker 2011), S read as Absolute Salinity, result a

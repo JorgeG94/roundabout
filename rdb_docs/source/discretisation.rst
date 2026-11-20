@@ -150,7 +150,7 @@ Sadourny's scheme. The corner vorticity
    \Bigr] \frac{1}{A_{Bu}(i,j)}
 
 is combined with :math:`f` at the same corner and interpolated onto the
-faces where the momentum tendency is needed. ``&ocean_coriolis_nml form=``
+faces where the momentum tendency is needed. ``[ocean.coriolis] form=``
 selects the variant:
 
 ``sadourny`` (default)
@@ -164,7 +164,7 @@ selects the variant:
    computational instability the plain enstrophy form admits at high
    resolution. Carried as a guard option rather than the production path.
 
-An orthogonal knob, ``&ocean_coriolis_nml pv_adv_scheme=``, chooses how the
+An orthogonal knob, ``[ocean.coriolis] pv_adv_scheme=``, chooses how the
 corner vorticity is interpolated onto the face. The default ``centered`` is
 a two-point average and is bit-identical to the historical behaviour.
 ``weno3``, ``weno5`` and ``weno7`` instead use an upwind-biased WENO-Z
@@ -236,7 +236,7 @@ is a per-face remainder that is unity unless substep drag, barotropic wave
 drag or land masking is active.
 
 The :math:`\zeta` and :math:`K` terms carry the nonlinearity of the
-barotropic mode, and ``&ocean_bt_nml substep_zeta_ke`` (default ``.true.``)
+barotropic mode, and ``[ocean.bt] substep_zeta_ke`` (default ``.true.``)
 controls whether they are recomputed each substep or frozen into the slow
 forcing. Freezing them is the MOM6-parity behaviour.
 
@@ -248,8 +248,8 @@ transports, and the momentum correction consumes the end-of-step velocity.
 Choosing ``n_inner``
 --------------------
 
-``&ocean_bt_nml n_inner`` sets the substep count directly. Setting
-``&ocean_bt_nml auto_n_inner = .true.`` derives it instead from the
+``[ocean.bt] n_inner`` sets the substep count directly. Setting
+``[ocean.bt] auto_n_inner = true`` derives it instead from the
 gravity-wave CFL:
 
 .. math::
@@ -317,7 +317,7 @@ note on NaN-laundering clamps in :ref:`extending`.
 The outer time scheme
 =====================
 
-``&ocean_bt_nml split_scheme`` selects the outer time integration. Two
+``[ocean.bt] split_scheme`` selects the outer time integration. Two
 values are accepted: ``pred_corr``, the default, and ``ssp_rk2``. The two
 schemes assemble the stages of an outer step differently, and they differ
 in how they amplify or damp certain numerical artifacts, so results are not
@@ -325,7 +325,7 @@ bit-identical between them.
 
 .. note::
 
-   The spellings ``split_rk2`` and ``mom6_pc`` are **retired**. A namelist
+   The spellings ``split_rk2`` and ``mom6_pc`` are **retired**. An input
    that still uses them fails at configure with a hint naming the
    replacement, rather than silently selecting a default.
 
@@ -374,12 +374,12 @@ gravity-wave pairing.
 **The v1 envelope.** ``pred_corr`` is refused **fail-loud** at configure in
 three cases, each of which names the fix in the error message:
 
-* ``&vcoord_nml vcoord_type = "eulerian_z"``
-* ``&ocean_wetdry_nml enable = .true.``
-* ``&ocean_vmix_nml dt_tracer_advect_ratio > 1``
+* ``[vcoord] vcoord_type = "eulerian_z"``
+* ``[ocean.wetdry] enable = true``
+* ``[ocean.vmix] dt_tracer_advect_ratio > 1``
 
 In each case the remedy is to set
-``&ocean_bt_nml split_scheme = "ssp_rk2"`` explicitly.
+``[ocean.bt] split_scheme = "ssp_rk2"`` explicitly.
 
 ``ssp_rk2``
 -----------
@@ -398,5 +398,5 @@ continuity-and-tracer chain runs *before* the velocity update.
 
 Its configuration envelope is the wider of the two: every vertical
 coordinate including ``eulerian_z``, wetting and drying, and windowed
-tracer advection. The six shipped namelists that use one of those features
+tracer advection. The six shipped inputs that use one of those features
 pin it explicitly.

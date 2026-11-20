@@ -84,7 +84,7 @@ contributor inserted *after* the split silently never reaches :math:`k_s`,
 and the salinity field quietly stops seeing it.
 
 The split rule itself is simple in the default case: with double diffusion
-off, :math:`k_s \equiv k_t` exactly. With ``&ocean_ddiff_nml enable``, it
+off, :math:`k_s \equiv k_t` exactly. With ``[ocean.ddiff] enable``, it
 becomes MOM6's asymmetric pair — :math:`K_{\mathrm{salt}} = K_{\mathrm{int}}
 + K^{\mathrm{extra}}_{S}` and :math:`K_{\mathrm{heat}} = K_{\mathrm{int}} +
 K^{\mathrm{extra}}_{T}` — branching on the *signed* comparison of
@@ -95,7 +95,7 @@ PP81 — the interior closure
 ---------------------------
 
 Pacanowski & Philander (1981). Richardson-number-dependent diffusivity,
-on by default via ``&ocean_vmix_nml use_closure``.
+on by default via ``[ocean.vmix] use_closure``.
 
 With :math:`N^2` the buoyancy frequency, :math:`S^2` the squared shear and
 :math:`\mathrm{Ri} = N^2/S^2`:
@@ -120,7 +120,7 @@ job of convective adjustment, not of PP81.
 KPP — the boundary-layer overlay
 --------------------------------
 
-On by default (``&ocean_vmix_nml use_kpp``), and mutually exclusive with
+On by default (``[ocean.vmix] use_kpp``), and mutually exclusive with
 EPBL. It is an **overlay on top of PP81**, not a standalone scheme.
 
 **Boundary-layer depth.** From a bulk Richardson number referenced to the
@@ -200,7 +200,7 @@ with :math:`C_s` = ``kpp_cs_nonlocal``, default 6.3.
 EPBL — energetics boundary layer
 --------------------------------
 
-Reichl & Hallberg (2018), ``&ocean_epbl_nml enable``, default off.
+Reichl & Hallberg (2018), ``[ocean.epbl] enable``, default off.
 Mutually exclusive with KPP; PP81 and the background still run underneath.
 
 EPBL replaces "diagnose a depth, then impose a profile" with a **turbulent
@@ -255,7 +255,7 @@ is why the energy solve is closed-form rather than iterative.
 kappa-shear — interior shear turbulence
 ---------------------------------------
 
-Jackson, Hallberg & Legg (2008), ``&ocean_kappa_shear_nml enable``, default
+Jackson, Hallberg & Legg (2008), ``[ocean.kappa_shear] enable``, default
 off. Genuinely **prognostic**: two coupled steady-state
 diffusion-reaction equations per column, solved as alternating tridiagonal
 sweeps to Picard convergence inside an adaptive substep loop.
@@ -300,7 +300,7 @@ Tidal mixing
 ------------
 
 St Laurent et al. (2002) / Simmons et al. (2004),
-``&ocean_tidal_mixing_nml enable``, default off. Internal tides break near
+``[ocean.tidal_mixing] enable``, default off. Internal tides break near
 rough topography and mix the deep ocean; this parameterizes that as a
 bottom-intensified diffusivity:
 
@@ -332,7 +332,7 @@ roughness override of :math:`N^2`.
 Convective adjustment
 ---------------------
 
-``&ocean_conv_nml enable``, default off. The bluntest instrument here, and
+``[ocean.conv] enable``, default off. The bluntest instrument here, and
 the right one for a statically unstable column:
 
 .. math::
@@ -363,7 +363,7 @@ two depth- or latitude-dependent schemes. They are **mutually exclusive** —
 enabling both fails loud at configure, matching MOM6's one-background-scheme
 rule — and both default off, so the default path is bit-identical.
 
-**Bryan & Lewis (1979)**, ``&ocean_vmix_nml bkgnd_profile``, a depth
+**Bryan & Lewis (1979)**, ``[ocean.vmix] bkgnd_profile``, a depth
 profile that puts weak mixing in the thermocline and stronger mixing in the
 abyss:
 
@@ -378,7 +378,7 @@ abyss:
 Depth is accumulated from the *current* layer thicknesses, so the profile
 tracks the moving free surface under any vertical coordinate.
 
-**Henyey, Wright & Flatté (1986)**, ``&ocean_vmix_nml bkgnd_henyey``, a
+**Henyey, Wright & Flatté (1986)**, ``[ocean.vmix] bkgnd_henyey``, a
 latitude factor that scales the scalar tracer floor:
 
 .. math::
@@ -427,7 +427,7 @@ Vanishing layers are decoupled as identity rows, so their tracer mass is
 preserved exactly. The matrix is factorised once per stage and reused for
 every registered tracer.
 
-Two optional folds, both in ``&ocean_vdiff_nml`` and both default off (the
+Two optional folds, both in ``[ocean.vdiff]`` and both default off (the
 MOM6 BBL glue, on by default, replaces ``implicit_drag``; see Bottom drag), put
 the boundary stresses **inside** this solve rather than applying them
 explicitly beforehand:
@@ -450,7 +450,7 @@ suffer when a z\*-layer pinches out near the bed.
 Bottom drag
 -----------
 
-``&ocean_bdrag_nml form``, accepted ``quadratic`` (the default) or
+``[ocean.bdrag] form``, accepted ``quadratic`` (the default) or
 ``linear``. Note that both coefficients default to zero, so drag is *off*
 out of the box until you set one.
 
@@ -477,7 +477,7 @@ Every branch is multiplied by the face wet-mask, so wall faces get exactly
 zero.
 
 **Default: the drag lives in the vertical viscosity** (MOM6
-``BOTTOMDRAGLAW``; ``&ocean_vdiff_nml bbl_glue`` and ``hvel_mom6``, both on
+``BOTTOMDRAGLAW``; ``[ocean.vdiff] bbl_glue`` and ``hvel_mom6``, both on
 since 2026-10-05). Once per outer step each face gets a bottom-boundary-layer
 viscosity and thickness (MOM6 ``set_viscous_BBL``):
 
@@ -504,11 +504,11 @@ Lateral closures
 Horizontal viscosity
 --------------------
 
-``&ocean_hvisc_nml``. Two independent pieces that **compose** — a
+``[ocean.hvisc]``. Two independent pieces that **compose** — a
 Laplacian and a biharmonic — plus the coefficient closures that set them.
 
 The Laplacian can be a plain velocity Laplacian (the default) or, with
-``stress_tensor = .true.``, a proper stress-tensor form built from the two
+``stress_tensor = true``, a proper stress-tensor form built from the two
 strain rates
 
 .. math::
@@ -562,7 +562,7 @@ the code enforces it per face:
 Coefficient closures
 --------------------
 
-``&ocean_hvisc_nml lateral_closure`` selects the flow-aware coefficient.
+``[ocean.hvisc] lateral_closure`` selects the flow-aware coefficient.
 Accepted: ``none`` (the default), ``leith``, ``smagorinsky`` / ``smag``,
 ``biharmonic``, ``leith_biharm``.
 
@@ -601,7 +601,7 @@ it**.
 MEKE — mesoscale eddy kinetic energy
 ------------------------------------
 
-``&ocean_meke_nml enable``, default off; requires GM. A prognostic 2D eddy
+``[ocean.meke] enable``, default off; requires GM. A prognostic 2D eddy
 energy field :math:`E`, carried across restarts, which lets an
 eddy-permitting but not eddy-resolving grid remember how energetic its
 unresolved eddy field is.
@@ -651,7 +651,7 @@ floored so the negative mode's growth rate is bounded:
 GM — Gent-McWilliams
 --------------------
 
-``&ocean_gm_nml enable``, default off; requires ``&ocean_slopes_nml``.
+``[ocean.gm] enable``, default off; requires ``[ocean.slopes]``.
 Parameterizes the adiabatic flattening of isopycnals by unresolved
 baroclinic eddies.
 
@@ -697,7 +697,7 @@ keyed on the transport sign. The coefficient itself is CFL-clamped at
 Redi — isoneutral diffusion
 ---------------------------
 
-``&ocean_redi_nml enable``, default off. Diffuses tracers *along* neutral
+``[ocean.redi] enable``, default off. Diffuses tracers *along* neutral
 surfaces rather than along coordinate surfaces, so that stirring by eddies
 does not spuriously mix across density.
 
@@ -729,7 +729,7 @@ The discontinuous variant is deferred and is **rejected at configure**.
 MLE — mixed-layer restratification
 ----------------------------------
 
-Fox-Kemper et al. (2008, 2011), ``&ocean_foxkemper_nml enable``, default
+Fox-Kemper et al. (2008, 2011), ``[ocean.foxkemper] enable``, default
 off. Submesoscale mixed-layer eddies restratify the surface layer after a
 mixing event, and at typical resolutions none of that is resolved.
 

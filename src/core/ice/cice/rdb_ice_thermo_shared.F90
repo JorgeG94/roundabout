@@ -55,7 +55,7 @@ module rdb_ice_thermo_shared
    !! atmosphere routine evaluates `exp(-TTT/TsfK)` with a divide and also needs
    !! the OCEAN pair, so the atmosphere-boundary-layer PR (D8) that reuses
    !! `ice_qsat_surface` differs from upstream by about 4e-15 relative.
-   !! `sfc_kind` is a TEST HOOK only and must never become a namelist knob.
+   !! `sfc_kind` is a TEST HOOK only and must never become an input knob.
    use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use, intrinsic :: iso_fortran_env, only: int32, int64
    use rdb_constants, only: wp

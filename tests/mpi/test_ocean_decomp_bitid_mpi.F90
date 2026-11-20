@@ -14,7 +14,7 @@
 !!      rank — deterministic, no collective that could differ — through
 !!      `engine_setup` -> `engine_enter_data` -> `engine_step` x N_STEPS;
 !!   2. runs every px x py factorisation of the launched rank count
-!!      (np = 2: 2x1, 1x2; np = 4: 4x1, 1x4, 2x2) on the same namelist;
+!!      (np = 2: 2x1, 1x2; np = 4: 4x1, 1x4, 2x2) on the same input;
 !!   3. compares, BITWISE, each rank's OWNED window (ghosts excluded; a
 !!      staggered face array includes both of its tile's edge faces, so a
 !!      seam face is checked on both ranks that compute it) of every field
@@ -124,7 +124,7 @@
 !!     keep_h, after poisoning the WHOLE u/v/hu/hv arrays with rank-dependent garbage;
 !!     the `_t0` twins compare the balanced IC itself;
 !!   * cice_ice / _wall / _island / _sph / _lat / _upwind / _bulk - the CICE-port sea ice
-!!     (`&ocean_ice_nml scheme = 'cice'`: thermodynamics + ITD, C-grid EVP with the category strength,
+!!     (`[ocean.ice] scheme = 'cice'`: thermodynamics + ITD, C-grid EVP with the category strength,
 !!     remap transport, ridging, ocean hand-off) on a cold column at the liquidus under an oblique wind:
 !!     the re-entrant seamount channel; a closed flat basin; a closed basin with an interior land block
 !!     on the rank seams; the lon-lat channel (latitude-dependent metrics); the `latitudes` seed with an
@@ -143,7 +143,7 @@
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
 !!     reconstruction at nghost 3 / 4 / 5 (rung ladder keyed on global edges);
-!!   * dtbt_reset / dtbt_reset_period - `&ocean_bt_nml dtbt` re-derived every step / hourly;
+!!   * dtbt_reset / dtbt_reset_period - `[ocean.bt] dtbt` re-derived every step / hourly;
 !!     `dtbt` sits at an n_inner threshold so n_inner flips 14 <-> 15 mid-run (27x19 trench)
 !!   * drain_ratio_fold / drain_ratio_fold_h3 - the same drain across the tripolar fold
 !!     (distributed fold exchange for px > 1);
@@ -203,7 +203,7 @@
 !!     leg runs under fold + MPI.  `_nodyn` has `dynamics = .false.` so a
 !!     thermo / transport seam bug is separable from an EVP one.
 !!   * visc_rem_chain — the island_basin topology with the visc_rem chain
-!!     live (`&ocean_vdiff_nml hvel_mom6 + bbl_glue`, `&ocean_bt_nml
+!!     live (`[ocean.vdiff] hvel_mom6 + bbl_glue`, `[ocean.bt]
 !!     visc_rem_chain`) AND the frhat port's `frhat_scheme = "hybrid"`
 !!     explicit (MOM6 `btcalc` HVEL_SCHEME=HYBRID; both now the PR-4
 !!     defaults, spelled out here anyway so the case stays a decomp-bitid
@@ -233,11 +233,11 @@
 !! nghost = 3 (weno7_pv: 26 x 24, nghost = 5): every factorisation above is
 !! uneven somewhere.
 !!
-!! The barotropic march-in (`&ocean_bt_nml bt_halo > 0`) is NOT covered: it
+!! The barotropic march-in (`[ocean.bt] bt_halo > 0`) is NOT covered: it
 !! is opt-in precisely because it is not bit-identical to the serial run over
 !! variable bathymetry or with open boundaries (see `resolve_bt_halo`).
 !!
-!! The EXPERIMENTAL in-halo march (`&ocean_bt_nml inhalo_march`) is a dev axis
+!! The EXPERIMENTAL in-halo march (`[ocean.bt] inhalo_march`) is a dev axis
 !! of this test: `RDB_BITID_INHALO=1` turns it on for the DECOMPOSED runs only
 !! (N ranks with the march == 1 rank without), `=2` on both legs, `=3` on the
 !! serial reference only (with np = 1: 1 rank on == 1 rank off);
@@ -590,7 +590,7 @@ contains
    end subroutine env_int
 
    recursive function case_nml(label, scheme, px, py) result(nml)
-      !! The namelist of one case on a px x py process grid.
+      !! The input of one case on a px x py process grid.
       character(len=*), intent(in) :: label, scheme
       integer, intent(in) :: px, py
       character(len=:), allocatable :: nml
@@ -611,7 +611,7 @@ contains
          return
       end if
       if (label == "runoff_river" .or. label == "runoff_river_fold") then
-         ! EPBL river mixing (`&ocean_epbl_nml rivermix_depth`) over the same file-driven runoff:
+         ! EPBL river mixing (`[ocean.epbl] rivermix_depth`) over the same file-driven runoff:
          ! the river energy is read in the GHOST columns (the momentum vdiff face loop averages the
          ! EPBL `kv` from both neighbouring centres), so `surface_flux%runoff` must be seam-exchanged.
          ! `runoff_river` reuses the basin points (both sides of every x / y seam); the fold twin adds
@@ -635,7 +635,7 @@ contains
          return
       end if
       if (label == "runoff_mass" .or. label == "runoff_mass_fold") then
-         ! File-driven RUNOFF (`&ocean_dataovr_nml lrunoff / frunoff`, static record) spent as real
+         ! File-driven RUNOFF (`[ocean.dataovr] lrunoff / frunoff`, static record) spent as real
          ! volume (`freshwater = 'mass'`) on the island basin / the tripolar cap.  The point sources
          ! (see `write_runoff_files`) sit on both sides of the x and y rank seams, and on the fold row
          ! across the tripolar fold (columns that mirror each other, one liquid, one frozen), so the
@@ -657,8 +657,8 @@ contains
          return
       end if
 
-      ! The visc_rem chain rides on the common &ocean_bt_nml group (one
-      ! group per namelist).  D1 follow-up (2026-10): the weighted
+      ! The visc_rem chain rides on the common [ocean.bt] group (one
+      ! group per input).  D1 follow-up (2026-10): the weighted
       ! BT-correction fold (`correction_visc_rem`) is RETIRED -- MOM6
       ! never weights it, and it is what NaNs the 1-degree Southern Ocean
       ! z* open-step case under bbl_glue -- so both cases below now
@@ -1193,7 +1193,7 @@ contains
          ! Ocean 1-degree configuration the periodic-seam / sponge-seam-ghost
          ! bug (this test's `bud` capture) was found on: a periodic axis
          ! carrying a physical-span-only relaxation on the orthogonal one.
-         ! Legacy per-edge band sponge (not map-driven): simplest namelist
+         ! Legacy per-edge band sponge (not map-driven): simplest input
          ! that reaches `ocean_sponge_apply`/`ocean_sponge_apply_tracers`
          ! and the seam-ghost refresh gated on `sponge_seam` in
          ! `rdb_ocean_dyn.F90`.
@@ -1261,7 +1261,7 @@ contains
                'south = "wall"'//NL// &
                'north = "wall"'//NL
       case ("wetdry_shoal")
-         ! Emergent shoal under dynamic wet/dry (`&ocean_wetdry_nml`): a seamount
+         ! Emergent shoal under dynamic wet/dry (`[ocean.wetdry]`): a seamount
          ! whose summit sits exactly at rest level (4 central cells seed dry,
          ! on all three seam crossings of the 2x1 / 1x2 / 2x2 splits), driven
          ! by a constant wind so the front sloshes through a ~3-cell radius and
@@ -2195,8 +2195,8 @@ contains
             "bulk_flux_ice_fw", "bulk_flux_bl", "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
             "bulk_flux_bl_ratio2", "bulk_flux_ice_fold", "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
             "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin")
-         ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
-         ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
+         ! Atmosphere-driven bulk forcing (`[ocean.atm_forcing]` +
+         ! `[ocean.bulk_flux]`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
          ! both directions), regridded per rank, turned into stress + heat +
          ! freshwater fluxes at the cell centres and averaged to faces
@@ -2213,7 +2213,7 @@ contains
          ! position shows in T.  Gate for the safe-math adoption of
          ! `rdb_atm_state`/`rdb_ocean_bulk_flux`/`rdb_ocean_surface_flux`.
          ! `bulk_flux_fw` / `bulk_flux_ice_fw`: `bulk_flux` / `bulk_flux_ice` with
-         ! `&ocean_forcing_nml freshwater = 'virtual'` (the virtual salt flux of
+         ! `[ocean.forcing] freshwater = 'virtual'` (the virtual salt flux of
          ! P - E, rain and snow on open water, and the rain through the ice).
          ! `bulk_flux_fw_mass` / `bulk_flux_fw_mass_fold`: `bulk_flux` / `bulk_flux_fold` with
          ! `freshwater = 'mass'`: the real Boussinesq P - E on the spoon basin / across the tripolar
@@ -2480,13 +2480,13 @@ contains
    end function case_nml
 
    function cice_ice_nml(label, scheme, px, py) result(nml)
-      !! The CICE-port sea ice (`&ocean_ice_nml scheme = 'cice'`) on the ocean's decomposition (stage A,
+      !! The CICE-port sea ice (`[ocean.ice] scheme = 'cice'`) on the ocean's decomposition (stage A,
       !! no fold): the full step (import, atmosphere, thermodynamics + ITD, dynamics with the category
       !! strength, remap transport, ridging, hand-off) on a cold column just above the liquidus under an
       !! oblique wind.  `cice_ice`: the re-entrant channel over a seamount (the ice crosses the wrap seam
       !! and every rank seam); `_wall`: a closed flat basin; `_island`: a closed basin with an interior
       !! land block (land crossing the seams); `_bulk`: the channel under the prescribed atmosphere of
-      !! `&ocean_atm_forcing_nml` (the atmosphere-prepare path with regridded, non-uniform fields).
+      !! `[ocean.atm_forcing]` (the atmosphere-prepare path with regridded, non-uniform fields).
       character(len=*), intent(in) :: label, scheme
       integer, intent(in) :: px, py
       character(len=:), allocatable :: nml
@@ -2681,7 +2681,7 @@ contains
       end if
       if (lbl == "cice_ice_fw_mass" .or. lbl == "cice_ice_fw_mass_fold") then
          ! Real fresh-water mass with the sea ice's weight on the surface pressure (`freshwater = 'mass'`,
-         ! `&ocean_psurf_nml ice_load`): the ice's water leaves and enters the layers as volume (`seaice_melt` ->
+         ! `[ocean.psurf] ice_load`): the ice's water leaves and enters the layers as volume (`seaice_melt` ->
          ! `fw_net` -> the mass step, ratio 2: the in-stage thermo path) and its weight rides the `eta_forcing`
          ! seam.  The channel over the seamount (the ice crosses every rank seam) / the tripolar cap (below).
          call replace_once(nml, "[ocean.forcing]"//new_line("a")// &
@@ -2766,7 +2766,7 @@ contains
          call swap_to_cice(nml)
          call replace_once(nml, "[ocean.forcing]"//NL//"enable_components = true"//NL, &
                            "[ocean.forcing]"//NL//"enable_components = true"//NL//'freshwater = "mass"'//NL)
-         ! the vmix group the bulk namelist carries (a group may appear once): ratio 8, deferred
+         ! the vmix group the bulk input carries (a group may appear once): ratio 8, deferred
          a_v = index(nml, "[ocean.vmix]")
          b_v = toml_table_end(nml, a_v)
          nml = nml(1:a_v - 1)//"[ocean.vmix]"//new_line("a")// &
@@ -2850,7 +2850,7 @@ contains
    end function cice_ice_nml
 
    function cdyn_nml(label, scheme, px, py) result(nml)
-      !! The C-grid EVP cases (D9.4): a sea-ice case with `&ocean_ice_dyn_nml dyn_scheme = 'cice_c'`
+      !! The C-grid EVP cases (D9.4): a sea-ice case with `[ocean.ice_dyn] dyn_scheme = 'cice_c'`
       !! on top of the SIS2 thermodynamics + transport.  `sea_ice_cdyn`: the periodic channel over a
       !! seamount (the ice crosses the wrap seam and every rank seam); `_rev`: revised EVP with the
       !! averaged-strength corner viscosity; `_island`: a closed basin with an interior land block;
@@ -2927,13 +2927,13 @@ contains
    end function toml_table_end
 
    subroutine replace_once(str, old, new)
-      !! Replace the first occurrence of `old` in `str` (stop when absent: a test-namelist typo).
+      !! Replace the first occurrence of `old` in `str` (stop when absent: a test-input typo).
       character(len=:), allocatable, intent(inout) :: str
       character(len=*), intent(in) :: old, new
       integer :: a
 
       a = index(str, old)
-      if (a == 0) error stop "replace_once: pattern not found in the case namelist: "//old
+      if (a == 0) error stop "replace_once: pattern not found in the case input: "//old
       str = str(1:a - 1)//new//str(a + len(old):)
    end subroutine replace_once
 
@@ -2943,7 +2943,7 @@ contains
       character(len=*), intent(in) :: old, new
       integer :: a, from
       from = 1
-      if (index(str, old) == 0) error stop "replace_all: pattern not found in the case namelist: "//old
+      if (index(str, old) == 0) error stop "replace_all: pattern not found in the case input: "//old
       do
          a = index(str(from:), old)
          if (a == 0) exit
@@ -3182,7 +3182,7 @@ contains
             call track_mass_range(snap, engine%state%cavity_flux%melt_volume_step, &
                                   engine%state%cavity_flux%comp_withdrawal_step, n)
          end if
-         ! Driver order: the sea-ice block (a no-op unless `&ocean_ice_nml
+         ! Driver order: the sea-ice block (a no-op unless `[ocean.ice]
          ! enable`) between the dyn-core advance and the finalize.
          call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
@@ -4579,7 +4579,7 @@ contains
             ! `cavity_sigma`, `cavity_gall`, `cavity_melt_only`) are NOT in the
             ! list: measured on ONE rank (np 1, same failure decomposed), their
             ! resume differs from the straight run (tracers ~1e-3, u/v ~3e-8,
-            ! `sf_heat_cavity` ~9e-2) while the same namelist with the melt off
+            ! `sf_heat_cavity` ~9e-2) while the same input with the melt off
             ! (dyn + draft only) resumes bit-identically and the ratio-2 twin
             ! does too: a serial warm-restart defect of the melt path at
             ! `dt_therm_ratio = 1`, not a decomposition defect.
@@ -4939,7 +4939,7 @@ contains
       if (.not. ref_bud%mass_active) then
          n_fail = n_fail + 1
          write (*, '(4a,i0)') "FAIL serial-out ", trim(label), "/", trim(scheme), &
-            ": reference budget was never computed (mass_active=.false.) on rank ", rank
+            ": reference budget was never computed (mass_active=false) on rank ", rank
          return
       end if
       if (.not. (ieee_is_finite(ref_bud%mass_out) .and. ieee_is_finite(ref_bud%salt_out) .and. &
@@ -5061,7 +5061,7 @@ contains
    end subroutine check_balance_fold_refusal
 
    subroutine swap_to_cice(nml)
-      !! Replace the SIS2 ice groups of a sea-ice case namelist by the CICE-port ones (`scheme = 'cice'`, the
+      !! Replace the SIS2 ice groups of a sea-ice case input by the CICE-port ones (`scheme = 'cice'`, the
       !! default remap advection, the CICE-named initial slab).
       character(len=:), allocatable, intent(inout) :: nml
       character(len=*), parameter :: NL = new_line("a")
@@ -5096,10 +5096,10 @@ contains
 
    subroutine check_cice_fences()
       !! What stages A and B do NOT cover stays refused at configure on several ranks: the upwind advection across the
-      !! tripolar fold (its fold-row face flux is not paired).  The refused namelist is the accepted `cice_ice_fold` one
+      !! tripolar fold (its fold-row face flux is not paired).  The refused input is the accepted `cice_ice_fold` one
       !! with ONLY the advection swapped, so the refusal is that knob's, and the accepted twin proves the base is valid.
       !! The named-term ledger is NOT a fence: its sums are EFP values combined in one collective per step, so the same
-      !! namelist with `ledger = .true.` is ACCEPTED on several ranks, with an explicit or an unset process grid (the
+      !! input with `ledger = .true.` is ACCEPTED on several ranks, with an explicit or an unset process grid (the
       !! `cice_ice_*_led` cases pin its numbers).
       character(len=*), parameter :: NL = new_line("a")
       character(len=:), allocatable :: base, nml
@@ -5110,7 +5110,7 @@ contains
       call read_config_from_toml_string(base, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
-         write (*, '(a,i0)') "FAIL cice fence: the accepted base namelist is refused, rank ", rank
+         write (*, '(a,i0)') "FAIL cice fence: the accepted base input is refused, rank ", rank
          n_fail = n_fail + 1
          return
       end if
@@ -5121,10 +5121,10 @@ contains
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
-         write (*, '(a,i0)') "FAIL cice fence: ledger = .true. is REFUSED on several ranks (it is supported now), rank ", rank
+         write (*, '(a,i0)') "FAIL cice fence: ledger = true is REFUSED on several ranks (it is supported now), rank ", rank
          n_fail = n_fail + 1
       else if (rank == 0) then
-         write (*, '(a)') "case cice fence: ledger = .true. accepted on several ranks (ok)"
+         write (*, '(a)') "case cice fence: ledger = true accepted on several ranks (ok)"
       end if
       call check_cice_ledger_unset_grid()
       ! the accepted tripolar-cap twin (`cice_ice_fold`, stage B) with ONLY the advection swapped to the upwind scheme
@@ -5148,7 +5148,7 @@ contains
    end subroutine check_cice_fences
 
    subroutine check_cice_ledger_unset_grid()
-      !! The ledger with NO `&mpi_nml` (px = py = 1 for `validate_config`, auto-factored by the engine on N ranks) is
+      !! The ledger with NO `[mpi]` (px = py = 1 for `validate_config`, auto-factored by the engine on N ranks) is
       !! accepted by `engine_setup` on the actual rank count and comes up active.
       type(config_t) :: cfg
       type(ocean_engine_t) :: engine
@@ -5161,7 +5161,7 @@ contains
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
-         write (*, '(a,i0)') "FAIL cice fence: validate_config refused the unset-grid ledger namelist, rank ", rank
+         write (*, '(a,i0)') "FAIL cice fence: validate_config refused the unset-grid ledger input, rank ", rank
          n_fail = n_fail + 1
          return
       end if
@@ -5186,7 +5186,7 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      ! The cavity entries need a namelist `validate_config` ACCEPTS (FV_MOM6 PGF
+      ! The cavity entries need an input `validate_config` ACCEPTS (FV_MOM6 PGF
       ! with `p_top_in_bc`, a sigma column, an analytic draft, virtual-freshwater
       ! melt with a matching top-drag coefficient): a bare `enable = .true.` is
       ! refused by `validate_config` before `engine_setup` runs, which made
@@ -5283,7 +5283,7 @@ contains
       character(len=64), parameter :: WHY(6) = [character(len=64) :: &
                                                 "global open area is 0", &
                                                 "draft_config = 'file' is unproven", &
-                                                "enable with &ocean_bulk_flux_nml enable is unproven", &
+                                                "enable with [ocean.bulk_flux] enable is unproven", &
                                                 "is not 'wall' or 'periodic'", &
                                                 "is not 'wall' or 'periodic'", &
                                                 "'tripolar_fold' is unproven"]
@@ -5296,7 +5296,7 @@ contains
       integer :: ik, ierr, im, ie
       logical :: why_found, engine_ran, must_validate
 
-      ! Entries 1..size(KNOBS) share one namelist template; the last seven are
+      ! Entries 1..size(KNOBS) share one input template; the last seven are
       ! the dynamic wet/dry refusals, built from gate cases (wet/dry itself
       ! runs decomposed: the `wetdry_*` cases).
       do ik = 1, size(KNOBS) + 7
@@ -5332,7 +5332,7 @@ contains
             ! that is accepted (and bit-identical) above, plus wet/dry, must be
             ! refused on > 1 rank by the ENGINE gate (not validate_config: the
             ! positivity limiter is supplied, so the config is valid).
-            lab = "&ocean_wetdry_nml enable = .true. / on the tripolar-fold case"
+            lab = "[ocean.wetdry] enable = true / on the tripolar-fold case"
             want = "with north = 'tripolar_fold' is unproven"
             must_validate = .true.
             nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"[ocean.continuity]"//NL// &
@@ -5346,27 +5346,27 @@ contains
             must_validate = .true.
             select case (ik - size(KNOBS) - 1)
             case (1)
-               lab = "&ocean_wetdry_nml enable = .true. / with a clamped east edge"
+               lab = "[ocean.wetdry] enable = true / with a clamped east edge"
                want = "edge 'clamped' is unproven"
                rep = 'east = "clamped"'
             case (2)
-               lab = "&ocean_wetdry_nml enable = .true. / with a chapman east edge"
+               lab = "[ocean.wetdry] enable = true / with a chapman east edge"
                want = "edge 'chapman' is unproven"
                rep = 'east = "chapman"'
             case (3)
-               lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and Orlanski radiation"
+               lab = "[ocean.wetdry] enable = true / with an open east edge and Orlanski radiation"
                want = "Orlanski radiation, full Flather"
                rep = 'east = "open"'//NL//'radiation_scheme = "orlanski"'
             case (4)
-               lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and full Flather"
+               lab = "[ocean.wetdry] enable = true / with an open east edge and full Flather"
                want = "Orlanski radiation, full Flather"
                rep = 'east = "open"'//NL//'flather_form = "full"'
             case (5)
-               lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and inflow nudging"
+               lab = "[ocean.wetdry] enable = true / with an open east edge and inflow nudging"
                want = "Orlanski radiation, full Flather"
                rep = 'east = "open"'//NL//"nudge_tau_in = 3600.0"
             case default
-               lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and tracer reservoirs"
+               lab = "[ocean.wetdry] enable = true / with an open east edge and tracer reservoirs"
                want = "reservoirs are unproven"
                rep = 'east = "open"'//NL//"res_lscale_out = 20000.0"
             end select
@@ -5729,7 +5729,7 @@ contains
       !! the averaging interval from the `rsds` axis and needs >= 3 -- all nine CMOR
       !! names) of spatially varying, east-west and north-south ASYMMETRIC
       !! prescribed atmospheric state (affine + sinusoid in lon/lat), plus
-      !! the one-line filelist the namelist points at.
+      !! the one-line filelist the input points at.
       character(len=*), intent(in) :: path, listname
       real(wp), intent(in) :: tas0, huss0
       integer, intent(in) :: nlon, nlat

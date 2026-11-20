@@ -14,7 +14,7 @@
 !!   * `sentinel_is_no_op` — `layer_rho_init = -1.0` everywhere
 !!     leaves `rho_layer` at its alloc-time value (zero from
 !!     `multilayer_state_init`).  Without this guarantee,
-!!     setting the namelist default to "disabled" wouldn't actually
+!!     setting the input default to "disabled" wouldn't actually
 !!     keep the EOS path bit-identical.
 !!
 !!   * `writes_per_layer_density` — `layer_rho_init = [1036.0, 1035.0]`

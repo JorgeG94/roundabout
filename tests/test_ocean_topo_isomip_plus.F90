@@ -1,5 +1,5 @@
 !! Analytic gates for the MISMIP+/ISOMIP+ bedrock formula bathymetry
-!! (`&ocean_topo_nml topo_config = "isomip_plus"`).
+!! (`[ocean.topo] topo_config = "isomip_plus"`).
 !!
 !! Source of truth: Asay-Davis et al. (2016), Geosci. Model Dev. 9,
 !! 2471-2497.  The bed is their Eq. (1),

@@ -81,7 +81,7 @@ contains
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
       type(ocean_metrics_t), intent(in) :: metrics
-         !! REQUIRED — and required on purpose.  Under `&vcoord_nml
+         !! REQUIRED — and required on purpose.  Under `[vcoord]
          !! zfixed_closed_faces` a CLOSED layer carries no transport, so
          !! it must not dilute the face mean either: the weight becomes
          !! `h_face·open` and `ubt` is the OPEN-column depth mean.  That
@@ -285,7 +285,7 @@ contains
       !! sign (sampled at the top of the outer step). Wall faces use the single
       !! available cell. No-op when the knob is off.
       !!
-      !! Under `&vcoord_nml zfixed_closed_faces` the sum is over the OPEN
+      !! Under `[vcoord] zfixed_closed_faces` the sum is over the OPEN
       !! column instead — see `metrics` and `h_face_upstream_open_impl`.
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
@@ -387,7 +387,7 @@ contains
                                              por_u, por_v, dy_cu, dx_cv, &
                                              dy_cu_bt, dx_cv_bt, h_up_x, h_up_y)
       !! OPEN-column upstream face thickness, for `upstream_h_face` under
-      !! `&vcoord_nml zfixed_closed_faces`.
+      !! `[vcoord] zfixed_closed_faces`.
       !!
       !! ### What the barotropic transport has to equal
       !!
@@ -577,7 +577,7 @@ contains
       !! Tendencies applied by separate operator-split steps AFTER
       !! `apply_bt_correction` (the baroclinic OBC, the sponges, the
       !! implicit vertical friction `vdiff_apply_momentum` and the
-      !! `&ocean_vdiff_nml implicit_stress` / `implicit_drag` folds) are
+      !! `[ocean.vdiff] implicit_stress` / `implicit_drag` folds) are
       !! outside the corrected set and must NOT be summed here.  Note the
       !! deliberate asymmetry that follows: `bd%du_drag` / `ss%du_stress`
       !! stay in this sum even when their explicit applies are skipped by
@@ -592,7 +592,7 @@ contains
       !! exact analytic rate under both `pred_corr` and `ssp_rk2`.
       !!
       !! Terms that reach the barotropic mode by a DIFFERENT seam have no
-      !! business here either: `&ocean_bt_nml substep_drag` and the linear
+      !! business here either: `[ocean.bt] substep_drag` and the linear
       !! wave drag multiply `bt_rem_u/v` inside the substep, the porous
       !! barriers narrow the substep transport widths, and the tide / SAL
       !! / surface-pressure loads arrive as `eta_forcing`.
@@ -852,12 +852,12 @@ contains
       !! * `from_u_av = .true.` (`pred_corr`) — the slow tendencies were
       !!   evaluated on the time-mean `u_av/v_av` (`run_stage_split`
       !!   step 2), so take ITS depth mean, weighted exactly as the
-      !!   forcing depth-mean was (h, or h·visc_rem when `&ocean_bt_nml
+      !!   forcing depth-mean was (h, or h·visc_rem when `[ocean.bt]
       !!   forcing_visc_rem`).  MOM6 does the same by construction:
       !!   `ubt_Cor = Σ_k wt_u·U_Cor` with `U_Cor = u_av`, the velocity
       !!   its `CorAdCalc` used.
       !!
-      !! **Under `&vcoord_nml zfixed_closed_faces` "the same weights" is
+      !! **Under `[vcoord] zfixed_closed_faces` "the same weights" is
       !! load-bearing and was, for one release, wrong here.**  A closed
       !! layer carries exactly zero velocity (`mask_layer_velocities`)
       !! but a non-zero `h_face`, so with
@@ -929,7 +929,7 @@ contains
 
    pure subroutine face_depth_mean_u(grid, F_3d, h_layer, F_mean_2d, nz, metrics, href, scheme)
       !! Depth-average a u-face 3D field, weighted by the per-layer face
-      !! thickness `frhat_h_face_step` returns (`&ocean_bt_nml
+      !! thickness `frhat_h_face_step` returns (`[ocean.bt]
       !! frhat_scheme`; `FRHAT_ARITHMETIC` = the plain mean of the two
       !! abutting cell columns' `h_layer` values, today's default; the
       !! argument is otherwise unchanged).  Writes to a 2D field at the
@@ -945,7 +945,7 @@ contains
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
       type(ocean_metrics_t), intent(in) :: metrics
-         !! REQUIRED.  Under `&vcoord_nml zfixed_closed_faces` every
+         !! REQUIRED.  Under `[vcoord] zfixed_closed_faces` every
          !! depth mean in the split chain MUST use the same weights
          !! `derive_bt_from_layers` and `apply_bt_correction` use —
          !! `h_face·open` — or the `dt·F_bt` the fold subtracts back out
@@ -968,7 +968,7 @@ contains
          !! it), so it must be a real, fully-sized array on every call,
          !! never a placeholder.
       integer, intent(in) :: scheme
-         !! A `FRHAT_*` constant (`rdb_constants`; `&ocean_bt_nml
+         !! A `FRHAT_*` constant (`rdb_constants`; `[ocean.bt]
          !! frhat_scheme`, via `bt_work%frhat_scheme`).
       integer :: i, j, k, nu, ny, nx_cells, il, ir
       real(wp) :: h_face, num, denom, href_l, href_r, e_prev
@@ -1032,7 +1032,7 @@ contains
 
    pure subroutine face_depth_mean_rem_u(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics, n_inner, &
                                          href, scheme)
-      !! `face_depth_mean_u` with MOM6 `wt_u` weighting (`&ocean_bt_nml
+      !! `face_depth_mean_u` with MOM6 `wt_u` weighting (`[ocean.bt]
       !! forcing_visc_rem`): the weight is
       !! `h_face·visc_rem(k)` instead of `h_face`, so layers the implicit
       !! vertical-friction solve will immediately damp (grounded sliver
@@ -1375,7 +1375,7 @@ contains
       !! same increment in every layer.
       !!
       !! The weight does NOT carry `h`.  An earlier opt-in h-weighted form
-      !! (`wt = h_face/⟨h⟩_h`, `&ocean_bt_nml correction_h_weighted`, now
+      !! (`wt = h_face/⟨h⟩_h`, `[ocean.bt] correction_h_weighted`, now
       !! retired and refused by `validate_config`) adds, beyond the
       !! barotropic `ΔKE`, a positive-definite source `½Δ²·H·(κ−1)`,
       !! `κ = Σh³Σh/(Σh²)² ≥ 1`, plus a shear feedback `Δ·Σ h·u′·(wt−1)`
@@ -1431,7 +1431,7 @@ contains
       logical, intent(in), optional :: use_bc_pgf
       logical, intent(in), optional :: use_visc_rem
          !! Weight the fold by `visc_rem/⟨visc_rem⟩_h`.  RETIRED as a live
-         !! namelist path (`&ocean_bt_nml correction_visc_rem` is
+         !! input path (`[ocean.bt] correction_visc_rem` is
          !! fail-loud at configure, D1 follow-up — MOM6's `accel_layer_u`
          !! never weights this fold) but the kernel dispatch stays, for
          !! its own direct unit tests.  Default `.false.` ⇒ the uniform
@@ -1504,7 +1504,7 @@ contains
          error stop "apply_bt_correction: rescale_strong_drag requires n_inner"
       end if
       if (do_bc_pgf .and. .not. present(grid)) then
-         error stop "apply_bt_correction: use_bc_pgf=.true. requires grid"
+         error stop "apply_bt_correction: use_bc_pgf=true requires grid"
       end if
 
       nu = size(ms%u_face_x_layer, 1)
@@ -1534,7 +1534,7 @@ contains
       end if
 
       if (do_open) then
-         ! OPEN-LAYER fold (`&vcoord_nml zfixed_closed_faces`):
+         ! OPEN-LAYER fold (`[vcoord] zfixed_closed_faces`):
          ! `wt = open·vr/⟨vr⟩_h` over `h_o = h_face·open`.  A CLOSED layer
          ! receives nothing.  Without visc_rem `wt = open` — written as
          ! exactly that (not `open·1/1`) so the no-visc_rem closed-face
@@ -1959,7 +1959,7 @@ contains
 
    pure subroutine set_fast_forcing_eta_pf(grid, metrics, bt_work, nx, ny, g_pf, eta_seam, use_seam)
       !! The barotropic substep's frozen forcing under the MOM6 split
-      !! (`&ocean_bt_nml bc_pgf_forcing`, default on):
+      !! (`[ocean.bt] bc_pgf_forcing`, default on):
       !!
       !!     F_bt_u_fast = F_bt_u + g_pf·(η_PF(i) − η_PF(i−1))·idxCu
       !!
@@ -1984,7 +1984,7 @@ contains
       !! it.
       !!
       !! `eta_seam`/`use_seam`: when the surface-pressure load ALSO enters
-      !! the slow PGF (`&ocean_pgf_nml p_top_in_bc` with the psurf seam on),
+      !! the slow PGF (`[ocean.pgf] p_top_in_bc` with the psurf seam on),
       !! `⟨PGF⟩` carries `−∇p_surf/ρ₀ = +g·∇η_ib` and the substep carries
       !! it again through `eta_forcing`; shedding `g_pf·∇η_ib` here counts
       !! it once.  Otherwise pass any full-size array and `.false.`.
@@ -2087,7 +2087,7 @@ contains
       !! arithmetic mean, UNCONDITIONALLY -- while every other depth mean
       !! in this module (`derive_bt_from_layers`'s `bt_ubt`, the BT
       !! forcing's `F_bt_u/_fast`, `apply_bt_correction`'s own folds)
-      !! already dispatches on `&ocean_bt_nml frhat_scheme` via
+      !! already dispatches on `[ocean.bt] frhat_scheme` via
       !! `frhat_h_face_step`, gated to `metrics%use_closed_faces` like
       !! every other call site (see `derive_bt_from_layers`'s matching
       !! comment). `gtot_face`'s "depth-mean zero" property holds for ANY
@@ -2359,7 +2359,7 @@ contains
       type(multilayer_state_t), intent(in) :: ms
       type(ocean_metrics_t), intent(in) :: metrics
          !! REQUIRED (see `derive_bt_from_layers`).  Under
-         !! `&vcoord_nml zfixed_closed_faces` `Htot_face` is the OPEN-column
+         !! `[vcoord] zfixed_closed_faces` `Htot_face` is the OPEN-column
          !! face depth `Σ_k h_face·open` — the column `ubt` is the mean of
          !! and the one the fast loop transports on — so the bed stress
          !! `r·hbbl·ubt` is spread over the depth that actually carries the
@@ -2430,7 +2430,7 @@ contains
       !!
       !! THE MULTIPLICATIVE-ACCUMULATOR CONTRACT.  `bt_rem_u/v` is allocated
       !! `source=1.0`.  Exactly ONE routine resets it to a fresh base each
-      !! stage: `compute_bt_rem` (`&ocean_bt_nml substep_drag`),
+      !! stage: `compute_bt_rem` (`[ocean.bt] substep_drag`),
       !! `compute_bt_rem_from_visc_rem` (`bt_rem_from_visc_rem`), or, when
       !! both are off, this routine.  Every other contributor (today
       !! `compute_bt_rem_wave_drag`) MULTIPLIES into it, and `mask_bt_rem`
@@ -2519,7 +2519,7 @@ contains
          !! REQUIRED — see `derive_bt_from_layers`/`face_depth_mean_u`.
       integer, intent(in) :: n_inner
          !! Barotropic substeps per outer step (MOM6 `nstep`; must be
-         !! >= 1 — `auto_n_inner`/the namelist floor already enforce
+         !! >= 1 — `auto_n_inner`/the input floor already enforce
          !! that).  `Instep = 1/n_inner`.
 
       integer :: i, j, nu, nv, ny_u, nx_v
@@ -2600,7 +2600,7 @@ contains
 
    pure subroutine bt_rem_open_impl(nx, ny, nz, h_layer, open_u, open_v, drag_dt, &
                                     bt_rem_u, bt_rem_v)
-      !! `compute_bt_rem` under `&vcoord_nml zfixed_closed_faces`: the
+      !! `compute_bt_rem` under `[vcoord] zfixed_closed_faces`: the
       !! same `H/(H + r·hbbl·dt_inner)` with `H = Σ_k h_face·open` (the
       !! OPEN-column centred face depth, the weight `face_depth_mean_*`
       !! uses).  A face whose every layer is closed has `H = 0` and keeps
@@ -2664,7 +2664,7 @@ contains
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
       type(ocean_metrics_t), intent(in) :: metrics
-         !! REQUIRED.  Under `&vcoord_nml zfixed_closed_faces`
+         !! REQUIRED.  Under `[vcoord] zfixed_closed_faces`
          !! `Htot_face = Σ_k h_face·open` — the same OPEN-column depth
          !! `compute_bt_rem` uses there, so the "identical `Htot_face`"
          !! contract above holds on both paths: the piston velocity
@@ -2712,7 +2712,7 @@ contains
 
    pure subroutine bt_rem_wave_drag_open_impl(nx, ny, nz, h_layer, open_u, open_v, &
                                               lwd_u, lwd_v, dt_inner, bt_rem_u, bt_rem_v)
-      !! `compute_bt_rem_wave_drag` under `&vcoord_nml zfixed_closed_faces`:
+      !! `compute_bt_rem_wave_drag` under `[vcoord] zfixed_closed_faces`:
       !! MULTIPLIES `H/(H + r_H·dt_inner)` into `bt_rem` with the OPEN-column
       !! face depth `H = Σ_k h_face·open` (the `bt_rem_open_impl` depth).
       !! `H <= 0` (every layer closed) ⇒ unmodified, MOM6's guard.

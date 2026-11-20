@@ -10,7 +10,7 @@ isn't here, please add it.
 | Acronym | Expansion | What it means in Roundabout |
 |---------|-----------|--------------------------|
 | **CWC** | Consistency With Continuity | The constraint that tracer-flux must agree with the same depth-integrated mass flux the barotropic continuity step used. Equivalently: `sum_k f_layer(k) = mass_flux_face`. Without CWC, uniform tracers don't stay uniform. |
-| **PGF** | Pressure Gradient Force | The pressure-gradient term in the layered momentum equation. Selected by `&ocean_pgf_nml form=`: Montgomery, FV-lite, FV-Wright, gprime (2-layer) or FV-MOM6. (Older notes call the baroclinic part "BPG".) |
+| **PGF** | Pressure Gradient Force | The pressure-gradient term in the layered momentum equation. Selected by `[ocean.pgf] form=`: Montgomery, FV-lite, FV-Wright, gprime (2-layer) or FV-MOM6. (Older notes call the baroclinic part "BPG".) |
 | **PCM / PLM / PPM** | Piecewise Constant / Linear / Parabolic Method | Increasing-order conservative remap reconstructions used by `rdb_remap_column`. PCM is donor-cell, PLM is minmod-limited, PPM is parabolic with monotonicity (Colella-Woodward 1984). |
 | **CFL** | Courant-Friedrichs-Lewy | Stability number `u·dt/dx`. Sets the explicit timestep. |
 | **SSP-RK** | Strong Stability Preserving Runge-Kutta | Time integrator. Roundabout uses SSP-RK2 (two-stage). Preserves monotonicity properties of the spatial discretisation. |

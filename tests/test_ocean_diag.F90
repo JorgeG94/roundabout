@@ -654,7 +654,7 @@ contains
       !! reviewer can see the guard is hit BEFORE the new check. This is
       !! the case that fails if the warn is "simplified" to fire before
       !! the `off` guard, which would spray a warning on every reusable
-      !! namelist that defensively disables ice diags.
+      !! input that defensively disables ice diags.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(ocean_state_t) :: state
@@ -665,7 +665,7 @@ contains
                     "parse_diag_spec should produce one 'ice_conc' entry")
          if (allocated(error)) exit checks
          call check(error, specs(1)%off, &
-                    "parse_diag_spec should set off=.true. for ':off'")
+                    "parse_diag_spec should set off=true for ':off'")
          if (allocated(error)) exit checks
 
          call setup_state(grid, state)
@@ -1372,8 +1372,8 @@ contains
    subroutine test_derived_catalog_size(error)
       !! Catalog ships 32 entries (30 + the TEOS-10 temperature_pt / salinity_sp pair): 7 base + 3 sea-ice velocity diags +
       !! 13 ice-shelf-cavity diags (11 melt-interface, gated on
-      !! `&ocean_cavity_melt_nml`, and 2 geometry, gated on
-      !! `&ocean_cavity_dyn_nml`) + 5 ACCESS-OM3-parity diags (C7 part 1:
+      !! `[ocean.cavity_melt]`, and 2 geometry, gated on
+      !! `[ocean.cavity_dyn]`) + 5 ACCESS-OM3-parity diags (C7 part 1:
       !! umo, vmo, tauuo, tauvo, Kd_interface) + 2 CICE velocity aliases
       !! (uvel, vvel: the drift velocities under the CICE names).  Locks
       !! the count so we notice if an entry is accidentally dropped.

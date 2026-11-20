@@ -6,22 +6,22 @@ shelf layers) — the regime that exposes instabilities flat-bottom and
 idealized basins never hit.
 
 > **The first thing to try, for almost any steep-topography blow-up:
-> `&ocean_bt_nml bebt = 0.1`.** It is the single highest-leverage knob and
+> `[ocean.bt] bebt = 0.1`.** It is the single highest-leverage knob and
 > the most common root cause (see #1). Set it before chasing anything else.
 
 ## Triage table
 
 | Symptom | Most likely knob | Group |
 |---|---|---|
-| Real-coast/steep-shelf run blows up after days; **barotropic**, mass-conserved, **death-day ∝ dt** | **`bebt = 0.1`** | `&ocean_bt_nml` |
-| NaN within hours at a **thin shallow-shelf bottom layer** | `implicit = .true.` | `&ocean_bdrag_nml` |
-| Day-1/2 death at a **steep shelf-break**, density-driven | `form = "fv_mom6"` + `mass_weight = .true.` | `&ocean_pgf_nml` |
-| Grid-scale noise hugging coasts; momentum diffusing *across* land | `stress_tensor = .true.` | `&ocean_hvisc_nml` |
-| Under-damped flow in **narrow channels / over sloping shelves** | `channel_drag = .true.` + `cdrag_side` | `&ocean_bdrag_nml` |
-| Spurious bottom-layer exchange at a steep wet-wet face at **marginal CFL** | `vol_cfl = .true.` | `&ocean_continuity_nml` |
-| Barotropic NaN in laminar spin-up (deep, ~2 km) | `auto_n_inner = .true.` | `&ocean_bt_nml` |
-| Nearshore KE not conserved (velocity-form Sadourny) | `form = "sadourny_energy"` (or `"sadourny_hk"`) | `&ocean_coriolis_nml` |
-| Smagorinsky biharmonic NaN at small dx/dt | cap `nu_4_max` | `&ocean_hvisc_nml` |
+| Real-coast/steep-shelf run blows up after days; **barotropic**, mass-conserved, **death-day ∝ dt** | **`bebt = 0.1`** | `[ocean.bt]` |
+| NaN within hours at a **thin shallow-shelf bottom layer** | `implicit = true` | `[ocean.bdrag]` |
+| Day-1/2 death at a **steep shelf-break**, density-driven | `form = "fv_mom6"` + `mass_weight = true` | `[ocean.pgf]` |
+| Grid-scale noise hugging coasts; momentum diffusing *across* land | `stress_tensor = true` | `[ocean.hvisc]` |
+| Under-damped flow in **narrow channels / over sloping shelves** | `channel_drag = true` + `cdrag_side` | `[ocean.bdrag]` |
+| Spurious bottom-layer exchange at a steep wet-wet face at **marginal CFL** | `vol_cfl = true` | `[ocean.continuity]` |
+| Barotropic NaN in laminar spin-up (deep, ~2 km) | `auto_n_inner = true` | `[ocean.bt]` |
+| Nearshore KE not conserved (velocity-form Sadourny) | `form = "sadourny_energy"` (or `"sadourny_hk"`) | `[ocean.coriolis]` |
+| Smagorinsky biharmonic NaN at small dx/dt | cap `nu_4_max` | `[ocean.hvisc]` |
 | Real bathy: land "drowned" / continents not walling | regenerate bathy with land preserved (`b < 2 m`) | bathy prep |
 | Isolated wet cells / 1-cell channels / NaN at the coast | remove degenerate 1-cell features (topology cleanup) | bathy prep |
 
@@ -45,7 +45,7 @@ mode at a steep `H` step (e.g. a 100 m shelf next to 5000 m, or against a
 wall) grows unchecked. The lateral-viscosity closures (even `stress_tensor`)
 act on the *layer* momentum and never reach the fast barotropic loop.
 
-**Fix.** `&ocean_bt_nml bebt = 0.1` (MOM6's default; valid 0→1, "must be
+**Fix.** `[ocean.bt] bebt = 0.1` (MOM6's default; valid 0→1, "must be
 greater than about 0.05 in practice" per MOM6) — a
 backward-Euler velocity-projection bias (`ubt_trans = (1+bebt)·ubt^n −
 bebt·ubt^{n-1}`) that damps the barotropic gravity modes. `bebt = 0` ⇒
@@ -69,7 +69,7 @@ damping was the whole cure; the ports only delayed the symptom.
 
 Quadratic bottom drag `du/dt = −C_d·|U|·u/h` is **explicit** by default and
 goes unstable when `C_d·|U|·dt/h > 1` — easy on a thin shelf bottom layer
-(5 m layer, dt=300, C_d=2.5e-3 ⇒ |U|≈6.7 m/s). `&ocean_bdrag_nml implicit =
+(5 m layer, dt=300, C_d=2.5e-3 ⇒ |U|≈6.7 m/s). `[ocean.bdrag] implicit =
 .true.` makes it backward-Euler (`u/(1+dt·C_d·|U|/h)`), unconditionally
 stable for any `h` (matches MOM6's implicit bottom-BC drag). Default-off ⇒
 bit-identical.
@@ -78,7 +78,7 @@ bit-identical.
 
 The FV-PGF interface integral is a layer-midpoint average; at a steep
 unequal-depth face it injects a spurious horizontal density gradient (the
-classic σ/z* shelf-break PGE). `&ocean_pgf_nml form="fv_mom6", mass_weight=
+classic σ/z* shelf-break PGE). `[ocean.pgf] form="fv_mom6", mass_weight=
 .true.` ports MOM6's `hWght` mass-weighting (blend toward the thinner column),
 cutting the shelf-break PGF error ~50×. `hWght=0` on aligned columns ⇒
 bit-identical.
@@ -87,33 +87,33 @@ bit-identical.
 
 The default lateral viscosity is a velocity Laplacian with global static
 caps and **no land masking inside the stencil** (it diffuses momentum across
-coastlines). `&ocean_hvisc_nml stress_tensor=.true.` switches to MOM6's
+coastlines). `[ocean.hvisc] stress_tensor=true` switches to MOM6's
 thickness-weighted stress-divergence with a **per-cell CFL viscosity limiter**
 (`bound_coef`, lets you crank scale-selective viscosity on a non-uniform grid
 without NaN) and **coast-masks** the strain/stress. Default-off ⇒ bit-identical.
 The biharmonic add-on (`nu_4` / `smag_ah` / `leith_biharm`) composes with this
 path (it previously did not — an early return silently disabled it whenever
-`stress_tensor=.true.`); the harmonic part is momentum-conserving and
+`stress_tensor=true`); the harmonic part is momentum-conserving and
 coast-masked, the velocity-form biharmonic part is not.
 
 ## #5 — Narrow channels / sloping shelves (`channel_drag`)
 
 MOM6 applies lateral side-wall Rayleigh drag in partially-blocked cells to
 *every* layer intersecting sloping bathymetry; we had only bed-layer drag.
-`&ocean_bdrag_nml channel_drag=.true., cdrag_side=2.5e-3` adds it (implicit,
+`[ocean.bdrag] channel_drag=true, cdrag_side=2.5e-3` adds it (implicit,
 thin-layer stable). All-wet/flat ⇒ no-op.
 
 ## #6 — Marginal-CFL continuity at a steep wet-wet face (`vol_cfl`)
 
 Continuity-PPM used the CFL-free PPM edge value for the face thickness (the
-CFL→0 limit). `&ocean_continuity_nml vol_cfl=.true.` adds MOM6's swept-volume
+CFL→0 limit). `[ocean.continuity] vol_cfl=true` adds MOM6's swept-volume
 `O(CFL)` term. Matters only at marginal CFL across a steep thickness jump;
 negligible (and `cfl=0` bit-identical) otherwise.
 
 ## #7 — Barotropic CFL in spin-up (`auto_n_inner`)
 
 Fixed `n_inner` can under-resolve the 2-D gravity-wave CFL in deep water →
-barotropic NaN. `&ocean_bt_nml auto_n_inner=.true.` derives `n_inner` once
+barotropic NaN. `[ocean.bt] auto_n_inner=true` derives `n_inner` once
 at configure from the 2-D bound `√(g·H)·dt_bt·√(1/dx²+1/dy²) ≤ cfl_bt_safety`,
 evaluated per wet cell (local depth, local cell size; land ignored).
 

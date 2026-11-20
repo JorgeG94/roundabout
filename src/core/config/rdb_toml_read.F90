@@ -27,7 +27,7 @@ module rdb_toml_read
                              nml_int_key_t, nml_logical_key_t, nml_string_key_t, &
                              nml_enum_key_t, nml_real_array_key_t, nml_key_t, add_err, &
                              suggest, group_key_list, make_prefix, reset_state, &
-                             post_parse_validate
+                             post_parse_validate, group_to_table
    use tomlf, only: toml_table, toml_array, toml_keyval, toml_value, toml_key, &
                     toml_context, toml_error, toml_load, toml_loads, get_value, len
    use tomlf_constants, only: toml_type
@@ -48,26 +48,8 @@ module rdb_toml_read
 contains
 
    ! ------------------------------------------------------------------
-   ! The group <-> table mapping (the only place it is spelled out).
+   ! The group <-> table mapping (`group_to_table` lives in rdb_nml_schema).
    ! ------------------------------------------------------------------
-
-   pure function group_to_table(group) result(table)
-      !! Table path of a registered group name (the bare name, as stored in
-      !! the schema: `ocean_hvisc`, `grid`).  `ocean_<x>` -> `ocean.<x>`;
-      !! anything else is its own top-level table.
-      character(len=*), intent(in) :: group
-      character(len=:), allocatable :: table
-      integer :: n
-
-      n = len(OCEAN_PREFIX)
-      if (len_trim(group) > n) then
-         if (group(1:n) == OCEAN_PREFIX) then
-            table = OCEAN_TABLE//"."//trim(group(n + 1:))
-            return
-         end if
-      end if
-      table = trim(group)
-   end function group_to_table
 
    pure function table_to_group(table) result(group)
       !! Group name of a table path, or an EMPTY string when `table` is not the

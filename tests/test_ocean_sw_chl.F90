@@ -1,5 +1,5 @@
 !! Analytical tests for the chlorophyll-dependent N-band penetrating
-!! shortwave (`&ocean_thermo_nml sw_scheme = "manizza05"`, Manizza et al.
+!! shortwave (`[ocean.thermo] sw_scheme = "manizza05"`, Manizza et al.
 !! 2005, GRL 32, L05603): `rdb_ocean_sw_chl` (opacity + reader consumer),
 !! `sw_band_fractions` / `sw_transmission_nb` / the N-band deposition
 !! kernels in `rdb_ocean_surface_flux`, and the KPP `B_0` + EPBL ledger
@@ -552,7 +552,7 @@ contains
       checks: block
          ! (a) scheme off == default, bit for bit.
          call check(error, all(v_off%kv == v_def%kv) .and. all(v_off%kt == v_def%kt), &
-                    "sw_chl = .false. must leave KPP identical to the two-band default")
+                    "sw_chl = false must leave KPP identical to the two-band default")
          if (allocated(error)) exit checks
 
          ! (b) with the scheme on, B_0 uses the N-band T(h_b): the kv ratio
@@ -683,7 +683,7 @@ contains
 
       checks: block
          call check(error, all(e_off%ctke_sw%data == e_def%ctke_sw%data), &
-                    "sw_chl = .false. must leave the EPBL SW ledger identical to the default")
+                    "sw_chl = false must leave the EPBL SW ledger identical to the default")
          if (allocated(error)) exit checks
 
          ! Analytical ledger: uniform linear-EOS column => constant prefactor.
@@ -754,7 +754,7 @@ contains
       type(hgrid_t) :: grid
       integer :: ierr
 
-      ! ---- validate_config: namelist level ----
+      ! ---- validate_config: input level ----
       call check(error, validate_thermo('sw_scheme = "manizza05"'//new_line("a")// &
                                         'sw_chl_file = "x.nc"'//new_line("a")// &
                                         'sw_chl_var = "chl_a"'//new_line("a")) == OCEAN_STATUS_OK, &

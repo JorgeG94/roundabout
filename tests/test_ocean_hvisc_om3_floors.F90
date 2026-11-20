@@ -345,7 +345,7 @@ contains
       integer :: ierr
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
-         call check(error, .false., what//": namelist must parse")
+         call check(error, .false., what//": input must parse")
          return
       end if
       ierr = -999

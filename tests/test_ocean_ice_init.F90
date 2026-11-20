@@ -15,7 +15,7 @@
 !! update self` before any host assertion, `exit data` at teardown.
 !!
 !! `ice%mh_lim` is filled by `ice%init` (`ice_itd_category_bounds`) —
-!! PR-58's `&ocean_ice_nml hlim` override is NOT merged on this branch, so
+!! PR-58's `[ocean.ice] hlim` override is NOT merged on this branch, so
 !! case 3 hand-seeds a non-default `ice%mh_lim` after `init` and re-runs the
 !! binning to prove `ice_ic_target_category`/`ice_init_apply` read the LIVE
 !! `ice%mh_lim` field, never a hardcoded/re-derived table (the PR-58 seam,

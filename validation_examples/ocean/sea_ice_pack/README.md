@@ -1,12 +1,12 @@
 # Sea-ice analytic IC — pack under wind, from step 1
 
-The first shipped namelist that turns sea ice on **without** growing it
-from frazil first: `&ocean_ice_ic_nml conc_config = "uniform"` seeds a
+The first shipped input that turns sea ice on **without** growing it
+from frazil first: `[ocean.ice_ic] conc_config = "uniform"` seeds a
 2 m, 100%-covered pack over the whole (20×20 @ 10 km, flat, f-plane)
 domain before the first step, pushed through the exact enthalpy
 inversion so the seeded state is a provable fixed point of the ITD
-restore on step 1 (see the namelist header). The same steady eastward
-wind stress as `../sea_ice/polar_freezeup_dynamics.nml` (`tau_x = 0.05`
+restore on step 1 (see the input header). The same steady eastward
+wind stress as `../sea_ice/polar_freezeup_dynamics.toml` (`tau_x = 0.05`
 Pa) is applied from `t = 0`, so — unlike that case — there is a live pack
 to push on immediately, with no frazil spin-up needed. Short run (2
 days): the question is "does a pack that already exists respond to wind
@@ -20,16 +20,16 @@ Hibler 1979 ice strength; Nansen 1902 free-drift reference).
 
 ```bash
 source nvhpc_env.sh
-build_cc70/rdb validation_examples/ocean/sea_ice_pack/sea_ice_pack.nml
+build_cc70/rdb validation_examples/ocean/sea_ice_pack/sea_ice_pack.toml
 ```
 
-## Namelist fix applied for the v0.1.0 release candidate
+## Input fix applied for the v0.1.0 release candidate
 
-**`sea_ice_pack.nml` shipped `dynamics = .true.` without
-`transport = .true.`.** `./rdb --validate-only` warns on exactly this
+**`sea_ice_pack.toml` shipped `dynamics = true` without
+`transport = true`.** `./rdb --validate-only` warns on exactly this
 combination: *"drift-only mode has no CFL backstop on u_ice (transport's
 positivity abort is the only ice-velocity guard) and is unvalidated."*
-`transport = .true.` costs nothing the example doesn't already satisfy
+`transport = true` costs nothing the example doesn't already satisfy
 (`ncat = 5 > 1`, all edges wall, single rank) and is what actually lets
 the EVP-computed velocity field move ice mass around — without it,
 `dynamics` alone only computes `u_ice`/`v_ice`, never redistributes
@@ -46,7 +46,7 @@ the expected EVP behaviour is the opposite of the ice-free-start dynamics
 case: **near-immobile, stress-limited drift from step 0**, not free drift
 decaying into it.
 
-Measured (re-run with `&ocean_diag_nml enabled = .true., diags = "ice_u
+Measured (re-run with `[ocean.diag] enabled = true, diags = "ice_u
 ice_v ice_speed"` to get the field, since the console summary line is
 broken — see "Bugs found" below):
 
@@ -62,11 +62,11 @@ the 2 days — a rigid, fully-jammed pack pressed against the (wall-only)
 boundary, exactly the "stress-limited convergence, no grid-scale noise"
 signature Hunke & Dukowicz (1997) EVP is designed to produce, and the
 mirror image of the free-drift-then-jam curve measured in the
-`polar_freezeup_dynamics.nml` case. Thickness stays within 0.5% of the
+`polar_freezeup_dynamics.toml` case. Thickness stays within 0.5% of the
 seeded 2.0 m everywhere (physical-index range of the re-run NetCDF file
 — the ghost-diluted console/file mean reads 0.694444 of this, see below),
 confirming the IC is close to an exact fixed point of both the ITD
-restore and the EVP, as the namelist header claims, with only a small
+restore and the EVP, as the input header claims, with only a small
 residual thermodynamic adjustment (the IC's −4 °C / 4 PSU ice column is
 not in exact thermal equilibrium with the `q_heat = −60 W/m²` / `air_temp
 = −20 °C` forcing).

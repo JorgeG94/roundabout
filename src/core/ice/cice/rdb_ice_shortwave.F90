@@ -99,7 +99,7 @@ module rdb_ice_shortwave
    real(wp), parameter :: ICE_SW_TIMELT = 0.0_wp
       !! Melting temperature of the ice top surface (degC).
 
-   ! Upstream code defaults for the namelist knobs (OM3 uses 0.86/0.44/0.98/0.70/0.1).
+   ! Upstream code defaults for the input knobs (OM3 uses 0.86/0.44/0.98/0.70/0.1).
    real(wp), parameter :: ICE_ALBICEV_DEFAULT = 0.78_wp
       !! Cold bare thick ice albedo, visible.
    real(wp), parameter :: ICE_ALBICEI_DEFAULT = 0.36_wp

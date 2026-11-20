@@ -89,7 +89,7 @@ module test_ocean_ice_snowfall
    real(wp), parameter :: FPREC = 2.0e-5_wp
       !! Uniform test snowfall rate (kg/m^2/s) for the driver-chain cases
       !! (~0.024 kg/m^2 per DT_THERM window -- comfortably resolvable in
-      !! double precision, well inside the &ocean_ice_nml snowfall min=0
+      !! double precision, well inside the [ocean.ice] snowfall min=0
       !! envelope).
 
 contains

@@ -1315,7 +1315,7 @@ contains
 
    subroutine test_windowed_drain_with_surface_flux(error)
       !! REGRESSION (2026-09-12): the windowed tracer-advection drain
-      !! (`&ocean_vmix_nml dt_tracer_advect_ratio > 1`) TOGETHER WITH an
+      !! (`[ocean.vmix] dt_tracer_advect_ratio > 1`) TOGETHER WITH an
       !! active surface tracer flux.  That exact combination was uncovered:
       !! every windowed test ran adiabatically and every surface-flux test ran
       !! at ratio = 1, so nothing drove both.
@@ -1327,7 +1327,7 @@ contains
       !! `(Q − Q0)/Q0`.  Raw drift cannot subtract a source, so a perfectly
       !! conservative run with `q_heat = −40 W/m²` reported the heat the flux
       !! legitimately added as a 5.6e-5 "leak" — 1e5x the corpus, on four
-      !! shipped `acc_channel` namelists.
+      !! shipped `acc_channel` inputs.
       !!
       !! The fix instruments the windowed path end to end: the drain
       !! sub-cycle AND both halves of the concentration hold accumulate into
@@ -1477,7 +1477,7 @@ contains
 
          ! (d) ... and the closure is doing real work: the raw drift the old
          !     fall-back printed is orders of magnitude larger.  This is the
-         !     shipped-namelist signature (5.6e-5 drift vs 3e-14 residual).
+         !     shipped-input signature (5.6e-5 drift vs 3e-14 residual).
          call check(error, abs(drift_heat) > 1.0e3_wp*abs(res_heat), &
                     "raw heat drift must dominate the closed residual (the fall-back was wrong)")
 
@@ -1613,7 +1613,7 @@ contains
 
          ! (d) ... and the closure is doing real work: the raw drift the old
          !     fall-back printed is orders of magnitude larger.  This is the
-         !     shipped-namelist signature (5.6e-5 drift vs 3e-14 residual).
+         !     shipped-input signature (5.6e-5 drift vs 3e-14 residual).
          call check(error, abs(drift_heat) > 1.0e3_wp*abs(res_heat), &
                     "raw heat drift must dominate the closed residual (the fall-back was wrong)")
 

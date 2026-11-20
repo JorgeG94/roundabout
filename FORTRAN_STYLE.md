@@ -298,12 +298,12 @@ subroutine configure_example(cfg, ocean_state, ierr)
 
    if (present(ierr)) ierr = OCEAN_STATUS_OK
    if (cfg%ocean%example%width < 1) then
-      call global_logger%error("&ocean_example_nml width must be >= 1")
+      call global_logger%error("[ocean.example] width must be >= 1")
       if (present(ierr)) then
          ierr = OCEAN_STATUS_ERR_SETUP
          return
       end if
-      error stop "configure_example: invalid &ocean_example_nml width"
+      error stop "configure_example: invalid [ocean.example] width"
    end if
 end subroutine configure_example
 ```
@@ -398,7 +398,7 @@ use pic_strings, only: to_string
 
 call global_logger%info("ALE remap: " // to_string(n_remapped) // " columns")
 call global_logger%warning("sponge width exceeds the tile; clipped")
-call global_logger%error("&ocean_bc_nml: CHAPMAN edges are single-rank")
+call global_logger%error("[ocean.bc]: CHAPMAN edges are single-rank")
 ```
 
 ### No Emojis in Fortran
@@ -417,7 +417,7 @@ call global_logger%error("&ocean_bc_nml: CHAPMAN edges are single-rank")
 - `character(len=:), allocatable :: lines(:)` followed by `lines = ""`
   re-allocates `lines` with `len=0` (F2018 10.2.1.3). ifx does this correctly;
   gfortran and nvfortran don't, which is how a reader silently discarded
-  every in-memory namelist on ifx. Blank-fill through a section: `lines(:) = ""`.
+  every in-memory input on ifx. Blank-fill through a section: `lines(:) = ""`.
 
 ### Transcendentals Go Through rdb_safe_math
 
@@ -496,7 +496,7 @@ end do
 - `!!` is the FORD documentation marker, placed **below** the declaration it
   documents. FORD renders the docs from these on every PR to `main`; don't
   write a parallel markdown description of a module or kernel (that copy rots).
-- Document every public type, procedure, type component and namelist field:
+- Document every public type, procedure, type component and input field:
   what it is and its unit, not what the code obviously does.
 - Use `!` for ordinary comments inside a routine body.
 

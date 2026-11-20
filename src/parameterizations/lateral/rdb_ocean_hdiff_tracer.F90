@@ -325,7 +325,7 @@ contains
       logical, intent(in) :: wall_w, wall_e, wall_s, wall_n
       real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
          !! Per-layer 0/1 u-face open mask
-         !! (`&vcoord_nml zfixed_closed_faces`).  A CLOSED face is a
+         !! (`[vcoord] zfixed_closed_faces`).  A CLOSED face is a
          !! z-level WALL for that layer, so it carries no diffusive
          !! tracer flux either — the same statement continuity makes
          !! about mass.

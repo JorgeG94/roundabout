@@ -270,7 +270,7 @@ contains
       !! promoting that to fail-loud never re-derives the rule — it edits one
       !! line.  Two rejections here, and — the part an over-eager guard
       !! breaks — every shipped value still accepted:
-      !! the 1.0e-4 type default AND the 1.5e-4 five shipped namelists set,
+      !! the 1.0e-4 type default AND the 1.5e-4 five shipped inputs set,
       !! which sits exactly ON `H_VANISHED` and is legal because every
       !! downstream vanish gate is a strict `>`.
       type(error_type), allocatable, intent(out) :: error

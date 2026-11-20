@@ -374,7 +374,7 @@ contains
          max_T_dev = maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic))
 
          call check(error, max_S_dev < 1.0e-12_wp, &
-                    "per-tracer flag: salinity touched despite do_horizontal_diffusion=.false.")
+                    "per-tracer flag: salinity touched despite do_horizontal_diffusion=false")
          if (allocated(error)) exit checks
          call check(error, max_T_dev > 1.0e-3_wp, &
                     "per-tracer flag: temperature should have diffused")
@@ -576,19 +576,19 @@ contains
             end do
          end do
          call check(error, west_dev > 1.0e-6_wp, &
-                    "hdiff: an MPI-seam (has_west=.false.) edge must NOT be hard-zeroed "// &
+                    "hdiff: an MPI-seam (has_west=false) edge must NOT be hard-zeroed "// &
                     "— the west column must respond to the neighbour ghost value")
          call hd_seam%destroy(); call ms_seam%destroy()
       end block checks
    end subroutine test_wall_physical_edge
 
    subroutine test_kappa_from_config(error)
-      !! PR-9 §9.8.  `&ocean_hdiff_nml kappa_h` reaches
+      !! PR-9 §9.8.  `[ocean.hdiff] kappa_h` reaches
       !! `ocean_state%hdiff_tracer%kappa_h` via `configure_ocean_hdiff` —
       !! driven from the CONFIG, not by setting the field directly (the
       !! gap the audit flagged: the existing suite only ever pokes
       !! `hd%kappa_h` directly, which is exactly why nobody noticed the
-      !! namelist key did not exist).  Bit-identity half: the DEFAULT
+      !! input key did not exist).  Bit-identity half: the DEFAULT
       !! config leaves kappa_h = 0.0, so the kernel's short-circuit stays
       !! intact.
       type(error_type), allocatable, intent(out) :: error
@@ -599,7 +599,7 @@ contains
          cfg%ocean%hdiff%kappa_h = 1.0e2_wp
          call configure_ocean_hdiff(cfg, ocean_state, compute_rank=0)
          call check(error, ocean_state%hdiff_tracer%kappa_h == 1.0e2_wp, &
-                    "configure_ocean_hdiff must copy &ocean_hdiff_nml kappa_h onto "// &
+                    "configure_ocean_hdiff must copy [ocean.hdiff] kappa_h onto "// &
                     "ocean_state%hdiff_tracer%kappa_h")
          if (allocated(error)) exit checks
 

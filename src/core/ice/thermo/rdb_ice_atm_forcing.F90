@@ -5,7 +5,7 @@
 module rdb_ice_atm_forcing
    !! Fills ocean_sea_ice_t's coupleable seam
    !! (atm_sf0/atm_dsfdt/atm_sw_dn/atm_fprec) either from the
-   !! &ocean_ice_nml scalar restoring knobs (`ice_atm_forcing_restoring`)
+   !! [ocean.ice] scalar restoring knobs (`ice_atm_forcing_restoring`)
    !! or from the prescribed atmospheric state (`ice_atm_forcing_from_atm`,
    !! C2c-3b) -- the engine dispatches on `atm_state_t%enable`. SF(T) is
    !! always upward-positive, linearised at a surface temperature `T`:
@@ -42,7 +42,7 @@ module rdb_ice_atm_forcing
    !!            + rho*L_s*C_E*wv*dqsat_ice_dT(T0)
    !!
    !! (`eps` is the atm-forcing bulk-flux emissivity knob,
-   !! `&ocean_bulk_flux_nml emissivity` -- LY09's over-ice formula does
+   !! `[ocean.bulk_flux] emissivity` -- LY09's over-ice formula does
    !! not distinguish an ocean- from an ice-emissivity, so this reuses the
    !! one knob rather than adding a second; `qsat_ice` is
    !! `bulk_flux_qsat_ice`, `L_s` is `BULK_LATENT_SUBLIMATION`).

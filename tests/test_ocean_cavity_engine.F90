@@ -1,5 +1,5 @@
 module test_ocean_cavity_engine
-   !! Engine-driven ice-shelf cavity cases, built from namelists and stepped
+   !! Engine-driven ice-shelf cavity cases, built from inputs and stepped
    !! through the production `engine_*` sequence on ONE rank, with the
    !! interesting geometry placed ON the seams of the MPI bit-identity gate
    !! (`tests/mpi/test_ocean_decomp_bitid_mpi.F90`: 26 x 18, nghost = 3, so the
@@ -31,7 +31,7 @@ module test_ocean_cavity_engine
    !! `cavity_case_nml` is public so the bit-identity gate can paste the same
    !! text: it opens with the gate's own `common` groups (nz_layers is the
    !! only difference: 8 for z_fixed) and, like the gate's other cases, leaves
-   !! `&output_nml output_to_file = .false.` to the caller.
+   !! `[output] output_to_file = false` to the caller.
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp, RHO_WATER
@@ -85,7 +85,7 @@ contains
    end subroutine collect_ocean_cavity_engine_tests
 
    function cavity_case_nml(label, scheme, px, py) result(nml)
-      !! Namelist of one case ("cavity_zfixed" | "cavity_sigma") on a px x py grid.
+      !! Input of one case ("cavity_zfixed" | "cavity_sigma") on a px x py grid.
       character(len=*), intent(in) :: label, scheme
       integer, intent(in) :: px, py
       character(len=:), allocatable :: nml

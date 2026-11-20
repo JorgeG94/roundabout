@@ -255,7 +255,7 @@ contains
    module subroutine apply_time_unit_cascade(cfg)
       !! Post-parse time-unit fixup shared by the file + string config
       !! paths.  `t_end`, `status_interval`, `ocean_diag%dt_out` are given
-      !! in `time_unit` from `&time_nml`; multiply through to SI seconds.
+      !! in `time_unit` from `[time]`; multiply through to SI seconds.
       !! `dt_fixed`/`dt_max` stay in seconds; default `time_unit="s"`
       !! gives a 1× factor (bit-identical to before).
       type(config_t), intent(inout) :: cfg
@@ -286,9 +286,9 @@ contains
 
    module subroutine apply_cartesian_degrees(cfg)
       !! Post-parse Cartesian domain sizing (MOM6 GRID_CONFIG="cartesian" +
-      !! AXIS_UNITS / LENLON / LENLAT).  When `&ocean_grid_nml len_lon`/`len_lat`
+      !! AXIS_UNITS / LENLON / LENLAT).  When `[ocean.grid] len_lon`/`len_lat`
       !! are set (> 0) on an ocean Cartesian grid, DERIVE the uniform
-      !! `&grid_nml dx`/`dy` (metres) from the domain extent, the physical cell
+      !! `[grid] dx`/`dy` (metres) from the domain extent, the physical cell
       !! count (`nx`/`ny` = MOM6 NIGLOBAL/NJGLOBAL) and `axis_units`, exactly as
       !! MOM6's `set_grid_metrics_cartesian`:
       !!   degrees : dx = rad_earth · len_lon · π/180 / nx  (arc length, no cos(lat))
@@ -305,7 +305,7 @@ contains
       if (cfg%ocean%grid%len_lon <= 0.0_wp .and. cfg%ocean%grid%len_lat <= 0.0_wp) return
 
       if (trim(cfg%sim_type) /= "ocean") then
-         call logger%error("len_lon/len_lat are &ocean_grid_nml knobs; "// &
+         call logger%error("len_lon/len_lat are [ocean.grid] knobs; "// &
                            "set sim_type='ocean' to use them")
          return
       end if
@@ -313,7 +313,7 @@ contains
          call logger%error("len_lon/len_lat (MOM6 LENLON/LENLAT) apply to "// &
                            "grid_config='cartesian' only (got '"// &
                            trim(cfg%ocean%grid%grid_config)//"'); the spherical/"// &
-                           "tripolar paths already read &grid_nml dx/dy as degrees")
+                           "tripolar paths already read [grid] dx/dy as degrees")
          return
       end if
       if (cfg%ocean%grid%len_lon <= 0.0_wp .or. cfg%ocean%grid%len_lat <= 0.0_wp) then

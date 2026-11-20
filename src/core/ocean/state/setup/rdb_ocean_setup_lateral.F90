@@ -122,7 +122,7 @@ contains
          end if
       end if
 
-      ! Vertical coordinate: namelist string → VCOORD_* code; z_fixed needs a
+      ! Vertical coordinate: input string → VCOORD_* code; z_fixed needs a
       ! reference total depth.  Without this every vcoord_type silently ran
       ! Eulerian-z (no ALE remap).
       ocean_state%vcoord%coord_type = parse_ocean_vcoord_type(cfg%vcoord_type)
@@ -200,14 +200,14 @@ contains
       ocean_state%vmix%interior_closure = &
          parse_vmix_interior_closure(trim(cfg%ocean%vmix%interior_closure))
       if (ocean_state%vmix%interior_closure < 0) then
-         call fail("ocean_vmix_nml: interior_closure='"// &
+         call fail("[ocean.vmix]: interior_closure='"// &
                    trim(cfg%ocean%vmix%interior_closure)// &
                    "' not recognised; valid: pp81, none", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
       if (ocean_state%vmix%interior_closure == VMIX_INTERIOR_NONE .and. &
           .not. cfg%ocean%vmix%use_closure) then
-         call fail("ocean_vmix_nml: interior_closure='none' needs use_closure=.true. "// &
+         call fail("[ocean.vmix]: interior_closure='none' needs use_closure=true "// &
                    "(it selects the interior of the closure pipeline; with the "// &
                    "pipeline off there is nothing to select)", ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -216,7 +216,7 @@ contains
       ! it tracks the dyn-core EOS (was a private never-refreshed copy).
       ocean_state%vmix%eos = ocean_state%eos
 
-      ! PP81 interior closure + KPP BL-depth constants (`&ocean_vmix_nml
+      ! PP81 interior closure + KPP BL-depth constants (`[ocean.vmix]
       ! pp81_*`/`kpp_*`).  Each default equals the ocean_vmix_t field
       ! default, so an nml that never mentions these keys is bit-identical.
       ocean_state%vmix%pp81_nu0 = cfg%ocean%vmix%pp81_nu0
@@ -227,12 +227,12 @@ contains
       ocean_state%vmix%ri_crit = cfg%ocean%vmix%kpp_ri_crit
       ocean_state%vmix%cs_nonlocal = cfg%ocean%vmix%kpp_cs_nonlocal
       ocean_state%vmix%c_vt2 = cfg%ocean%vmix%kpp_c_vt2
-      ! (PR-21) KPP shortwave-in-BL method (&ocean_thermo_nml
+      ! (PR-21) KPP shortwave-in-BL method ([ocean.thermo]
       ! kpp_sw_method).  validate_config already rejected unknown strings.
       ocean_state%vmix%kpp_sw_method = &
          parse_kpp_sw_method(trim(cfg%ocean%thermo%kpp_sw_method))
       ! (E4) Source of the α/β pair behind the KPP `B_0` and the
-      ! double-diffusion density ratio (`&ocean_vmix_nml
+      ! double-diffusion density ratio (`[ocean.vmix]
       ! buoyancy_coeffs`).  `nml_enum allowed=` already rejected an
       ! unknown spelling at parse time; the INVALID arm here is the
       ! belt-and-braces guard that keeps the schema list and
@@ -244,13 +244,13 @@ contains
       ocean_state%vmix%buoyancy_coeffs = &
          parse_buoyancy_coeffs(trim(cfg%ocean%vmix%buoyancy_coeffs))
       if (ocean_state%vmix%buoyancy_coeffs == BUOY_COEFFS_INVALID) then
-         call fail("ocean_vmix_nml: buoyancy_coeffs='"// &
+         call fail("[ocean.vmix]: buoyancy_coeffs='"// &
                    trim(cfg%ocean%vmix%buoyancy_coeffs)// &
                    "' is not a known source; use 'constant' or 'eos'", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
-      ! Mirror of the E3 `&ocean_psurf_nml in_eos` seam gate, taken from
+      ! Mirror of the E3 `[ocean.psurf] in_eos` seam gate, taken from
       ! the SAME knob EPBL's `in_eos` takes so the two boundary-layer
       ! schemes measure their in-situ pressures from the same origin.
       ! NOT redundant with `p_top` being zero — a cavity fills `p_top`
@@ -425,7 +425,7 @@ contains
       !! for `VCOORD_RHO` / `VCOORD_HYCOM`.  `rho_target(0)` is the surface
       !! (lightest) interface, `rho_target(nz_ml)` the bed (densest).
       !!
-      !!   * `&vcoord_nml rho_target_profile = "uniform"` (default) — a
+      !!   * `[vcoord] rho_target_profile = "uniform"` (default) — a
       !!     uniform light→dense linspace from `rho_target_light` /
       !!     `rho_target_dense` (MOM6 `ALE_COORDINATE_CONFIG=UNIFORM`);
       !!   * `"list"` — the `nz_ml+1` interface densities of
@@ -464,7 +464,7 @@ contains
    end subroutine configure_rho_target
 
    module subroutine configure_ocean_wavespeed(cfg, ocean_state, grid, ierr)
-      !! Copy the `&ocean_wavespeed_nml` knobs onto the wave-speed slot
+      !! Copy the `[ocean.wavespeed]` knobs onto the wave-speed slot
       !! (B1).  Diagnostic, no mutual exclusion: cg1/Rd read `rho_layer`
       !! directly.  Fills `f_centre` + the static `beta_centre = |grad
       !! f|` field via `fill_coriolis_centre` + `build_static` — the
@@ -492,7 +492,7 @@ contains
          ! NZ_STACK_MAX column arrays; wavespeed_compute never ran before
          ! this PR so nz > NZ_STACK_MAX never overran it.  It can now.
          if (cfg%nz_layers > NZ_STACK_MAX) then
-            call fail("ocean_wavespeed_nml: nz_layers exceeds "// &
+            call fail("[ocean.wavespeed]: nz_layers exceeds "// &
                       "NZ_STACK_MAX (raise NZ_STACK_MAX in rdb_constants)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -509,7 +509,7 @@ contains
          deallocate (f_centre)
 
          if (wcfg%n_wavespeed < 1) then
-            call fail("ocean_wavespeed_nml: n_wavespeed must be >= 1", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.wavespeed]: n_wavespeed must be >= 1", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
       end associate
@@ -558,14 +558,14 @@ contains
       !! Fan the ONE configured Boussinesq reference density out to every
       !! remaining slot that carries its own `rho0` copy.
       !!
-      !! `&ocean_ic_nml rho_0` lands on `eos%rho0` in
+      !! `[ocean.ic] rho_0` lands on `eos%rho0` in
       !! `ocean_state_init_from_config`; that is the ρ₀ of record.  EPBL,
       !! kappa-shear, tidal mixing, wave speed, the `eta_ib` surface-pressure
       !! seam, GM / MEKE / Redi / MLE, the isopycnal slopes and (since the
       !! preceding commit) the PGF all copy it in their own
       !! `configure_ocean_*`.  The four slots wired here were the remainder:
       !! they kept a hard 1035 type default that nothing ever assigned, so a
-      !! namelist with `rho_0 /= 1035` ran the EOS on one reference density
+      !! input with `rho_0 /= 1035` ran the EOS on one reference density
       !! and the surface forcing, wind stress and KPP buoyancy on another —
       !! no warning, no fail-loud, just a 1035/ρ₀ scaling on every surface
       !! heat/salt flux, every wind-stress acceleration, and N²/u*/B_0.
@@ -602,7 +602,7 @@ contains
       ocean_state%surface_stress%rho0 = ocean_state%eos%rho0
       ocean_state%vmix%rho0 = ocean_state%eos%rho0
       if (present(geo)) geo%rho0 = ocean_state%eos%rho0
-      ! Heat-to-temperature divisor, `&ocean_eos_nml c_p` (MOM6 `C_P`; default
+      ! Heat-to-temperature divisor, `[ocean.eos] c_p` (MOM6 `C_P`; default
       ! 3992 = `SEAWATER_CP`, bit-identical, and the ACCESS-OM3 value under
       ! CT/SA too -- it does not follow `ts_convention`).  Set HERE with
       ! `rho0`: host-side scalars folded into the `dt/(rho0*cp)` divisors,
@@ -613,7 +613,7 @@ contains
 
    module subroutine configure_ocean_pgf(cfg, ocean_state, compute_rank, ierr)
       !! Pressure-force variant, the reference densities (`rho0` / `rho_ref`,
-      !! both from the single configured ρ₀ — `&ocean_ic_nml rho_0` via
+      !! both from the single configured ρ₀ — `[ocean.ic] rho_0` via
       !! `eos%rho0`), the reduced-gravity (gprime / gfs_scale) knobs, the
       !! bathymetry copy into the PGF slot, and the matching barotropic
       !! fast-loop gravity g_bt for the gprime / FV_MOM6-reduced-GFS paths.
@@ -653,7 +653,7 @@ contains
       end if
       ocean_state%pressure_force%variant = parse_opgf_variant(cfg%ocean%pgf%form)
 
-      ! Grounded-layer PGF gate (`&ocean_isopycnal_nml pgf_skip_nonoverlap`).
+      ! Grounded-layer PGF gate (`[ocean.isopycnal] pgf_skip_nonoverlap`).
       ! The predicate lives in `pgf_nonoverlap_gate_on` because the PGF slot's
       ! allocation gate had to evaluate it BEFORE `init` (FV_MOM6 allocates
       ! `z_centre` for this gate and nothing else) — see the pre-init latch in
@@ -691,8 +691,8 @@ contains
          ! a crash.  Loud, not fatal: the run is legal, it just keeps the
          ! spurious gradient.
          if (compute_rank == 0) then
-            call logger%warning("ocean_isopycnal_nml: pgf_skip_nonoverlap has no "// &
-                                "effect with ocean_pgf_nml form='"// &
+            call logger%warning("[ocean.isopycnal]: pgf_skip_nonoverlap has no "// &
+                                "effect with [ocean.pgf] form='"// &
                                 trim(cfg%ocean%pgf%form)//"' (the gate covers mont "// &
                                 "/ fv_lite / fv_wright / fv_mom6) — a grounded "// &
                                 "isopycnal layer can still drive a spurious "// &
@@ -729,11 +729,11 @@ contains
       end if
 
       ! Reference densities.  BOTH PGF reference densities follow the SINGLE
-      ! configured ρ₀ (`&ocean_ic_nml rho_0`, landed on `eos%rho0` by
+      ! configured ρ₀ (`[ocean.ic] rho_0`, landed on `eos%rho0` by
       ! `ocean_state_init_from_config` — the same scalar EPBL, kappa-shear,
       ! tidal mixing, the `eta_ib` surface-pressure seam, MEKE/GM and the
       ! isopycnal slopes all take).  Without this the PGF slot kept its
-      ! 1035 type default while the EOS followed the namelist, so a run with
+      ! 1035 type default while the EOS followed the input, so a run with
       ! `rho_0 /= 1035` silently integrated an EOS and a pressure gradient on
       ! two different reference densities.
       !
@@ -762,12 +762,12 @@ contains
       ocean_state%pressure_force%p_top_in_bc = cfg%ocean%pgf%p_top_in_bc
       ! The top-of-column load enters the `pa` stack's surface boundary
       ! condition, which only the FV_MOM6 family builds.  Mirrors the
-      ! `validate_config` refusal so an in-memory namelist / API caller
+      ! `validate_config` refusal so an in-memory input / API caller
       ! that bypasses validation still fails loud instead of running a
       ! silently inert knob.
       if (cfg%ocean%pgf%p_top_in_bc .and. &
           ocean_state%pressure_force%variant /= OPGF_VARIANT_FV_MOM6) then
-         call fail("configure_ocean_pgf: p_top_in_bc=.true. requires "// &
+         call fail("configure_ocean_pgf: p_top_in_bc=true requires "// &
                    "form='fv_mom6'. Other PGF variants build no pa(nz+1) "// &
                    "pressure-stack boundary condition for the load to enter.", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
@@ -778,7 +778,7 @@ contains
       ! API caller fails at configure, not with an `error stop` in step 1.
       if (cfg%ocean%bt%correction_bc_pgf .and. &
           ocean_state%pressure_force%variant /= OPGF_VARIANT_FV_MOM6) then
-         call fail("configure_ocean_pgf: &ocean_bt_nml correction_bc_pgf=.true. "// &
+         call fail("configure_ocean_pgf: [ocean.bt] correction_bc_pgf=true "// &
                    "requires form='fv_mom6'. compute_pbce builds the per-layer "// &
                    "pressure response from the FV_MOM6 interface-height stack "// &
                    "(pgf%e_face), which no other PGF form fills.", &
@@ -790,7 +790,7 @@ contains
       ! knob is on with any other PGF form.
       if (cfg%ocean%pgf%reconstruct_for_pressure .and. &
           ocean_state%pressure_force%variant /= OPGF_VARIANT_FV_MOM6) then
-         call fail("configure_ocean_pgf: reconstruct_for_pressure=.true. "// &
+         call fail("configure_ocean_pgf: reconstruct_for_pressure=true "// &
                    "requires form='fv_mom6' (the layer-integrated FV path). "// &
                    "Other PGF variants do not carry the e_face/pa/intz_dpa "// &
                    "stack the reconstruction replaces.", ierr, OCEAN_STATUS_ERR_SETUP)
@@ -827,7 +827,7 @@ contains
       ! Invisible in an ordinary run (eta gradients are generated by real
       ! dynamics, and the bias is a tiny wave-speed error), but exposed
       ! bit-for-bit whenever `eta` starts with a real static gradient at
-      ! rest -- exactly what `&ocean_cavity_dyn_nml trim_ic_for_p_surf`
+      ! rest -- exactly what `[ocean.cavity_dyn] trim_ic_for_p_surf`
       ! seeds under a sloping ice draft. Root cause of the
       ! `vcm_lid_slope_sigma_unstrat` rest-state blip (peak En 9.997e-13);
       ! see `tests/test_ocean_cavity_load.F90::test_trim_uniform_rho_rest`

@@ -1,4 +1,4 @@
-!! MPI test of the KE-attribution probe's reductions (`&ocean_debug_nml ke_attr`).
+!! MPI test of the KE-attribution probe's reductions (`[ocean.debug] ke_attr`).
 !! Run with 1, 2 or 4 ranks: mpirun -np N ./test_ocean_ke_probe_mpi
 !!
 !! A non-uniform, non-symmetric analytic C-grid state (a closed form of the

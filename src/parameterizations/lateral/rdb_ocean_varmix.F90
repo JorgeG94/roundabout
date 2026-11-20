@@ -62,7 +62,7 @@ module rdb_ocean_varmix
    !! `calc_Eady_growth_rate_2D` outcrop-cropping filter, and the OBC-aware
    !! face interpolation (interior straddle-average only for now).
    !!
-   !! Default off (`&ocean_varmix_nml enable = .false.`) ⇒ `varmix_compute`
+   !! Default off (`[ocean.varmix] enable = false`) ⇒ `varmix_compute`
    !! is never called and GM keeps its constant `khth` ⇒ bit-identical.
    !!
    !! References: Visbeck, Marshall, Haine & Spall (1997) JPO 27, 381-402;
@@ -104,7 +104,7 @@ module rdb_ocean_varmix
    type :: ocean_varmix_t
       !! Spatially-varying lateral-diffusivity-coefficient state.  All
       !! fields default to the inert (`enable=.false.`) configuration so an
-      !! ocean run that never sets `&ocean_varmix_nml` is bit-identical.
+      !! ocean run that never sets `[ocean.varmix]` is bit-identical.
       logical :: is_init = .false.
          !! True between `init` and `destroy`; gate on this (never on
          !! `allocated`, which misses the GPU mapping).
@@ -132,7 +132,7 @@ module rdb_ocean_varmix
          !! Resolution-function `alpha` (the `(alpha*cg1)^p` denom coef).
       real(wp) :: khth = 0.0_wp
          !! Background thickness diffusivity KhTh (m^2/s) — the constant the
-         !! Visbeck term and Res_fn scale.  Mirrors `&ocean_gm_nml khth`.
+         !! Visbeck term and Res_fn scale.  Mirrors `[ocean.gm] khth`.
       real(wp) :: khtr = 0.0_wp
          !! Background tracer diffusivity KhTr (m^2/s) for the future Redi.
       real(wp) :: khth_slope_cff = 0.0_wp

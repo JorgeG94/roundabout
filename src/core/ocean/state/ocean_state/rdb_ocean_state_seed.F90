@@ -61,7 +61,7 @@ contains
       logical, intent(in), optional :: periodic_x
          !! Grid topology the static geometry is wrapped with (see
          !! `seed_wrap_static_2d`).  Absent ⇒ derived from the
-         !! `&ocean_bc_nml` west/east tags, exactly as `configure_ocean_bc`
+         !! `[ocean.bc]` west/east tags, exactly as `configure_ocean_bc`
          !! derives `bc%periodic_x`.  The engine passes it when a staged
          !! topology (`rdb_ocean_stage_topology`) overrides the tags.
       logical, intent(in), optional :: periodic_y
@@ -78,12 +78,12 @@ contains
          !! otherwise.  Host-only setup scratch, released on return.
       real(wp), allocatable :: eta_trim(:, :)
          !! Initial free-surface anomaly of the TRIMMED cavity IC
-         !! (`&ocean_cavity_dyn_nml trim_ic_for_p_surf`); 0 when off.
+         !! (`[ocean.cavity_dyn] trim_ic_for_p_surf`); 0 when off.
       real(wp), allocatable :: h_col(:, :)
          !! Initial water column `water + eta_trim` the layer split seeds
          !! from; a byte copy of `water` when the trim is off.
       logical :: trim_ic
-         !! `&ocean_cavity_dyn_nml trim_ic_for_p_surf` under an active cavity.
+         !! `[ocean.cavity_dyn] trim_ic_for_p_surf` under an active cavity.
 
       nz_ml = state%multilayer%nz_ml
       idx_S = state%multilayer%idx_salinity
@@ -255,7 +255,7 @@ contains
       ! axis can get); on the local axes that is now a no-op.
       call seed_wrap_static_2d(state%barotropic%b, grid, per_x, per_y, north_fold)
 
-      ! ---- Static ice-shelf cavity geometry (&ocean_cavity_dyn_nml, P5.1) ----
+      ! ---- Static ice-shelf cavity geometry ([ocean.cavity_dyn], P5.1) ----
       ! ORDERING IS LOAD-BEARING and this is the only place it can go: the
       ! draft must exist before the water column `b − z_draft` seeds the
       ! layer split and the wet mask (grounding), both of which happen a
@@ -288,7 +288,7 @@ contains
          water = state%barotropic%b
       end if
 
-      ! MOM6 TRIM_IC_FOR_P_SURF (`&ocean_cavity_dyn_nml
+      ! MOM6 TRIM_IC_FOR_P_SURF (`[ocean.cavity_dyn]
       ! trim_ic_for_p_surf`, default off).  The ice LOAD stays the
       ! Boussinesq-isostatic `rho_ref*g*z_draft`; each loaded column's
       ! initial TOP moves to the depth where the displaced water's own
@@ -321,7 +321,7 @@ contains
             call grid_allreduce_min(grid, minval(eta_trim), eta_lo)
             call grid_allreduce_max(grid, maxval(eta_trim), eta_hi)
             if (ok_flag_glob > 0.5_wp) then
-               call fail("ocean_state_seed_from_cfg: &ocean_cavity_dyn_nml "// &
+               call fail("ocean_state_seed_from_cfg: [ocean.cavity_dyn] "// &
                          "trim_ic_for_p_surf found no admissible trim depth (the "// &
                          "initial density must be positive and stably stratified, "// &
                          "and the trimmed column must stay non-empty)", &
@@ -373,7 +373,7 @@ contains
       ! coordinate there is quasi-geopotential with inert fillers inside
       ! the ice, so a sigma-style seed is NOT on the coordinate: the very
       ! first ALE remap would relamp the whole column in one step, and a
-      ! T/S profile that `&ocean_zinit_nml source="linear"` made exactly
+      ! T/S profile that `[ocean.zinit] source="linear"` made exactly
       ! linear in geopotential z would come back through the PPM boundary
       ! closure NOT exactly linear — column by column, because the draft
       ! (and so the cut) differs column to column.  That difference IS a
@@ -385,11 +385,11 @@ contains
       ! identity, no step-1 regrid shock.
       !
       ! The same holds WITHOUT a cavity whenever the T/S come from the
-      ! GEOPOTENTIAL `&ocean_zinit_nml` overlay: a sigma-style seed puts
+      ! GEOPOTENTIAL `[ocean.zinit]` overlay: a sigma-style seed puts
       ! layer `k` of a column of depth `H` at `(nz-k+1/2)*H/nz`, the zinit
       ! profile is evaluated THERE, and only the step-1 regrid moves it onto
       ! the `z_fixed` layers.  Anything snapshotted from the seed in between
-      ! is then indexed on the wrong layers -- the `&ocean_sponge_nml
+      ! is then indexed on the wrong layers -- the `[ocean.sponge]
       ! target_source = "ic"` reference is (`ocean_sponge_snapshot_reference`
       ! runs right after this seed), so the sponge relaxed layer `k` of the
       ! 50-level tanh grid toward the zinit value hundreds of metres deeper,
@@ -399,10 +399,10 @@ contains
       ! cold, domain-mean T -0.55 degC in 5 days on the coastal-noise box).
       ! Seeding on the target makes the overlay exact and the snapshot
       ! consistent.  `z_fixed` WITHOUT zinit keeps the sigma-style seed: its
-      ! `&tracer_nml` IC is defined PER LAYER INDEX, so moving the layers
+      ! `[tracer]` IC is defined PER LAYER INDEX, so moving the layers
       ! would change what that IC means.
       !
-      ! FOURTH BRANCH — `VCOORD_ZSTAR_FULL` under `&vcoord_nml
+      ! FOURTH BRANCH — `VCOORD_ZSTAR_FULL` under `[vcoord]
       ! zfixed_closed_faces`.  The closed-face mask is built from the
       ! `ZSTAR_FULL` target at `η = 0`; a sigma-style seed is not on that
       ! coordinate, so step 1 would run the FULL sigma pressure gradient on
@@ -412,19 +412,19 @@ contains
       ! would snapshot T/S on the wrong layers — the `z_fixed` seed bug
       ! above.  So seed `h_layer` from the SAME target the mask is built
       ! from (`ocean_vcoord_eta0_target`, after laying the `z_ref` table
-      ! it walks), with or without zinit: a per-index `&tracer_nml` IC
+      ! it walks), with or without zinit: a per-index `[tracer]` IC
       ! then means "per coordinate layer", which is the only reading under
       ! which the mask's live/filler pattern is the IC's.  Knob-gated, so
-      ! every existing `zstar_full` namelist keeps its sigma-style seed
+      ! every existing `zstar_full` input keeps its sigma-style seed
       ! byte for byte.
       !
       ! FIFTH BRANCH — `VCOORD_ZSTAR` (MOM6 z*) under `zfixed_closed_faces`
-      ! OR `&ocean_zinit_nml`.  The same reasons as the fourth (the mask's
+      ! OR `[ocean.zinit]`.  The same reasons as the fourth (the mask's
       ! pattern is the `η = 0` target's) and the third (a z-level IC is
       ! exact only at the running coordinate's own layer centres; a
       ! `target_source = "ic"` sponge snapshots what is seeded), on the
       ! `η = 0` z* target, which is the `z_fixed` one with `z_top = 0`.  A
-      ! per-layer-index `&tracer_nml` IC without the knob keeps the
+      ! per-layer-index `[tracer]` IC without the knob keeps the
       ! sigma-style seed and is moved onto z* by the first regrid, as on
       ! `z_fixed`.  z* is refused under a cavity, so `eta_trim ≡ 0` here.
       if (trim(cfg%thickness_config) == "uniform_z") then
@@ -451,12 +451,12 @@ contains
             ! copies both `zstar_*` knobs onto the slot immediately BEFORE
             ! this seed (it has to — the seed's own tail calls
             ! `vcoord%build_zref_full`, which reads them), so the value is
-            ! already the namelist's.  Fall back to `cfg` only for a
+            ! already the input's.  Fall back to `cfg` only for a
             ! caller that seeds a state whose vcoord slot was never
             ! initialised.
             h_min_seed = cfg%zstar_h_min
             if (state%vcoord%is_init) h_min_seed = state%vcoord%zstar_h_min
-            ! A stretched nominal profile (`&vcoord_nml z_fixed_profile`)
+            ! A stretched nominal profile (`[vcoord] z_fixed_profile`)
             ! is installed on the slot by `engine_setup` before this seed,
             ! for the same one-source-of-truth reason as `zstar_h_min`.
             if (state%vcoord%is_init .and. state%vcoord%z_fixed_use_profile) then
@@ -812,7 +812,7 @@ contains
 
 #ifndef RDB_NO_NETCDF
    subroutine seed_zinit_overlay(state, grid, cfg, ierr, z_top)
-      !! Dispatch the `&ocean_zinit_nml` T/S overlay across its two axes:
+      !! Dispatch the `[ocean.zinit]` T/S overlay across its two axes:
       !! the profile SOURCE (`"file"` — the pre-regridded NetCDF reader;
       !! `"linear"` — the analytic affine `lin_*` profile) and whether a
       !! cavity draft is present.
@@ -837,7 +837,7 @@ contains
       real(wp), intent(in), optional :: z_top(:, :)
          !! Column-top depth (m, positive down), FULL ghosted shape, in
          !! place of `metrics%z_draft`: the TRIMMED cavity IC
-         !! (`&ocean_cavity_dyn_nml trim_ic_for_p_surf`) puts the top at
+         !! (`[ocean.cavity_dyn] trim_ic_for_p_surf`) puts the top at
          !! `z_draft - eta_trim`.  Absent => `metrics%z_draft`.
 
       logical :: cav, conv
@@ -1394,7 +1394,7 @@ contains
       !! perturbation is an unbalanced interface displacement the
       !! instability feeds on.
       !!
-      !! Requires `nz_layers == 2`, `&ocean_pgf_nml form="gprime"`, and a
+      !! Requires `nz_layers == 2`, `[ocean.pgf] form="gprime"`, and a
       !! spherical grid.  Fills the FULL arrays incl. ghost rows: φ/λ are
       !! continued analytically past the physical cells, which for a
       !! periodic-x channel wraps exactly because `k_x·L_x = 2π·pert_nx`
@@ -1438,18 +1438,18 @@ contains
          return
       end if
       if (trim(cfg%ocean%pgf%form) /= "gprime") then
-         call fail("seed_baroclinic_jet_ic: requires &ocean_pgf_nml "// &
+         call fail("seed_baroclinic_jet_ic: requires [ocean.pgf] "// &
                    "form='gprime'; got '"//trim(cfg%ocean%pgf%form)//"'", ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
       end if
       if (trim(cfg%ocean%grid%grid_config) /= "spherical") then
-         call fail("seed_baroclinic_jet_ic: requires &ocean_grid_nml "// &
+         call fail("seed_baroclinic_jet_ic: requires [ocean.grid] "// &
                    "grid_config='spherical'; got '"// &
                    trim(cfg%ocean%grid%grid_config)//"'", ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
       end if
       if (cfg%ocean%grid%omega <= 0.0_wp) then
-         call fail("seed_baroclinic_jet_ic: requires &ocean_grid_nml "// &
+         call fail("seed_baroclinic_jet_ic: requires [ocean.grid] "// &
                    "omega > 0 (planetary Coriolis f = 2*Omega*sin(phi))", ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
       end if
@@ -1915,7 +1915,7 @@ contains
 
    module subroutine seed_cavity_draft(state, grid, cfg, ierr)
       !! Fill `metrics%z_draft` (and its `cover_frac` companion) from
-      !! `&ocean_cavity_dyn_nml`, then cross-validate the geometry against
+      !! `[ocean.cavity_dyn]`, then cross-validate the geometry against
       !! the seeded bathymetry.  Runs from `ocean_state_seed_from_cfg`
       !! IMMEDIATELY after the bathymetry and BEFORE the layer split and
       !! the wet-mask seed, which both read `b − z_draft`.
@@ -1925,11 +1925,11 @@ contains
       !! logger and fails loud through the error ring.  The arithmetic it
       !! drives is in `rdb_ocean_cavity`, where every routine IS `pure`.
       !!
-      !! UNITS.  The namelist carries metres; the setters work in GRID
+      !! UNITS.  The input carries metres; the setters work in GRID
       !! coordinate units (metres on Cartesian, DEGREES on
       !! spherical/curvilinear), so the box corners are converted with
       !! `topo_length_to_grid_units` and the dimensionless slope is
-      !! converted the inverse way — the same trap `&ocean_topo_nml
+      !! converted the inverse way — the same trap `[ocean.topo]
       !! slope_scale` documents, where a metres length against a degrees
       !! position collapsed a seamount to a flat basin.
       type(ocean_state_t), intent(inout) :: state
@@ -1955,7 +1955,7 @@ contains
       ny = size(state%metrics%z_draft, 2)
       ng = grid%nghost
       if (nx /= size(state%barotropic%b, 1) .or. ny /= size(state%barotropic%b, 2)) then
-         call fail("&ocean_cavity_dyn_nml: z_draft is at its placeholder size — "// &
+         call fail("[ocean.cavity_dyn]: z_draft is at its placeholder size — "// &
                    "metrics%use_cavity must be latched BEFORE metrics%init (it is "// &
                    "latched in ocean_state_init_from_config)", &
                    ierr, OCEAN_STATUS_ERR_IC_SEED)
@@ -1969,13 +1969,13 @@ contains
       ! down, for direct (test / API) callers that bypass it.
       if (draft_code /= CAVITY_DRAFT_NONE .and. draft_code /= CAVITY_DRAFT_FLAT &
           .and. draft_code /= CAVITY_DRAFT_LINEAR .and. draft_code /= CAVITY_DRAFT_FILE) then
-         call fail("&ocean_cavity_dyn_nml draft_config='"// &
+         call fail("[ocean.cavity_dyn] draft_config='"// &
                    trim(cfg%ocean%cavity_dyn%draft_config)//"' is not available "// &
                    "(none|flat|linear|file)", ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
       end if
       if (source_code /= CAVITY_SOURCE_DRAFT .and. source_code /= CAVITY_SOURCE_THICKNESS) then
-         call fail("&ocean_cavity_dyn_nml draft_source='"// &
+         call fail("[ocean.cavity_dyn] draft_source='"// &
                    trim(cfg%ocean%cavity_dyn%draft_source)//"' is not available "// &
                    "(draft|thickness; 'in_situ' isostasy is deferred)", &
                    ierr, OCEAN_STATUS_ERR_IC_SEED)
@@ -2026,7 +2026,7 @@ contains
          ! the restriction is re-asserted here (every rank sees a tile
          ! smaller than the global grid, so all fail together).
          if (grid%nx_phys /= grid%nx_global .or. grid%ny_phys /= grid%ny_global) then
-            call fail("&ocean_cavity_dyn_nml draft_config='file' is "// &
+            call fail("[ocean.cavity_dyn] draft_config='file' is "// &
                       "unproven on a decomposed domain (no multi-rank bit-identity "// &
                       "case covers the windowed draft read).  Run on one rank or "// &
                       "use an analytic draft.", &
@@ -2035,7 +2035,7 @@ contains
          end if
          sign_code = parse_cavity_draft_sign(cfg%ocean%cavity_dyn%draft_sign)
          if (sign_code == CAVITY_SIGN_INVALID) then
-            call fail("&ocean_cavity_dyn_nml draft_sign='"// &
+            call fail("[ocean.cavity_dyn] draft_sign='"// &
                       trim(adjustl(cfg%ocean%cavity_dyn%draft_sign))// &
                       "' is not recognised (depth|positive_down|elevation|"// &
                       "positive_up)", ierr, OCEAN_STATUS_ERR_IC_SEED)
@@ -2062,7 +2062,7 @@ contains
          ! draft see an identical boundary treatment.
          call bathymetry_fill_ghosts_array(state%metrics%z_draft, grid)
 #else
-         call fail("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+         call fail("[ocean.cavity_dyn] draft_config='file' requires "// &
                    "RDB_ENABLE_NETCDF=ON at build time (the static-2-D reader "// &
                    "lives in the NetCDF-gated rdb_ocean_data_input).", &
                    ierr, OCEAN_STATUS_ERR_IO)
@@ -2079,7 +2079,7 @@ contains
       draft_bad = merge(0.0_wp, 1.0_wp, cavity_draft_is_finite_nonneg(state%metrics%z_draft, nx, ny))
       call grid_allreduce_max(grid, draft_bad, draft_bad_glob)
       if (draft_bad_glob > 0.5_wp) then
-         call fail("&ocean_cavity_dyn_nml: z_draft must be finite and >= 0 "// &
+         call fail("[ocean.cavity_dyn]: z_draft must be finite and >= 0 "// &
                    "everywhere (it is a DEPTH below z = 0, positive down)", &
                    ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
@@ -2123,7 +2123,7 @@ contains
       n_interior = int(n_interior_glob)
       grounded_frac = real(n_grounded, wp)/real(max(n_interior, 1), wp)
       if (grounded_frac > cfg%ocean%cavity_dyn%grounded_max_frac) then
-         call fail("&ocean_cavity_dyn_nml: the prescribed draft grounds "// &
+         call fail("[ocean.cavity_dyn]: the prescribed draft grounds "// &
                    to_string(n_grounded)//" of "//to_string(n_interior)// &
                    " interior columns ("//to_string(grounded_frac)//"), above "// &
                    "grounded_max_frac = "// &
@@ -2149,7 +2149,7 @@ contains
                           to_string(n_grounded)//" of "//to_string(n_interior)// &
                           " interior columns grounded (-> LAND via the wet mask)")
          if (n_over_land > 0) then
-            call logger%warning("&ocean_cavity_dyn_nml: draft zeroed on "// &
+            call logger%warning("[ocean.cavity_dyn]: draft zeroed on "// &
                                 to_string(n_over_land)//" column(s) whose bed is "// &
                                 "already land (b < LAND_DEPTH_THRESHOLD) — no ice "// &
                                 "over land.  Check the shelf box if that is a surprise.")

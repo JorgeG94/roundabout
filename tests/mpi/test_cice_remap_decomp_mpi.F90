@@ -111,7 +111,7 @@ program test_cice_remap_decomp_mpi
 contains
 
    ! ------------------------------------------------------------------
-   ! namelists
+   ! inputs
    ! ------------------------------------------------------------------
 
    function case_nml(label, px, py) result(nml)

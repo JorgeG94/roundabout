@@ -3,7 +3,7 @@ module rdb_regrid_latlon
    !! Grid-agnostic regridding library: builds bilinear or first-order
    !! conservative weights from a regular lat-lon SOURCE grid onto the
    !! model's T-grid, stored in an ELL (padded-stencil) layout, and applies
-   !! them with one device kernel. No namelist knob, no engine wiring here
+   !! them with one device kernel. No input knob, no engine wiring here
    !! -- bit-identity by construction; the engine-side selector knobs
    !! (`states_regrid`/`fluxes_regrid`/...) are added by a later PR.
    !!

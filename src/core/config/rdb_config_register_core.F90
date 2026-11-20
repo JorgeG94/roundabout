@@ -86,7 +86,7 @@ contains
    end subroutine build_rdb_schema
 
    module subroutine register_sim(cfg, schema)
-      !! `&sim_nml`: the simulation regime selector.
+      !! `[sim]`: the simulation regime selector.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -102,7 +102,7 @@ contains
    end subroutine register_sim
 
    module subroutine register_grid(cfg, schema)
-      !! `&grid_nml`: structured-grid geometry.
+      !! `[grid]`: structured-grid geometry.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -126,7 +126,7 @@ contains
    end subroutine register_grid
 
    module subroutine register_time(cfg, schema)
-      !! `&time_nml`: time-integration controls.  `t_end` is interpreted
+      !! `[time]`: time-integration controls.  `t_end` is interpreted
       !! in `time_unit` and converted to seconds by the post-parse
       !! cascade in read_config; `dt_fixed`/`dt_max` stay in seconds.
       !! `time_unit` is a plain string (the cascade validates its set).
@@ -171,7 +171,7 @@ contains
    end subroutine register_time
 
    module subroutine register_mpi(cfg, schema)
-      !! `&mpi_nml`: MPI domain decomposition.
+      !! `[mpi]`: MPI domain decomposition.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -187,7 +187,7 @@ contains
    end subroutine register_mpi
 
    module subroutine register_logging(cfg, schema)
-      !! `&logging_nml`: logger verbosity + status cadence.
+      !! `[logging]`: logger verbosity + status cadence.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -207,7 +207,7 @@ contains
    end subroutine register_logging
 
    module subroutine register_vcoord(cfg, schema)
-      !! `&vcoord_nml`: vertical-coordinate + ALE-remap controls.
+      !! `[vcoord]`: vertical-coordinate + ALE-remap controls.
       !! `vcoord_type` / `remap_method` / `zstar_stretching` are enums
       !! with the canonical sets accepted by the rdb_vcoord parsers.
       type(config_t), target, intent(in) :: cfg
@@ -334,7 +334,7 @@ contains
    end subroutine register_vcoord
 
    module subroutine register_physics(cfg, schema)
-      !! `&physics_nml`: barotropic physics + bottom drag + wind stress.
+      !! `[physics]`: barotropic physics + bottom drag + wind stress.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -347,7 +347,7 @@ contains
       call g%add(nml_real("manning_n", pr, "Manning roughness coefficient", &
                           dead_on_ocean_path="coastal-legacy A-grid bottom-drag knob; the A-grid "// &
                           "god state that read it is gone (see rdb_state.F90's module docstring). "// &
-                          "The ocean path's drag is &ocean_bdrag_nml."))
+                          "The ocean path's drag is [ocean.bdrag]."))
       pr => cfg%wind_stress_x
       call g%add(nml_real("wind_stress_x", pr, "Surface wind stress in x", units="Pa"))
       pr => cfg%wind_stress_y
@@ -358,7 +358,7 @@ contains
    end subroutine register_physics
 
    module subroutine register_output(cfg, schema)
-      !! `&output_nml`: file output + I/O + forcing/restart/gauge files.
+      !! `[output]`: file output + I/O + forcing/restart/gauge files.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -393,7 +393,7 @@ contains
    end subroutine register_output
 
    module subroutine register_boundary(cfg, schema)
-      !! `&boundary_nml`: per-side BC types, tidal forcing, inflow/
+      !! `[boundary]`: per-side BC types, tidal forcing, inflow/
       !! discharge/clamped/sponge/nesting parameters.  The four `bc_*`
       !! keys are enums over the bc_type_from_string accepted set.
       type(config_t), target, intent(in) :: cfg
@@ -412,22 +412,22 @@ contains
       ps => cfg%bc_west
       call g%add(nml_enum("bc_west", ps, "West boundary type", allowed=bc_allowed, &
                           dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc "// &
-                          "and nothing else. The ocean path's edge selector is &ocean_bc_nml "// &
+                          "and nothing else. The ocean path's edge selector is [ocean.bc] "// &
                           "west/east/south/north."))
       ps => cfg%bc_east
       call g%add(nml_enum("bc_east", ps, "East boundary type", allowed=bc_allowed, &
                           dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc "// &
-                          "and nothing else. The ocean path's edge selector is &ocean_bc_nml "// &
+                          "and nothing else. The ocean path's edge selector is [ocean.bc] "// &
                           "west/east/south/north."))
       ps => cfg%bc_south
       call g%add(nml_enum("bc_south", ps, "South boundary type", allowed=bc_allowed, &
                           dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc "// &
-                          "and nothing else. The ocean path's edge selector is &ocean_bc_nml "// &
+                          "and nothing else. The ocean path's edge selector is [ocean.bc] "// &
                           "west/east/south/north."))
       ps => cfg%bc_north
       call g%add(nml_enum("bc_north", ps, "North boundary type", allowed=bc_allowed, &
                           dead_on_ocean_path="coastal-legacy: reaches only warn_unknown_bc "// &
-                          "and nothing else. The ocean path's edge selector is &ocean_bc_nml "// &
+                          "and nothing else. The ocean path's edge selector is [ocean.bc] "// &
                           "west/east/south/north."))
       pi => cfg%n_tidal_constituents
       call g%add(nml_int("n_tidal_constituents", pi, &
@@ -456,7 +456,7 @@ contains
    end subroutine register_boundary
 
    module subroutine register_tracer(cfg, schema)
-      !! `&tracer_nml`: salinity + temperature IC/EOS/bounds + sediment.
+      !! `[tracer]`: salinity + temperature IC/EOS/bounds + sediment.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -472,14 +472,14 @@ contains
       call g%add(nml_real("S_ref", pr, "EOS reference salinity", units="PSU", &
                           dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_ref via "// &
                           "register_default_tracers but eos_ref is read nowhere on the ocean "// &
-                          "path. The live ocean-path spelling is &ocean_ic_nml S_ref; setting "// &
+                          "path. The live ocean-path spelling is [ocean.ic] S_ref; setting "// &
                           "THIS one to anything other than its default is a fail-loud "// &
                           "configure error (validate_config)."))
       pr => cfg%beta_S
       call g%add(nml_real("beta_S", pr, "Haline contraction coefficient", units="kg/m^3/PSU", &
                           dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_coeff via "// &
                           "register_default_tracers but eos_coeff is read nowhere on the "// &
-                          "ocean path. The live ocean-path spelling is &ocean_ic_nml beta_S; "// &
+                          "ocean path. The live ocean-path spelling is [ocean.ic] beta_S; "// &
                           "setting THIS one to anything other than its default is a fail-loud "// &
                           "configure error (validate_config)."))
       pr => cfg%S_min
@@ -497,7 +497,7 @@ contains
                           dead_on_ocean_path="stored onto tracer_t%kappa_bg via "// &
                           "register_default_tracers but kappa_bg is read nowhere on the "// &
                           "ocean path -- the ocean path's background salt diffusivity is "// &
-                          "&ocean_vmix_nml ks_bg (found by the P4 dead-knob sweep, 2026-09-10)."))
+                          "[ocean.vmix] ks_bg (found by the P4 dead-knob sweep, 2026-09-10)."))
       pr => cfg%S_init_surface
       call g%add(nml_real("S_init_surface", pr, &
                           "Initial surface salinity at k=nz (linear-in-layer stratified IC; "// &
@@ -512,7 +512,7 @@ contains
       call g%add(nml_real("T_ref", pr, "EOS reference temperature", units="degC", &
                           dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_ref via "// &
                           "register_default_tracers but eos_ref is read nowhere on the ocean "// &
-                          "path. The live ocean-path spelling is &ocean_ic_nml T_ref; setting "// &
+                          "path. The live ocean-path spelling is [ocean.ic] T_ref; setting "// &
                           "THIS one to anything other than its default is a fail-loud "// &
                           "configure error (validate_config)."))
       pr => cfg%alpha_T
@@ -520,7 +520,7 @@ contains
                           dead_on_ocean_path="RETIRED -- the coastal-legacy alpha_T (D2.5): "// &
                           "stored onto tracer_t%eos_coeff via register_default_tracers but "// &
                           "eos_coeff is read nowhere on the ocean path. The live ocean-path "// &
-                          "spelling is &ocean_ic_nml alpha_T; setting THIS one to anything "// &
+                          "spelling is [ocean.ic] alpha_T; setting THIS one to anything "// &
                           "other than its default is a fail-loud configure error "// &
                           "(validate_config)."))
       pr => cfg%T_min
@@ -538,7 +538,7 @@ contains
                           dead_on_ocean_path="stored onto tracer_t%kappa_bg via "// &
                           "register_default_tracers but kappa_bg is read nowhere on the "// &
                           "ocean path -- the ocean path's background heat diffusivity is "// &
-                          "&ocean_vmix_nml kt_bg (found by the P4 dead-knob sweep, 2026-09-10)."))
+                          "[ocean.vmix] kt_bg (found by the P4 dead-knob sweep, 2026-09-10)."))
       pr => cfg%T_init_surface
       call g%add(nml_real("T_init_surface", pr, "Initial surface temperature (stratified IC)", units="degC"))
       pr => cfg%T_init_bottom
@@ -547,7 +547,7 @@ contains
    end subroutine register_tracer
 
    module subroutine register_initial_condition(cfg, schema)
-      !! `&initial_condition_nml`: coastal IC selector + parameters.
+      !! `[initial_condition]`: coastal IC selector + parameters.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -562,7 +562,7 @@ contains
    end subroutine register_initial_condition
 
    module subroutine register_nonhydrostatic(cfg, schema)
-      !! `&nonhydrostatic_nml`: NH/multilayer switches, CG-Poisson
+      !! `[nonhydrostatic]`: NH/multilayer switches, CG-Poisson
       !! controls, PP81 vmix, KPP knobs, k-eps, Smagorinsky, BPG, mode
       !! split.  `keps_stability` and `bpg_method` are enums.
       type(config_t), target, intent(in) :: cfg
@@ -590,17 +590,17 @@ contains
       pr => cfg%hdiff_kappa
       call g%add(nml_real("hdiff_kappa", pr, &
                           "Horizontal tracer diffusion coefficient (COASTAL path only; "// &
-                          "ocean's along-coordinate equivalent is &ocean_hdiff_nml kappa_h)", &
+                          "ocean's along-coordinate equivalent is [ocean.hdiff] kappa_h)", &
                           units="m^2/s", &
                           dead_on_ocean_path="coastal-legacy, per this key's own doc string: "// &
                           "stored onto tracer_t%hdiff_kappa via register_default_tracers but "// &
                           "hdiff_kappa is read nowhere on the ocean path. Use "// &
-                          "&ocean_hdiff_nml kappa_h."))
+                          "[ocean.hdiff] kappa_h."))
       call schema%add_group(g)
    end subroutine register_nonhydrostatic
 
    module subroutine register_ocean_grid(cfg, schema)
-      !! `&ocean_grid_nml`: horizontal-grid generator + geometry
+      !! `[ocean.grid]`: horizontal-grid generator + geometry
       !! (curvilinear-grid stream).  `grid_config` / `coriolis_scheme`
       !! enums mirror `parse_grid_config` / `parse_coriolis_scheme` in
       !! `rdb_ocean_metrics`.
@@ -661,7 +661,7 @@ contains
    end subroutine register_ocean_grid
 
    module subroutine register_ocean_debug(cfg, schema)
-      !! `&ocean_debug_nml`: forensic probes (all heavy, all default off).
+      !! `[ocean.debug]`: forensic probes (all heavy, all default off).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -699,7 +699,7 @@ contains
    end subroutine register_ocean_debug
 
    module subroutine register_ocean_mpi(cfg, schema)
-      !! `&ocean_mpi_nml`: multi-rank MPI debug / tuning controls.
+      !! `[ocean.mpi]`: multi-rank MPI debug / tuning controls.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -716,7 +716,7 @@ contains
    end subroutine register_ocean_mpi
 
    module subroutine register_ocean_topo(cfg, schema)
-      !! `&ocean_topo_nml`: basin geometry + surface forcing + Coriolis tilt.
+      !! `[ocean.topo]`: basin geometry + surface forcing + Coriolis tilt.
       !! `topo_config` / `wind_config` enums mirror the dispatch
       !! select-cases in rdb_ocean_state / rdb_ocean_setup.
       type(config_t), target, intent(in) :: cfg
@@ -769,7 +769,7 @@ contains
    end subroutine register_ocean_topo
 
    module subroutine register_ocean_ic(cfg, schema)
-      !! `&ocean_ic_nml`: initial-condition overlay + EOS reference state.
+      !! `[ocean.ic]`: initial-condition overlay + EOS reference state.
       !! `ic_config` enum mirrors the IC dispatch in rdb_ocean_state
       !! (default "" keeps the analytical T(z) IC).
       type(config_t), target, intent(in) :: cfg
@@ -887,7 +887,7 @@ contains
    end subroutine register_ocean_ic
 
    module subroutine register_ocean_zinit(cfg, schema)
-      !! `&ocean_zinit_nml`: z-level T/S initial-condition overlay (A2).
+      !! `[ocean.zinit]`: z-level T/S initial-condition overlay (A2).
       !! Default `enable = .false.` is a no-op (analytical IC unchanged).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -946,11 +946,11 @@ contains
    end subroutine register_ocean_zinit
 
    module subroutine register_ocean_data(cfg, schema)
-      !! `&ocean_data_nml`: the shared time-varying NetCDF input reader
+      !! `[ocean.data]`: the shared time-varying NetCDF input reader
       !! (PR-14).  Two knobs, no per-field entries — see
       !! `ocean_data_config_t`.  Registration of individual (file,
       !! variable, destination) triples is programmatic, via each
-      !! consumer's own namelist group calling
+      !! consumer's own input group calling
       !! `ocean_data_input_register_2d/_3d` at setup.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -970,7 +970,7 @@ contains
    end subroutine register_ocean_data
 
    module subroutine register_ocean_dataovr(cfg, schema)
-      !! `&ocean_dataovr_nml`: file-backed surface forcing (PR-15).  Flat
+      !! `[ocean.dataovr]`: file-backed surface forcing (PR-15).  Flat
       !! per-tag knobs (`<tag>_file`, `<tag>_var`, `<tag>_scale`,
       !! `<tag>_add`) rather than a MOM6-style parallel-array data table
       !! — the schema engine has no string-array key type, and the set of
@@ -1025,7 +1025,7 @@ contains
    end subroutine register_ocean_dataovr
 
    module subroutine add_dataovr_entry(g, e, tag, what, units)
-      !! Register the four flat knobs of one `&ocean_dataovr_nml` tag.
+      !! Register the four flat knobs of one `[ocean.dataovr]` tag.
       !! `e` is `target, intent(in)` for the same reason `cfg` is in every
       !! `register_ocean_*` above: the schema stores a pointer to the
       !! target and assigns through it at parse time, and the actual
@@ -1052,7 +1052,7 @@ contains
    end subroutine add_dataovr_entry
 
    module subroutine register_ocean_diag(cfg, schema)
-      !! `&ocean_diag_nml`: ocean diag-manager output controls.  `dt_out`
+      !! `[ocean.diag]`: ocean diag-manager output controls.  `dt_out`
       !! is interpreted in `time_unit` and converted by the post-parse
       !! cascade in read_config.  `vgrid` enum is {layer, z_fixed}.
       type(config_t), target, intent(in) :: cfg
@@ -1095,7 +1095,7 @@ contains
       ! passing a 4th `nml_real_array(...)` function-result temporary
       ! directly to `g%add(...)` inside THIS subroutine corrupts unrelated
       ! heap state (manifests as a SIGSEGV deep in an unrelated later
-      ! namelist read, e.g. the old hand-rolled `read_ocean_bc_nml`, since
+      ! input read, e.g. the old hand-rolled `read_ocean_bc_nml`, since
       ! removed by the P4.5 schema migration — `register_ocean_bc` uses
       ! the same workaround for its twelve real_array knobs).  z_levels/sigma_levels/
       ! zstar_levels (the first 3 real_array calls here) are unaffected;

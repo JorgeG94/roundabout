@@ -7,7 +7,7 @@
 !! subtracted from layer densities when building the FV_MOM6 `pa` anomaly
 !! stack (also the `g·ρ_ref/ρ₀` surface value in `compute_pbce`).  Both were
 !! declared `= 1035.0_wp` and `configure_ocean_pgf` assigned NEITHER, while
-!! the EOS took its ρ₀ from `&ocean_ic_nml rho_0`.  A namelist setting
+!! the EOS took its ρ₀ from `[ocean.ic] rho_0`.  An input setting
 !! `rho_0 /= 1035` therefore ran an equation of state and a pressure gradient
 !! on two different reference densities, silently — no warning, no fail-loud,
 !! just a pressure gradient scaled by `1035/ρ₀_configured`.
@@ -65,7 +65,7 @@ module test_ocean_pgf_rho_ref
       !! FV_LITE `z_correction` vanish exactly (both columns share a
       !! `z_centre`), leaving the pure two-column hydrostatic expression.
    real(wp), parameter :: RHO0_DEFAULT = 1035.0_wp
-      !! The literal the PGF slot defaults to, and the `&ocean_ic_nml rho_0`
+      !! The literal the PGF slot defaults to, and the `[ocean.ic] rho_0`
       !! default.  Named here only so the non-vacuity arms can show the test
       !! is not comparing 1035 against 1035.
    real(wp), parameter :: RHO0_CFG = 1000.0_wp
@@ -215,7 +215,7 @@ contains
    ! ---------------------------------------------------------------------
 
    subroutine test_rho_ref_plumbing(error)
-      !! `&ocean_ic_nml rho_0` must reach BOTH PGF reference densities.
+      !! `[ocean.ic] rho_0` must reach BOTH PGF reference densities.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       type(ocean_state_t) :: state
@@ -231,7 +231,7 @@ contains
          if (allocated(error)) exit checks
 
          call check(error, abs(state%eos%rho0 - RHO0_CFG) < 1.0e-12_wp, &
-                    "eos%rho0 did not follow &ocean_ic_nml rho_0")
+                    "eos%rho0 did not follow [ocean.ic] rho_0")
          if (allocated(error)) exit checks
          call check(error, abs(state%pressure_force%rho0 - RHO0_CFG) < 1.0e-12_wp, &
                     "pressure_force%rho0 did not follow the configured rho_0 "// &

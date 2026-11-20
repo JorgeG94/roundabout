@@ -361,7 +361,7 @@ contains
                                 to_string(remap_flux_bytes_per_index(nx, ny, this%ntrace))// &
                                 " bytes of flux and reconstruction buffers) exceeds the buffer budget ("// &
                                 to_string(bmax)//" bytes): the batch is one index, the least the scheme can run "// &
-                                "(&ocean_ice_dyn_nml transport_buffer_mib)")
+                                "([ocean.ice_dyn] transport_buffer_mib)")
          end if
       end if
       this%is_init = .true.

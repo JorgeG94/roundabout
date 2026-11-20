@@ -1,6 +1,6 @@
 !! Unit tests for `eos_freezing_point` (`rdb_eos`) — the
 !! ocean-side sea-ice prerequisite (PLAN_SEA_ICE.md, PR 1), and for the
-!! `&ocean_eos_nml tfreeze_set` liquidus coefficient SETS.
+!! `[ocean.eos] tfreeze_set` liquidus coefficient SETS.
 !!
 !! The form is linear for every EOS variant:
 !!   T_f = λ1·S + λ2 + λ3·p
@@ -289,7 +289,7 @@ contains
    end subroutine test_teos2b_fail_loud_matrix
 
    subroutine test_teos2b_cp(error)
-      !! sf%cp and the geothermal cp follow `&ocean_eos_nml c_p`, NOT the
+      !! sf%cp and the geothermal cp follow `[ocean.eos] c_p`, NOT the
       !! T/S convention: 3992 by default under both conventions (ACCESS-OM3
       !! runs CT/SA with C_P = 3992), and an explicit TEOS-10 cp0 is passed
       !! through unchanged.  Pass 2 is the one that fails if cons_abs ever
@@ -328,7 +328,7 @@ contains
          call check(error, SEAWATER_CP == 3992.0_wp, "SEAWATER_CP must stay 3992")
          if (allocated(error)) return
          call check(error, state%surface_flux%cp == want .and. geo%cp == want, &
-                    "sf%cp / geo%cp must equal &ocean_eos_nml c_p (pass "// &
+                    "sf%cp / geo%cp must equal [ocean.eos] c_p (pass "// &
                     achar(48 + pass)//")")
          if (pass >= 2 .and. .not. allocated(error)) then
             call check(error, state%eos%ts_convention == TS_CONS_ABS, &
@@ -567,7 +567,7 @@ contains
       !! `eos_freezing_point` (`ice_frazil_accumulate`,
       !! `ice_frazil_uptake{,_multicat}_impl`,
       !! `ice_compute_basal_flux_impl`) pass `p = 0.0_wp`, so this arm is
-      !! what "bit-identical" means for every shipped namelist.  Over a
+      !! what "bit-identical" means for every shipped input.  Over a
       !! dense salinity sweep the handle-driven
       !! `(tfr_s·S + tfr_p·p) + tfr_0` must reproduce the pre-knob
       !! `TFR_S_COEFF*S + TFR_P_COEFF*p` BIT FOR BIT — including through
@@ -841,7 +841,7 @@ contains
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
-                 "an unrecognised &ocean_eos_nml tfreeze_set must fail loud")
+                 "an unrecognised [ocean.eos] tfreeze_set must fail loud")
       if (allocated(error)) return
 
       ! …and a recognised one still validates.
@@ -893,7 +893,7 @@ contains
          call check(error, state%eos%tfr_s == TFR_ISOMIP_S_COEFF .and. &
                     state%eos%tfr_0 == TFR_ISOMIP_0_COEFF .and. &
                     state%eos%tfr_p == TFR_ISOMIP_P_COEFF, &
-                    "&ocean_eos_nml tfreeze_set must reach ocean_state%eos")
+                    "[ocean.eos] tfreeze_set must reach ocean_state%eos")
          if (allocated(error)) exit checks
 
          ! The call the ice kernels make, through the very handle they get.

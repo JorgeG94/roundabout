@@ -1,5 +1,5 @@
 !! Gent-McWilliams thickness diffusion on `z_fixed` with partial-step
-!! CLOSED faces (`&vcoord_nml zfixed_closed_faces`).  Every case runs the
+!! CLOSED faces (`[vcoord] zfixed_closed_faces`).  Every case runs the
 !! production device kernels — `ocean_slopes_compute` +
 !! `gm_compute_transports` (+ the GM operator `continuity_gm_apply` for the multi-step case) — over a
 !! hand-specified staircase whose layer thicknesses AND closed-face masks

@@ -3,9 +3,9 @@
 !! three-equation kernel into two surface-flux components the ocean
 !! integrates.
 !!
-!! `&ocean_cavity_melt_nml enable` (default `.false.`) is the gate; the
+!! `[ocean.cavity_melt] enable` (default `.false.`) is the gate; the
 !! geometry it stands on (`z_draft`, `cover_frac`, `p_ice_ref`) is
-!! `&ocean_cavity_dyn_nml`'s and is required.  Knob off ⇒ the slot's
+!! `[ocean.cavity_dyn]`'s and is required.  Knob off ⇒ the slot's
 !! arrays stay at their `(1,1)` placeholders, no kernel is launched, and
 !! every path is byte-identical.
 !!
@@ -112,7 +112,7 @@
 !! identity above is what the ocean's fixed-mass salinity equation
 !! requires, and it is what the budget test asserts.
 !!
-!! ## Phase 3 — REAL freshwater MASS (`&ocean_cavity_melt_nml freshwater`)
+!! ## Phase 3 — REAL freshwater MASS (`[ocean.cavity_melt] freshwater`)
 !!
 !! `freshwater = "virtual"` is the default and everything above is what
 !! runs.  `freshwater = "mass"` moves the meltwater as a real Boussinesq
@@ -371,7 +371,7 @@ module rdb_ocean_cavity_flux
          !! Set by `init` after every allocation succeeds; cleared by
          !! `destroy` first.  Always test this, never `allocated(...)`.
       logical :: enable = .false.
-         !! `&ocean_cavity_melt_nml enable`, latched before `init`.
+         !! `[ocean.cavity_melt] enable`, latched before `init`.
 
       ! ---- Knobs the kernel is called with (host scalars) ----
       real(wp) :: far_field_depth = 10.0_wp
@@ -386,11 +386,11 @@ module rdb_ocean_cavity_flux
       real(wp) :: s_ice = 0.0_wp
          !! Ice salinity (g/kg).
       integer :: freshwater = CAVITY_FW_VIRTUAL
-         !! `&ocean_cavity_melt_nml freshwater`, parsed.
+         !! `[ocean.cavity_melt] freshwater`, parsed.
          !! `CAVITY_FW_VIRTUAL` (default) ⇒ `ocean_cavity_mass_step` is
          !! an immediate return and the path is byte-identical.
       integer :: volume_comp = CAVITY_VC_NONE
-         !! `&ocean_cavity_melt_nml volume_compensation`, parsed.
+         !! `[ocean.cavity_melt] volume_compensation`, parsed.
          !! Requires `freshwater = CAVITY_FW_MASS` (validate_config).
       real(wp) :: rho0 = 1035.0_wp
          !! Boussinesq reference density (kg/m^3) — THE density that
@@ -413,7 +413,7 @@ module rdb_ocean_cavity_flux
          !! `rho_w`, `c_w`, `alpha_T`, `beta_S` here are the MELT LAW's
          !! own calibrated constants, NOT copies of the model's
          !! Boussinesq `rho_0` — the same "out of scope on purpose"
-         !! category as `RHO_WATER` and `&ocean_ice_nml rho_ocean` (see
+         !! category as `RHO_WATER` and `[ocean.ice] rho_ocean` (see
          !! `configure_ocean_reference_density`).
          !! Overriding them would break ISOMIP+ comparability, which is
          !! the reason this path exists.
@@ -1604,7 +1604,7 @@ contains
                                   to_string(n_thin_src)//" melt column(s) and "// &
                                   to_string(n_thin_comp)//" compensation column(s) "// &
                                   "could not give up the requested thickness")
-         call fail("&ocean_cavity_melt_nml freshwater='mass': "// &
+         call fail("[ocean.cavity_melt] freshwater='mass': "// &
                    to_string(cav%n_thin_step)//" column(s) would have been driven "// &
                    "below H_CAVITY_FLOOR (2*H_VANISHED) by the top-layer "// &
                    "withdrawal (a freezing "// &
@@ -1732,7 +1732,7 @@ contains
       cav%n_nonfinite_step = int(nf_glob)
 
       if (cavity_melt_status_is_fatal(cav%n_nonfinite_step)) then
-         call fail("&ocean_cavity_melt_nml: "//to_string(cav%n_nonfinite_step)// &
+         call fail("[ocean.cavity_melt]: "//to_string(cav%n_nonfinite_step)// &
                    " ice-covered column(s) fed the basal-melt solver a non-finite "// &
                    "far-field temperature, salinity, velocity or interface pressure "// &
                    "(CAVITY_MELT_NONFINITE_*).  The kernel's safe state is zero melt, "// &

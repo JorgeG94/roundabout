@@ -26,7 +26,7 @@ module rdb_ocean_bulk_forcing
    !! cell's `tas`/`huss`/`psl` sits at its `source=0.0_wp` allocation
    !! value forever.  Calling the bulk-flux column kernel there would
    !! divide by `t_air = 0` (`rho_air = slp/(R*t_air*(...))`) and most
-   !! namelists this provider is gated on (`grid_config` must be
+   !! inputs this provider is gated on (`grid_config` must be
    !! spherical/supergrid/tripolar, and a tripolar cap REQUIRES
    !! periodic east/west) have genuinely WET ghost cells, so this is
    !! not a hypothetical edge case.  `bulk_forcing_core_impl` below
@@ -107,7 +107,7 @@ module rdb_ocean_bulk_forcing
    !! convention (`heat_content_fprec = c_p*SST*fprec`, every precipitation
    !! arrives "at T_s"), which belongs to the mass-flux treatment and is
    !! unchanged.  The latent heat is NOT in that term and does not depend on
-   !! what later happens to the snow's mass.  With `&ocean_ice_nml snowfall
+   !! what later happens to the snow's mass.  With `[ocean.ice] snowfall
    !! /= 0` the ice model already delivers the open-water snow share to the
    !! ocean at the full melt + warming enthalpy (`rdb_ice_snow`), so this
    !! term is not charged then (`lfus = 0`): no double count.
@@ -165,12 +165,12 @@ module rdb_ocean_bulk_forcing
       !! device on entry/exit (CLAUDE.md "Persistent kernel
       !! workspaces").
       logical :: enable = .false.
-         !! Mirrors `&ocean_bulk_flux_nml enable` (`cfg%ocean%bulk_flux
+         !! Mirrors `[ocean.bulk_flux] enable` (`cfg%ocean%bulk_flux
          !! %enable`). `.false.` (default): every procedure below is an
          !! immediate no-op -- bit-identical to a pre-C2c-3a build.
       logical :: on_device = .false.
       logical :: cons_abs = .false.
-         !! Latched `&ocean_eos_nml ts_convention == "cons_abs"`: the model
+         !! Latched `[ocean.eos] ts_convention == "cons_abs"`: the model
          !! T/S are CT/SA, so the SST fed to the bulk formulae is
          !! `pt_from_ct(SA, CT)` of the top layer (IOC/SCOR/IAPSO 2010;
          !! McDougall & Barker 2011).  `.false.` (default) is the original
@@ -193,7 +193,7 @@ module rdb_ocean_bulk_forcing
          !! step only when `ice%enable` -- otherwise stays 1 forever,
          !! so a run without sea ice never reads an ice array.
       logical :: cice_wind = .false.
-         !! `.true.` only under `&ocean_ice_nml enable` with `scheme = "cice"`: the stress is
+         !! `.true.` only under `[ocean.ice] enable` with `scheme = "cice"`: the stress is
          !! sent to the ice-ocean blend UNWEIGHTED, and exposed each step as `ice%tau_a_x/y`
          !! (module docstring).
    contains
@@ -262,10 +262,10 @@ contains
    ! ======================================================================
 
    subroutine bulk_forcing_configure(cfg, grid, sf, this)
-      !! A no-op when `&ocean_bulk_flux_nml enable = .false.` (the
+      !! A no-op when `[ocean.bulk_flux] enable = false` (the
       !! default) -- nothing allocates and `bulk_forcing_apply` stays a
       !! no-op: bit-identical. `validate_config` ties `enable` to
-      !! `&ocean_atm_forcing_nml enable` (each requires the other), so
+      !! `[ocean.atm_forcing] enable` (each requires the other), so
       !! by the time this runs with `enable = .true.` the atm provider
       !! is configured too.
       !!
@@ -361,7 +361,7 @@ contains
       end if
 
       ! Latent heat of fusion charged for snow on open water -- unless the
-      ! sea-ice model already books it: `&ocean_ice_nml snowfall /= 0`
+      ! sea-ice model already books it: `[ocean.ice] snowfall /= 0`
       ! (`has_snowfall`) makes `ice_snowfall_ocean_share` deliver the same
       ! open-water share of `atm_fprec` to the ocean through `heat_flux_diag`
       ! at the full enthalpy difference (melt + warming), which includes
@@ -498,14 +498,14 @@ contains
       real(wp), intent(inout) :: lprec(nx, ny), fprec(nx, ny), p_surf_atm(nx, ny)
       real(wp), intent(inout) :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
       logical, intent(in) :: cons_abs
-         !! `.true.` under `&ocean_eos_nml ts_convention = "cons_abs"`
+         !! `.true.` under `[ocean.eos] ts_convention = "cons_abs"`
          !! (with a salinity tracer): the SST handed to the bulk formulae
          !! and to the longwave emission is `pt_from_ct(SA, CT)` of the top
          !! layer, SA = `c_S`.  `.false.` takes the model T as is
          !! (bit-identical default).
       real(wp), intent(in) :: cp
          !! Specific heat (J/kg/K) of the heat content of precipitation:
-         !! `sf%cp` (`&ocean_eos_nml c_p`, default 3992).
+         !! `sf%cp` (`[ocean.eos] c_p`, default 3992).
       real(wp), intent(in) :: lfus
          !! Latent heat of fusion (J/kg) charged to the ocean for the snow
          !! that falls on open water (`q_fus = -lfus*fprec`);

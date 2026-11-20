@@ -285,9 +285,9 @@ contains
       ! nghost=2 (invisible to the mass/salt gates; the O4 heat-leak
       ! postmortem).  This is an ABORT, not a warning: a silent
       ! decomposition-dependent conservation leak is a correctness bug.
-      ! `decomp%px/py` are the TRUE runtime decomposition (namelist px/py
+      ! `decomp%px/py` are the TRUE runtime decomposition (input px/py
       ! are auto-factored by then), so this gate sees the real seam even
-      ! when the namelist left px=py=1.  The default nghost is now 3, so
+      ! when the input left px=py=1.  The default nghost is now 3, so
       ! this only trips an EXPLICIT decomposed override below 3.  The ocean
       ! halo-primitive tests (test_halo_ocean_mpi) already init at nghost=3.
       if ((decomp%px > 1 .or. decomp%py > 1) .and. nghost < 3) then
@@ -297,7 +297,7 @@ contains
                    ". The continuity/tracer PPM 5-point stencil degrades to "// &
                    "FIRST ORDER at rank-seam faces, leaking a structured tracer "// &
                    "(heat) while conserving a uniform one (salt). "// &
-                   "Set &grid_nml nghost = 3 (the default) or higher.", &
+                   "Set [grid] nghost = 3 (the default) or higher.", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if

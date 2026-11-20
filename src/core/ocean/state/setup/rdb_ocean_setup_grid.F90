@@ -11,7 +11,7 @@ contains
       !! then single-source the inverses + hvisc ratio bundle
       !! (`metrics_finalize`).  Must run BEFORE `ocean_state_enter_data`
       !! (the host fill is what the GPU copyin captures).  For
-      !! "spherical", the `&grid_nml dx`/`dy` are reinterpreted as
+      !! "spherical", the `[grid] dx`/`dy` are reinterpreted as
       !! dlon/dlat in degrees.
       type(config_t), intent(in) :: cfg
       type(ocean_state_t), intent(inout) :: ocean_state
@@ -53,7 +53,7 @@ contains
       case (GRID_CONFIG_SUPERGRID)
          if (len_trim(cfg%ocean%grid%supergrid_file) == 0) then
             call fail("configure_ocean_metrics: grid_config='supergrid' "// &
-                      "requires supergrid_file to be set in &ocean_grid_nml", ierr, OCEAN_STATUS_ERR_SETUP)
+                      "requires supergrid_file to be set in [ocean.grid]", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          ! ierr threaded down ONLY when THIS routine's own ierr is
@@ -102,7 +102,7 @@ contains
          if (trim(cfg%ocean%bc%west) /= "periodic" .or. &
              trim(cfg%ocean%bc%east) /= "periodic") then
             call fail("configure_ocean_metrics: grid_config='tripolar' requires "// &
-                      "periodic east-west BCs (&ocean_bc_nml west='periodic' east='periodic')", ierr, OCEAN_STATUS_ERR_SETUP)
+                      "periodic east-west BCs ([ocean.bc] west='periodic' east='periodic')", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          ! A tripolar grid MUST close the top with the north fold; otherwise
@@ -112,7 +112,7 @@ contains
          ! this check.)
          if (trim(cfg%ocean%bc%north) /= "tripolar_fold") then
             call fail("configure_ocean_metrics: grid_config='tripolar' requires "// &
-                      "north='tripolar_fold' (&ocean_bc_nml north='tripolar_fold')", ierr, OCEAN_STATUS_ERR_SETUP)
+                      "north='tripolar_fold' ([ocean.bc] north='tripolar_fold')", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          ! grid%dx / grid%dy are dlon / dlat in DEGREES here (as spherical).
@@ -196,7 +196,7 @@ contains
                                      device_resident=.false.)
       end if
 
-      ! Solid-wall velocity masking (&ocean_bc_nml mask_wall_velocity):
+      ! Solid-wall velocity masking ([ocean.bc] mask_wall_velocity):
       ! thread the per-edge WALL flags so only genuine solid walls get their
       ! ghost wet_T zeroed (periodic + open/OBC edges keep their ghosts).
       !
@@ -295,7 +295,7 @@ contains
          ! Warn loudly when a wind was configured on the knob this path does
          ! NOT read. `taux_magnitude` is only consumed by the "2gyre" and
          ! "neverworld2" profiles above; the constant path reads
-         ! `&physics_nml wind_stress_x/y`. Setting the former under
+         ! `[physics] wind_stress_x/y`. Setting the former under
          ! `wind_config="constant"` is silently inert — which is exactly how
          ! `coriolis_coast.toml` shipped a case whose header promises a
          ! "wind-spun-up gyre" that it has never generated: it ran its full
@@ -304,12 +304,12 @@ contains
              abs(cfg%wind_stress_x) <= 0.0_wp .and. &
              abs(cfg%wind_stress_y) <= 0.0_wp) then
             call logger%warning( &
-               "&ocean_topo_nml taux_magnitude = "// &
+               "[ocean.topo] taux_magnitude = "// &
                to_string(cfg%ocean%topo%taux_magnitude)//" is INERT under "// &
                'wind_config="constant" (it is only read by "2gyre" / '// &
-               '"neverworld2"), and &physics_nml wind_stress_x/y are both '// &
+               '"neverworld2"), and [physics] wind_stress_x/y are both '// &
                "zero, so this run has NO wind forcing at all. Set "// &
-               "&physics_nml wind_stress_x to apply a constant wind.")
+               "[physics] wind_stress_x to apply a constant wind.")
          end if
          call ocean_state%surface_stress%set_wind_stress_const( &
             cfg%wind_stress_x, cfg%wind_stress_y)
@@ -451,9 +451,9 @@ contains
       !! Resolve the `VCOORD_Z_FIXED` nominal layering onto the vcoord slot —
       !! and the `VCOORD_ZSTAR` one, which is the same nominal profile
       !! (MOM6 z* dilates it per column; `ocean_vcoord_zstar_target`):
-      !! `z_fixed_h_ref = &ocean_topo_nml max_depth` (the uniform
+      !! `z_fixed_h_ref = [ocean.topo] max_depth` (the uniform
       !! `max_depth/nz` spacing — the default, byte-identical), or, under
-      !! `&vcoord_nml z_fixed_profile = "list" | "tanh"`, the stretched
+      !! `[vcoord] z_fixed_profile = "list" | "tanh"`, the stretched
       !! per-layer tables `z_fixed_zi` / `z_fixed_dz` built by
       !! `rdb_vcoord :: z_fixed_nominal_dz` (`z_fixed_h_ref` then becomes
       !! the profile's total depth).
@@ -700,7 +700,7 @@ contains
 
    module subroutine configure_ocean_closed_faces(cfg, ocean_state, grid, compute_rank, ierr)
       !! Build the static partial-step z-level FACE-CLOSURE mask
-      !! (`&vcoord_nml zfixed_closed_faces`; Adcroft, Hill & Marshall
+      !! (`[vcoord] zfixed_closed_faces`; Adcroft, Hill & Marshall
       !! 1997; Losch 2008 §2.1 for the ice-shelf cavity).
       !!
       !! Under `vcoord_type = "z_fixed"` a layer whose nominal
@@ -780,14 +780,14 @@ contains
       end if
 
       if (.not. ocean_state%multilayer%is_init) then
-         call fail("&vcoord_nml zfixed_closed_faces requires the ocean "// &
+         call fail("[vcoord] zfixed_closed_faces requires the ocean "// &
                    "multilayer path (the mask is per-layer)", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
       if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED .and. &
           ocean_state%vcoord%coord_type /= VCOORD_ZSTAR .and. &
           ocean_state%vcoord%coord_type /= VCOORD_ZSTAR_FULL) then
-         call fail("&vcoord_nml zfixed_closed_faces is only defined for "// &
+         call fail("[vcoord] zfixed_closed_faces is only defined for "// &
                    "vcoord_type='z_fixed', 'zstar' and 'zstar_full': the "// &
                    "live/filler staircase it closes is made by a GEOMETRIC "// &
                    "coordinate that vanishes bed-side layers at fixed "// &
@@ -800,8 +800,8 @@ contains
       if ((ocean_state%vcoord%coord_type == VCOORD_Z_FIXED .or. &
            ocean_state%vcoord%coord_type == VCOORD_ZSTAR) .and. &
           ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) then
-         call fail("&vcoord_nml zfixed_closed_faces needs a resolved "// &
-                   "z_fixed_h_ref (set &ocean_topo_nml max_depth): without "// &
+         call fail("[vcoord] zfixed_closed_faces needs a resolved "// &
+                   "z_fixed_h_ref (set [ocean.topo] max_depth): without "// &
                    "it the z_fixed / zstar target degenerates to uniform sigma, "// &
                    "there are no fillers, and the mask would close nothing", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
@@ -809,7 +809,7 @@ contains
       end if
       if (ocean_state%vcoord%coord_type == VCOORD_ZSTAR_FULL .and. &
           ocean_state%vcoord%zstar_h_surf_target <= 0.0_wp) then
-         call fail("&vcoord_nml zfixed_closed_faces under vcoord_type="// &
+         call fail("[vcoord] zfixed_closed_faces under vcoord_type="// &
                    "'zstar_full' needs zstar_h_surf_target > 0: without it "// &
                    "build_zref_full lays uniform sigma, there are no fillers, "// &
                    "and the mask would close nothing", &
@@ -821,26 +821,26 @@ contains
          ! tile + halo) while the others go on into the face collective.
          call grid_allreduce_max(grid, maxval(ocean_state%dyn%bt_work%bt_H_ref), href_max)
          if (href_max <= 0.0_wp) then
-            call fail("&vcoord_nml zfixed_closed_faces: bt_H_ref is empty — "// &
-                      "the barotropic datum must be built (&ocean_bt_nml "// &
+            call fail("[vcoord] zfixed_closed_faces: bt_H_ref is empty — "// &
+                      "the barotropic datum must be built ([ocean.bt] "// &
                       "n_inner >= 1) before the static face mask can be laid", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
       end if
       if (cfg%ocean%wetdry%enable) then
-         call fail("&vcoord_nml zfixed_closed_faces is incompatible with "// &
-                   "&ocean_wetdry_nml enable: wet/dry moves the live/filler "// &
+         call fail("[vcoord] zfixed_closed_faces is incompatible with "// &
+                   "[ocean.wetdry] enable: wet/dry moves the live/filler "// &
                    "pattern under the running state and the mask is static", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
       if (cfg%ocean%bt%bt_halo > 0) then
-         call fail("&vcoord_nml zfixed_closed_faces is incompatible with "// &
-                   "&ocean_bt_nml bt_halo > 0: the wide-halo barotropic "// &
+         call fail("[vcoord] zfixed_closed_faces is incompatible with "// &
+                   "[ocean.bt] bt_halo > 0: the wide-halo barotropic "// &
                    "clone carries its own metrics and no face mask, so the "// &
                    "wide BT loop would transport through closed faces "// &
-                   "(the same argument &ocean_porous_nml already makes)", &
+                   "(the same argument [ocean.porous] already makes)", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -866,8 +866,8 @@ contains
       ! corner shear are built from the face velocities with the 2-D
       ! `wet_*` masks only.
       if (cfg%ocean%hvisc%stress_tensor) then
-         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
-                   "with &ocean_hvisc_nml stress_tensor (nor kh_aniso, which "// &
+         call fail("[vcoord] zfixed_closed_faces does not yet compose "// &
+                   "with [ocean.hvisc] stress_tensor (nor kh_aniso, which "// &
                    "only the stress-tensor path reads): its T-cell tension and "// &
                    "corner shear are masked by the 2-D wet_* fields only, so a "// &
                    "closed face-layer's zeroed velocity enters the strain as a "// &
@@ -890,15 +890,15 @@ contains
       ! staircase face — so it is refused until it is ported, rather than
       ! left to run on the wrong column.
       if (cfg%ocean%bt%correction_bc_pgf) then
-         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
-                   "with &ocean_bt_nml correction_bc_pgf: compute_pbce, "// &
+         call fail("[vcoord] zfixed_closed_faces does not yet compose "// &
+                   "with [ocean.bt] correction_bc_pgf: compute_pbce, "// &
                    "compute_gtot_faces and the bc-PGF du_bc block in "// &
                    "apply_bt_correction all weight by the FULL column "// &
                    "(0.5*(h_L+h_R) over every layer), so the correction's "// &
                    "depth-mean-zero identity holds on the full column, not "// &
                    "on the OPEN column ubt is the mean of — it would leak a "// &
                    "barotropic increment into the open layers and push one "// &
-                   "into the closed ones.  Set correction_bc_pgf=.false.", &
+                   "into the closed ones.  Set correction_bc_pgf=false", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1125,18 +1125,18 @@ contains
       call halo_allreduce_sum(steps_local, steps_global)
       if (steps_global < 0.5_wp) return
 
-      call fail("&vcoord_nml zfixed_closed_faces = .false. is refused with "// &
+      call fail("[vcoord] zfixed_closed_faces = false is refused with "// &
                 "vcoord_type='z_fixed' over a stepped bed: "// &
                 to_string(nint(steps_global))//" wet faces join columns whose "// &
                 "bed lies in different nominal z_fixed layers, so an open face "// &
                 "pairs a live layer with a bed filler and the pressure gradient "// &
                 "across the open staircase step drives flow from rest (blows "// &
-                "up within steps).  Set &vcoord_nml zfixed_closed_faces = .true.", &
+                "up within steps).  Set [vcoord] zfixed_closed_faces = true", &
                 ierr, OCEAN_STATUS_ERR_SETUP)
    end subroutine refuse_open_zfixed_staircase
 
    module subroutine configure_ocean_porous(cfg, ocean_state, grid, compute_rank, ierr)
-      !! Configure porous barriers (`&ocean_porous_nml`, Adcroft 2013).
+      !! Configure porous barriers (`[ocean.porous]`, Adcroft 2013).
       !! Grows the `ocean_metrics_t` porous arrays to full face size and
       !! fills the STATIC along-face `d_min`/`d_max`/`d_avg` statistics;
       !! the layer-averaged open fractions themselves are recomputed on
@@ -1164,7 +1164,7 @@ contains
       end if
 
       if (.not. ocean_state%multilayer%is_init) then
-         call fail("&ocean_porous_nml enable requires the ocean multilayer "// &
+         call fail("[ocean.porous] enable requires the ocean multilayer "// &
                    "path (the open fractions are per-layer)", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1174,21 +1174,21 @@ contains
       case (POROUS_SOURCE_RESOLVED)
          continue
       case (POROUS_SOURCE_FILE)
-         call fail("&ocean_porous_nml source='file' (an offline "// &
+         call fail("[ocean.porous] source='file' (an offline "// &
                    "subgrid-bathymetry file, MOM6 topog_edge.nc) is not "// &
                    "implemented — it needs the file-forcing backend that "// &
-                   "&ocean_bt_nml wave_drag_form='file' also waits on. "// &
+                   "[ocean.bt] wave_drag_form='file' also waits on. "// &
                    "Use source='resolved' (a documented proxy).", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       case default
-         call fail("&ocean_porous_nml source='"// &
+         call fail("[ocean.porous] source='"// &
                    trim(cfg%ocean%porous%source)//"' is not recognised", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end select
 
       interp = parse_porous_eta_interp(cfg%ocean%porous%eta_interp)
       if (interp < 0) then
-         call fail("&ocean_porous_nml eta_interp='"// &
+         call fail("[ocean.porous] eta_interp='"// &
                    trim(cfg%ocean%porous%eta_interp)//"' is not recognised", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1199,7 +1199,7 @@ contains
 
       call metrics_porous_alloc(ocean_state%metrics, grid, nz)
       ocean_state%metrics%porous_eta_interp = interp
-      ! The namelist knob is a DEPTH (positive below the surface); the
+      ! The input knob is a DEPTH (positive below the surface); the
       ! kernel gate compares HEIGHTS, so flip the sign once here.
       ocean_state%metrics%porous_mask_depth = -cfg%ocean%porous%masking_depth
 
@@ -1232,7 +1232,7 @@ contains
                                          ocean_state%metrics%por_dmin_u, &
                                          ocean_state%metrics%por_dmax_u, &
                                          ocean_state%metrics%por_davg_u)) then
-         call fail("&ocean_porous_nml: u-face subgrid statistics violate "// &
+         call fail("[ocean.porous]: u-face subgrid statistics violate "// &
                    "d_min <= d_avg <= d_max", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1240,7 +1240,7 @@ contains
                                          ocean_state%metrics%por_dmin_v, &
                                          ocean_state%metrics%por_dmax_v, &
                                          ocean_state%metrics%por_davg_v)) then
-         call fail("&ocean_porous_nml: v-face subgrid statistics violate "// &
+         call fail("[ocean.porous]: v-face subgrid statistics violate "// &
                    "d_min <= d_avg <= d_max", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1263,7 +1263,7 @@ contains
 
    module subroutine configure_ocean_wetdry(cfg, ocean_state, grid, compute_rank)
       !! Dynamic wetting/drying (docs/ocean_wetdry_plan.md): copy the
-      !! `&ocean_wetdry_nml` knobs onto the BT workstate, allocate the
+      !! `[ocean.wetdry]` knobs onto the BT workstate, allocate the
       !! wd_* workspaces (lazy — absent when the knob is off, so the
       !! default path carries no new arrays and stays byte-identical),
       !! and seed the hysteresis wet mask from the seeded bathymetry

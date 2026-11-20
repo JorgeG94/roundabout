@@ -130,7 +130,7 @@ module rdb_ocean_porous
    public :: POROUS_SOURCE_RESOLVED, POROUS_SOURCE_FILE
    public :: POROUS_ETA_MAX, POROUS_ETA_MIN, POROUS_ETA_ARITH, POROUS_ETA_HARM
 
-   ! ---- Subgrid-statistics source enum (`&ocean_porous_nml source`) ----
+   ! ---- Subgrid-statistics source enum (`[ocean.porous] source`) ----
    integer, parameter :: POROUS_SOURCE_RESOLVED = 0
       !! Along-face min/max/mean of the RESOLVED bathymetry (three
       !! samples: the two face corners + the face midpoint).  A proxy
@@ -160,7 +160,7 @@ contains
    ! =================================================================
 
    pure function parse_porous_source(name) result(src)
-      !! Map `&ocean_porous_nml source` onto `POROUS_SOURCE_*`.  An
+      !! Map `[ocean.porous] source` onto `POROUS_SOURCE_*`.  An
       !! unrecognised string returns -1 so the caller can fail loud.
       character(len=*), intent(in) :: name
       integer :: src
@@ -175,7 +175,7 @@ contains
    end function parse_porous_source
 
    pure function parse_porous_eta_interp(name) result(interp)
-      !! Map `&ocean_porous_nml eta_interp` onto `POROUS_ETA_*`.  An
+      !! Map `[ocean.porous] eta_interp` onto `POROUS_ETA_*`.  An
       !! unrecognised string returns -1 so the caller can fail loud.
       character(len=*), intent(in) :: name
       integer :: interp
@@ -758,7 +758,7 @@ contains
                                                  por_u, por_v, open_u, open_v, &
                                                  dy_cu_bt, dx_cv_bt)
       !! Refresh the BAROTROPIC face widths from the LIVE layer
-      !! thicknesses when `&vcoord_nml zfixed_closed_faces` is on.
+      !! thicknesses when `[vcoord] zfixed_closed_faces` is on.
       !!
       !! The barotropic substep transports on `ubt * FA * dy_cu_bt` with
       !! `FA = sum_k h_face` — the FULL column.  A closed layer carries no

@@ -295,7 +295,7 @@ contains
                  "ke0 must be bit-identical between reproducing_sums absent and .false.")
       if (allocated(error)) return
       call check(error,.not. stats_false%exact_sums, &
-                 "reproducing_sums=.false. must NOT set console_stats_t%exact_sums")
+                 "reproducing_sums=false must NOT set console_stats_t%exact_sums")
    end subroutine test_console_reproducing_sums_off_bit_identical
 
    subroutine test_console_reproducing_sums_true_agrees_with_fp(error)
@@ -324,7 +324,7 @@ contains
       call state%destroy()
 
       call check(error, stats_efp%exact_sums, &
-                 "reproducing_sums=.true. must set console_stats_t%exact_sums")
+                 "reproducing_sums=true must set console_stats_t%exact_sums")
       if (allocated(error)) return
       call check(error, abs(stats_efp%mass0 - stats_fp%mass0) <= 1.0e-9_wp*abs(stats_fp%mass0), &
                  "EFP-path Mass total must agree with the FP-path total to 1e-9 relative")
@@ -398,7 +398,7 @@ contains
       !! poison` came back a nonzero, run-invariant garbage value and the
       !! console printed "Ice: conc 0.0000 thick 0.0000" on a 100%
       !! ice-covered run (`validation_examples/ocean/sea_ice_pack/
-      !! sea_ice_pack.toml`, `&ocean_ice_nml ncat = 5`). This test is
+      !! sea_ice_pack.toml`, `[ocean.ice] ncat = 5`). This test is
       !! CPU-portable (the defect is GPU-codegen-specific and does not
       !! reproduce on a host/multicore build -- see the GPU ctest gate for
       !! the actual device regression check) but pins the two invariants

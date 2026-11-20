@@ -90,7 +90,7 @@ module rdb_ocean_kappa_shear
 
       ! ---- Scheme selection + master switch ----
       logical :: enable = .false.
-         !! Master switch.  Default off — existing namelists and tests
+         !! Master switch.  Default off — existing inputs and tests
          !! stay bit-identical.  Requires `vmix%use_closure` +
          !! thermodynamics (validated at configure).
 

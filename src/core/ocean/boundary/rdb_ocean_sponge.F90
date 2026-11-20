@@ -7,13 +7,13 @@ module rdb_ocean_sponge
    !! Two sponge implementations share this module.
    !!
    !! LEGACY BAND PATH (`ocean_sponge_apply` / `ocean_sponge_apply_tracers`,
-   !! `&ocean_bc_nml`): dissipates outgoing waves in a band of cells next to
+   !! `[ocean.bc]`): dissipates outgoing waves in a band of cells next to
    !! a sponge-tagged edge. Reads `bc%<edge>%bc_type == OBC_SPONGE` +
    !! per-edge `sponge_width` (cells) and `sponge_strength` (1/s) and
    !! applies `du/dt += -τ·u`, with `τ` a cosine ramp from 0 at the interior
    !! to `sponge_strength` at the outer edge, toward **zero** momentum and a
    !! **scalar** per-edge tracer target. State evolution (`c`, momentum)
-   !! kept byte-identical — this is what `&ocean_sponge_nml enable=.false.`
+   !! kept byte-identical — this is what `[ocean.sponge] enable=false`
    !! (the default) still runs. PR-23 additionally mirrors the tracer
    !! relaxation's salinity/temperature increment into `ms%salt_budget_sponge`
    !! / `heat_budget_sponge` (a pure side-channel add, new arrays that were
@@ -22,7 +22,7 @@ module rdb_ocean_sponge
    !! knob too, not just the map-driven path.
    !!
    !! MAP-DRIVEN PATH (`ocean_sponge_t` + `ocean_sponge_apply_maps`,
-   !! `&ocean_sponge_nml enable=.true.`): a real sponge (MOM6's ALE sponge
+   !! `[ocean.sponge] enable=true`): a real sponge (MOM6's ALE sponge
    !! is the model in spirit, not in code — see below).
    !! A per-cell inverse-damping-time map (`idamp_h`/`idamp_u`/`idamp_v`,
    !! 1/s; `Idamp = 0` IS the sponge mask, no separate width/extent
@@ -42,7 +42,7 @@ module rdb_ocean_sponge
    !!   * `target_source="ic"` (default) snapshots the reference from the
    !!     seeded initial condition via `ocean_sponge_snapshot_reference` —
    !!     reachable as a "nudge toward a parent climatology" via
-   !!     `&ocean_zinit_nml` with no new file reader.
+   !!     `[ocean.zinit]` with no new file reader.
    !!   * `target_source="linear_z"` builds an ANALYTIC affine
    !!     geopotential T(z)/S(z) profile, re-evaluated on the LIVE layer
    !!     geometry once per outer step by `ocean_sponge_refresh_target`.
@@ -71,10 +71,10 @@ module rdb_ocean_sponge
    !!      motion is far below the target's own vertical resolution.
    !!      It also needs the SEED to be on the coordinate already: the
    !!      snapshot runs before the first regrid.  `z_fixed` +
-   !!      `&ocean_zinit_nml` seeds on its target for exactly this reason
+   !!      `[ocean.zinit]` seeds on its target for exactly this reason
    !!      (`ocean_state_seed_from_cfg`).  Coordinates whose seed is not
    !!      their target still snapshot on the seed layers.  `z_fixed` with a
-   !!      per-layer-index `&tracer_nml` IC is one; `zstar_full`, `rho` and
+   !!      per-layer-index `[tracer]` IC is one; `zstar_full`, `rho` and
    !!      `hycom` have not been checked.
    !!      `target_source="linear_z"` does NOT take that shortcut — it
    !!      rebuilds the profile on the live geometry every outer step,
@@ -114,10 +114,10 @@ module rdb_ocean_sponge
    public :: SPONGE_RAMP_COSINE, SPONGE_RAMP_LINEAR
 
    integer, parameter :: SPONGE_RAMP_COSINE = 0
-      !! `&ocean_sponge_nml ramp = "cosine"` (default): the legacy band
+      !! `[ocean.sponge] ramp = "cosine"` (default): the legacy band
       !! kernel's `0.5*(1 + rdb_sm_cos(pi*d/band))`.
    integer, parameter :: SPONGE_RAMP_LINEAR = 1
-      !! `&ocean_sponge_nml ramp = "linear"`: `(band - d - 0.5)/band`.
+      !! `[ocean.sponge] ramp = "linear"`: `(band - d - 0.5)/band`.
 
    type :: ocean_sponge_t
       !! Map-driven sponge state: per-cell `Idamp` [1/s] + a 3-D reference
@@ -540,7 +540,7 @@ contains
       !! the `z = 0` datum, i.e. `z_top + sum_{k'>k} h(k') + h(k)/2`, and
       !! `z_top = sp%z_top(i,j)` the depth of the column top (0 in the
       !! open ocean, the ice draft under a shelf).  `z` in the profile is
-      !! positive UP, hence the minus signs — the `&ocean_zinit_nml
+      !! positive UP, hence the minus signs — the `[ocean.zinit]
       !! source="linear"` convention exactly.
       !!
       !! ### Why re-evaluated, not frozen at t = 0
@@ -653,7 +653,7 @@ contains
       !!   * `SPONGE_RAMP_COSINE` (default): `0.5*(1 + rdb_sm_cos(pi*d/band))` —
       !!     the legacy band kernel's own ramp, reproduced bit-for-bit
       !!     (including its `acos(-1)` spelling of pi) so `ramp="cosine"`
-      !!     stays byte-identical to every shipped namelist.
+      !!     stays byte-identical to every shipped input.
       !!   * `SPONGE_RAMP_LINEAR`: `(band - d - 0.5)/band`.  This is the
       !!     CELL-CENTRE evaluation of ISOMIP+ Eq. (20),
       !!     `gamma(x) = gamma0*max(0, (x - x_r0)/(x_r1 - x_r0))`
@@ -676,7 +676,7 @@ contains
    end function sponge_band_alpha
 
    subroutine ocean_sponge_apply_maps(grid, sp, ms, dt)
-      !! Map-driven sponge dispatch (`&ocean_sponge_nml enable=.true.`).
+      !! Map-driven sponge dispatch (`[ocean.sponge] enable=true`).
       !! Relaxes momentum toward `u_ref`/`v_ref` (when `relax_uv`) and every
       !! registered tracer toward `ref_tracer` (when `relax_tracers`),
       !! mirroring the S/T tracer relaxation into `ms%salt_budget_sponge` /

@@ -15,44 +15,44 @@ assumes you have a working build — if not, see :ref:`installation`.
 Running the model
 =================
 
-The solver takes exactly one argument, the namelist file:
+The solver takes exactly one argument, the input file:
 
 .. code-block:: bash
 
-   ./build/rdb validation_examples/ocean/double_gyre/double_gyre_mom6.nml
+   ./build/rdb validation_examples/ocean/double_gyre/double_gyre_mom6.toml
 
 That is the entire command-line interface. There are no flags — no
 ``--help``, no ``--version``. Everything the model does is set in the
-namelist. Give it no argument, or a path that does not exist, and it prints
+input. Give it no argument, or a path that does not exist, and it prints
 
 .. code-block:: text
 
    FATAL: no input file provided.
-   Usage: rdb <input_file.nml>
+   Usage: rdb [--validate-only] <input_file.toml>
 
 and exits with status 2.
 
-Output lands in a directory the namelist chooses (``&output_nml
+Output lands in a directory the input chooses (``[output]
 output_dir``, default ``./output``), **relative to the directory you run
 from**. So it is usually easier to run from the case directory:
 
 .. code-block:: bash
 
    cd validation_examples/ocean/double_gyre
-   ../../../build/rdb double_gyre_mom6.nml
+   ../../../build/rdb double_gyre_mom6.toml
 
 On a GPU build, pin the device explicitly:
 
 .. code-block:: bash
 
-   CUDA_VISIBLE_DEVICES=0 ../../../build/rdb double_gyre_mom6.nml
+   CUDA_VISIBLE_DEVICES=0 ../../../build/rdb double_gyre_mom6.toml
 
 Multi-rank runs go through ``mpirun`` in the usual way, with the per-rank
 device pinning described in :ref:`installation`:
 
 .. code-block:: bash
 
-   mpirun -np 4 ./build/rdb case.nml
+   mpirun -np 4 ./build/rdb case.toml
 
 
 Choosing a first case
@@ -61,13 +61,13 @@ Choosing a first case
 ``validation_examples/ocean/`` holds the canonical configurations. Three are
 good starting points, for different reasons.
 
-**``double_gyre/double_gyre_mom6.nml``** — the MOM6-reference double gyre.
+**``double_gyre/double_gyre_mom6.toml``** — the MOM6-reference double gyre.
 44 × 40 cells, two layers, :math:`\Delta t = 1200\ \mathrm{s}`, ten
 simulated days. Tiny, fast, and it exercises the full driver path: the
 split-explicit dynamical core, the barotropic sub-cycle, bathymetry, wind
 forcing and the diagnostics manager. This is the one to run first.
 
-**``seamount/seamount.nml``** — an at-rest test. A 100 km closed basin with
+**``seamount/seamount.toml``** — an at-rest test. A 100 km closed basin with
 a Gaussian seamount, uniform density, :math:`f = 0`, no wind and no forcing
 of any kind. The correct answer is **no motion at all**, for thirty
 simulated days. Any velocity it produces is a numerical artefact of the
@@ -75,13 +75,13 @@ vertical coordinate or the pressure gradient. About 30 s on a single V100.
 Tests of this shape are unusually informative: there is no tuning that can
 make a wrong answer look plausible.
 
-**``eady/eady.nml``** — a 250 km reentrant channel with an Eady front,
+**``eady/eady.toml``** — a 250 km reentrant channel with an Eady front,
 50 × 50 × 10, run for sixty days. It has an analytical answer — linear
 theory predicts a growth rate of :math:`1.98\times10^{-6}\ \mathrm{s^{-1}}`
 for the 125 km mode in this channel, and the model reproduces it to about
 3 %. Roughly two minutes on a single V100.
 
-Every shipped namelist carries a header comment block describing the setup,
+Every shipped input carries a header comment block describing the setup,
 the expected outcome, and how to interpret a failure. Read it before you
 run the case; several of them are the best documentation in the repository.
 
@@ -103,7 +103,7 @@ configuration it is about to run:
      Diag:     double_gyre every 86400.0 s
 
 followed by a memory budget per state slot and the setup timings. Check the
-grid spacing here. Several namelists *derive* ``dx`` and ``dy`` from a
+grid spacing here. Several inputs *derive* ``dx`` and ``dy`` from a
 domain extent in degrees rather than stating them, and a configuration
 error at this point produces a basin of the wrong size that runs perfectly
 happily.
@@ -111,7 +111,7 @@ happily.
 The status line
 ---------------
 
-At a cadence set by ``&logging_nml status_interval`` — or every 100 steps
+At a cadence set by ``[logging] status_interval`` — or every 100 steps
 if that is left at its default of zero — the model prints a ``[stats]``
 line:
 
@@ -150,7 +150,7 @@ line:
      - Volume-mean temperature.
 
 ``Salt`` and ``Temp`` appear only when thermodynamics is enabled
-(``&ocean_thermo_nml enable_thermodynamics``); the double gyre above turns
+(``[ocean.thermo] enable_thermodynamics``); the double gyre above turns
 it off, so its lines carry only the first five fields.
 
 **How to read these.** ``En`` is the health indicator. What counts as
@@ -221,7 +221,7 @@ Diagnostics are written **per rank**, with no gather:
 
    <output_dir>/<filename>_rank_NNNNNN.nc
 
-where ``<filename>`` is ``&ocean_diag_nml filename`` (default
+where ``<filename>`` is ``[ocean.diag] filename`` (default
 ``ocean_diag``). The double gyre above, with ``output_dir =
 "./out_double_gyre_mom6"`` and ``filename = "double_gyre"``, produces
 
@@ -229,7 +229,7 @@ where ``<filename>`` is ``&ocean_diag_nml filename`` (default
 
    out_double_gyre_mom6/double_gyre_rank_000000.nc
 
-Write cadence is ``&ocean_diag_nml dt_out``. A single-rank run produces a
+Write cadence is ``[ocean.diag] dt_out``. A single-rank run produces a
 single file you can open directly:
 
 .. code-block:: bash
@@ -241,10 +241,10 @@ into one offline.
 
 Rank 0 also writes two parameter dumps into the same directory —
 ``rdb_parameter_doc.all`` and ``rdb_parameter_doc.short`` — recording every
-namelist value the run actually used. When you come back to output in six
+input value the run actually used. When you come back to output in six
 months and cannot remember how it was configured, these are the answer.
 
-Restarts, if ``&output_nml restart_interval`` is set, follow the same
+Restarts, if ``[output] restart_interval`` is set, follow the same
 pattern with a fixed prefix:
 
 .. code-block:: text
@@ -252,21 +252,21 @@ pattern with a fixed prefix:
    <output_dir>/restart_rank_NNNNNN.nc
 
 They are overwritten in place rather than versioned by time. Point
-``&output_nml restart_file`` at the file (or its directory) to warm-start
+``[output] restart_file`` at the file (or its directory) to warm-start
 from one.
 
 .. note::
 
-   ``&output_nml output_to_file`` is a **dead knob** on this path. Several
-   shipped namelists still set it; it parses and validates and then does
+   ``[output] output_to_file`` is a **dead knob** on this path. Several
+   shipped inputs still set it; it parses and validates and then does
    nothing. To turn diagnostics off, use
-   ``&ocean_diag_nml enabled = .false.``.
+   ``[ocean.diag] enabled = false``.
 
 
 Where to go next
 ================
 
-* :ref:`running_simulations` — how a namelist is organised, and walkthroughs
+* :ref:`running_simulations` — how an input is organised, and walkthroughs
   of real cases.
 * :ref:`theory` — the equations being solved.
 * :ref:`validation` — how to check that a build is behaving.

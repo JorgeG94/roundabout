@@ -28,7 +28,7 @@ module rdb_ocean_bathymetry_inject
    !!      `OCEAN_STATUS_ERR_BATHYMETRY_SIGN`, naming the array's median and
    !!      the convention that was asked for.
    !!   3. this is NOT a "no negatives" test: `b < 0` is legal under
-   !!      wet/dry (`rdb_config.F90` `&ocean_wetdry_nml`), so the check is on
+   !!      wet/dry (`rdb_config.F90` `[ocean.wetdry]`), so the check is on
    !!      the wet fraction, never on the presence of a negative value.
    !!
    !! Ghost fill (`bathymetry_fill_ghosts_array`) mirrors

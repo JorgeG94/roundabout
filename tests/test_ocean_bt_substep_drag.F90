@@ -28,7 +28,7 @@
 !!      `bt_substep_drag` knob too, not only the newer wave-drag one.
 !!   6. `warns_when_bdrag_not_linear` — `compute_bt_rem` reads only the
 !!      LINEAR coefficient `r`, so `substep_drag` under
-!!      `&ocean_bdrag_nml form /= "linear"` is a no-op (r = 0) or a drag
+!!      `[ocean.bdrag] form /= "linear"` is a no-op (r = 0) or a drag
 !!      the slow step never applies.  `validate_config` WARNS (does not
 !!      refuse); this pins the predicate behind that warning and that the
 !!      configuration still validates.

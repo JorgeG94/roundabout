@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate a synthetic time-varying surface-forcing NetCDF for
-`&ocean_dataovr_nml` (PR-15).
+`[ocean.dataovr]` (PR-15).
 
 Writes NetCDF-3 *classic* (CDF-1) by hand from the standard library only.
 This box has no `netCDF4`, no `scipy` and no `numpy`, and the project

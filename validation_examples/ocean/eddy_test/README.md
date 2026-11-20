@@ -23,7 +23,7 @@ modelled after the MOM6 `ocean_only/double_gyre` example.
 ## Run
 
 ```bash
-./build/rdb validation_examples/ocean/eddy_test/eddy_test.nml
+./build/rdb validation_examples/ocean/eddy_test/eddy_test.toml
 ```
 
 Expected wallclock single V100: **~10-15 min for 30 days**
@@ -75,7 +75,7 @@ plt.title('SSH at day 30')
 # basin-scale dipole.
 ```
 
-## Tuning knobs (in `eddy_test.nml`)
+## Tuning knobs (in `eddy_test.toml`)
 
 | Knob | Effect |
 |---|---|
@@ -105,7 +105,7 @@ mode killing on `h`).  We have neither — our dissipation stack is
 calibrated for dissipated regional ocean (real bathy + drag + KPP
 + thermo), not idealised energetic wind-driven 2-layer setups.
 
-For a baroclinic-instability movie, **use `../eady/eady.nml`
+For a baroclinic-instability movie, **use `../eady/eady.toml`
 instead** — IC is the unstable jet, no forcing, saturates at modest
 amplitude, validated 25 days stable.  50×50 basin is small but
 shows real eddies.

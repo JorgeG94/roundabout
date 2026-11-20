@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""[C1] Convert a MOM6 `ocean_vgrid.nc` into a roundabout `&vcoord_nml
+"""[C1] Convert a MOM6 `ocean_vgrid.nc` into a roundabout `[vcoord]
 z_fixed_dz` list, so the ocean dyn-core can run on ACCESS-OM3's exact
 vertical grid (75 levels, z* coordinate).
 
@@ -33,12 +33,12 @@ has layers.
 
 Output ordering -- READ BEFORE PASTING
 ---------------------------------------
-roundabout's `&vcoord_nml z_fixed_dz` is documented and enforced
+roundabout's `[vcoord] z_fixed_dz` is documented and enforced
 SURFACE-FIRST (`src/core/rdb_config.F90`: "z_fixed_profile = 'list' needs
 exactly nz_layers ... leading positive z_fixed_dz entries (surface first,
 no gaps)"). The internal bottom-up table the kernels actually index
 (k=1 = bed, k=nz = surface, per CLAUDE.md's Vertical Layer Convention) is
-built by FLIPPING this surface-first namelist input --
+built by FLIPPING this surface-first list --
 `ocean_vcoord_set_z_fixed_profile` in
 `src/core/ocean/vcoord/rdb_ocean_vcoord.F90` does the flip.
 
@@ -122,26 +122,25 @@ def read_text_interfaces(path):
     return interfaces_to_dz(interfaces)
 
 
-def format_nml_block(dz, line_width=88):
-    """Render a ready-to-paste `&vcoord_nml z_fixed_profile = "list",
-    z_fixed_dz = ...` block, surface first, matching roundabout's
-    namelist formatting (see docs/generated_nml_knobs.md)."""
+def format_toml_block(dz, line_width=88):
+    """Render a ready-to-paste `[vcoord]` table with `z_fixed_profile = "list"`
+    and `z_fixed_dz = [...]`, surface first (valid TOML: the array may span lines)."""
     values = ["{:.6f}".format(d) for d in dz]
-    lines = ['&vcoord_nml', '   vcoord_type     = "zstar",', '   z_fixed_profile = "list",']
-    prefix = "   z_fixed_dz      = "
+    lines = ['[vcoord]', 'vcoord_type = "zstar"', 'z_fixed_profile = "list"']
+    prefix = "z_fixed_dz = ["
     cur = prefix
+    cont = "  "
     for i, v in enumerate(values):
-        tok = v + ("," if i < len(values) - 1 else "")
-        if len(cur) + len(tok) + 1 > line_width and cur != prefix:
-            lines.append(cur)
-            cur = " " * len(prefix)
+        tok = v + ("," if i < len(values) - 1 else "]")
+        if len(cur) + len(tok) + 1 > line_width and cur not in (prefix, cont):
+            lines.append(cur.rstrip())
+            cur = cont
         cur += tok + " "
     lines.append(cur.rstrip())
-    lines.append("/")
     header = (
-        "! {} layer thicknesses (m), surface first, sum = {:.3f} m\n"
-        "! pair with &ocean_topo_nml max_depth >= {:.3f}, "
-        "&nonhydrostatic_nml nz_layers = {}"
+        "# {} layer thicknesses (m), surface first, sum = {:.3f} m\n"
+        "# pair with [ocean.topo] max_depth >= {:.3f}, "
+        "[nonhydrostatic] nz_layers = {}"
     ).format(len(dz), sum(dz), sum(dz), len(dz))
     return header + "\n" + "\n".join(lines) + "\n"
 
@@ -211,12 +210,12 @@ def self_test():
     finally:
         os.remove(tmp_path)
 
-    # (3) format_nml_block: sanity on structure/content, surface-first order
+    # (3) format_toml_block: sanity on structure/content, surface-first order
     #     preserved verbatim (no flip -- that's the kernel's job).
-    block = format_nml_block(expected)
+    block = format_toml_block(expected)
     check(
         '(3a) block selects vcoord_type = "zstar" + z_fixed_profile = "list"',
-        'vcoord_type     = "zstar"' in block and 'z_fixed_profile = "list"' in block,
+        'vcoord_type = "zstar"' in block and 'z_fixed_profile = "list"' in block,
     )
     check(
         "(3b) first printed value is the surface layer (10.0 m), not the bed",
@@ -324,7 +323,7 @@ def main(argv=None):
     except (ValueError, RuntimeError) as exc:
         print("error: {}".format(exc), file=sys.stderr)
         return 1
-    sys.stdout.write(format_nml_block(dz))
+    sys.stdout.write(format_toml_block(dz))
     return 0
 
 

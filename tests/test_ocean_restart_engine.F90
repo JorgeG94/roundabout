@@ -39,7 +39,7 @@
 !!     periodic edge puts ice across the wrap seam, whose ghosts the
 !!     checkpoint holds and setup must not re-derive (the cold-start ice
 !!     exchange is skipped on a warm restart);
-!!   * sea_ice_components -- the same under `&ocean_forcing_nml
+!!   * sea_ice_components -- the same under `[ocean.forcing]
 !!     enable_components`, where `Q_heat`/`Q_salt` are ASSEMBLED at the
 !!     end of each thermo window and carried, unchanged, through the steps
 !!     until the next one;
@@ -181,7 +181,7 @@ contains
    end subroutine ensure_comm
 
    function case_nml(label) result(nml)
-      !! The namelist of one variant (see the module docstring).
+      !! The input of one variant (see the module docstring).
       character(len=*), intent(in) :: label
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
@@ -310,9 +310,9 @@ contains
          ! `kd_corner` -- a flat-bottom / weakly-sheared column leaves it
          ! at exactly 0 whether warm-started or not, which would make this
          ! case pass for the wrong reason) on `zstar` (MOM6 z*), with the
-         ! kappa-shear VERTEX closure live (`&ocean_kappa_shear_nml
+         ! kappa-shear VERTEX closure live (`[ocean.kappa_shear]
          ! enable = .true., at_vertex = .true.`) and the visc_rem chain
-         ! (`&ocean_bt_nml visc_rem_chain = .true.`).
+         ! (`[ocean.bt] visc_rem_chain = true`).
          ! `wind_stress_x =
          ! 2.0` is deliberately strong -- it is what pushes the corner
          ! solve's converged `kd_corner` well above `kappa_trunc`
@@ -404,7 +404,7 @@ contains
       case ("island_periodic_zfixed_bkgnd")
          ! PR-2 review: the SAME island/periodic/z_fixed/pred_corr/
          ! visc_rem-chain case as `island_periodic_zfixed_visc_rem`
-         ! (closed-BC: south/north = 'wall'), PLUS `&ocean_vmix_nml
+         ! (closed-BC: south/north = 'wall'), PLUS `[ocean.vmix]
          ! bkgnd_profile` (Bryan-Lewis) -- `kd_bg` is set ONLY by
          ! `vmix_seed_backgrounds`, so a warm restart that wrongly skips
          ! the FULL seed (the bug this case was added to catch: the
@@ -940,7 +940,7 @@ contains
       case default
          error stop "test_ocean_restart_engine: unknown case"
       end select
-      ! The fresh-water variants of the bulk case: the same namelist with the knob set.
+      ! The fresh-water variants of the bulk case: the same input with the knob set.
       select case (label)
       case ("sea_ice_components_bulk_fw", "sea_ice_components_bulk_fw_ratio1")
          nml = swap(nml, "[ocean.forcing]"//new_line("a")// &
@@ -971,7 +971,7 @@ contains
    function cavity_nml(label) result(nml)
       !! Ice-shelf cavity with basal melt (and optionally top drag) over a
       !! seamount, closed basin, `enable_components`: the engine-driven
-      !! cavity namelists of the cavity engine tests.  The label selects the
+      !! cavity inputs of the cavity engine tests.  The label selects the
       !! variant by substring: `zfixed` = z_fixed (no KPP, 8 fixed-z layers,
       !! top drag on) else sigma with the default KPP and 4 layers;
       !! `tdrag` = top drag on a sigma cavity; `ustar` = sigma, 16 thin
@@ -1125,7 +1125,7 @@ contains
 
    subroutine advance(engine, cfg, t, nsteps, ok)
       !! The driver's step sequence (the ice block is a no-op unless
-      !! `&ocean_ice_nml enable`).
+      !! `[ocean.ice] enable`).
       type(ocean_engine_t), intent(inout) :: engine
       type(config_t), intent(inout) :: cfg
       real(wp), intent(inout) :: t
@@ -1395,7 +1395,7 @@ contains
       !! a `kd_bg`-dependent config.  The first `reseed_arrays` version
       !! of the warm-restart fix returned before seeding `kt`/`ks`/
       !! `kd_bg` and the `kv`/`ks` boundary zero -- `kd_bg` is set ONLY
-      !! in that routine, so a Bryan-Lewis background (`&ocean_vmix_nml
+      !! in that routine, so a Bryan-Lewis background (`[ocean.vmix]
       !! bkgnd_profile`) silently lost its depth-varying floor on every
       !! warm restart of a `visc_rem_chain`/`implicit_drag` (closed
       !! south/north wall) case.  Full round trip (not resume-point-only)
@@ -1819,7 +1819,7 @@ contains
    end subroutine test_engine_bit_exact_cavity_tdrag_sigma
 
    function atm_group(list) result(g)
-      !! `&ocean_atm_forcing_nml` pointing all nine fields at one filelist.
+      !! `[ocean.atm_forcing]` pointing all nine fields at one filelist.
       character(len=*), intent(in) :: list
       character(len=:), allocatable :: g
       g = "[ocean.atm_forcing]"//NL// &
@@ -1840,7 +1840,7 @@ contains
    subroutine write_atm_file(path, listname, tas0, huss0, rsds_const)
       !! One global lon-lat file (10 degrees, two time records, all nine CMOR
       !! names) of spatially varying prescribed atmospheric state, plus the
-      !! one-line filelist the namelist points at.  `rsds_const >= 0` makes
+      !! one-line filelist the input points at.  `rsds_const >= 0` makes
       !! the downwelling shortwave spatially/temporally UNIFORM at that value
       !! (the shortwave probe); negative keeps the varying field.
       character(len=*), intent(in) :: path, listname

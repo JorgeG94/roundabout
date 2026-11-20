@@ -68,8 +68,8 @@ Adding a capability
 
 The standing recipe, in order:
 
-**1. A namelist knob, defaulting off.** New physics is off until asked for.
-This is not timidity — it is what makes every existing namelist and every
+**1. An input knob, defaulting off.** New physics is off until asked for.
+This is not timidity — it is what makes every existing input and every
 test bit-identical across your change, which in turn is what makes the
 change reviewable. If the knob is on by default, every baseline in the
 repository moves and nobody can tell your physics from your bug.
@@ -108,7 +108,7 @@ request**.
 
 There are recipes for the common cases under ``docs/howto/`` — adding a
 boundary condition, a closure, a diagnostic, an equation of state, a
-namelist knob, a passive tracer, a vertical coordinate.
+input knob, a passive tracer, a vertical coordinate.
 
 
 GPU rules that bite

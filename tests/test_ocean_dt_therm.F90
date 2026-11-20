@@ -11,7 +11,7 @@ module test_ocean_dt_therm
 !! zero-order-held the baroclinic PGF for tau = (ratio-1)*dt, giving a
 !! delayed-restoring-force instability of the grid-scale internal gravity
 !! wave (sigma ~ omega^2*tau/2, unstable for ANY tau > 0). ~14 shipped
-!! namelists were exposed, surviving only by viscosity margin. Fixed by
+!! inputs were exposed, surviving only by viscosity margin. Fixed by
 !! recomputing the EOS every dynamics step.
 !!
 !! The gate that WOULD have caught it: an unforced adiabatic run's kinetic

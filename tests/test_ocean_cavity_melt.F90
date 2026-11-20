@@ -948,7 +948,7 @@ contains
    end subroutine test_ustar_law
 
    subroutine test_parse_strings(error)
-      !! Namelist-string parsing, including the fail-loud INVALID codes.
+      !! Input-string parsing, including the fail-loud INVALID codes.
       type(error_type), allocatable, intent(out) :: error
       call check(error, parse_cavity_exchange_law("const_gamma") == CAVITY_LAW_CONST_GAMMA, &
                  "const_gamma did not parse")

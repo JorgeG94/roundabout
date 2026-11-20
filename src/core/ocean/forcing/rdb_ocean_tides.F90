@@ -118,7 +118,7 @@ contains
    subroutine ocean_tides_init(this, grid)
       !! Minimal init — the real allocation + astronomy fill happens in
       !! `tides_configure_astronomy` / `tides_build_struct` once the
-      !! namelist + metrics are available (host, before enter_data).
+      !! input + metrics are available (host, before enter_data).
       class(ocean_tides_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
       if (.false.) this%beta_sal = real(grid%nx_total, wp)

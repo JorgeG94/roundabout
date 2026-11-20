@@ -98,7 +98,7 @@ def build_model():
             ConstantViscosity(nu_h=0.0, nu_4=0.0),
             # "Pure dyn-core test": no interior closure, no boundary
             # layer at all. PacanowskiPhilander(enabled=False) ->
-            # use_closure=.false.; KPP(enabled=False) -> use_kpp=
+            # use_closure=false; KPP(enabled=False) -> use_kpp=
             # .false. (KPP defaults ON in the schema). Composing
             # KPP(enabled=False) with no EPBL(...) is EXACTLY the
             # deliberate "no boundary-layer scheme" case

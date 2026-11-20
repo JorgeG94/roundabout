@@ -47,7 +47,7 @@ nx     = 44
 ny     = 40
 # nghost = 3 (not the coastal default 2): the ocean-MPI O4 heat-closure
 # needs a 3-cell halo for the PPM seam stencil + wide-halo BT march-in.
-# dx/dy are DERIVED from &ocean_grid_nml degrees (arc lengths) — do not
+# dx/dy are DERIVED from [ocean.grid] degrees (arc lengths) — do not
 # pin them here (pinning dx at a 300-grid size gave a broken 16700 km basin).
 nghost = 3
 
@@ -73,7 +73,7 @@ wind_stress_x = 0.0
 wind_stress_y = 0.0
 
 [nonhydrostatic]
-# MUST stay 2: `&ocean_pgf_nml form = "gprime"` below is a NK=2-only
+# MUST stay 2: `[ocean.pgf] form = "gprime"` below is a NK=2-only
 # kernel (rdb_ocean_pressure_force.F90:compute_gprime_impl — "Higher k
 # stays zero ⇒ no-op on NK > 2").  At nz>2 it silently leaves layers
 # 3..nz with ZERO pressure gradient and applies the free-surface PGF to
@@ -86,20 +86,20 @@ nz_layers = 2
 initial_temperature = 15.0
 initial_salinity    = 35.0
 # NOTE: this config used to carry a belt-and-braces
-# `&tracer_nml alpha_T = beta_S = 0` here.  Those two keys were
+# `[tracer] alpha_T = beta_S = 0` here.  Those two keys were
 # coastal-legacy and dead on the ocean path (they only ever reached
 # tracer_t%eos_coeff), so they never guaranteed anything; they are
 # now RETIRED and fail loud.  What actually decouples the carried
-# tracers from the dynamics is `&ocean_thermo_nml
-# enable_thermodynamics = .false.` below plus the gprime /
+# tracers from the dynamics is `[ocean.thermo]
+# enable_thermodynamics = false` below plus the gprime /
 # reduced-gravity PGF, which never calls the EOS at all.  The live
 # EOS coefficients, if this config ever needs them, are
-# `&ocean_ic_nml alpha_T` / `beta_S`.
+# `[ocean.ic] alpha_T` / `beta_S`.
 
 [ocean.ic]
 # Per-layer static density (MOM6 COORD_CONFIG="gprime" analogue).
 # Convention: k=1 (bed) first, k=nz_ml (surface) last.  With
-# enable_thermodynamics=.false. the dyn-step EOS call is
+# enable_thermodynamics=false the dyn-step EOS call is
 # skipped — without this knob, `ms%rho_layer` would stay at its
 # alloc-time zero and FV-LITE's pressure stack would collapse to
 # zero (no PGF, no Sverdrup balance, only wind+Coriolis dynamics).
@@ -175,7 +175,7 @@ bbl_thick_min = 0.1
 # heavily resolved; the Smagorinsky term adds local damping
 # wherever the WBC sharpens.
 nu_h        = 10000.0
-# Biharmonic AH — bypassed when ocean_smag_ah=.true. (below).
+# Biharmonic AH — bypassed when ocean_smag_ah=true (below).
 # Kept as a fallback floor for the constant-coefficient path.
 nu_4        = 0.0
 # Flow-aware biharmonic (MOM6 SMAGORINSKY_AH=True analogue).
@@ -218,7 +218,7 @@ hmix_stress = 20.0
 harmonic_visc = true
 # DT_THERM ratio — thermo / tracer kernels fire every 2 outer
 # steps with dt_eff = 2·dt.  Matches MOM6's DT_THERM=2·DT.  No-op
-# when ocean_enable_thermodynamics = .false. (current setup), but
+# when ocean_enable_thermodynamics = false (current setup), but
 # the knob is wired for when thermodynamics is re-enabled.
 dt_therm_ratio = 2
 

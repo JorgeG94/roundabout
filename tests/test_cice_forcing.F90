@@ -1,5 +1,5 @@
-!! The CICE-port sea ice (`&ocean_ice_nml scheme = "cice"`) under a PRESCRIBED, TIME-VARYING atmosphere
-!! (`&ocean_atm_forcing_nml enable` + the bulk forcing), through the production engine path (D11.4b).
+!! The CICE-port sea ice (`[ocean.ice] scheme = "cice"`) under a PRESCRIBED, TIME-VARYING atmosphere
+!! (`[ocean.atm_forcing] enable` + the bulk forcing), through the production engine path (D11.4b).
 !! The atmosphere is a small synthetic NetCDF set written in the test: nine fields, each affine in
 !! (lon, lat, time) so the bilinear regrid and the time blend reproduce the closed form exactly.
 !!
@@ -108,7 +108,7 @@ contains
    end subroutine remove_atm_files
 
    ! ------------------------------------------------------------------
-   ! namelists and engine plumbing
+   ! inputs and engine plumbing
    ! ------------------------------------------------------------------
 
    function case_nml(geom, conc, ratio, prescribed, extra) result(nml)
@@ -536,7 +536,7 @@ contains
       call ensure_comm()
       ! prescribed atmosphere alone: accepted by the ice config check
       call read_config_from_toml_string(case_nml("column", 0.6_wp, 1, .true.), cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "the prescribed-atmosphere namelist parses")
+      call check(error, ierr == OCEAN_STATUS_OK, "the prescribed-atmosphere input parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
       call check(error, n == 0, "the prescribed atmosphere alone has no refusal: "//trim(msgs(max(n, 1))))
@@ -545,14 +545,14 @@ contains
       call read_config_from_toml_string(case_nml("column", 0.6_wp, 1, .true., &
                                                  "[ocean.ice_atm]"//NL// &
                                                  "uni_tas = 250.0"//NL), cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "the doubled-atmosphere namelist parses")
+      call check(error, ierr == OCEAN_STATUS_OK, "the doubled-atmosphere input parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
       call check(error, n > 0 .and. mentions(msgs, n, "is ambiguous"), "uni_* with a prescribed atmosphere is refused")
       if (allocated(error)) return
       call read_config_from_toml_string(replace(case_nml("column", 0.6_wp, 1, .true.), "hfreeze = 10.0", &
                                                 "hfreeze = 10.0"//new_line('a')//"snowfall = 1.0e-5"), cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "the snowfall namelist parses")
+      call check(error, ierr == OCEAN_STATUS_OK, "the snowfall input parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
       call check(error, n > 0 .and. mentions(msgs, n, "is ambiguous"), "snowfall with a prescribed atmosphere is refused")
@@ -561,7 +561,7 @@ contains
       call read_config_from_toml_string(case_nml("column", 0.6_wp, 1, .false., &
                                                  "[ocean.dataovr]"//NL// &
                                                  'tau_x_file = "wind.nc"'//NL), cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "the file-wind namelist parses")
+      call check(error, ierr == OCEAN_STATUS_OK, "the file-wind input parses")
       if (allocated(error)) return
       call ice_config_check(cfg, msgs, n)
       call check(error, n > 0 .and. mentions(msgs, n, "tau_x/tau_y files"), "a file wind stress stays refused")

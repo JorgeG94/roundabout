@@ -24,7 +24,7 @@ module rdb_ocean_mle
    !! momentum-mixrate (production-recommended; suppresses restratification
    !! under vigorous mixing).  Default off ⇒ bit-identical.
    !!
-   !! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
+   !! ### Partial-step z-level faces (`[vcoord] zfixed_closed_faces`)
    !!
    !! Under `z_fixed` a face column is not the whole water column: a layer
    !! that is an inert FILLER on either side (inside the bed or the ice
@@ -108,7 +108,7 @@ module rdb_ocean_mle
    type :: ocean_mle_t
       !! Fox-Kemper mixed-layer-eddy restratification state.  All fields
       !! default to the inert (`enable=.false.`) configuration so an
-      !! ocean run that never sets `&ocean_foxkemper_nml` is bit-identical.
+      !! ocean run that never sets `[ocean.foxkemper]` is bit-identical.
       logical :: is_init = .false.
          !! True between `init` and `destroy`; tracks GPU attachment.
       logical :: enable = .false.
@@ -390,7 +390,7 @@ contains
          !! PR-8: this cap is UNCONDITIONAL in production — both production
          !! call sites (`rdb_ocean_dyn.F90`) always pass
          !! `dt_limit=dyn%therm_dt(dt)` > 0, so `do_limit` is always
-         !! `.true.` on the live path.  The former `&ocean_foxkemper_nml
+         !! `.true.` on the live path.  The former `[ocean.foxkemper]
          !! apply_cfl_limit` knob was deleted as dead/incoherent — it could
          !! only ever be set to a thing the code already always does; do
          !! not re-add a knob that toggles this cap.

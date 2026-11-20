@@ -3,7 +3,7 @@
 How (and when) to advect tracers less often than the dynamics step — the
 ocean path's equivalent of MOM6's `DT_TRACER_ADVECT` / `DT_THERM`.
 
-## The two knobs (`&ocean_vmix_nml`)
+## The two knobs (`[ocean.vmix]`)
 
 | knob | default | meaning |
 |---|---|---|
@@ -50,11 +50,10 @@ advection only fire every few steps. This is exactly why MOM6 makes
 **For large, smooth production runs, set `ratio > 1` per config** — this is
 where the windowed drain pays off, on both speed *and* consistency:
 
-```
-&ocean_vmix_nml
-   dt_therm_ratio          = 4
-   dt_tracer_advect_ratio  = 4   ! must divide dt_therm_ratio
-/
+```toml
+[ocean.vmix]
+   dt_therm_ratio = 4
+   dt_tracer_advect_ratio = 4  # must divide dt_therm_ratio
 ```
 
 Measured on the seamount bench (512×256×30, single V100): `ratio = 4` runs
@@ -66,7 +65,7 @@ not the scheme; at `ratio = 1` the heavier drain has no amortization and is
 Rule of thumb: raise the ratio until a validation run drifts beyond your
 accuracy tolerance, then back off — per config, MOM6-style. Reduced-gravity
 / passive-tracer runs (where S/T do not feed the dynamics) can also just set
-`do_horizontal_advection = .false.` on those tracers to skip the work
+`do_horizontal_advection = false` on those tracers to skip the work
 entirely.
 
 ## Multi-rank
@@ -95,12 +94,12 @@ never treated as a wall. Gated by the `drain_ratio*` cases of
   2 cells nearest a true wall, where MOM6 keeps full PPM (periodic seams are
   unaffected). See the `TODO(MOM6-fidelity)` in `drain_parabola_x`.
 
-## Ordering inside a thermo interval: `&ocean_vmix_nml diabatic_first`
+## Ordering inside a thermo interval: `[ocean.vmix] diabatic_first`
 
 Only matters at `dt_therm_ratio > 1`.  Both settings give the same answer at
 `dt_therm_ratio = 1`.
 
-| Work | `diabatic_first = .true.` (default) | `.false.` (ACCESS-OM3 `DIABATIC_FIRST = False`) |
+| Work | `diabatic_first = true` (default) | `.false.` (ACCESS-OM3 `DIABATIC_FIRST = False`) |
 |---|---|---|
 | surface heat/salt fluxes, shortwave, restoring, geothermal, ideal-age source, vertical tracer diffusion + KPP nonlocal | first step of the interval (`1, N+1, ...`), inside the stage chain | last step (`N, 2N, ...`), AFTER that step's tracer-window drain (and for ratio 1 after the stage loop), BEFORE the remap: they act on the advected tracers |
 | mixing coefficients (EPBL / KPP / kappa-shear / tidal / BBL / convective kt, ks, kv) | thermo step, stage chain (rebuilt every stage) | assembled once, at the interval end (`N`), from the post-drain, post-diffusion state with the fluxes assembled after step `N-1`, before the surface/vertical-diffusion applies; the next interval's dynamics CARRY that kv (no in-stage rebuild after the first step; the first interval runs on the step-1 coefficients with zero slow-solve `kd_int`, as a cold OM3 start) |
@@ -112,19 +111,19 @@ Only matters at `dt_therm_ratio > 1`.  Both settings give the same answer at
 | ALE remap | first step (no windowed advection) or last step (`dt_tracer_advect_ratio > 1`) | last step, after the drain that closes the last window |
 | horizontal tracer window drain | steps `R, 2R, ...` | steps `R, 2R, ...` |
 
-`diabatic_first = .false.` needs `split_scheme = "pred_corr"` and no
-`&ocean_cavity_melt_nml` (both fail-loud at configure when `dt_therm_ratio > 1`).
+`diabatic_first = false` needs `split_scheme = "pred_corr"` and no
+`[ocean.cavity_melt]` (both fail-loud at configure when `dt_therm_ratio > 1`).
 The coefficient chain is `vmix_build_coefficients` (one routine, called in
 the stage chain by default and at the interval end by `apply_deferred_thermo`).  The tidal and
 law-of-the-wall BBL `kd_int` are checkpointed (`tidal_kd_int`, `bbl_kd_int`),
 since under `.false.` a resume always falls between their refreshes.  With
-`&ocean_hdiff_nml kappa_h > 0` the single full-dt explicit step is checked at
+`[ocean.hdiff] kappa_h > 0` the single full-dt explicit step is checked at
 configure (warning above half the diffusive-number limit, error above it).
 
 ## Known gaps
 
 - **`freshwater = "mass"` with the deferred order plus windowed advection.** The mass step
-  (`rdb_ocean_surface_fw_mass`) is accepted under `diabatic_first = .false.` with
+  (`rdb_ocean_surface_fw_mass`) is accepted under `diabatic_first = false` with
   `dt_tracer_advect_ratio > 1`, where it is a SECOND writer of `h` between windows beside the
   ALE remap. It is exact only when the window drain carries no leftover transport into the next
   window (the drain's thickness reconstruction assumes `h` moves only through the drained

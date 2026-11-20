@@ -54,7 +54,7 @@ module rdb_efp
    !! `efp_to_real` return a quiet NaN, identically on every rank, instead
    !! of laundering the corruption into "0.000" or a saturated-but-finite
    !! value. This was a real regression, not a hypothetical: once
-   !! `&ocean_diag_nml reproducing_sums` became the console default
+   !! `[ocean.diag] reproducing_sums` became the console default
    !! (a0755ada1), the in-module device duplicate
    !! `rdb_ocean_console_stats::efp_decompose_impl` had NO non-finite
    !! handling at all, so a blown-up run's console printed finite-looking

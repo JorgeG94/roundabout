@@ -123,7 +123,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_ke_probe.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/io/rdb_ocean_restart.F90
     # Grid-agnostic lat-lon regridding library (bilinear + first-order
-    # conservative weights, ELL apply kernel): no NetCDF, no namelist knob, not
+    # conservative weights, ELL apply kernel): no NetCDF, no input knob, not
     # wired into the engine yet -- unconditional like the rest of core.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/io/rdb_regrid_latlon.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/vcoord/rdb_ocean_vcoord.F90
@@ -134,8 +134,8 @@ set(CORE_SOURCES
     # P5.1 static ice-shelf cavity geometry: the prescribed draft setters, the
     # grounding/cross-validation helpers and the isostatic load fill. Leaf
     # module (rdb_constants + rdb_grid only) — deliberately free of rdb_config
-    # so the formula dispatch, which needs the namelist, stays in the state
-    # builder next to the bathymetry dispatch it mirrors.
+    # so the formula dispatch, which needs the input, stays in the state builder
+    # next to the bathymetry dispatch it mirrors.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_cavity.F90
     # P2.5 pre-create geometry injection (Python runtime API plan): sign
     # normalisation/validation + ghost fill for an in-memory bathymetry array.

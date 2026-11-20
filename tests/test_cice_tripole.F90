@@ -1,4 +1,4 @@
-!! The CICE-port sea ice (`&ocean_ice_nml scheme = "cice"`) across the tripolar north fold, ONE RANK, through the
+!! The CICE-port sea ice (`[ocean.ice] scheme = "cice"`) across the tripolar north fold, ONE RANK, through the
 !! production engine path: the fold is right, not merely self-consistent (stage B; Murray 1996 for the grid, Hunke et
 !! al. for the scheme).
 !!

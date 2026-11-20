@@ -43,7 +43,7 @@ is the bug.
 - `u_face_x(i,j,k)` sits on the face between cells `(i,j)` and `(i+1,j)`; its array runs from `i = 1` (west
   outer wall) to `i = nx+1` (east outer wall). `v_face_y` is the same in `j`.
 
-**`is_init`.** Every slot type carries `logical :: is_init = .false.`. `init` sets it only after every
+**`is_init`.** Every slot type carries `logical :: is_init = false`. `init` sets it only after every
 allocation and device attachment succeeded; `destroy` clears it before releasing anything. Always test
 `slot%is_init`, never `allocated(slot%some_array)`: `allocated` sees only the host pointer, so it is true
 for arrays that exist on the host but are not on the device yet. It is also the right guard against
@@ -67,17 +67,17 @@ the isopycnal slopes allocate only when their `enable` flag is set.
   the saving on. Where the discriminator is re-derived later, compare it to the latched value and
   `error stop` on a mismatch.
 
-**One ρ₀.** `&ocean_ic_nml rho_0` lands on `eos%rho0`, the Boussinesq reference density of record.
+**One ρ₀.** `[ocean.ic] rho_0` lands on `eos%rho0`, the Boussinesq reference density of record.
 Every slot that carries its own `rho0` copy must be assigned from it in its `configure_ocean_*` (or in
 `configure_ocean_reference_density` for surface flux, surface stress, vmix and geothermal). A copy with a
 type default that nothing assigns compiles, runs and conserves, and silently scales a force by
 `1035/ρ₀`. `ocean_vmix_t%rho0` is read on the device, so it is correct only because the configure pass
 runs before `ocean_state_enter_data`; anything that writes it later owes an `!$acc update device`.
-`RHO_WATER` (console statistics, OBC mass flux, ice), `&ocean_ice_nml rho_ocean`, the melt law's own
+`RHO_WATER` (console statistics, OBC mass flux, ice), `[ocean.ice] rho_ocean`, the melt law's own
 constants and the `ICE_RHO_*` constants are deliberately *not* copies of ρ₀.
 
 **Thin layers.** `H_VANISHED` (1.5e-4 m) is a skip/merge marker, never a positivity floor. `H_DIV_EPS`
-(1e-20) is pure 1/0 armour. The runtime `angstrom_h` floor (`&ocean_isopycnal_nml`, Lagrangian only) lifts
+(1e-20) is pure 1/0 armour. The runtime `angstrom_h` floor (`[ocean.isopycnal]`, Lagrangian only) lifts
 `h`, so it injects volume (non-conservative by a bounded amount per floored cell); the tracer update divides by the stored floored
 thickness, so tracer content is kept and `c` is diluted (an overdrawn cell keeps `c`). Not yet supported with
 `dt_tracer_advect_ratio > 1` (refused).
@@ -116,18 +116,18 @@ reproducible, and `efp_real_diff` for a difference against a latched reference.
 
 The mass-flux components (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`, `seaice_melt`) and
 their `heat_content_*` companions are enthalpy and salt bookkeeping only. They do not change column mass.
-The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`) or `q_fus_rof` (`-L_f*frunoff`, written by the runoff reader, `&ocean_dataovr_nml frunoff`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
+The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`) or `q_fus_rof` (`-L_f*frunoff`, written by the runoff reader, `[ocean.dataovr] frunoff`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
 
 | Path | Real column mass? |
 |---|---|
-| Ice-shelf basal melt, `&ocean_cavity_melt_nml freshwater = "mass"` | Yes. The only one. |
+| Ice-shelf basal melt, `[ocean.cavity_melt] freshwater = "mass"` | Yes. The only one. |
 | Ice-shelf basal melt, `freshwater = "virtual"` (default) | No |
 | Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler), `freshwater = "none"`/`"virtual"` | No. Virtual. |
-| Sea ice, CICE-port, `freshwater = "mass"` (`seaice_melt = fresh`, `salt_ice = 1000*fsalt`; weight on `p_surf` via `&ocean_psurf_nml ice_load`) | Yes (same step as the atmosphere's; named terms: the ice's salt mass, `H_mass_conv`) |
-| The seven atmospheric/river mass-flux components, `&ocean_forcing_nml freshwater = "virtual"`: their net `F` is the virtual salt flux `salt_fw`, no mass | No |
-| The same components, `freshwater = "mass"` (open-ocean `lprec`, `fprec`, `evap`, and `lrunoff`/`frunoff` from `&ocean_dataovr_nml`; `seaice_melt` is written by the CICE-port hand-off; `vprec` has no filler) | Yes (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`) |
+| Sea ice, CICE-port, `freshwater = "mass"` (`seaice_melt = fresh`, `salt_ice = 1000*fsalt`; weight on `p_surf` via `[ocean.psurf] ice_load`) | Yes (same step as the atmosphere's; named terms: the ice's salt mass, `H_mass_conv`) |
+| The seven atmospheric/river mass-flux components, `[ocean.forcing] freshwater = "virtual"`: their net `F` is the virtual salt flux `salt_fw`, no mass | No |
+| The same components, `freshwater = "mass"` (open-ocean `lprec`, `fprec`, `evap`, and `lrunoff`/`frunoff` from `[ocean.dataovr]`; `seaice_melt` is written by the CICE-port hand-off; `vprec` has no filler) | Yes (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`) |
 
-**Surface fresh-water mass (`&ocean_forcing_nml freshwater = "mass"`).** Ownership and order, all in the
+**Surface fresh-water mass (`[ocean.forcing] freshwater = "mass"`).** Ownership and order, all in the
 module header of `src/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90`:
 - The assembler (`ocean_surface_flux_assemble`) is the ONE writer of `sf%fw_net` (the net open-ocean flux
   snapshot, kg m-2 s-1, into the ocean) and `sf%Q_salt_tracer` (`Q_salt` without the virtual `salt_fw`).

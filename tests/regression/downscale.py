@@ -37,7 +37,7 @@ R1  MUNK LAYER >= 2 CELLS.      nu_h >= beta * (MUNK_CELLS * dy)**3
     Only applies to cases with a beta plane and a meridional wall.
 
 R2  ah_max CLAMPS nu_h.         ah_max >= nu_h (when ah_max is set at all)
-    `&ocean_hvisc_nml ah_max` is a magnitude CEILING applied to the assembled
+    `[ocean.hvisc] ah_max` is a magnitude CEILING applied to the assembled
     viscosity. Raising `nu_h` to satisfy R1 without raising `ah_max` is inert
     -- the clamp silently throws the increase away and the twin runs at the
     old, too-small viscosity.
@@ -45,7 +45,7 @@ R2  ah_max CLAMPS nu_h.         ah_max >= nu_h (when ah_max is set at all)
 R3  VISCOUS CFL.                nu_h * dt / min(dx,dy)**2 <= VISC_CFL (0.125)
     Explicit Laplacian friction is forward-Euler here. Satisfying R1 by
     raising nu_h on a coarse twin can trip this; satisfying R3 by shrinking
-    dx can trip R1. When both cannot hold, either `bound_kh = .true.` (the
+    dx can trip R1. When both cannot hold, either `bound_kh = true` (the
     per-cell CFL clamp) must be on, or the case is tier-1 only. Note ah_max
     does NOT help: it bounds magnitude, not the CFL.
 
@@ -235,7 +235,7 @@ def check_twin(spec):
         note = "" if cfl <= VISC_CFL else (
             " (bound_kh ON -> per-cell clamp covers it)"
             if spec.get("bound_kh") else
-            " -- raise dx, lower dt/nu_h, or set bound_kh=.true.")
+            " -- raise dx, lower dt/nu_h, or set bound_kh=true")
         emit("R3-viscous-cfl", ok,
              "nu_h*dt/dx^2 = {:.4f} vs limit {:.3f}{}".format(
                  cfl, VISC_CFL, note))

@@ -1,6 +1,6 @@
 module rdb_ice_dyn_c
    !! Engine driver of the CICE6 C-grid EVP dynamics under the SIS2-derived ice
-   !! state (`&ocean_ice_dyn_nml dyn_scheme = "cice_c"`, CICE6 port D9.2): the
+   !! state (`[ocean.ice_dyn] dyn_scheme = "cice_c"`, CICE6 port D9.2): the
    !! coupling kernels that feed `rdb_ice_evp_c` from the ocean state and the
    !! ice aggregates, the subcycle loop with the face halo, and the hand-off of
    !! the ice-ocean stress.  The solver is Lemieux et al. (2024) (see
@@ -76,7 +76,7 @@ module rdb_ice_dyn_c
    !! Open ocean boundaries are land for the ice (the dynamics envelope allows
    !! wall or periodic edges only).  `strocnT_x/y` is restart state with no
    !! consumer until the basal-heat wiring.  When the ice mass loads the
-   !! surface (`&ocean_psurf_nml ice_load`) the tilt uses the pressure-loaded surface
+   !! surface (`[ocean.psurf] ice_load`) the tilt uses the pressure-loaded surface
    !! `sum h - b + p_surf/(rho0 g)` (`p_surf`, `inv_rho0_g` of `ice_dyn_c_step`), not `sum h - b`.
    use, intrinsic :: iso_fortran_env, only: int32, int64
    use rdb_constants, only: wp, H_VANISHED
@@ -180,7 +180,7 @@ contains
          !! run through `ice_err_enforce`.
       type(ice_dyn_c_cat_t), intent(in), optional :: cat
       real(wp), intent(in), optional :: p_surf(:, :)
-         !! `&ocean_psurf_nml ice_load`: the assembled surface pressure `sf%p_surf` [Pa], which carries
+         !! `[ocean.psurf] ice_load`: the assembled surface pressure `sf%p_surf` [Pa], which carries
          !! the ice's own weight.  The tilt the ice feels is then that of the PRESSURE-LOADED surface,
          !! `ssh + p_surf/(rho0 g) = ssh - eta_ib`: a floating ice sheet sits in the depression it makes,
          !! and the tilt of that depression (zero in the inverse-barometer equilibrium) is not a force on

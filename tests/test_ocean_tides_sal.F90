@@ -103,7 +103,7 @@ contains
       !$acc update self(tides%eta_forcing, tides%eta_eq)
       maxdev = maxval(abs(tides%eta_forcing - tides%eta_eq))
       call check(error, maxdev == 0.0_wp, &
-                 "use_sal=.false. must give eta_forcing bit-identical to eta_eq")
+                 "use_sal=false must give eta_forcing bit-identical to eta_eq")
       if (allocated(error)) then
          !$acc exit data delete(eta_ssh)
          call tides%exit_data()

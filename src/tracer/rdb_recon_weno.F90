@@ -87,7 +87,7 @@ contains
    ! ==========================================================================
 
    pure function parse_tracer_recon(str) result(code)
-      !! Map a namelist string onto a TRACER_RECON_* code.
+      !! Map an input string onto a TRACER_RECON_* code.
       !!
       !! Returns:
       !!   TRACER_RECON_PPM  (0) for "ppm"

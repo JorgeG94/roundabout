@@ -64,16 +64,16 @@ module rdb_ocean_data_forcing
    !! value on a land cell is FATAL (`check_runoff_on_land`, rank-uniform; run at the first
    !! read and whenever a new record has been read).
    !!
-   !! **The namelist is the expert-level surface, not the intended one.**
-   !! `&ocean_dataovr_nml` is a flat, fixed set of tags because that is
+   !! **The input is the expert-level surface, not the intended one.**
+   !! `[ocean.dataovr]` is a flat, fixed set of tags because that is
    !! what the strict schema can express; it is not the ergonomic way to
    !! describe a forcing dataset.  The binding itself is programmatic —
    !! `register_tag` is a thin wrapper over
    !! `ocean_data_input_register_2d` returning an opaque id — so a
    !! future Python/C driver should call the registration path DIRECTLY
-   !! with its own field table rather than synthesising namelist text.
+   !! with its own field table rather than synthesising input text.
    !! Keep `ocean_data_forcing_configure` a pure translation of config
-   !! to registrations, with no logic that a non-namelist caller would
+   !! to registrations, with no logic that a non-input caller would
    !! have to re-implement.
    !!
    !! **Heat/salt destination depends on `use_components`** — see
@@ -115,7 +115,7 @@ module rdb_ocean_data_forcing
    type :: ocean_data_forcing_t
       !! Registration bookkeeping for the file-driven surface tags.  A
       !! zero `id_*` means that tag is not file-driven (blank `file` in
-      !! `&ocean_dataovr_nml`) and its slot keeps whatever the
+      !! `[ocean.dataovr]`) and its slot keeps whatever the
       !! configure-time scalar/formula path seeded.
       logical :: active = .false.
          !! `.true.` once at least one tag registered.  `.false.` makes
@@ -136,10 +136,10 @@ module rdb_ocean_data_forcing
       integer :: land_checked_f = -1
          !! Same for `frunoff`.  The check runs only when a new record has been read.
       integer :: id_sss = 0
-         !! File-based SSS restoring target (`&ocean_restore_nml sss_file`)
+         !! File-based SSS restoring target (`[ocean.restore] sss_file`)
          !! -> `surface_flux%sss_target`; 0 = scalar target.  Registered by
          !! `ocean_data_forcing_register_sss`, independent of
-         !! `&ocean_dataovr_nml enable`.
+         !! `[ocean.dataovr] enable`.
       logical :: heat_to_component = .false.
          !! `.true.` => the heat tag blends into `heat_added` (components
          !! on); `.false.` => straight into `Q_heat`.  Resolved once at
@@ -170,7 +170,7 @@ contains
       type(ocean_data_forcing_t), intent(out) :: this
       integer, intent(out), optional :: ierr
          !! Non-zero (`OCEAN_STATUS_ERR_SETUP`/`OCEAN_STATUS_ERR_IO`, see
-         !! `rdb_ocean_status`) on a malformed `&ocean_dataovr_nml` group
+         !! `rdb_ocean_status`) on a malformed `[ocean.dataovr]` group
          !! or a registration failure (bad file/variable/dims) when
          !! present; absent behaves as today (`error stop`).
 
@@ -259,7 +259,7 @@ contains
                      this%id_lrunoff > 0 .or. this%id_frunoff > 0)
 
       if (.not. this%active) then
-         call logger%warning("ocean_dataovr: enable = .true. but no tag has a file — "// &
+         call logger%warning("ocean_dataovr: enable = true but no tag has a file — "// &
                              "every surface slot keeps its configure-time value")
          return
       end if
@@ -282,9 +282,9 @@ contains
    end subroutine ocean_data_forcing_configure
 
    subroutine ocean_data_forcing_register_sss(rcfg, reader, grid, sf, this, ierr)
-      !! Register the SSS-restoring target file (`&ocean_restore_nml
+      !! Register the SSS-restoring target file (`[ocean.restore]
       !! sss_file`) against the shared reader.  Independent of
-      !! `&ocean_dataovr_nml enable`; call AFTER `ocean_data_forcing_configure`
+      !! `[ocean.dataovr] enable`; call AFTER `ocean_data_forcing_configure`
       !! (which resets `this`) and after `surface_flux%set_restore_file`
       !! (which allocates the target).  A blank `sss_file` is a no-op.
       !! The reader fails loud on a missing file, variable or grid mismatch.
@@ -324,12 +324,12 @@ contains
    subroutine check_time_mode(cfg, ierr)
       !! Fail loud on a `cyclic` group with no period.  The reader makes
       !! the same check per field; catching it once here names the
-      !! namelist group the user actually edited.
+      !! input group the user actually edited.
       type(ocean_dataovr_config_t), intent(in) :: cfg
       integer, intent(out), optional :: ierr
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (trim(cfg%time_mode) == "cyclic" .and. cfg%cycle_period <= 0.0_wp) then
-         call fail("&ocean_dataovr_nml: time_mode = 'cyclic' requires cycle_period > 0", &
+         call fail("[ocean.dataovr]: time_mode = 'cyclic' requires cycle_period > 0", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
       end if
    end subroutine check_time_mode
@@ -357,8 +357,8 @@ contains
 
       if (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0 .or. &
           len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0) then
-         call fail("&ocean_dataovr_nml: evap/lprec/lrunoff/frunoff file forcing needs the surface-flux "// &
-                   "component set — set &ocean_forcing_nml enable_components = .true. "// &
+         call fail("[ocean.dataovr]: evap/lprec/lrunoff/frunoff file forcing needs the surface-flux "// &
+                   "component set — set [ocean.forcing] enable_components = true "// &
                    "(there is no non-component freshwater slot to write into)", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
       end if
@@ -385,7 +385,7 @@ contains
       if (len_trim(e%file) == 0) return
 
       if (len_trim(e%var) == 0) then
-         call fail("&ocean_dataovr_nml: "//tag//"_file is set ('"//trim(e%file)// &
+         call fail("[ocean.dataovr]: "//tag//"_file is set ('"//trim(e%file)// &
                    "') but "//tag//"_var is blank — name the variable explicitly "// &
                    "(no guessed fallbacks for forcing)", ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -504,7 +504,7 @@ contains
          call ocean_data_input_update_2d(reader, this%id_frunoff, t, nx, ny, sf%frunoff)
          call runoff_latent_heat_impl(nx, ny, ICE_LAT_FUS, sf%frunoff, sf%q_fus_rof)
       end if
-      ! River mixing (`&ocean_epbl_nml rivermix_depth > 0`) reads the total runoff in the ghost
+      ! River mixing (`[ocean.epbl] rivermix_depth > 0`) reads the total runoff in the ghost
       ! columns (EPBL `kv` is averaged onto faces from both neighbouring centres), but
       ! `lrunoff`/`frunoff` live on physical cells only: assemble the sum once and EXCHANGE it
       ! like `Q_heat` above.  Off, nothing runs (bit-identical).
@@ -557,7 +557,7 @@ contains
       if (runoff_on_land_is_fatal(n_glob)) then
          call logger%error("ocean_dataovr: "//to_string(int(n_glob))// &
                            " land cell(s) carry a non-zero (or non-finite) lrunoff/frunoff")
-         call fail("&ocean_dataovr_nml lrunoff/frunoff: "//to_string(int(n_glob))// &
+         call fail("[ocean.dataovr] lrunoff/frunoff: "//to_string(int(n_glob))// &
                    " land cell(s) carry runoff.  That mass would vanish silently (the "// &
                    "assembled fresh-water flux is wet-masked).  Move it to the nearest wet "// &
                    "coastal cell offline with tools/om_runoff_to_model.f90.", &

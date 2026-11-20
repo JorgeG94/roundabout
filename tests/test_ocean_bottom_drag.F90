@@ -13,7 +13,7 @@
 !!     IC.  Catches accidental whole-column writes.
 !!   * Zero-coefficient short-circuit — `r_linear = 0` AND
 !!     `c_drag = 0` is a no-op.  Lets the driver wire the kernel
-!!     unconditionally and gate via the namelist.
+!!     unconditionally and gate via the input.
 !!   * Quadratic stability — Non-trivial multilayer u, v with
 !!     bottom-layer flow.  After several steps the bed-layer KE
 !!     must decrease and stay finite (the `h_min` floor keeps
@@ -340,7 +340,7 @@ contains
    subroutine test_bed_factor_unity(error)
       !! `bed_factor = 1.0` (default) must give the same drag tendency
       !! as not setting the knob at all.  Tests the no-op guarantee:
-      !! existing namelists that don't mention `bed_factor` get the
+      !! existing inputs that don't mention `bed_factor` get the
       !! pre-knob behaviour to round-off.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid

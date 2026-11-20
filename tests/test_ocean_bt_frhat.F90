@@ -1,4 +1,4 @@
-!! Unit tests for the frhat port (`&ocean_bt_nml frhat_scheme`): MOM6
+!! Unit tests for the frhat port (`[ocean.bt] frhat_scheme`): MOM6
 !! `btcalc`'s HVEL_SCHEME=HYBRID face-thickness closure,
 !! ported bottom-up as
 !! `rdb_barotropic_coupling::frhat_h_face_step`
@@ -207,7 +207,7 @@ contains
       !! here is actually closed, but because `compute_bt_rem_from_visc_
       !! rem`'s av_rem gate (`rdb_barotropic_coupling.F90`) reads
       !! `metrics%use_closed_faces` to decide whether `av_rem` may follow
-      !! `&ocean_bt_nml frhat_scheme` at all: HYBRID only applies to
+      !! `[ocean.bt] frhat_scheme` at all: HYBRID only applies to
       !! av_rem under `use_closed_faces = .true.` (see that gate's
       !! docstring for the open-step regression it guards against), so a
       !! test that wants to exercise frhat_scheme=hybrid for av_rem
@@ -428,7 +428,7 @@ contains
 
    subroutine test_av_rem_hybrid_gated_on_closed_faces(error)
       !! The open-step fix itself: `compute_bt_rem_from_visc_rem`'s av_rem
-      !! must follow `&ocean_bt_nml frhat_scheme` only under `metrics%
+      !! must follow `[ocean.bt] frhat_scheme` only under `metrics%
       !! use_closed_faces = .true.` -- under OPEN faces (the default) it
       !! is forced to FRHAT_ARITHMETIC regardless of the knob (see that
       !! gate's docstring in `rdb_barotropic_coupling.F90` for the measured
@@ -494,13 +494,13 @@ contains
       !! `derive_bt_from_layers`'s `bt_ubt` -- the compat matrix's cliff
       !! geometry found the gate was missing here (and at every other
       !! frhat call site except av_rem): `eulerian_z` + a cliff bed +
-      !! `&ocean_bt_nml correction_bc_pgf` leaked mass to 4.9e-5 by step 24
+      !! `[ocean.bt] correction_bc_pgf` leaked mass to 4.9e-5 by step 24
       !! (budget tolerance 1e-9) with `frhat_scheme = "hybrid"` (the
       !! default) followed UNGATED here, and a 4-rank decomposition of a
       !! `hycom` + open-boundary cell disagreed with its own 1-rank
       !! checkpoint by 3e-3 relative in `bt_visc_rem_u` -- both cells have
       !! `metrics%use_closed_faces = .false.` (neither is z_fixed/zstar
-      !! with `&vcoord_nml zfixed_closed_faces`), and both run clean once
+      !! with `[vcoord] zfixed_closed_faces`), and both run clean once
       !! HYBRID is forced back to ARITHMETIC off that one family it was
       !! ported, bisected and validated for (`rdb_barotropic_coupling.F90`,
       !! `derive_bt_from_layers`'s gate comment). Mirrors

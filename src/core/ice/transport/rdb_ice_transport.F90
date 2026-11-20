@@ -174,9 +174,9 @@ contains
       real(wp), intent(in) :: dt
          !! The thermo-step dt (cadence = the ice slow step).
       integer, intent(in) :: adv_substeps
-         !! SIS2 `NSTEPS_ADV` (`&ocean_ice_nml adv_substeps`), >= 1.
+         !! SIS2 `NSTEPS_ADV` (`[ocean.ice] adv_substeps`), >= 1.
       real(wp), intent(in) :: roll_factor
-         !! SIS2 `SEA_ICE_ROLL_FACTOR` (`&ocean_ice_nml roll_factor`).
+         !! SIS2 `SEA_ICE_ROLL_FACTOR` (`[ocean.ice] roll_factor`).
          !! 0 disables rolling.
       logical, intent(out) :: ok
          !! `.false.` => the caller (driver) must abort fail-loud

@@ -376,7 +376,7 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine test_implicit_fold(error)
-      !! `&ocean_vdiff_nml implicit_drag` with the closed-face coupling cut
+      !! `[ocean.vdiff] implicit_drag` with the closed-face coupling cut
       !! (`zlevel_faces`, production z_fixed) and K_v = 0: the fold must
       !! decelerate the first live layer as `U0/(1 + dt·r)^N` and remove
       !! kinetic energy.  Before `k_bot` the rate sat on row 1 — a filler

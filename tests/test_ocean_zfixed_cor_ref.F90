@@ -1,4 +1,4 @@
-!! THE CLOSED-FACE Coriolis-reference gate: `&vcoord_nml
+!! THE CLOSED-FACE Coriolis-reference gate: `[vcoord]
 !! zfixed_closed_faces` under `VCOORD_Z_FIXED`, with ROTATION, on the
 !! `pred_corr` outer split.
 !!
@@ -73,7 +73,7 @@
 !!
 !! **`unmasked_walls_documents_growth`** — the SAME basin with the
 !! solid walls left unmasked, which is what this file used to run and
-!! what a run gets with `&ocean_bc_nml mask_wall_velocity = .false.`.
+!! what a run gets with `[ocean.bc] mask_wall_velocity = false`.
 !! It asserts the energy DOES grow, so the bar above is shown to be
 !! reachable from this case rather than vacuous.
 !!
@@ -888,8 +888,8 @@ contains
    end subroutine test_unmasked_walls_refused
 
    pure function zfixed_nml(bc_body, bt_body, closed) result(nml)
-      !! A minimal in-envelope `z_fixed` namelist; `bc_body`/`bt_body`
-      !! are the `&ocean_bc_nml` / extra `&ocean_bt_nml` entries under
+      !! A minimal in-envelope `z_fixed` input; `bc_body`/`bt_body`
+      !! are the `[ocean.bc]` / extra `[ocean.bt]` entries under
       !! test (empty ⇒ defaults).
       character(len=*), intent(in) :: bc_body, bt_body
       logical, intent(in), optional :: closed
@@ -937,7 +937,7 @@ contains
       type(config_t) :: cfg
       integer :: ierr
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "namelist must PARSE: "//what)
+      call check(error, ierr == OCEAN_STATUS_OK, "input must PARSE: "//what)
       if (allocated(error)) return
       ierr = -999
       call validate_config(cfg, ierr=ierr)

@@ -34,7 +34,7 @@ program rdb
    mpi_rank = comm_env_rank()
 
    ! Read input file from command line (all ranks read independently).
-   ! Running without a namelist used to fall back to a hard-coded default
+   ! Running without an input used to fall back to a hard-coded default
    ! state, which then SIGBUS'd downstream once any output path was hit.
    ! Fail loudly here instead so the user gets a clear "no nml" message
    ! rather than a stale-default crash several seconds in.
@@ -44,7 +44,7 @@ program rdb
    ! exit 0 if the configuration is accepted, 3 with every refusal reason
    ! logged if not (a stage that still `error stop`s instead of returning
    ! a status exits non-zero with its own message).  No device mapping, no
-   ! stepping, no output files.  Run it with `&logging_nml log_level =
+   ! stepping, no output files.  Run it with `[logging] log_level =
    ! "error"` and stdout carries exactly the refusal reasons.
    validate_only = .false.
    n_files = 0

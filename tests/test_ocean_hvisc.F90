@@ -8,7 +8,7 @@
 !!     leave u, v bit-for-bit at the IC.  Constancy preservation.
 !!   * Zero-coefficient short-circuit — `nu_h = 0` is a no-op even
 !!     for non-uniform velocity.  Lets the driver wire the kernel
-!!     unconditionally and gate via the namelist.
+!!     unconditionally and gate via the input.
 !!   * Sinusoid decay — initialise a single Fourier mode in u
 !!     (cos(k*x)) and run several steps.  Analytic amplitude after
 !!     N steps is (1 - dt * nu * k^2)^N.  Check the realised decay

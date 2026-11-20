@@ -10,7 +10,7 @@ or procedure does — that lives in the source `!!` docstrings and is rendered b
 FORD on every PR to `main`. When a guide says "the kernel computes X", go read
 the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 
-> Symbol names (modules, procedures, enums, namelist groups) are stable and are
+> Symbol names (modules, procedures, enums, input groups) are stable and are
 > what these guides anchor on. Line numbers drift — treat any you see in git
 > history or agent output as "approximately here", and grep for the symbol.
 
@@ -23,8 +23,8 @@ the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 | Which closure/scheme is on + the knobs | [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md) |
 | Dyn-core orientation (directory map, the 4 rules, one outer step) | [`src/core/ocean/README.md`](../../src/core/ocean/README.md) |
 | Where each cross-module contract lives | [`docs/codebase/CONTRACTS.md`](../codebase/CONTRACTS.md) |
-| Every namelist group + knob + default (code-derived) | [`docs/generated_nml_knobs.md`](../generated_nml_knobs.md) |
-| Physics + namelist reference | [`docs/REFERENCE.md`](../REFERENCE.md) |
+| Every input group + knob + default (code-derived) | [`docs/generated_nml_knobs.md`](../generated_nml_knobs.md) |
+| Physics + input reference | [`docs/REFERENCE.md`](../REFERENCE.md) |
 | Style + GPU programming (`do concurrent` + OpenACC) | [`FORTRAN_STYLE.md`](../../FORTRAN_STYLE.md) |
 | Capabilities + limits | [`docs/CAPABILITIES_AND_LIMITATIONS.md`](../CAPABILITIES_AND_LIMITATIONS.md) |
 
@@ -32,22 +32,22 @@ the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 
 | Guide | Has a dispatch seam already? |
 |---|---|
-| [Add a namelist knob](add_namelist_knob.md) | n/a — the config plumbing itself |
-| [Migrate a namelist group to the schema](migrate_namelist_to_schema.md) | n/a — the config plumbing itself |
+| [Add an input knob](add_input_knob.md) | n/a — the config plumbing itself |
+| [Register an input group in the schema](register_schema_group.md) | n/a — the config plumbing itself |
 | [Add a passive tracer](add_passive_tracer.md) | yes — the tracer registry "just works" |
 | [Add a vertical coordinate](add_vertical_coordinate.md) | yes — `VCOORD_*` enum + target-thickness generator |
-| [Add an equation of state](add_equation_of_state.md) | yes — `EOS_VARIANT_*` + `&ocean_eos_nml eos` |
+| [Add an equation of state](add_equation_of_state.md) | yes — `EOS_VARIANT_*` + `[ocean.eos] eos` |
 | [Add a diagnostic](add_diagnostic.md) | yes — the diag registry + `fill_*` |
 | [Add a turbulence closure](add_closure.md) | yes — the vmix contributor chain / `LMIX_*` select-case |
 | [Add a boundary condition](add_boundary_condition.md) | yes — the `OBC_*` enum + per-edge dispatch |
-| [Read the sea-ice conservation ledger](read_ice_ledger.md) | no — a reading guide for `&ocean_ice_nml ledger` under `scheme = "cice"`; also how to add a stage to it |
+| [Read the sea-ice conservation ledger](read_ice_ledger.md) | no — a reading guide for `[ocean.ice] ledger` under `scheme = "cice"`; also how to add a stage to it |
 
 ## Deployment
 
 | Guide | For |
 |---|---|
 | [Deploy without netcdf-c](deploy_without_netcdf.md) | a machine with a compiler and HDF5 but no usable netcdf-c (e.g. NERSC Perlmutter): `tools/build_netcdf.sh` |
-| [Prepare a runoff file](prepare_runoff_file.md) | `tools/om_runoff_to_model.f90`: remap a lon-lat runoff product onto the model grid for `&ocean_dataovr_nml lrunoff / frunoff` |
+| [Prepare a runoff file](prepare_runoff_file.md) | `tools/om_runoff_to_model.f90`: remap a lon-lat runoff product onto the model grid for `[ocean.dataovr] lrunoff / frunoff` |
 
 ## Two-minute orientation
 
@@ -75,7 +75,7 @@ the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 
 Every guide is a specialisation of this. From the top-level `CLAUDE.md`:
 
-1. **Namelist knob, default = off.** Preserves bit-identity for existing namelists
+1. **Input knob, default = off.** Preserves bit-identity for existing inputs
    and tests. This is non-negotiable — every existing run must stay byte-for-byte.
 2. **Kernel implementation, gated on the knob.**
 3. **Unit test covering the new path.** Analytical tests are the highest-leverage
@@ -85,7 +85,7 @@ Every guide is a specialisation of this. From the top-level `CLAUDE.md`:
 5. **`ctest` green on the GPU build** (never `-j N` — every worker shares one GPU;
    `ctest -R rdb` is the rdb-only regression subset; `ctest -N -R rdb` gives the current count).
 6. **One capability per commit, one PR per capability.** Smaller PRs review faster
-   and bisect cleanly. (Exception: several branches that each just add a namelist +
+   and bisect cleanly. (Exception: several branches that each just add an input +
    IC + test → bundle into one `feat/<area>` PR.)
 
 ## Cross-cutting GPU rules (you *will* hit these)

@@ -1,7 +1,7 @@
 # Reading the sea-ice conservation ledger
 
-For `&ocean_ice_nml scheme = "cice"` only. Default off; turn it on with
-`&ocean_ice_nml ledger = .true.`. The module docstring of
+For `[ocean.ice] scheme = "cice"` only. Default off; turn it on with
+`[ocean.ice] ledger = true`. The module docstring of
 `src/core/ice/coupling/rdb_ice_ledger_terms.F90` owns the definitions; this page
 says how to read the output and how to add a term.
 

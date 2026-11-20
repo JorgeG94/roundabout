@@ -13,7 +13,7 @@
 !!      rank — deterministic, no collective that could differ — through
 !!      `engine_setup` -> seeded structure -> `engine_step` x N_STEPS;
 !!   2. runs every DECOMPOSED case of the launched rank count on the same
-!!      namelist: the north-south split (px = 1, py = nprocs) and the
+!!      input: the north-south split (px = 1, py = nprocs) and the
 !!      east-west splits through the distributed fold exchange (2x1; 3x1;
 !!      4x1 and 2x2);
 !!   3. compares, BITWISE, each rank's whole storage window (ghost rows and

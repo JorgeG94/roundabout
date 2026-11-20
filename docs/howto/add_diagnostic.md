@@ -102,7 +102,7 @@ not before) and a time-op test.
   `scale_factor`, not `scale`); one `do concurrent` per time-op case, not
   case-inside-loop.
 - **The vertical remap is CONSERVATIVE** (donor-cell overlap integral via
-  `remap_column`, reconstruction set by `&ocean_diag_nml diag_remap_scheme` =
+  `remap_column`, reconstruction set by `[ocean.diag] diag_remap_scheme` =
   pcm/plm/ppm/ppm_h4, default **ppm**; all schemes conserve the column
   integral) and comes in intensive / extensive variants for both
   z (`remap_layer_to_z{,_extensive}`) and density

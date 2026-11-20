@@ -22,9 +22,9 @@ module rdb_ocean_data_input
    !!     axis is read AS STORED; nothing here flips it.  A 3-D field
    !!     read from a surface-first source file is handed back
    !!     bottom-last; if that's wrong for your consumer, flip it there.
-   !!   * `&ocean_data_nml` carries no per-field entries — only
+   !!   * `[ocean.data]` carries no per-field entries — only
    !!     `max_fields`/`verbose`.  Each consumer defines its own file/
-   !!     variable keys in its own namelist group.
+   !!     variable keys in its own input group.
    !!   * Out-of-range time is an ABORT by default (`DATA_OOR_ERROR`);
    !!     `DATA_OOR_CLAMP` is opt-in per field.
    !!   * No in-core horizontal interpolation (files are pre-regridded
@@ -39,7 +39,7 @@ module rdb_ocean_data_input
    !!   * `ocean_data_input_update_all(this, t)` refreshes every
    !!     registered field's bracket (+ pushes any new slab to the
    !!     device) and is the driver's one-line per-step hook — a no-op
-   !!     when `nfields == 0` (every shipped namelist today).  It does
+   !!     when `nfields == 0` (every shipped input today).  It does
    !!     NOT write into any consumer array (the reader stores the
    !!     registration-time `dest` shape as metadata only, never a
    !!     pointer).  Each consumer then calls `update_2d/_3d` with its
@@ -357,7 +357,7 @@ contains
    end function data_input_time_mode_is_implemented
 
    function data_input_time_mode_from_string(tag) result(mode)
-      !! Translate a namelist/registration-time string into a
+      !! Translate an input/registration-time string into a
       !! `DATA_TIME_*` code.  Fail-loud on anything not covered by
       !! `data_input_time_mode_is_implemented` — an unrecognised tag
       !! must never silently fall back to a default mode.
@@ -854,7 +854,7 @@ contains
       end if
       if (this%nfields >= this%nfields_max) then
          call fail("ocean_data_input: registry full (max_fields = "// &
-                   to_string(this%nfields_max)//"); raise &ocean_data_nml max_fields", &
+                   to_string(this%nfields_max)//"); raise [ocean.data] max_fields", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1185,7 +1185,7 @@ contains
 
       if (this%nfields >= this%nfields_max) then
          call fail("ocean_data_input: registry full (max_fields = "// &
-                   to_string(this%nfields_max)//"); raise &ocean_data_nml max_fields", &
+                   to_string(this%nfields_max)//"); raise [ocean.data] max_fields", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1416,7 +1416,7 @@ contains
       !! Driver hook: refresh every registered field's bracket for model
       !! time `t` (reading + pushing a new slab to the device only when
       !! the bracket actually advances).  No-op when `nfields == 0` —
-      !! every shipped namelist today.  Does NOT write into any
+      !! every shipped input today.  Does NOT write into any
       !! consumer array (see module docstring) — call `update_2d/_3d`
       !! afterwards for that.
       class(ocean_data_input_t), intent(inout) :: this
@@ -1683,7 +1683,7 @@ contains
       !! convenience wrapper over `register_2d(time_mode="static")` +
       !! `fill_static_host` for a field that is read ONCE and never
       !! updated — a prescribed, time-constant geometry rather than a
-      !! forcing.  `&ocean_cavity_dyn_nml draft_config="file"` is the
+      !! forcing.  `[ocean.cavity_dyn] draft_config="file"` is the
       !! first consumer.
       !!
       !! The reader is LOCAL and destroyed on the way out: nothing is left
@@ -1699,7 +1699,7 @@ contains
       !! it — with a time COORDINATE VARIABLE, and its horizontal extents
       !! must cover this rank's slab.  Record 1 is read.  There is NO
       !! horizontal interpolation: the file must already be on the model
-      !! grid, exactly as `bathymetry_file` and `&ocean_zinit_nml file`
+      !! grid, exactly as `bathymetry_file` and `[ocean.zinit] file`
       !! require.
       !!
       !! HOST-ONLY: runs at setup, before `dest` is device-mapped.

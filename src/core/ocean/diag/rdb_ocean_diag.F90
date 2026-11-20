@@ -160,11 +160,11 @@ module rdb_ocean_diag
       !! diagnostic's canonical default time-operator.
    integer, parameter, public :: DIAG_COORD_UNSET = 0
       !! `diag_spec_t%coord` sentinel: no `:coord` attribute given => keep
-      !! the diagnostic's default output vgrid (the global `&ocean_diag_nml
+      !! the diagnostic's default output vgrid (the global `[ocean.diag]
       !! vgrid`).  Set values are `DIAG_VGRID_*` (layer / z / zstar / sigma).
 
    type :: diag_spec_t
-      !! One parsed entry of the `&ocean_diag_nml diags` selection list.
+      !! One parsed entry of the `[ocean.diag] diags` selection list.
       !! Produced by `parse_diag_spec`; consumed by `register_default_diags`
       !! (canonical-default overrides / skips) and the derived-diagnostic
       !! orchestrator (`apply_diag_selection`).  Unset attributes carry
@@ -189,7 +189,7 @@ module rdb_ocean_diag
       integer :: xtype = -1
          !! Resolved NetCDF element type for the DATA variables of this
          !! stream (`NC_WP` / `NC_R4` — see `rdb_io_netcdf`).  `-1` = unset;
-         !! `open_stream` resolves it from `&ocean_diag_nml
+         !! `open_stream` resolves it from `[ocean.diag]
          !! output_precision` ("double", the default, => `NC_WP` =>
          !! byte-identical output).  Held as a bare integer so this module
          !! stays NetCDF-free; only `rdb_ocean_diag_netcdf` interprets it.
@@ -294,7 +294,7 @@ module rdb_ocean_diag
          !! `DIAG_MISSING_VALUE` instead of 0, and the NetCDF writer tags the
          !! variable with a `_FillValue` / `missing_value` attribute.  Set at
          !! register time for non-LAYER diagnostics when masking is enabled
-         !! (`&ocean_diag_nml mask_vanished_layers`).  Default `.false.` =>
+         !! (`[ocean.diag] mask_vanished_layers`).  Default `.false.` =>
          !! below-bottom cells read 0 (bit-identical to the legacy writer).
 
       ! ---- I/O server binding ----
@@ -352,7 +352,7 @@ module rdb_ocean_diag
       type(diag_var_t), allocatable :: vars(:)
 
       ! ---- Output vertical grids ----
-      ! Configured at init from the namelist.  The manager looks up
+      ! Configured at init from the input.  The manager looks up
       ! `vars(i)%output_vgrid` and dispatches the remap onto the
       ! matching array.  Phase 6 wires the remap kernels.
       integer  :: nz_out = 0
@@ -378,7 +378,7 @@ module rdb_ocean_diag
 
       ! ---- Triggering scalars ----
       logical :: enabled = .true.
-         !! Master switch.  Phase 6 reads from namelist.
+         !! Master switch.  Phase 6 reads from input.
       real(wp) :: dt_last_eval = 0.0_wp
          !! Wall time at last evaluation pass (s).
 
@@ -418,7 +418,7 @@ module rdb_ocean_diag
 contains
 
    function parse_diag_spec(spec) result(specs)
-      !! Parse the `&ocean_diag_nml diags` selection string into structured
+      !! Parse the `[ocean.diag] diags` selection string into structured
       !! entries.  Entries are whitespace/comma-separated; within an entry,
       !! colon-separated attributes are self-identifying (order-free):
       !!

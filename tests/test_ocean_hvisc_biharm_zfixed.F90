@@ -1,4 +1,4 @@
-!! Velocity-form BIHARMONIC viscosity under `&vcoord_nml
+!! Velocity-form BIHARMONIC viscosity under `[vcoord]
 !! zfixed_closed_faces`: a closed face-layer (`metrics%open_u/open_v == 0`)
 !! is a FREE-SLIP wall for both biharmonic paths — the scalar `nu_4`
 !! (`hvisc_compute_biharmonic_impl`) and the flow-aware `nu4_face_*`

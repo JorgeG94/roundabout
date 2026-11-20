@@ -33,10 +33,10 @@ contains
    end subroutine collect_remap_pqm_tests
 
    ! ----------------------------------------------------------------------
-   ! T0 — reachability: the "pqm" namelist string reaches REMAP_PQM.
+   ! T0 — reachability: the "pqm" input string reaches REMAP_PQM.
    !      This is the exact string->enum link that was missing for the
    !      life of the feature (PR-9 §2A) — the kernel above had 8 green
-   !      tests while nothing in a namelist could select it.
+   !      tests while nothing in an input could select it.
    ! ----------------------------------------------------------------------
    subroutine test_pqm_parses_from_namelist_string(error)
       type(error_type), allocatable, intent(out) :: error

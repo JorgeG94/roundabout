@@ -7,8 +7,8 @@ eddies. Two configs:
 
 | file | layers | grid | cells | runtime (V100) | use |
 |---|---|---|---|---|---|
-| `baroclinic_2layer.nml` | 2 | 192×96 @2 km | 37 k | ~3 min / 40 d | **fast regression** |
-| `baroclinic_15layer.nml` | 15 | 384×192 @2 km | 1.1 M | ~21 min / 50 d | depth‑resolved demo |
+| `baroclinic_2layer.toml` | 2 | 192×96 @2 km | 37 k | ~3 min / 40 d | **fast regression** |
+| `baroclinic_15layer.toml` | 15 | 384×192 @2 km | 1.1 M | ~21 min / 50 d | depth‑resolved demo |
 
 ## The physics
 
@@ -63,7 +63,7 @@ dyn‑core's baroclinic instability is healthy.
 ```bash
 # NVHPC + NetCDF toolchain loaded in this shell (module / spack / conda)
 CUDA_VISIBLE_DEVICES=<gpu> ./build/rdb \
-   validation_examples/ocean/baroclinic_channel/baroclinic_2layer.nml
+   validation_examples/ocean/baroclinic_channel/baroclinic_2layer.toml
 python validation_examples/ocean/baroclinic_channel/animate_baroclinic.py \
    out_bci_2layer/bci_2layer_rank_000000.nc baroclinic.mp4
 ```

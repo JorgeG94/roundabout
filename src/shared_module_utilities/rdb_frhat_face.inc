@@ -10,7 +10,7 @@
 ! loop actually integrated (see `face_depth_mean_u`'s own docstring on the
 ! ISOMIP+ Ocean0 x22.7 bug from exactly one inconsistent call site).
 !
-! Two schemes (`&ocean_bt_nml frhat_scheme`, `rdb_constants::FRHAT_*`):
+! Two schemes (`[ocean.bt] frhat_scheme`, `rdb_constants::FRHAT_*`):
 !
 !   FRHAT_ARITHMETIC (default) — today's plain two-abutting-cell mean,
 !     h_face(k) = 0.5*(h_L(k) + h_R(k)).
@@ -71,7 +71,7 @@
 !     while fillers remain — at which point a REMAINING filler would take
 !     the ARITHMETIC branch and be handed a `h_arith`-scale weight despite
 !     carrying no real water on one side.  Measured on the 1-degree
-!     Southern Ocean OPEN-step case (`&vcoord_nml zfixed_closed_faces =
+!     Southern Ocean OPEN-step case (`[vcoord] zfixed_closed_faces =
 !     .false.`): `compute_bt_rem_from_visc_rem`'s `av_rem` is the one
 !     consumer this actually corrupts — a filler's `visc_rem` is ~1
 !     (uncoupled, not glue-damped), so an inflated filler weight pulls

@@ -62,7 +62,7 @@ contains
       !! how a test obeys it.
       !!
       !! `solid_walls` (optional, default `.false.`) applies the PRODUCTION
-      !! solid-wall convention — `&ocean_bc_nml mask_wall_velocity`, which
+      !! solid-wall convention — `[ocean.bc] mask_wall_velocity`, which
       !! defaults ON — to all four array edges: `metrics_apply_land_mask`
       !! with `mask_wall_velocity = .true.` zeroes the wet mask in the
       !! ghost band, so `wet_u`/`wet_v` (and the six face metrics) are 0

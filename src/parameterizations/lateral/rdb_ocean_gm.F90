@@ -48,7 +48,7 @@ module rdb_ocean_gm
    !! >= H_VANISHED); (3) per-layer donor cap.  The donor side is keyed on
    !! the SIGN of `uhtot` (column i when uhtot<=0, else i+1).
    !!
-   !! KhTh is a 2D face field, constant-filled from `&ocean_gm_nml khth`
+   !! KhTh is a 2D face field, constant-filled from `[ocean.gm] khth`
    !! (VarMix/MEKE seam populates it later via +=), CFL-clamped per face.
    !! `gm_src(nx,ny)` carries the GM PE release (>= 0 for a stable tilted
    !! column) for future MEKE coupling.
@@ -57,7 +57,7 @@ module rdb_ocean_gm
    !! K=nz+1 surface); the slopes slot zeroes the slope at both caps so the
    !! streamfunction vanishes there and the recurrence closes.
    !!
-   !! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
+   !! ### Partial-step z-level faces (`[vcoord] zfixed_closed_faces`)
    !!
    !! Under `z_fixed` a face column is not the whole water column: a layer
    !! that is an inert FILLER on either side (inside the bed or the ice
@@ -97,7 +97,7 @@ module rdb_ocean_gm
    !! non-finite slope is therefore read as ZERO slope (no GM at that
    !! interface) before any clamp sees it; finite inputs are untouched.
    !!
-   !! Default off (`&ocean_gm_nml enable=.false.`) => slot allocated but
+   !! Default off (`[ocean.gm] enable=false`) => slot allocated but
    !! `gm_compute_transports` no-ops => bit-identical.
    !!
    !! ### FGNV streamfunction (`use_fgnv`)
@@ -119,7 +119,7 @@ module rdb_ocean_gm
    !! `psi_unlim` is amplified by `(1 + s)` before the solve, so the small-`c`
    !! limit is `(1+s)*psi_unlim` and `c^2 = 0` short-circuits to exactly that
    !! (no solve).  `N^2 >= (fgnv_strat_floor*Omega)^2`.  `fgnv_c_min` is
-   !! accepted for namelist parity but not applied.  Away from the caps
+   !! accepted for input parity but not applied.  Away from the caps
    !! (`c/N` small against the vertical scale of the slope) psi follows
    !! psi_unlim; near the surface and bed it is smoothed over the deformation
    !! depth `c/N` and forced to zero, replacing ad-hoc tapering.
@@ -128,7 +128,7 @@ module rdb_ocean_gm
    !! LOCAL form (`gm_pe_release`), which does not see FGNV, the EBT
    !! structure or the limiters, so with FGNV on it overstates the release
    !! actually performed near the caps.  `src_work`
-   !! (`&ocean_gm_nml gm_src_form = "work"`) instead has `gm_work_source`
+   !! (`[ocean.gm] gm_src_form = "work"`) instead has `gm_work_source`
    !! replace it by the rate of potential-energy release of the FINAL
    !! transports, face by face (see `gm_work_face`).
    !!
@@ -166,14 +166,14 @@ module rdb_ocean_gm
    type :: ocean_gm_t
       !! Gent-McWilliams thickness-diffusion state.  All fields default to
       !! the inert (`enable=.false.`) configuration so an ocean run that
-      !! never sets `&ocean_gm_nml` is bit-identical.
+      !! never sets `[ocean.gm]` is bit-identical.
       logical :: is_init = .false.
          !! True between `init` and `destroy`; gate on this (never on
          !! `allocated`, which misses the GPU mapping).
       logical :: enable = .false.
          !! Master switch.  Off => `gm_compute_transports` and
          !! `continuity_gm_apply` are no-ops => bit-identity preserved.  Requires the
-         !! slopes slot (`&ocean_slopes_nml enable`); the loud invariant is
+         !! slopes slot (`[ocean.slopes] enable`); the loud invariant is
          !! checked at configure (`configure_ocean_gm`).
       real(wp) :: khth = 0.0_wp
          !! Thickness-diffusion coefficient KhTh (m^2/s); constant-filled
@@ -202,7 +202,7 @@ module rdb_ocean_gm
          !! Needs `ebt_struct` passed to `gm_compute_transports`; off ⇒ the
          !! kernels are byte-identical.
       logical :: src_work = .false.
-         !! `&ocean_gm_nml gm_src_form = "work"`: `gm_work_source` REPLACES
+         !! `[ocean.gm] gm_src_form = "work"`: `gm_work_source` REPLACES
          !! `gm_src` by the PE-release rate of the final bolus transports
          !! (MOM6 `MEKE_GM_SRC_ALT = False`).  Off ⇒ the local form,
          !! bit-identical.
@@ -543,7 +543,7 @@ contains
          !! never read (`cg1` is then an inert device-present stand-in).
       real(wp), intent(in) :: fgnv_filter_scale, fgnv_strat_floor
       real(wp), intent(in) :: cg1(nx, ny)
-         !! EBT vertical structure of KhTh on (`&ocean_gm_nml use_ebt_struct`).
+         !! EBT vertical structure of KhTh on (`[ocean.gm] use_ebt_struct`).
       real(wp), intent(in) :: ebt_struct(nx, ny, nz)
          !! T-cell EBT structure; an inert device-present stand-in when
          !! `use_struct = .false.` (never indexed).
@@ -665,7 +665,7 @@ contains
       !! kb=Kr-1 (below) and fills LAYER kb; the rsum bound keys on ka, the
       !! donor `h_frac` and per-layer cap on kb.
       !!
-      !! OPEN COLUMN (`use_open`, `&vcoord_nml zfixed_closed_faces`): a
+      !! OPEN COLUMN (`use_open`, `[vcoord] zfixed_closed_faces`): a
       !! layer is part of the face column only if `ok(k) = open_u(i,j,k)`
       !! and it is live on both sides.  A not-`ok` layer gets `h_avail = 0`
       !! and `uhD = 0`, leaving `uhtot` (the streamfunction at its top)
@@ -677,7 +677,7 @@ contains
       !! DIVERGENCE (MOM6 nk_linear): MOM6's `thickness_diffuse_full`
       !! sets `nk_linear = max(GV%nkml, 1)`; in
       !! ALE mode `GV%nkml = 0`, so MOM6 always runs `nk_linear = 1` and it
-      !! is NOT a namelist parameter — its top layer always takes a linear
+      !! is NOT an input parameter — its top layer always takes a linear
       !! return-flow closure (comment: "Balance the deeper flow with a
       !! return flow uniformly distributed though the remaining
       !! near-surface layers"; MOM6 is top-down, k=1=surface, so
@@ -1216,7 +1216,7 @@ contains
 
    subroutine gm_work_source(grid, metrics, eos, this, slopes, ms)
       !! Replace `gm_src` by the potential-energy release rate of the FINAL
-      !! bolus transports (`&ocean_gm_nml gm_src_form = "work"`).  Run after
+      !! bolus transports (`[ocean.gm] gm_src_form = "work"`).  Run after
       !! `gm_compute_transports` and BEFORE `continuity_gm_apply`, so
       !! `uhD`/`vhD` (limited, FGNV, EBT-structured) and `h_layer` are the
       !! pair the operator will apply.  T/S come from the slopes slot's

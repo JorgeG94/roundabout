@@ -33,7 +33,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Item | What shipped |
 |---|---|
 | C-grid core | Continuity-PPM, PV-conserving Coriolis, split-explicit barotropic loop (Phases 1-4b). |
-| Outer split scheme | `&ocean_bt_nml split_scheme`: `pred_corr` (default) or `ssp_rk2` (experimental). See [Appendix B](#appendix-b-detail-for-done-and-open-items). |
+| Outer split scheme | `[ocean.bt] split_scheme`: `pred_corr` (default) or `ssp_rk2` (experimental). See [Appendix B](#appendix-b-detail-for-done-and-open-items). |
 | Periodic boundaries (PBCs) | Per-axis ghost-wrap, bit-exact seam (`test_ocean_periodic`). Eady runs as a periodic-x channel. |
 | Tripolar north fold | Bit-identical on every split, including `px > 1` (`b35c5f63e`, `e8d614aa1`, `42adac5ff`, `6d91130b2`, `40236aba0`, `11ed42542`). |
 | Hollingsworth-Källén Coriolis | `sadourny_hk` ships opt-in (Phase 3c). Promotion is still open, see §2. |
@@ -47,7 +47,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 |---|---|
 | Mesoscale closures | Isopycnal slopes, GM thickness diffusion, Redi neutral diffusion, VarMix, prognostic MEKE. |
 | Tides (forcing) | Equilibrium body force, scalar SAL, nodal correction (also for OBC_TIDAL), barotropic wave drag. The TPXO validation is still open, see §2. |
-| Sea ice | `src/core/ice/`: Winton thermodynamics, multi-category ITD, ITD-aware transport, C-grid EVP, frazil, ice-ocean couplers. All under `&ocean_ice_nml` (default off). |
+| Sea ice | `src/core/ice/`: Winton thermodynamics, multi-category ITD, ITD-aware transport, C-grid EVP, frazil, ice-ocean couplers. All under `[ocean.ice]` (default off). |
 | Sea ice on many ranks | Thermo, EVP and stress blend on the ocean decomposition (`84ddefc87`); category transport across ranks and periodic seams (`313a8c0c1`); restart round trip (`9df1c5b90`). |
 | Sea ice under the tripolar fold | Category state (`cc75df88f`) and EVP dynamics (A6, `e1ae86fa7`); multi-rank with the `sea_ice_fold` bit-identity cases (A7, #143). |
 | Windowed tracer advection | `dt_tracer_advect_ratio`; multi-rank and decomposition-bit-identical, tripolar north fold included (`drain_ratio*`, `drain_ratio_fold*` cases). |
@@ -69,9 +69,9 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Global 1-degree + sea ice | One year on one V100 (`d6e46b6d7`, 7.45 s per simulated day). |
 | **C1** 75-level vertical grid | ACCESS-OM3's exact grid runs (`69310e028`, `tools/vgrid_to_dz.py`, `tests/test_ocean_vgrid_om3.F90`). |
 | **C7 part 1** OM3 diagnostics | `umo`/`vmo`, `tauuo`/`tauvo`, `Kd_interface` (`89f78f07c`, `src/core/ocean/diag/rdb_ocean_diag_derived.F90`). |
-| **C3** Large-Yeager bulk flux | Standalone column kernel plus a 2-D driver (`babb12d6e`, review fixes `e963d3469`; `src/parameterizations/vertical/rdb_ocean_bulk_flux.F90`). **Not wired in:** no namelist, no engine call site. |
-| **C2a** calendar and multi-file time axis | `rdb_calendar`, `&time_nml start_date`/`calendar`, `register_2d_filelist` (`3d4ff94d7`, review fixes `d3921d57a`; `src/core/rdb_calendar.F90`). |
-| **C2b** lat-lon regridding weights | Bilinear and first-order conservative weights onto spherical, supergrid or tripolar grids (`b1b4b94b3`, `c9006a540`; `src/core/ocean/io/rdb_regrid_latlon.F90`). **Not wired in:** no reader, no namelist. Conservative scratch scaling is #202. |
+| **C3** Large-Yeager bulk flux | Standalone column kernel plus a 2-D driver (`babb12d6e`, review fixes `e963d3469`; `src/parameterizations/vertical/rdb_ocean_bulk_flux.F90`). **Not wired in:** no input, no engine call site. |
+| **C2a** calendar and multi-file time axis | `rdb_calendar`, `[time] start_date`/`calendar`, `register_2d_filelist` (`3d4ff94d7`, review fixes `d3921d57a`; `src/core/rdb_calendar.F90`). |
+| **C2b** lat-lon regridding weights | Bilinear and first-order conservative weights onto spherical, supergrid or tripolar grids (`b1b4b94b3`, `c9006a540`; `src/core/ocean/io/rdb_regrid_latlon.F90`). **Not wired in:** no reader, no input. Conservative scratch scaling is #202. |
 
 ### Code health (October 2026)
 
@@ -91,7 +91,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Item | Goal | Status |
 |---|---|---|
 | `[M]` **C2c** atmospheric-state provider | JRA55-do reader, regrid and bulk-flux wiring, in three chunks. | C2c-1 (config and reader window) is open PR [#205](https://github.com/JorgeG94/roundabout/pull/205). Blocked on #202 for the conservative regrid at 1440x1080. |
-| **C3 wiring** | Connect the bulk-flux kernel to a namelist, an atmospheric-state reader and an engine call site. | Not started. The C3 commit (`babb12d6e`) names C2b/C2c as the work packages for the reader and regridder. |
+| **C3 wiring** | Connect the bulk-flux kernel to an input, an atmospheric-state reader and an engine call site. | Not started. The C3 commit (`babb12d6e`) names C2b/C2c as the work packages for the reader and regridder. |
 | `[M]` **OBC nesting data** | A file-backed data source, so a one-way nest reproduces its parent. | Only the `constant` backend exists (`ocean_boundary_data_constant_t` in `src/core/ocean/boundary/rdb_ocean_boundary_data.F90`, held as `bc_source` in `ocean_engine_t`). `OBC_NESTED` is tag-reserved and behaves as OPEN (`OBC_NESTED` in `src/core/ocean/boundary/rdb_ocean_boundary_types.F90`). |
 | `[M]` **Tide validation** | Australia-wide barotropic run against TPXO M2/S2/K1/O1. | Forcing ships. No TPXO comparison in `validation_examples/ocean/tides/`. |
 | `[M]` **MOM6 cross-comparison** | Phillips/Eady, overflow/DOME, seamount/internal tide against published MOM6. | Not started beyond the double-gyre. |
@@ -119,7 +119,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Item | Note |
 |---|---|
 | `[E]` **Song-Haidvogel `dsig` stretch** | Expose ROMS stretching as `stretch_type="song_haidvogel"` feeding the sigma path (`dsig` builder, about 30 lines). The dead `VCOORD_SCOORD` enum is gone (D7). Not in `src/` today. *Validate:* generated `dsig` matches the S&H formula for given `(θ_s, θ_b, h_c)`. |
-| `[H]` **Adaptive barotropic Orlanski radiation** | Per-layer implicit-upwind Orlanski on the baroclinic normal velocity ships (`&ocean_bc_nml radiation_scheme = "orlanski"`, `RAD_ORLANSKI` in `rdb_ocean_obc_baroclinic.F90`; default `"anomaly"`). Still missing: a per-cell adaptive phase speed for the barotropic eta (Chapman uses one edge-mean value, `rdb_barotropic_substep.F90`), and restart state for the radiation memory (`rx`, `u_prev`). |
+| `[H]` **Adaptive barotropic Orlanski radiation** | Per-layer implicit-upwind Orlanski on the baroclinic normal velocity ships (`[ocean.bc] radiation_scheme = "orlanski"`, `RAD_ORLANSKI` in `rdb_ocean_obc_baroclinic.F90`; default `"anomaly"`). Still missing: a per-cell adaptive phase speed for the barotropic eta (Chapman uses one edge-mean value, `rdb_barotropic_substep.F90`), and restart state for the radiation memory (`rx`, `u_prev`). |
 | `[M]` **Remaining single-rank features** | In-memory geometry injection, wet/dry with a tripolar fold or a non-wall/non-periodic edge (the ice-shelf cavity now runs multi-rank, virtual and real-mass freshwater, wall/periodic edges; dynamic wet/dry on wall/periodic edges too). Each fails loud on more than one rank. |
 | `[M]` **Restarts across a rank-count change** | Restarts resume on the same decomposition only. |
 | `[M]` **Strong-scaling characterisation** | Multi-GPU strong scaling is not yet measured. |
@@ -144,7 +144,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 
 | Item | Note |
 |---|---|
-| `[M]` **Ridging** | `compress_ice` is SIS2's `DO_RIDGING=.false.` fallback. |
+| `[M]` **Ridging** | `compress_ice` is SIS2's `DO_RIDGING=false` fallback. |
 | `[M]` **Ice-shell / shelf-cavity interface kernel** | Not started. |
 | `[M]` **Polar validation campaign** | Not started. |
 
@@ -208,7 +208,7 @@ The `Phase N` anchors the ocean source cites (about 152 comments). Tier-1 dyn-co
 - **Phase 5g** — Vertical coord + ALE remap on the ocean path (originally six VCOORD families; ten ship today — PPM remap, centre + face). **shipped**
 - **Phase 6** — Diagnostics manager + ocean validation suite. **partial**
 - **Phase 6a** — Diag registry + cadence + log sink (SSH / T / S / u / v / KE default fills). **shipped**
-- **Phase 6b** — Windowed flux-accumulated tracer advection (`dt_tracer_advect_ratio` knob, `&ocean_vmix_nml`): `uhtr`/`vhtr` face-transport accumulators + `t_dyn_rel_adv` in `continuity_t`; swept-average CW-PPM drain with fixed-budget CFL sub-cycling; mandatory flush before output/restart/remap; MOM6 `DT_TRACER_ADVECT` cadence (Adcroft & Hallberg 2006). Multi-rank since E1: every off-tile drain field is halo-exchanged per pass and the pass count is a global max, bit-identical to one rank (`drain_ratio*` cases), across the tripolar fold too, `px > 1` included (`drain_ratio_fold*`). **shipped** (default cadence stays `dt_tracer_advect_ratio=1` fused per-stage; the windowed drain is the opt-in `ratio>1` path — see `docs/howto/tracer_advect_cadence.md`).
+- **Phase 6b** — Windowed flux-accumulated tracer advection (`dt_tracer_advect_ratio` knob, `[ocean.vmix]`): `uhtr`/`vhtr` face-transport accumulators + `t_dyn_rel_adv` in `continuity_t`; swept-average CW-PPM drain with fixed-budget CFL sub-cycling; mandatory flush before output/restart/remap; MOM6 `DT_TRACER_ADVECT` cadence (Adcroft & Hallberg 2006). Multi-rank since E1: every off-tile drain field is halo-exchanged per pass and the pass count is a global max, bit-identical to one rank (`drain_ratio*` cases), across the tripolar fold too, `px > 1` included (`drain_ratio_fold*`). **shipped** (default cadence stays `dt_tracer_advect_ratio=1` fused per-stage; the windowed drain is the opt-in `ratio>1` path — see `docs/howto/tracer_advect_cadence.md`).
 - **Phase 6c** — Land/ocean mask + layer→fixed-z diag vremap + time-mean ops; budgets path. **shipped**
 - **Phase 6d** — Serial NetCDF emit (per-rank, CF-1.8). **shipped** (the MPI I/O-server rank was coastal-path machinery and left with the carve-out; the ocean path emits per-rank directly)
 - **Phase 7** — Multi-GPU C-grid MPI halo (face/centre/corner); single-GPU perf characterised. **shipped** (halo + decomp-invariance gate; multi-GPU strong scaling not yet characterised)
@@ -239,7 +239,7 @@ GM remains *opt-in / off by design* at the 1 km submesoscale-resolving target, w
 <details>
 <summary>Status paragraph (long form)</summary>
 
-Tier-1 operational: double-gyre stable to day 580; 2 km Tasman eddy-resolving at about 34 s per simulated day on one V100. Geometric + isopycnal/hybrid coordinates, mesoscale-eddy closures, PERIODIC (reentrant) boundaries, and windowed tracer advection all shipped, alongside the sea-ice train (`&ocean_ice_nml`).
+Tier-1 operational: double-gyre stable to day 580; 2 km Tasman eddy-resolving at about 34 s per simulated day on one V100. Geometric + isopycnal/hybrid coordinates, mesoscale-eddy closures, PERIODIC (reentrant) boundaries, and windowed tracer advection all shipped, alongside the sea-ice train (`[ocean.ice]`).
 
 The C-grid MPI multi-rank halo ships and is gated by a decomposition-invariance suite (1 rank vs N, same answer) plus the `tests/mpi/` set. OBC dispatch is wired; file-backed nesting data is the remaining regional-enabling gap (tidal forcing ships; its validation campaign does not).
 
@@ -269,7 +269,7 @@ Per-axis ghost-wrap (`nghost >= 3`, paired edges, bit-exact seam: shifted IC giv
 <details>
 <summary>Tides, detail</summary>
 
-The forcing ships: the equilibrium body force plus scalar self-attraction and loading (`&ocean_tides_nml enable` / `use_sal` / `beta_sal`), the 18.6-yr nodal correction (`add_nodal`, also reaching OBC_TIDAL via `&ocean_bc_nml obc_tidal_nodal`), and barotropic linear wave drag (`&ocean_bt_nml wave_drag`). All run off the shared astro generator (`rdb_ocean_tide_astro`); configs are in `validation_examples/ocean/tides/`.
+The forcing ships: the equilibrium body force plus scalar self-attraction and loading (`[ocean.tides] enable` / `use_sal` / `beta_sal`), the 18.6-yr nodal correction (`add_nodal`, also reaching OBC_TIDAL via `[ocean.bc] obc_tidal_nodal`), and barotropic linear wave drag (`[ocean.bt] wave_drag`). All run off the shared astro generator (`rdb_ocean_tide_astro`); configs are in `validation_examples/ocean/tides/`.
 
 Remaining: the *validation* campaign. *Validate:* Australia-wide barotropic run vs TPXO M2/S2/K1/O1; SAL phase shift about 10-15 %.
 
@@ -302,24 +302,24 @@ This was scoped as an *adaptation of the proven coastal sigma-coordinate NH solv
 <details>
 <summary>Sea ice, detail</summary>
 
-No longer tentative; the ladder was built. `src/core/ice/` ships the Winton enthalpy column thermodynamics, multi-category ITD, ITD-aware transport, C-grid EVP dynamics, frazil, and the ice-ocean salt/heat/stress couplers, all under `&ocean_ice_nml` (default off, byte-identical). Remaining: ridging, the ice-shell / shelf-cavity interface kernel, and a polar validation campaign.
+No longer tentative; the ladder was built. `src/core/ice/` ships the Winton enthalpy column thermodynamics, multi-category ITD, ITD-aware transport, C-grid EVP dynamics, frazil, and the ice-ocean salt/heat/stress couplers, all under `[ocean.ice]` (default off, byte-identical). Remaining: ridging, the ice-shell / shelf-cavity interface kernel, and a polar validation campaign.
 
 </details>
 
 <details>
 <summary>Eady / ACC channel, detail</summary>
 
-PBC shipped. Eady runs as a periodic-x channel (`validation_examples/ocean/eady/`) and, since 2026-09-13, reproduces the linear-theory growth rate of its channel mode (1.93e-6 vs 1.98e-6 1/s; gated in `tests/regression/stability_manifest.py`). Remaining: an ACC transport run. The front's nonlinear collapse past day about 65 is not integrable at dt = 600 s (open; see the nml header).
+PBC shipped. Eady runs as a periodic-x channel (`validation_examples/ocean/eady/`) and, since 2026-09-13, reproduces the linear-theory growth rate of its channel mode (1.93e-6 vs 1.98e-6 1/s; gated in `tests/regression/stability_manifest.py`). Remaining: an ACC transport run. The front's nonlinear collapse past day about 65 is not integrable at dt = 600 s (open; see the input header).
 
 </details>
 
 <details>
 <summary>Outer split scheme (§1) and the <code>ssp_rk2</code> residual (§2), detail</summary>
 
-- **Shipped:** `&ocean_bt_nml split_scheme` selects `pred_corr` (default; predictor-corrector, tendencies on the barotropic-window means `u_av`/`h_av`, forward-backward gravity-wave pairing) or `ssp_rk2` (Heun, experimental).
+- **Shipped:** `[ocean.bt] split_scheme` selects `pred_corr` (default; predictor-corrector, tendencies on the barotropic-window means `u_av`/`h_av`, forward-backward gravity-wave pairing) or `ssp_rk2` (Heun, experimental).
 - The Coriolis reference the fast loop subtracts is evaluated on the same velocity the slow tendency used, under the same weights, so the two cancel exactly (MOM6 `ubt_Cor`). Evaluating it at stage entry instead pumped a barotropic seiche.
 - Both vertical-friction tridiagonals gained an `nz = 1` path. `scratch_3d` buffers are attached holding their host payload (zero from `init`) rather than as allocator leftovers.
-- **Open (`ssp_rk2`):** Heun amplifies oscillatory modes at `(ω·Δt)⁴`, so a stratified rest state manufactures internal-wave energy. It is gated by `validation_examples/ocean/eady/resting_stratified_channel.nml`, which every scheme must pass on magnitude. The *settle* criterion is a scoped expected failure. Options: retire `ssp_rk2`, or give the outer loop a neutral or dissipative option (forward-backward is neutral; an RK3 outer step damps at the same order). *Validate:* a motionless stratified periodic channel does not grow.
+- **Open (`ssp_rk2`):** Heun amplifies oscillatory modes at `(ω·Δt)⁴`, so a stratified rest state manufactures internal-wave energy. It is gated by `validation_examples/ocean/eady/resting_stratified_channel.toml`, which every scheme must pass on magnitude. The *settle* criterion is a scoped expected failure. Options: retire `ssp_rk2`, or give the outer loop a neutral or dissipative option (forward-backward is neutral; an RK3 outer step damps at the same order). *Validate:* a motionless stratified periodic channel does not grow.
 
 </details>
 

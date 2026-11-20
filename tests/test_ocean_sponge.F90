@@ -1,6 +1,6 @@
 !! Unit tests for the map-driven ocean sponge (PR-23,
 !! `rdb_ocean_sponge::ocean_sponge_t` + `ocean_sponge_apply_maps`, plus the
-!! `&ocean_sponge_nml damp_source="band"` map builder in
+!! `[ocean.sponge] damp_source="band"` map builder in
 !! `rdb_ocean_setup::configure_ocean_sponge`).
 !!
 !! See `docs/plans/PLAN_PR23_real_sponge.md` §9 for the full test list and
@@ -936,7 +936,7 @@ contains
 
    subroutine test_refresh_noop_for_ic(error)
       !! Default-off contract: with `target_source = "ic"` (the default)
-      !! the refresh is a bit-for-bit no-op, so every shipped namelist
+      !! the refresh is a bit-for-bit no-op, so every shipped input
       !! and every existing test is unaffected by this feature existing.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid

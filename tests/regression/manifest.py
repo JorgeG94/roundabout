@@ -1,6 +1,6 @@
 """Curated manifest of fast, physics-diverse OCEAN regression cases (P0).
 
-This is the single source of truth for *which* bathymetry-free ocean namelist
+This is the single source of truth for *which* bathymetry-free ocean input
 inputs the regression runner exercises, and *how short* each one is run. It is
 deliberately a hand-curated list (not a directory glob) so inclusion and the
 per-case run-length / timeout knobs are explicit and reviewable.
@@ -10,8 +10,8 @@ comparison (P1) and gcov coverage (P2) are separate phases.
 
 Each CASES entry is a dict:
     name        short unique id for the case (used for the scratch dir + report)
-    nml         repo-relative path to the committed namelist
-    n_steps     number of OUTER timesteps to run (the runner rewrites &time_nml
+    nml         repo-relative path to the committed input
+    n_steps     number of OUTER timesteps to run (the runner rewrites [time]
                 so t_end = n_steps * dt_fixed seconds; keep this SMALL)
     timeout_s   hard per-case wallclock cap (catches hangs / runaway substeps)
     backends    set of backends this case is valid on -- {"cpu", "gpu"}
@@ -486,7 +486,7 @@ CASES = [
     },
 
     # ---- MOM6 predictor-corrector split scheme -----------------------------
-    # These two PIN `&ocean_bt_nml split_scheme="pred_corr"` explicitly.
+    # These two PIN `[ocean.bt] split_scheme="pred_corr"` explicitly.
     # They were written when the predictor-corrector was the NON-default
     # scheme and existed to keep its production branches in
     # rdb_ocean_dyn.F90 (predictor stage, corrector on the time-mean
@@ -594,7 +594,7 @@ CASES = [
 # golden captured from a broken run passes forever.
 #
 # `STABILITY_CASES` is the answer to both: every one of the 68 tracked ocean
-# namelists, run long enough that its physics manifests, asserted against
+# inputs, run long enough that its physics manifests, asserted against
 # PHYSICS (finite / closed budgets / energy must not grow in an unforced case /
 # bounded CFL / the case's own stated claims) rather than against a stored
 # answer. It lives in its own module because it is large and independently

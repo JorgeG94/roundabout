@@ -546,7 +546,7 @@ contains
          call ocean_bc_state_init(bc_cart, grid, nz_ml=NZ, n_tracers=2)
          call ocean_bc_validate_fold(bc_cart)
          call check(error,.not. bc_cart%north_fold, &
-                    "T4: cartesian/wall bc must have north_fold = .false.")
+                    "T4: cartesian/wall bc must have north_fold = false")
          call ocean_bc_state_destroy(bc_cart)
          if (allocated(error)) exit checks
 
@@ -557,7 +557,7 @@ contains
          call ocean_bc_validate_periodic(bc_periodic)
          call ocean_bc_validate_fold(bc_periodic)
          call check(error,.not. bc_periodic%north_fold, &
-                    "T4: periodic-x + wall-north bc must have north_fold = .false.")
+                    "T4: periodic-x + wall-north bc must have north_fold = false")
          call ocean_bc_state_destroy(bc_periodic)
       end block checks
    end subroutine test_bit_identity

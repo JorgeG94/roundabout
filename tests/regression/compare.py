@@ -19,8 +19,8 @@ Guaranteeing a final-state print
 --------------------------------
 The committed nmls print diags/stats on an hours-or-days cadence, so a short
 regression run would otherwise only emit at t=0. run_regression.patch_input
-(force_emit=True, the default) rewrites `&logging_nml status_interval` and
-`&ocean_diag_nml dt_out` down to half an outer step (in seconds, after the
+(force_emit=True, the default) rewrites `[logging] status_interval` and
+`[ocean.diag] dt_out` down to half an outer step (in seconds, after the
 time_unit normalization) so BOTH fire every step -- the final step therefore
 always emits a usable summary. This module relies on that.
 

@@ -1,4 +1,4 @@
-!! Closure of the CICE-port sea ice (`&ocean_ice_nml scheme = "cice"`): the named-term conservation ledger
+!! Closure of the CICE-port sea ice (`[ocean.ice] scheme = "cice"`): the named-term conservation ledger
 !! (`rdb_ice_ledger_terms`) closes stage by stage, what the ice hands over is what the ocean receives, and
 !! ocean + ice together conserve salt, water and heat against the atmosphere that was delivered (D11.5).
 !! Everything runs through the production engine path (`engine_step` -> `engine_step_ice` -> `engine_step_finalize`).
@@ -167,7 +167,7 @@ contains
    end subroutine collect_cice_closure_tests
 
    ! ------------------------------------------------------------------
-   ! namelists and engine plumbing
+   ! inputs and engine plumbing
    ! ------------------------------------------------------------------
 
    pure function has_nan(line) result(yes)
@@ -1502,7 +1502,7 @@ contains
    end subroutine test_global_prescribed_frazil
 
    ! ------------------------------------------------------------------
-   ! G: real fresh-water mass (`&ocean_forcing_nml freshwater = "mass"`) with the ice loading
+   ! G: real fresh-water mass (`[ocean.forcing] freshwater = "mass"`) with the ice loading
    ! ------------------------------------------------------------------
 
    function mass_nml(base) result(nml)

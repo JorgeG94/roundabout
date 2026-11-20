@@ -108,7 +108,7 @@ contains
 
    pure function bt_wide_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the wide-halo BT shadow state
-      !! (0 when unallocated, i.e. whenever `&ocean_bt_nml bt_halo = 0`).
+      !! (0 when unallocated, i.e. whenever `[ocean.bt] bt_halo = 0`).
       !!
       !! Every term here is device-mapped by `bt_wide_enter_data_impl` and
       !! was previously counted by nothing — `ocean_dyn_bytes` omitted the

@@ -1,7 +1,7 @@
 # Coastal-noise box
 
 A minutes-scale reproducer for the surface-vorticity symptoms of the 1/4-degree
-Southern Ocean run (`southern_ocean_025_wind.nml`): extra relative vorticity at
+Southern Ocean run (`southern_ocean_025_wind.toml`): extra relative vorticity at
 coastlines and in the north sponge band.  It keeps that run's physics stack
 (z_fixed 50-level tanh grid, Wright EOS, FV-MOM6 PGF, SADOURNY75_ENSTRO,
 Smagorinsky + SMAGORINSKY_AH 0.06, quadratic drag, dt 900 s, OBC_SPONGE north
@@ -10,7 +10,7 @@ coast, a continental slope, an island and a 5-degree north sponge.
 
 ```bash
 python3 make_inputs.py                      # bathy.nc + ic.nc (stdlib only)
-CUDA_VISIBLE_DEVICES=0 ../../../build_cc70/rdb coastal_noise_box.nml   # ~2 min / 30 days, 1 V100
+CUDA_VISIBLE_DEVICES=0 ../../../build_cc70/rdb coastal_noise_box.toml   # ~2 min / 30 days, 1 V100
 python3 metrics.py .                        # needs ncdump on PATH
 ```
 
@@ -46,7 +46,7 @@ Numbers are day 30 unless marked; "base" is the tree before the two fixes below.
 | same, closed by a periodic land strip | 4.7 | 0.01 | – | – |
 | channel, base | 8.8 | 0.16 | 6.6e-6 | 13.6 |
 | channel, no sponge | 11.9 | 0.07 | 7.2e-7 | 1.5 |
-| channel, sponge `relax_tracers = .false.` | 8.6 | 0.16 | 2.5e-7 | 0.5 |
+| channel, sponge `relax_tracers = false` | 8.6 | 0.16 | 2.5e-7 | 0.5 |
 | channel, sponge-reference fix | 9.2 | 0.15 | 2.5e-7 | 0.5 |
 | vertical staircase walls, base, day 120 | 1.6 | 0.17 | | |
 | vertical staircase walls, free-slip viscosity fix, day 120 | 1.0 | 0.11 | | |
@@ -54,7 +54,7 @@ Numbers are day 30 unless marked; "base" is the tree before the two fixes below.
 * **Straight walls carry no 2dx signal** (nyq 0.01), whether the wall is a
   domain edge or an interior land strip.  The coastal excess there is the
   resolved boundary current.
-* **The sponge band was a defect.**  Under `z_fixed` + `&ocean_zinit_nml` the
+* **The sponge band was a defect.**  Under `z_fixed` + `[ocean.zinit]` the
   layers were seeded sigma-style, the `target_source = "ic"` reference was
   snapshotted on those layers, and only then did the step-1 regrid move the
   state onto the z_fixed grid.  The sponge therefore relaxed each layer toward

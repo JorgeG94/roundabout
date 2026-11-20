@@ -62,7 +62,7 @@ module rdb_ice_enthalpy
       !! value as the ocean-side `TFR_S_COEFF` (rdb_eos) by
       !! construction — SIS2 parity on both sides of the seam.
       !!
-      !! DELIBERATELY NOT switched by `&ocean_eos_nml tfreeze_set`.
+      !! DELIBERATELY NOT switched by `[ocean.eos] tfreeze_set`.
       !! That knob selects the OCEAN-side liquidus that
       !! `eos_freezing_point` returns (the sea-surface freezing
       !! temperature the frazil / basal-flux seam works against); THIS

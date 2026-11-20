@@ -2,8 +2,8 @@
 
 Why this exists
 ===============
-`stability_manifest.py` runs each shipped namelist under whatever vertical
-coordinate that namelist happens to choose.  Nothing in the tree runs ONE
+`stability_manifest.py` runs each shipped input under whatever vertical
+coordinate that input happens to choose.  Nothing in the tree runs ONE
 problem under ALL of them, so nothing in the tree can answer the question a
 user actually has: *which coordinate is trustworthy on which geometry?*
 
@@ -15,13 +15,13 @@ hid, simultaneously:
     with the dimensionless `k/nz`) -- with `sum target_h = H + eta` still
     exact, which is why no conservation test caught it;
   * `VCOORD_ZSTAR_SIGMA` being numerically indistinguishable from
-    `VCOORD_SIGMA` in all 21 shipped namelists that select it;
+    `VCOORD_SIGMA` in all 21 shipped inputs that select it;
   * `VCOORD_ZSTAR_FULL` resolving the WRONG HALF of the column under a lid;
   * a rest-state growth mode over ANY sloping boundary that no shipped case
     saw, because every sloping case carries viscosity or runs short;
   * sigma failing outright on steep bathymetry (`rx0 = 0.73`).
 
-Every one of those is invisible to a per-namelist suite and obvious in a
+Every one of those is invisible to a per-input suite and obvious in a
 family x geometry table.  Producing that table is what this module is for --
 and the table itself, recorded in `tests/regression/README.md`, IS the
 product.
@@ -30,12 +30,12 @@ How it works
 ============
 ONE canonical template (`vcoord_templates/rest_matrix.toml.in`) plus one
 parameter dict per PROBLEM and one per FAMILY.  `build_matrix()` emits a
-namelist per cell into `tmp_local_artifacts/vcoord_matrix/` at import time
+input per cell into `tmp_local_artifacts/vcoord_matrix/` at import time
 and returns manifest rows built through `stability_manifest._case`.  The
 emitted files are plain text and are left on disk after a run, so any cell
 can be reproduced by hand with `./rdb <that file>`.
 
-Dozens of near-identical namelists are deliberately NOT checked in: they
+Dozens of near-identical inputs are deliberately NOT checked in: they
 rot, a reader cannot tell which cell of the matrix a given file is, and a
 change to the shared problem then has to be applied by hand N times.
 
@@ -137,7 +137,7 @@ factor of ~2.
 NOT DONE, and not stubbed
 =========================
   * The NONLINEAR (exponential thermocline) stratification axis.
-    `&ocean_zinit_nml source="linear"` is AFFINE in z by construction and
+    `[ocean.zinit] source="linear"` is AFFINE in z by construction and
     `source="file"` aborts at `validate_config` (PR-23b), so there is no way
     to lay a non-affine rest state today without either a new analytic
     profile or the file reader.  The axis is absent rather than faked.
@@ -184,7 +184,7 @@ CAVITY_DEPTH = 720.0            # ISOMIP+ z_b,deep
 #     stress form cancel -- so KH maps onto `nu_h` one-for-one in DEFINITION.
 #     The OPERATORS differ where h varies between neighbours: MOM6
 #     thickness-weights and conserves momentum, the scalar path does neither.
-#     roundabout's `stress_tensor=.true.` IS MOM6's operator (tension/shear
+#     roundabout's `stress_tensor=true` IS MOM6's operator (tension/shear
 #     stress times h, divided by h_u + h_neglect, per-cell BOUND_KH clamp,
 #     coast-masked), so the viscous leg selects it.  It is refused under
 #     `zfixed_closed_faces`, so the z_fixed cells carry the scalar operator
@@ -211,7 +211,7 @@ CAVITY_DEPTH = 720.0            # ISOMIP+ z_b,deep
 #     reproduces the stress exactly.
 #   * NOT carried: MOM6's KV = 1e-4 m2/s vertical viscosity. Its damping of
 #     the first baroclinic mode, KV * (pi/H)^2 ~ 1e-9 1/s, is four decades
-#     under the growth rates this matrix measures; `use_closure=.false.`
+#     under the growth rates this matrix measures; `use_closure=false`
 #     keeps KD = 0 too, which the tracer-extrema gate needs.
 MOM6_SEAMOUNT_DX = 5000.0
 MOM6_KH = 1000.0
@@ -230,7 +230,7 @@ LEGS = {
                 "bdrag_r": VISC_BDRAG_R, "bdrag_hbbl": MOM6_HBBL,
                 "stress_tensor": True},
 }
-# `stress_tensor` is refused under `&vcoord_nml zfixed_closed_faces`, so the
+# `stress_tensor` is refused under `[vcoord] zfixed_closed_faces`, so the
 # z_fixed and zstar cells of the viscous leg carry the scalar velocity
 # Laplacian.
 SCALAR_LAPLACIAN_FAMILIES = ("z_fixed", "zstar")
@@ -294,7 +294,7 @@ FAMILIES = [
      "FRACTIONALLY, so it is immune to the ZSIGMA units defect. With the "
      "uniform default table its deep branch is numerically "
      "indistinguishable from sigma, which is precisely what this row is "
-     "here to make visible: 21 shipped namelists select it believing "
+     "here to make visible: 21 shipped inputs select it believing "
      "otherwise."),
     ("zstar_full", "zstar_full", "run", None,
      "zstar_h_surf_target = 20.0\nzstar_n_surf = 3",
@@ -304,7 +304,7 @@ FAMILIES = [
     ("z_fixed", "z_fixed", "run", None, "zfixed_closed_faces = true",
      "quasi-geopotential: fixed-z interfaces with bed-side layers vanishing "
      "to the inert filler. `z_fixed_h_ref` is taken from "
-     "`&ocean_topo_nml max_depth`, so the nominal spacing is max_depth/nz. "
+     "`[ocean.topo] max_depth`, so the nominal spacing is max_depth/nz. "
      "Runs with `zfixed_closed_faces` (the staircase faces closed, the "
      "barotropic mode open), which is how v0.1.0 recommends z_fixed be "
      "run and without which the staircase PGF residual is not bounded."),
@@ -334,7 +334,7 @@ FAMILIES = [
      "refusal was dropped without fixing it (a regression)."),
 ]
 
-# Families the CAVITY (`&ocean_cavity_dyn_nml enable`) accepts.  Everything
+# Families the CAVITY (`[ocean.cavity_dyn] enable`) accepts.  Everything
 # else is refused fail-loud by `validate_config`, each with its own reason --
 # the one that rescales the live column and so follows the ice base for free,
 # plus the one that has been TAUGHT the ice base.  `zstar` left the set when
@@ -565,14 +565,14 @@ XFAIL_REASONS = {
         "upwind donor flips across the step's thickness jump, returns a "
         "wrong-sign transport, and the layer eta leaves the barotropic "
         "eta_end, pumping the (under pred_corr undamped) 2 dx barotropic "
-        "mode. Fixed by &ocean_continuity_nml renorm_consistent_flux "
+        "mode. Fixed by [ocean.continuity] renorm_consistent_flux "
         "(MOM6 zonal_flux_adjust parity), which with MOM6's bebt = 0.1 is "
         "the model DEFAULT since 2026-09-22; the 2026-09-23 two-toolchain "
         "re-pin measured no cell left carrying this reason.",
     "finding_stress_density":
         "FINDING A (viscous leg) -- NOT expected, NOT hidden. The "
         "thickness-weighted stress-divergence viscosity "
-        "(`stress_tensor=.true.`, MOM6's operator) drives a thin layer of a "
+        "(`stress_tensor=true`, MOM6's operator) drives a thin layer of a "
         "density-space column negative within the first 4-8 outer steps "
         "(mm to dm of negative h, every sloping geometry, both split "
         "schemes); the scalar velocity Laplacian and no viscosity at all "
@@ -770,7 +770,7 @@ def problem_truncation_estimate(prob, n2):
 
 
 # ---------------------------------------------------------------------------
-# Namelist emission
+# Input emission
 # ---------------------------------------------------------------------------
 def _fmt(v):
     if isinstance(v, bool):
@@ -781,7 +781,7 @@ def _fmt(v):
 
 
 def render(name, prob, fam, strat, eos, remap="ppm", leg="inviscid"):
-    """Render one matrix cell's namelist text from the canonical template."""
+    """Render one matrix cell's input text from the canonical template."""
     fam_id, vcoord, status, pin, extra, _note = fam
     lg = LEGS[leg]
     dt_dz, ds_dz, _n2, _sn = STRATIFICATIONS[strat]
@@ -790,7 +790,7 @@ def render(name, prob, fam, strat, eos, remap="ppm", leg="inviscid"):
 
     bathy_block = ""
     if prob["topo"] == "file":
-        # `bathymetry_file` lives in `&output_nml`; the path is RELATIVE so it
+        # `bathymetry_file` lives in `[output]`; the path is RELATIVE so it
         # resolves against the scratch dir the setup hook writes it into,
         # which is also the binary's cwd.
         bathy_block = 'bathymetry_file = "bathy.nc"'
@@ -855,7 +855,7 @@ def _bathy_setup(prob):
     """The `setup` argv that writes this geometry's bathymetry NetCDF.
 
     Run by `stability.run_case` in the case's scratch dir, which is also the
-    binary's cwd -- so the namelist's relative `bathymetry_file = "bathy.nc"`
+    binary's cwd -- so the input's relative `bathymetry_file = "bathy.nc"`
     resolves to exactly this file.
     """
     kind, kw = prob["bathy"]
@@ -878,7 +878,7 @@ T1_STEPS = 4320          # 30 days at dt = 600
 T2_STEPS = 480           # 3.33 days
 # The SEAMOUNT problems (the `seamount` pair and the `rx0` ladder) run 10 days
 # at tier 1 (maintainer decision, 2026-09-25).  Under the MOM6 barotropic
-# split (`&ocean_bt_nml bc_pgf_forcing`, the default) the depth mean of the
+# split (`[ocean.bt] bc_pgf_forcing`, the default) the depth mean of the
 # sigma-family PGF truncation over a seamount forces the barotropic mode, as
 # it does in MOM6; the legacy split discarded it.  The inviscid legs'
 # sloping-boundary mode -- the one MOM6 shares (MOM6_EVIDENCE) -- then reaches
@@ -896,7 +896,7 @@ REST_SIGMA_MAX = 0.05 / 2.0 / 86400.0
 
 
 def build_matrix(_case, bars, out_dir=None):
-    """Emit every cell's namelist and return its manifest rows.
+    """Emit every cell's input and return its manifest rows.
 
     `_case` is `stability_manifest._case` and `bars` the module's bar
     constants, both passed in rather than imported, so this module has NO
@@ -969,7 +969,7 @@ def cell_name(leg, pid, fam_id, strat="linear", eos="linear"):
 
 def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
          pin, fam_note, leg="inviscid"):
-    """Build one matrix cell: write its namelist, return its manifest row."""
+    """Build one matrix cell: write its input, return its manifest row."""
     fam_id = fam[0]
     name = cell_name(leg, pid, fam_id, strat, eos)
 
@@ -1055,7 +1055,7 @@ def _refusal_reason(pid, prob, fam, is_cavity):
     fam_id = fam[0]
     if is_cavity and fam_id not in CAVITY_ACCEPTED:
         return ("REFUSED BY DESIGN, and this row asserts the refusal. "
-                "`&ocean_cavity_dyn_nml enable=.true.` accepts "
+                "`[ocean.cavity_dyn] enable=true` accepts "
                 "vcoord_type='sigma' or 'z_fixed' only -- the family "
                 "that rescales the live column and so follows the ice "
                 "base for free, plus the one that has been TAUGHT it "

@@ -33,7 +33,7 @@ PP81 interior (vmix_compute_pp81)
 The interior closure itself is selected by `vmix%interior_closure`
 (`VMIX_INTERIOR_PP81` = the only implemented one; `VMIX_INTERIOR_LARGE94` /
 `VMIX_INTERIOR_CVMIX` are reserved-but-unwired and **fail loud**, they are not
-silent fall-throughs). It has no namelist key today — `&ocean_vmix_nml
+silent fall-throughs). It has no input key today — `[ocean.vmix]
 use_closure` is the master on/off switch.
 
 ### Interface contract a vertical closure must satisfy
@@ -48,7 +48,7 @@ use_closure` is the master on/off switch.
   apply your own explicit diffusive flux and do **not** clamp — clamping is
   `vmix_assemble`'s job, and doing it upstream double-applies the floor.
 - **`ks` is derived, never written by a closure.** `vmix_split_kd_heat_salt`
-  produces `ks` from `kt` (with the `&ocean_ddiff_nml` double-diffusion
+  produces `ks` from `kt` (with the `[ocean.ddiff]` double-diffusion
   asymmetry folded in when enabled) as the last statement before the gate. A new
   closure writes `kv`/`kt` only.
 - **Persistent state** lives on your own slot type (e.g. `ocean_epbl_t`,
@@ -62,8 +62,8 @@ use_closure` is the master on/off switch.
 
 ## Recipe (ordered) — a new vertical closure `<name>`
 
-1. **Config knobs** — a new `&ocean_<name>_nml` group with `enable = .false.`
-   per [add_namelist_knob.md](add_namelist_knob.md). Default off ⇒ bit-identical.
+1. **Config knobs** — a new `[ocean.<name>]` group with `enable = false`
+   per [add_input_knob.md](add_input_knob.md). Default off ⇒ bit-identical.
 2. **Slot type + fields** — `ocean_<name>_t` in
    `src/parameterizations/vertical/rdb_ocean_<name>.F90`, with the
    interface-shaped (`nz+1`) persistent fields it needs and bound
@@ -91,10 +91,10 @@ use_closure` is the master on/off switch.
    (mutual exclusions, "requires X" checks). Fail loud; never silently downgrade.
 7. **Test + matrix row** — add `tests/test_ocean_<name>.F90` to
    `tests/CMakeLists.txt` with regime `ocean` (see the ctest row format in
-   [add_namelist_knob.md](add_namelist_knob.md)), and a row to
+   [add_input_knob.md](add_input_knob.md)), and a row to
    `docs/CLOSURE_MATRIX.md` (the drift hook fails the build if a cited test is
-   unregistered, and the curated-knob list there covers `&ocean_hvisc_nml`,
-   `&ocean_bdrag_nml` and `&ocean_kappa_shear_nml` by name).
+   unregistered, and the curated-knob list there covers `[ocean.hvisc]`,
+   `[ocean.bdrag]` and `[ocean.kappa_shear]` by name).
 
 ## Lateral closures
 
@@ -103,7 +103,7 @@ Under `src/parameterizations/lateral/`:
 - `rdb_ocean_lateral_mix.F90` — the flow-aware closures, dispatched by
   `select case (this%closure)` over `LMIX_NONE` / `LMIX_LEITH` /
   `LMIX_SMAGORINSKY` / `LMIX_BIHARMONIC` / `LMIX_LEITH_BIHARM`, parsed from
-  `&ocean_hvisc_nml lateral_closure` by `parse_lateral_closure`. The
+  `[ocean.hvisc] lateral_closure` by `parse_lateral_closure`. The
   dispatcher is **fail-loud**: `lateral_closure_is_implemented` /
   `LMIX_INVALID` mean a typo aborts rather than silently selecting `LMIX_NONE`.
   Harmonic closures fill per-face `ah_face_x/y`; the biharmonic one fills

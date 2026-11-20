@@ -60,7 +60,7 @@ module test_ocean_bottom_drag_live_kbot
    real(wp), parameter :: CD = 2.5e-3_wp
    real(wp), parameter :: DT = 600.0_wp
    real(wp), parameter :: PISTON = 1.0e-3_wp
-      !! `&ocean_bdrag_nml` constant-piston test value (MOM6 `bbl_piston`);
+      !! `[ocean.bdrag]` constant-piston test value (MOM6 `bbl_piston`);
       !! paired with `HBBL_THICK` below gives `kv_bbl = PISTON*HBBL_THICK`.
    real(wp), parameter :: HBBL_THICK = 5.0_wp
       !! `< 0.5*H_LIVE`, so the piston's `min(0.5*hvel, bbl_thick)` floor

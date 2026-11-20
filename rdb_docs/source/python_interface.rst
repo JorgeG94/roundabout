@@ -475,7 +475,7 @@ is the honest way to record what a script ran.
 
 Whatever the entry point, **that string is the only thing that crosses the
 ABI**. A curated model, a hand-built ``Config`` and a config file all end
-up in ``read_config_from_string``, through the identical parse, the identical
+up in ``read_config_from_toml_string``, through the identical parse, the identical
 cross-checks and the identical ``validate_config``. There is no second,
 mirrored configuration path to fall out of sync.
 
@@ -733,7 +733,7 @@ any periodic edge — uses it automatically. It is also directly available:
 
 .. code-block:: python
 
-   model = rdb.Model.pending(nml)          # config parsed and validated;
+   model = rdb.Model.pending(config_toml)          # config parsed and validated;
                                            # nothing allocated, no device map
    model.stage_bathymetry(depth, rdb.BATHY_DEPTH_POSITIVE_DOWN)
    model.stage_topology(periodic_x=True, periodic_y=False)
@@ -757,7 +757,7 @@ built-in initial condition before any setup-time snapshot is taken:
 
 .. code-block:: python
 
-   model = rdb.Model.pending(nml)
+   model = rdb.Model.pending(config_toml)
    model.stage_h(h)                        # (nx, ny, nz) metres, k=0 = bed
    model.stage_tracer("temperature", T)    # (nx, ny, nz) concentration
    model.stage_tracer("salinity", S)
@@ -799,7 +799,7 @@ the land-face mask and the seam ghosts. After a batch of such writes, call
 
 .. code-block:: python
 
-   model = rdb.Model(nml)
+   model = rdb.Model(config_toml)
    model.h[...] = h                 # set h before the tracers
    model.temperature[...] = T
    model.u[...] = u
@@ -836,7 +836,7 @@ model's own pressure-gradient kernel:
                                           -((j + .5 - cy) / ay) ** 2)
           for k in range(nz)] for j in range(ny)] for i in range(nx)]
 
-   model = rdb.Model.pending(nml)        # thermodynamics on, f-plane
+   model = rdb.Model.pending(config_toml)        # thermodynamics on, f-plane
    model.stage_tracer("temperature", T)
    model.stage_balance("geostrophic", ref_level="bottom_rest")
    model.finalize()                      # u/v now geostrophic
@@ -863,7 +863,7 @@ Rules:
   :math:`|f| \ge 10^{-6}\,\mathrm{s^{-1}}` on every open face. A refusal raises
   :class:`~rdb.RdbInitialConditionError` and leaves ``u``/``v`` untouched; a
   stepped model raises :class:`~rdb.RdbSetupError`.
-* With ``enable_thermodynamics = .false.`` the density is the prescribed
+* With ``enable_thermodynamics = false`` the density is the prescribed
   ``layer_rho_init`` and your temperature/salinity cannot change it, so
   staging or setting T/S and then requesting a balance raises
   :class:`~rdb.RdbInitialConditionError` (enable thermodynamics, or set the
@@ -984,7 +984,7 @@ a pointer dereference and costs nothing.
 
 .. code-block:: python
 
-   with rdb.Model(nml) as model:
+   with rdb.Model(config_toml) as model:
        h = model.h                    # issued at generation 0
        print(h._gen)                  # 0
 

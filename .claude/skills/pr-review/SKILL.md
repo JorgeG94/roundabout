@@ -145,7 +145,7 @@ when every CI leg is green.
 
 ### 3e. Knobs — the plumbing that fails silently
 
-A new namelist knob (`docs/howto/add_namelist_knob.md`) needs **all** of:
+A new input knob (`docs/howto/add_input_knob.md`) needs **all** of:
 the field and its default in `src/core/rdb_config.F90`; registration in that
 group's `register_ocean_<group>`; validation if any combination is illegal
 (fail loud); propagation in `src/core/ocean/state/rdb_ocean_setup.F90` (or its
@@ -157,7 +157,7 @@ in `python/tests/test_config.py` — **regenerated with
 `tools/gen_python_config.py`, never text-merged**. After a rebase, check the
 three counts still agree.
 
-- **Default off ⇒ bit-identical** for every existing namelist and test (KPP
+- **Default off ⇒ bit-identical** for every existing input and test (KPP
   and ALE remap are the on-by-default exceptions). A new default-on knob
   changes answers — see 3f.
 - Check the knob does not already exist under another name.

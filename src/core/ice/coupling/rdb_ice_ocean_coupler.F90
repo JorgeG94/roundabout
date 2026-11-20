@@ -17,7 +17,7 @@ module rdb_ice_ocean_coupler
    !! computed with that sign in `ice_frazil_uptake_impl`) is added
    !! directly, unnegated.
    !!
-   !! OWNERSHIP: with ice on and `&ocean_forcing_nml enable_components =
+   !! OWNERSHIP: with ice on and `[ocean.forcing] enable_components =
    !! .false.` (the default), this coupler OWNS the `Q_salt` field-fill —
    !! any future field-fill path (Area-A3 data-override) composing with
    !! sea ice must add into `salt_flux_diag` or fold in here, not
@@ -350,14 +350,14 @@ contains
       !! `tau` pair inherits the same obligation.
       !!
       !! **Momentum-budget caveat (F5, D7).**  This blend gives the ocean
-      !! `(1-a)*tau_a + a*fxoc` per face.  With `&ocean_ice_nml
+      !! `(1-a)*tau_a + a*fxoc` per face.  With `[ocean.ice]
       !! a_face_stress=.false.` (default, legacy) the ice absorbs the FULL
       !! wind stress `tau_a` and sheds the FULL drag `fxoc` — so at
       !! fractional cover `a in (0,1)` the coupled system sees a spurious
       !! net input `(1-a)*(tau_a - fxoc)` per face.  It is exact only at
       !! `a in {0,1}` and at steady free drift (`fxoc == tau_a`); a
       !! generic transient at fractional `ci` (ITD) leaks momentum.
-      !! `&ocean_ice_nml a_face_stress=.true.` (PR 62,
+      !! `[ocean.ice] a_face_stress=true` (PR 62,
       !! `evp_u_momentum_impl`/`evp_v_momentum_impl` in `rdb_ice_evp`)
       !! CLOSES this identically, for every `a` and in every transient, by
       !! weighting BOTH the wind AND the ice-ocean drag by the same `a_u`
@@ -412,11 +412,11 @@ contains
       ! (`rdb_ocean_vmix`) and EPBL (`rdb_ocean_epbl`) read
       ! `stress%stress_mag` and NOTHING else, and no other per-step path
       ! refreshes it (the wind setters run at configure; the data-override
-      ! seam refresh runs only under `&ocean_dataovr_nml`), so without this
+      ! seam refresh runs only under `[ocean.dataovr]`), so without this
       ! both schemes mix on the configure-time WIND under ice — identically
       ! zero, and therefore `u_* == 0`, in a windless ice-covered run.
       ! Device-resident and allocation-free.  Reached only through this
-      ! routine, which the engine calls only when `&ocean_ice_nml enable`
+      ! routine, which the engine calls only when `[ocean.ice] enable`
       ! AND `dynamics` are both on — an ice-free run never executes it and
       ! stays bit-identical.  Gate: `test_ocean_ice_stress_mag`.
       if (present(grid) .and. present(bc)) then

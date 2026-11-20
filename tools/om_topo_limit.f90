@@ -9,7 +9,7 @@ program om_topo_limit
    !! capped at `max_depth`; every other cell is land, `depth = 0`. A raw
    !! `topog.nc`-style file (`depth`, `wet`) — unlike the already-limited
    !! `bathy_om1deg.nc` `tools/om1deg_prepare_inputs.py` builds for OM_1deg —
-   !! needs this applied before `&ocean_topo_nml topo_config = "file"` reads
+   !! needs this applied before `[ocean.topo] topo_config = "file"` reads
    !! it: `roundabout`'s bathymetry reader takes `depth` as given, with no
    !! floor/cap of its own. Modifies `depth`/`wet` IN PLACE (same file, same
    !! shape); every other variable is untouched.

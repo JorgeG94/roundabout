@@ -1,7 +1,7 @@
 !! State slot of the CICE-port sea ice (Icepack layout; roundabout-original).
 module rdb_ice_cice_state
    !! `ice_cice_state_t` holds the prognostic state of the CICE-port ice
-   !! (`&ocean_ice_nml scheme = "cice"`), laid out as named structure-of-arrays
+   !! (`[ocean.ice] scheme = "cice"`), laid out as named structure-of-arrays
    !! with the HORIZONTAL indices FIRST and the ocean's ghost extents
    !! (`nx_total, ny_total`), exactly the table of MASTER_PLAN C.1:
    !!

@@ -28,9 +28,9 @@ module rdb_ice_cice_adapters
    !! `sw_source = "q_sw"` the shortwave through the ice penetrates like any other.  The values are
    !! grid-cell means (`fhocn`, `fswthru`, `fsalt` are already weighted by the ice area), and the
    !! only assembler variant that scales them, the ice-shelf cover twin (`1 - cover_frac`), runs
-   !! only under `&ocean_cavity_dyn_nml enable`, which this scheme refuses.  The scheme requires
+   !! only under `[ocean.cavity_dyn] enable`, which this scheme refuses.  The scheme requires
    !! `enable_components`; the components-off branch below (`Q_heat`/`Q_salt` overwrite, the SIS2
-   !! couplers' form) is not reachable from a validated namelist and is kept for the equivalence
+   !! couplers' form) is not reachable from a validated input and is kept for the equivalence
    !! test of the adapters.  Under it the shortwave sits inside `Q_heat` and does not penetrate.
    !!
    !! **Seam ghosts.**  The adapters write OWNED cells; the ocean's surface-flux application
@@ -38,7 +38,7 @@ module rdb_ice_cice_adapters
    !! exchange (`ocean_halo_exchange_centre_field`: two-pass, periodic wrap, tripolar fold)
    !! of every field it wrote (needs `ocean_halo_init`; a no-op on one non-periodic rank).
    !!
-   !! **Real-mass form (`&ocean_forcing_nml freshwater = "mass"`).**  The ice's fresh water is REAL
+   !! **Real-mass form (`[ocean.forcing] freshwater = "mass"`).**  The ice's fresh water is REAL
    !! volume: `seaice_melt = fresh` [kg m-2 s-1, window mean, + into the ocean] is written next to the
    !! ocean's other mass fluxes and `ocean_surface_flux_assemble` sums it into `fw_net`, which
    !! `ocean_surface_fw_mass_step` spends as a thickness change of the first live layer (ice growth
@@ -49,7 +49,7 @@ module rdb_ice_cice_adapters
    !! `-S*fresh`).  The boundary-layer buoyancy forcing still sees the fresh water: `fw_virtual_step`
    !! carries `seaice_melt` in its `salt_fw` under mass, and the tracer deposit reads
    !! `Q_salt_tracer = Q_salt - salt_fw`, so the virtual term reaches the tracers never.  The ice's
-   !! weight rides the surface pressure (`&ocean_psurf_nml ice_load`, required with it), so the
+   !! weight rides the surface pressure (`[ocean.psurf] ice_load`, required with it), so the
    !! water the ice takes leaves from under the ice WITHOUT a sea-surface step (Campin et al. 2008).
    !! The two forms never mix in one run; the rest of this paragraph describes the virtual form.
    !!
@@ -96,7 +96,7 @@ module rdb_ice_cice_adapters
    !! **Precipitation through the ice (limits, stated plainly).**  `fresh` contains the rain that falls on
    !! the ice-covered fraction (`frain*aice`, booked by the ice step so its own water ledger closes).  The
    !! ocean's own precipitation on the open fraction (`lprec`, `fprec`: weight `aice0`) is enthalpy-only
-   !! under `&ocean_forcing_nml freshwater = "none"` (no mass, no salt term), so under a prescribed atmosphere
+   !! under `[ocean.forcing] freshwater = "none"` (no mass, no salt term), so under a prescribed atmosphere
    !! the engine hook removes the rain-through term from the window mean of `fresh` before the hand-over:
    !! RAIN is then treated alike on both shares (no dilution).  It is NOT alike for SNOW: snow on open water
    !! never freshens the ocean, while snow that falls on ice is stored and freshens the ocean when it melts

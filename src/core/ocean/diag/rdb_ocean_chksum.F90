@@ -22,7 +22,7 @@ module rdb_ocean_chksum
    !! contaminated field can print plausible min/max — `nonfin` is the
    !! authoritative corruption signal; `sum` goes NaN with the field.
    !!
-   !! Gated by `&ocean_debug_nml chksum` with an optional
+   !! Gated by `[ocean.debug] chksum` with an optional
    !! `[chksum_start_step, chksum_end_step]` outer-step window (mirrors
    !! debug_ke_attr).  Default off => bit-identical (untaken branches).
    !! Single-rank semantics: sums are per-rank (no halo reduction);
@@ -64,7 +64,7 @@ module rdb_ocean_chksum
       !! Config + one-shot header state.  Lives on `ocean_dyn_t`;
       !! host-only (never device-mapped).
       logical :: enable = .false.
-         !! Master gate — `&ocean_debug_nml chksum`.
+         !! Master gate — `[ocean.debug] chksum`.
       integer :: start_step = 0
          !! First outer step to sample (0 = from the start).
       integer :: end_step = 0

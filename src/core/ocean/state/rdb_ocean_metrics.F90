@@ -73,7 +73,7 @@ module rdb_ocean_metrics
    public :: CORIOLIS_SCHEME_BETA_PLANE, CORIOLIS_SCHEME_PLANETARY
    public :: parse_grid_config, parse_coriolis_scheme
 
-   ! ---- Grid-config enum (mirrors `&ocean_grid_nml grid_config`) ----
+   ! ---- Grid-config enum (mirrors `[ocean.grid] grid_config`) ----
    integer, parameter :: GRID_CONFIG_CARTESIAN = 0
       !! Uniform Cartesian: every metric constant (bit-identity gate).
    integer, parameter :: GRID_CONFIG_SPHERICAL = 1
@@ -84,7 +84,7 @@ module rdb_ocean_metrics
       !! Analytic TRIPOLAR (Murray 1996): lon-lat below `phi_join`,
       !! bipolar Arctic cap above.  See `metrics_fill_tripolar`.
 
-   ! ---- Coriolis-scheme enum (mirrors `&ocean_grid_nml coriolis_scheme`) ----
+   ! ---- Coriolis-scheme enum (mirrors `[ocean.grid] coriolis_scheme`) ----
    integer, parameter :: CORIOLIS_SCHEME_BETA_PLANE = 0
       !! `f = f_0 + beta*(y - y_ref)`, y from the Cartesian coordinate.
    integer, parameter :: CORIOLIS_SCHEME_PLANETARY = 1
@@ -144,7 +144,7 @@ module rdb_ocean_metrics
 
       ! ---- Porous barriers (Adcroft 2013; see rdb_ocean_porous) ----
       logical :: use_porous = .false.
-         !! Master switch (`&ocean_porous_nml enable`).  OFF ⇒ the
+         !! Master switch (`[ocean.porous] enable`).  OFF ⇒ the
          !! `por_face_area_*` arrays stay at their `(1,1,1)` placeholder
          !! size and every transport kernel takes the un-narrowed
          !! `dy_cu` / `dx_cv` branch — byte-identical to a build without
@@ -182,7 +182,7 @@ module rdb_ocean_metrics
 
       ! ---- Partial-step z-level face closure (VCOORD_Z_FIXED) ----
       logical :: use_closed_faces = .false.
-         !! Master switch (`&vcoord_nml zfixed_closed_faces`), latched by
+         !! Master switch (`[vcoord] zfixed_closed_faces`), latched by
          !! `configure_ocean_closed_faces`.  OFF ⇒ `open_u`/`open_v` stay
          !! at their `(1,1,1)` placeholder size, no kernel branch is
          !! taken, byte-identical to a build without the feature.
@@ -228,7 +228,7 @@ module rdb_ocean_metrics
 
       ! ---- Static ice-shelf cavity geometry (P5.1; see rdb_ocean_cavity) ----
       logical :: use_cavity = .false.
-         !! Master switch (`&ocean_cavity_dyn_nml enable`), latched in
+         !! Master switch (`[ocean.cavity_dyn] enable`), latched in
          !! `ocean_state_init_from_config` BEFORE `init` so the allocation
          !! gate below can read it.  OFF ⇒ `z_draft` / `cover_frac` /
          !! `p_ice_ref` stay at their `(1,1)` placeholder size, `bt_H_ref`
@@ -571,7 +571,7 @@ contains
    subroutine metrics_porous_alloc(this, grid, nz)
       !! Grow the porous-barrier arrays from their `(1,1)`/`(1,1,1)`
       !! placeholder size to full face size.  Call ONLY when
-      !! `&ocean_porous_nml enable` is on, at configure time — i.e. after
+      !! `[ocean.porous] enable` is on, at configure time — i.e. after
       !! `init` and BEFORE `ocean_state_enter_data`, so the device map
       !! captures the final shapes (a realloc after `enter_data` would
       !! leave the device pointing at freed host memory).
@@ -612,7 +612,7 @@ contains
    subroutine metrics_closed_faces_alloc(this, grid, nz)
       !! Grow the z-level closed-face masks from their `(1,1,1)`
       !! placeholder to full face size.  Call ONLY when
-      !! `&vcoord_nml zfixed_closed_faces` is on, at configure time —
+      !! `[vcoord] zfixed_closed_faces` is on, at configure time —
       !! after `init` and BEFORE `ocean_state_enter_data`, so the device
       !! map captures the final shapes (a realloc after `enter_data`
       !! would leave the device pointing at freed host memory).
@@ -1191,7 +1191,7 @@ contains
       !! Topology cross-check (fail-loud, `OCEAN_STATUS_ERR_SETUP`): whether
       !! the file IS tripolar is read off the file itself
       !! (`supergrid_top_row_folds`), and must agree with `north_fold`
-      !! (the `&ocean_bc_nml north = "tripolar_fold"` tag) — a folded grid
+      !! (the `[ocean.bc] north = "tripolar_fold"` tag) — a folded grid
       !! with a north wall, or a fold tag on a grid whose top row does not
       !! fold, would silently exchange the wrong cells.  `periodic_x`
       !! requires the east and west node columns to lie on the same
@@ -1372,13 +1372,13 @@ contains
       file_folds = supergrid_top_row_folds(top_x, top_y)
       if (file_folds .and. .not. fold) then
          call fail("Supergrid "//trim(supergrid_file)//" is TRIPOLAR (its top node row "// &
-                   "folds onto itself, m <-> 2ni+2-m) but &ocean_bc_nml north is not "// &
+                   "folds onto itself, m <-> 2ni+2-m) but [ocean.bc] north is not "// &
                    "'tripolar_fold': the fold row would be treated as an ordinary edge", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
       if (fold .and. .not. file_folds) then
-         call fail("&ocean_bc_nml north = 'tripolar_fold' but the top node row of "// &
+         call fail("[ocean.bc] north = 'tripolar_fold' but the top node row of "// &
                    trim(supergrid_file)//" does not fold onto itself (m <-> 2ni+2-m): "// &
                    "this is not a tripolar grid", ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -1387,7 +1387,7 @@ contains
          y_scale = max(maxval(abs(sg_y)), 1.0_wp)
          y_seam_err = maxval(abs(sg_y(1, :) - sg_y(sg_nxp, :)))
          if (y_seam_err > 1.0e-9_wp*y_scale) then
-            call fail("&ocean_bc_nml west/east = 'periodic' but the west and east node "// &
+            call fail("[ocean.bc] west/east = 'periodic' but the west and east node "// &
                       "columns of "//trim(supergrid_file)//" are not the same line "// &
                       "(max |y(1,:) - y(nxp,:)| = "//to_string(y_seam_err)//")", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
@@ -2519,7 +2519,7 @@ contains
    ! =================================================================
 
    pure function parse_grid_config(s) result(cfg_enum)
-      !! Map a `&ocean_grid_nml grid_config` string onto its enum.
+      !! Map a `[ocean.grid] grid_config` string onto its enum.
       !! Unknown -> cartesian (the schema enum already validates the
       !! set; this is the canonical-name dispatch).
       character(len=*), intent(in) :: s
@@ -2537,7 +2537,7 @@ contains
    end function parse_grid_config
 
    pure function parse_coriolis_scheme(s) result(scheme_enum)
-      !! Map a `&ocean_grid_nml coriolis_scheme` string onto its enum.
+      !! Map a `[ocean.grid] coriolis_scheme` string onto its enum.
       character(len=*), intent(in) :: s
       integer :: scheme_enum
       select case (trim(s))

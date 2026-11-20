@@ -3,14 +3,14 @@
 
 Writes ``wind_jra55do_<year>_<avg>h.nc`` (default: daily means,
 ``$RDB_DATA_DIR/OM_1deg/wind_jra55do_1958_24h.nc``) in the layout the
-``&ocean_dataovr_nml`` ``tau_x``/``tau_y`` tags read:
+``[ocean.dataovr]`` ``tau_x``/``tau_y`` tags read:
 
 * ``taux(xf = 361, y = 320, time)`` on the u faces (the WEST face of T-cell
   ``i``, supergrid node ``(2i-1, 2j)``), ``tauy(x = 360, yf = 321, time)`` on
   the v faces (the SOUTH face, node ``(2i, 2j-1)``) — one face more than
   cells in the staggered direction, Fortran order, float32;
 * ``time`` in ``days since <year>-01-01`` at the bin centres (0.5, 1.5, ...
-  for daily bins), so the namelist needs ``t_offset = 0`` and
+  for daily bins), so the input needs ``t_offset = 0`` and
   ``cycle_period`` = the year's length.
 
 Method, per 3-hourly JRA55-do record (``uas``/``vas``, point values on the
@@ -155,7 +155,7 @@ def main():
 
     ndays = 366 if calendar.isleap(args.year) else 365
     print(f"\n{out}: {os.path.getsize(out) / 1e6:.1f} MB")
-    print("namelist (&ocean_dataovr_nml): time_mode = \"cyclic\", "
+    print("input ([ocean.dataovr]): time_mode = \"cyclic\", "
           f"cycle_period = {ndays * 86400.0:.1f}, t_offset = 0.0, "
           "tau_x_var = \"taux\", tau_y_var = \"tauy\"")
     return 0

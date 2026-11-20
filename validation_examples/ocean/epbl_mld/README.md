@@ -1,6 +1,6 @@
 # EPBL vs KPP — mixed-layer-depth comparison basin
 
-The canonical `double_gyre_mom6.nml` is adiabatic (NK=2 reduced
+The canonical `double_gyre_mom6.toml` is adiabatic (NK=2 reduced
 gravity), so it cannot exercise a surface boundary layer.  This setup
 is the thermally-active sibling built for comparing the surface
 mixing schemes: flat 600 m basin, 30 × 20 m sigma layers, the same
@@ -10,11 +10,11 @@ N² ≈ 2.5e-5 s⁻²).
 
 Three runs, identical except for the boundary-layer scheme:
 
-| nml | scheme |
+| input | scheme |
 |---|---|
-| `kpp_basin.nml` | PP81 interior + KPP overlay (current default) |
-| `epbl_basin.nml` | PP81 interior + EPBL (`&ocean_epbl_nml enable`, OM4 mstar) |
-| `epbl_lt_basin.nml` | as EPBL + LF17 Langmuir enhancement (`use_lt`) |
+| `kpp_basin.toml` | PP81 interior + KPP overlay (current default) |
+| `epbl_basin.toml` | PP81 interior + EPBL (`[ocean.epbl] enable`, OM4 mstar) |
+| `epbl_lt_basin.toml` | as EPBL + LF17 Langmuir enhancement (`use_lt`) |
 
 Expected physics (30 days): combined wind + convective deepening to
 an MLD of roughly the encroachment scale `sqrt(2|B0|t)/N ≈ 97 m`,
@@ -26,9 +26,9 @@ point of the comparison.
 ## Run
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> ./build/rdb validation_examples/ocean/epbl_mld/kpp_basin.nml
-CUDA_VISIBLE_DEVICES=<gpu> ./build/rdb validation_examples/ocean/epbl_mld/epbl_basin.nml
-CUDA_VISIBLE_DEVICES=<gpu> ./build/rdb validation_examples/ocean/epbl_mld/epbl_lt_basin.nml
+CUDA_VISIBLE_DEVICES=<gpu> ./build/rdb validation_examples/ocean/epbl_mld/kpp_basin.toml
+CUDA_VISIBLE_DEVICES=<gpu> ./build/rdb validation_examples/ocean/epbl_mld/epbl_basin.toml
+CUDA_VISIBLE_DEVICES=<gpu> ./build/rdb validation_examples/ocean/epbl_mld/epbl_lt_basin.toml
 python3 validation_examples/ocean/epbl_mld/compare_epbl_kpp.py
 ```
 
@@ -46,10 +46,10 @@ mixed layer during deepening.
 
 ## Knobs worth sweeping during tuning
 
-- `&ocean_epbl_nml mstar_scheme` (`om4` vs `constant`), `mstar_cap`
+- `[ocean.epbl] mstar_scheme` (`om4` vs `constant`), `mstar_cap`
 - `tke_decay` (2.5 default — controls the wind-mixing depth under
   rotation), `translay_scale`
-- `q_heat` in `&ocean_thermo_nml` (e.g. −400 for storm cooling, +100
+- `q_heat` in `[ocean.thermo]` (e.g. −400 for storm cooling, +100
   for restratification)
 - `use_lt` + `lt_lac1..5` (the stability-modified La; zero them for
   the raw LF17 La)

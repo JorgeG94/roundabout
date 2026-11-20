@@ -609,7 +609,7 @@ contains
 
       max_diff = maxval(abs(ms_a%h_layer - ms_b%h_layer))
       call check(error, max_diff == 0.0_wp, &
-                 "vol_cfl=.false. must be byte-identical to the default")
+                 "vol_cfl=false must be byte-identical to the default")
 
       call ct_a%destroy(); call ct_b%destroy()
       call ms_a%destroy(); call ms_b%destroy()

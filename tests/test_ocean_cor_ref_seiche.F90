@@ -33,7 +33,7 @@
 !! unforced, undamped, inviscid and uniform-density, so `KE + PE` is a
 !! conserved quantity of the continuous system.  Any sustained GAIN is
 !! the integrator manufacturing energy.  A 51-case A/B over shipped
-!! namelists missed this defect entirely because no shipped case is a
+!! inputs missed this defect entirely because no shipped case is a
 !! long rotating closed basin — hence a dedicated one here.
 !!
 !! `ssp_rk2` runs first on the identical configuration as a control.
@@ -45,7 +45,7 @@
 !!
 !! `energy_form_masked_walls_no_growth` runs the same basin with the
 !! PRODUCTION wall convention (`mask_wall_velocity`, `wet_u = wet_v = 0`
-!! on the four wall faces) under `&ocean_coriolis_nml form =
+!! on the four wall faces) under `[ocean.coriolis] form =
 !! "sadourny_energy"` and `"sadourny_hk"`, from a jet that is NOT
 !! masked at the wall faces.  `u_av` used to be seeded from that
 !! unmasked state and was never rewritten at a masked face (the

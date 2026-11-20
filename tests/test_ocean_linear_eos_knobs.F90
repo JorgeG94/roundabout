@@ -1,13 +1,13 @@
-!! Analytical + contract tests for the `&ocean_ic_nml` linear-EOS
+!! Analytical + contract tests for the `[ocean.ic]` linear-EOS
 !! reference state (`alpha_T`, `beta_S`, `T_ref`, `S_ref`, `rho_0`).
 module test_ocean_linear_eos_knobs
    !! Before this capability only `alpha_T` and `rho_0` reached the ocean
    !! path's linear EOS; `beta_S`, `T_ref` and `S_ref` were fixed
-   !! `eos_t` component defaults that no namelist could move, and the
-   !! coastal-legacy `&tracer_nml` spellings of all four validated and
+   !! `eos_t` component defaults that no input could move, and the
+   !! coastal-legacy `[tracer]` spellings of all four validated and
    !! then did nothing.  This suite pins all three halves of the fix:
    !!
-   !!   (a) **Configure path** — a namelist string carrying the full
+   !!   (a) **Configure path** — an input string carrying the full
    !!       quintet lands on `ocean_state%eos` through the PRODUCTION
    !!       route (`read_config_from_toml_string` -> `init_from_config`), and
    !!       `eos_density_point` then reproduces a hand-computed density.
@@ -31,17 +31,17 @@ module test_ocean_linear_eos_knobs
    !!       independently of the expression the kernel evaluates, so it
    !!       fails if the conversion documented on the knobs is wrong.
    !!
-   !!   (c) **Retirement** — the coastal-legacy `&tracer_nml` quartet
+   !!   (c) **Retirement** — the coastal-legacy `[tracer]` quartet
    !!       (`alpha_T`, `beta_S`, `T_ref`, `S_ref`) reached
    !!       `tracer_t%eos_coeff`/`eos_ref`, which no ocean kernel reads.
    !!       Moving any of them off its historical default is now a
    !!       fail-loud `validate_config` error naming the live
-   !!       `&ocean_ic_nml` replacement, instead of being accepted and
+   !!       `[ocean.ic]` replacement, instead of being accepted and
    !!       silently ignored.
    !!
-   !!   (d) **Bit-identity** — with `&ocean_ic_nml` untouched, all five
+   !!   (d) **Bit-identity** — with `[ocean.ic]` untouched, all five
    !!       EOS members equal the `eos_t` component defaults they had
-   !!       before the knobs existed, so every shipped namelist is
+   !!       before the knobs existed, so every shipped input is
    !!       unchanged.
    !!
    !! Host-only by construction: `eos_t` is a flat POD passed BY VALUE
@@ -74,7 +74,7 @@ module test_ocean_linear_eos_knobs
    real(wp), parameter :: ISOMIP_S_REF = 34.2_wp            ! PSU
    real(wp), parameter :: ISOMIP_RHO_0 = 1027.51_wp         ! kg/m^3
 
-   ! The DIMENSIONAL knob values `&ocean_ic_nml` actually takes.
+   ! The DIMENSIONAL knob values `[ocean.ic]` actually takes.
    real(wp), parameter :: ISOMIP_ALPHA_T = ISOMIP_RHO_0*ISOMIP_ALPHA_FRAC
    real(wp), parameter :: ISOMIP_BETA_S = ISOMIP_RHO_0*ISOMIP_BETA_FRAC
 
@@ -94,7 +94,7 @@ module test_ocean_linear_eos_knobs
    real(wp), parameter :: SAMPLE_RHO_HAND = 1027.6942274055_wp
 
    ! `eos_t` component defaults as they stood before the knobs existed —
-   ! the bit-identity contract for every namelist that stays silent.
+   ! the bit-identity contract for every input that stays silent.
    real(wp), parameter :: LEGACY_EOS_ALPHA_T = 1.7e-4_wp
    real(wp), parameter :: LEGACY_EOS_BETA_S = 7.6e-4_wp
    real(wp), parameter :: LEGACY_EOS_T_REF = 10.0_wp
@@ -116,10 +116,10 @@ contains
    end subroutine collect_ocean_linear_eos_knobs_tests
 
    subroutine build_state(cfg, grid, state, nml, ierr)
-      !! Drive the PRODUCTION configure path: parse the namelist text
+      !! Drive the PRODUCTION configure path: parse the input text
       !! exactly as `rdb_ocean_create` / the driver does, then hand it to
       !! `ocean_state_t%init_from_config`, which is the single site that
-      !! copies `&ocean_ic_nml` onto `state%eos`.
+      !! copies `[ocean.ic]` onto `state%eos`.
       type(config_t), intent(out) :: cfg
       type(hgrid_t), intent(out) :: grid
       type(ocean_state_t), intent(out) :: state
@@ -162,25 +162,25 @@ contains
             "rho_0 = 1027.51"//new_line("a")
 
       call build_state(cfg, grid, state, nml, ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "ISOMIP+ namelist must parse")
+      call check(error, ierr == OCEAN_STATUS_OK, "ISOMIP+ input must parse")
       if (allocated(error)) return
 
       checks: block
          ! Every member reached the EOS handle — not just alpha_T/rho_0.
          call check(error, abs(state%eos%rho0 - ISOMIP_RHO_0) < 1.0e-12_wp, &
-                    "&ocean_ic_nml rho_0 must reach eos%rho0")
+                    "[ocean.ic] rho_0 must reach eos%rho0")
          if (allocated(error)) exit checks
          call check(error, abs(state%eos%T_ref - ISOMIP_T_REF) < 1.0e-12_wp, &
-                    "&ocean_ic_nml T_ref must reach eos%T_ref")
+                    "[ocean.ic] T_ref must reach eos%T_ref")
          if (allocated(error)) exit checks
          call check(error, abs(state%eos%S_ref - ISOMIP_S_REF) < 1.0e-12_wp, &
-                    "&ocean_ic_nml S_ref must reach eos%S_ref")
+                    "[ocean.ic] S_ref must reach eos%S_ref")
          if (allocated(error)) exit checks
          call check(error, abs(state%eos%alpha_T - ISOMIP_ALPHA_T) < 1.0e-9_wp, &
-                    "&ocean_ic_nml alpha_T must reach eos%alpha_T")
+                    "[ocean.ic] alpha_T must reach eos%alpha_T")
          if (allocated(error)) exit checks
          call check(error, abs(state%eos%beta_S - ISOMIP_BETA_S) < 1.0e-9_wp, &
-                    "&ocean_ic_nml beta_S must reach eos%beta_S")
+                    "[ocean.ic] beta_S must reach eos%beta_S")
          if (allocated(error)) exit checks
 
          rho = eos_density_point(state%eos, SAMPLE_T, SAMPLE_S, 0.0_wp)
@@ -211,7 +211,7 @@ contains
    end subroutine test_isomip_reference_state
 
    subroutine test_defaults_bit_identical(error)
-      !! (d): a namelist that never mentions the EOS knobs leaves all
+      !! (d): an input that never mentions the EOS knobs leaves all
       !! five members at the pre-capability `eos_t` defaults.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
@@ -230,7 +230,7 @@ contains
             "dy = 1000.0"//new_line("a")
 
       call build_state(cfg, grid, state, nml, ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "bare namelist must parse")
+      call check(error, ierr == OCEAN_STATUS_OK, "bare input must parse")
       if (allocated(error)) return
 
       checks: block
@@ -268,8 +268,8 @@ contains
    end subroutine assert_default_config_valid
 
    subroutine test_tracer_alpha_t_retired(error)
-      !! (c): `&tracer_nml alpha_T` only ever reached
-      !! `tracer_t%eos_coeff`; the live spelling is `&ocean_ic_nml
+      !! (c): `[tracer] alpha_T` only ever reached
+      !! `tracer_t%eos_coeff`; the live spelling is `[ocean.ic]
       !! alpha_T`.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
@@ -282,11 +282,11 @@ contains
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
-                 "&tracer_nml alpha_T off its default must fail loud")
+                 "[tracer] alpha_T off its default must fail loud")
    end subroutine test_tracer_alpha_t_retired
 
    subroutine test_tracer_beta_s_retired(error)
-      !! (c): live spelling is `&ocean_ic_nml beta_S`.
+      !! (c): live spelling is `[ocean.ic] beta_S`.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
@@ -298,11 +298,11 @@ contains
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
-                 "&tracer_nml beta_S off its default must fail loud")
+                 "[tracer] beta_S off its default must fail loud")
    end subroutine test_tracer_beta_s_retired
 
    subroutine test_tracer_t_ref_retired(error)
-      !! (c): live spelling is `&ocean_ic_nml T_ref`.
+      !! (c): live spelling is `[ocean.ic] T_ref`.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
@@ -314,11 +314,11 @@ contains
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
-                 "&tracer_nml T_ref off its default must fail loud")
+                 "[tracer] T_ref off its default must fail loud")
    end subroutine test_tracer_t_ref_retired
 
    subroutine test_tracer_s_ref_retired(error)
-      !! (c): live spelling is `&ocean_ic_nml S_ref`.
+      !! (c): live spelling is `[ocean.ic] S_ref`.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
@@ -330,7 +330,7 @@ contains
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
-                 "&tracer_nml S_ref off its default must fail loud")
+                 "[tracer] S_ref off its default must fail loud")
    end subroutine test_tracer_s_ref_retired
 
 end module test_ocean_linear_eos_knobs

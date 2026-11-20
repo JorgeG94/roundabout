@@ -576,8 +576,8 @@ contains
    ! -----------------------------------------------------------------
 
    function validate_restore(extra) result(ierr)
-      !! `validate_config` status of a minimal ocean namelist with the
-      !! given `&ocean_restore_nml` body.
+      !! `validate_config` status of a minimal ocean input with the
+      !! given `[ocean.restore]` body.
       character(len=*), intent(in) :: extra
       integer :: ierr
       type(config_t) :: cfg
@@ -625,7 +625,7 @@ contains
                                          "piston_s = 0.11"//new_line("a")// &
                                          'sss_file = "x.nc"'//new_line("a")// &
                                          "sss_as_sflux = false"//new_line("a")) &
-                 /= OCEAN_STATUS_OK, "sss_file with sss_as_sflux = .false. must be refused")
+                 /= OCEAN_STATUS_OK, "sss_file with sss_as_sflux = false must be refused")
       if (allocated(error)) return
       call check(error, validate_restore("enable_restore_salt = true"//new_line("a")// &
                                          "piston_s = 0.0"//new_line("a")// &

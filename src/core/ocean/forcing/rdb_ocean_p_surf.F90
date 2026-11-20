@@ -54,17 +54,17 @@ module rdb_ocean_p_surf
    !!     `ocean_surface_flux_t` and extends the single overwrite that builds
    !!     `sf%p_surf` (full overwrite from the pristine `p_surf_atm`, never
    !!     `+=`); `eta_ib` is always built from the assembled total.
-   !!   * Split solver only, and mutually exclusive with `&ocean_bt_nml
+   !!   * Split solver only, and mutually exclusive with `[ocean.bt]
    !!     bt_halo > 0` (an explicit width fails loud in `validate_config`;
    !!     the AUTO default resolves to 0).
    !!
    !! The partition rule: the seam owns the barotropic response to a load
    !! that is NOT in the layer PGF.  Under the default split
-   !! (`&ocean_bt_nml bc_pgf_forcing`) the substep is forced by the depth mean
+   !! (`[ocean.bt] bc_pgf_forcing`) the substep is forced by the depth mean
    !! of the FULL layer PGF, shedding only the free-surface term the PGF
    !! carries at stage entry (`set_fast_forcing_eta_pf`), so a DEPTH-UNIFORM
    !! PGF contribution reaches the barotropic mode.  A load that is both in
-   !! the PGF boundary condition (`&ocean_pgf_nml p_top_in_bc`) and on this
+   !! the PGF boundary condition (`[ocean.pgf] p_top_in_bc`) and on this
    !! seam would be counted twice; `ocean_dyn_step_split` therefore hands
    !! `run_stage_split` `eta_pf_seam = eta_ib` in exactly that case and the
    !! forcing sheds `g*grad(eta_ib)`.  A load a DATUM already absorbs (an ice
@@ -91,7 +91,7 @@ module rdb_ocean_p_surf
       logical :: in_eos = .false.
          !! Also hand the assembled `p_surf` to the equation of state's
          !! IN-SITU pressure arguments as the top-of-column pressure
-         !! (`&ocean_psurf_nml in_eos`).  Read by the outer-step driver,
+         !! (`[ocean.psurf] in_eos`).  Read by the outer-step driver,
          !! which refreshes `multilayer_state_t%p_top` from `sf%p_surf`
          !! when BOTH this and `enable` are set; `p_top` is otherwise the
          !! zero array it is allocated as, and every EOS evaluation is
@@ -119,7 +119,7 @@ contains
 
    subroutine ocean_p_surf_init(this, grid)
       !! Minimal init — the real allocation happens in `p_surf_configure`
-      !! once the namelist is available (host, before enter_data).
+      !! once the input is available (host, before enter_data).
       class(ocean_p_surf_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
       if (.false.) this%rho0 = real(grid%nx_total, wp)
@@ -206,7 +206,7 @@ contains
 
    pure subroutine p_surf_balance_ic_impl(nx, ny, nz, i_rho0_g, p_load, wet, h_layer)
       !! Cold-start balance of a resting ocean with the weight on its surface
-      !! (`&ocean_psurf_nml ice_load_balance_ic`): the inverse-barometer response to the load
+      !! (`[ocean.psurf] ice_load_balance_ic`): the inverse-barometer response to the load
       !! `p_load` (Pa) is a sea surface lowered by `p_load/(rho0 g) = (rho_i vice + rho_s vsno)/rho0`
       !! (Campin et al. 2008), so take exactly that from the column, PROPORTIONALLY from every
       !! layer (`h <- h (1 - delta/sum h)`: a concentration-preserving thinning, vanished layers

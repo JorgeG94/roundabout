@@ -1,5 +1,5 @@
 !! BAROTROPIC CONSISTENCY of the partial-step z-level face closure
-!! (`&vcoord_nml zfixed_closed_faces`) — a closed-basin seiche over a
+!! (`[vcoord] zfixed_closed_faces`) — a closed-basin seiche over a
 !! STAIRCASE bed under `VCOORD_Z_FIXED`.
 !!
 !! ### What this guards, and why a seiche

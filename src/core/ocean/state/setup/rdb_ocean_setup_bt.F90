@@ -39,7 +39,7 @@ contains
          td%t_epoch = 0.0_wp
 
          if (td%use_sal .and. td%beta_sal <= 0.0_wp .and. compute_rank == 0) then
-            call logger%warning("ocean_tides_nml: use_sal=.true. but "// &
+            call logger%warning("[ocean.tides]: use_sal=true but "// &
                                 "beta_sal<=0 => scalar SAL is inert "// &
                                 "(typical beta ~0.085-0.12)")
          end if
@@ -55,7 +55,7 @@ contains
             call parse_constituent_list(tcfg%constituents, cat_idx, nconst)
          end if
          if (nconst < 1) then
-            call fail("ocean_tides_nml: constituents='"// &
+            call fail("[ocean.tides]: constituents='"// &
                       trim(tcfg%constituents)//"' has no valid entries", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -63,7 +63,7 @@ contains
          ! Reference date -> day number since 1900-01-01.
          call parse_date_string(tcfg%ref_date, y, m, d, ok)
          if (.not. ok) then
-            call fail("ocean_tides_nml: bad ref_date '"// &
+            call fail("[ocean.tides]: bad ref_date '"// &
                       trim(tcfg%ref_date)//"' (want YYYY-MM-DD)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -73,7 +73,7 @@ contains
          if (len_trim(nodal_str) == 0) nodal_str = tcfg%ref_date
          call parse_date_string(nodal_str, y, m, d, ok)
          if (.not. ok) then
-            call fail("ocean_tides_nml: bad nodal_ref_date '"// &
+            call fail("[ocean.tides]: bad nodal_ref_date '"// &
                       trim(nodal_str)//"' (want YYYY-MM-DD)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -98,7 +98,7 @@ contains
    module subroutine configure_ocean_p_surf(cfg, ocean_state, grid, compute_rank)
       !! Configure the atmospheric surface-pressure loading slot (PR-17):
       !! copy `enable`, take ρ₀ from `ocean_state%eos%rho0` (the single ρ₀
-      !! of record — NOT a namelist knob), and allocate the seam fields.
+      !! of record — NOT an input knob), and allocate the seam fields.
       !! Host-side setup — runs BEFORE `ocean_state_enter_data`.
       !! `enable=.false.` => no-op, bit-identical.  The uniform-`p_surf`
       !! inert warning is emitted in `validate_config`; here we only log the
@@ -114,7 +114,7 @@ contains
          if (.not. pcfg%enable) return
 
          ! Single ρ₀ of record: the model's own reference density, so the
-         ! inverse barometer scales with whatever `&ocean_ic_nml rho_0`
+         ! inverse barometer scales with whatever `[ocean.ic] rho_0`
          ! set.  `eos%rho0` is assigned in `ocean_state_init_from_config`
          ! (runs earlier), so it is finalised here.
          ps%rho0 = ocean_state%eos%rho0
@@ -310,7 +310,7 @@ contains
                in_tok = .false.
                idx = tide_name_index(buf(i0:i - 1))
                if (idx < 1) then
-                  call fail("ocean_tides_nml: unknown constituent '"// &
+                  call fail("[ocean.tides]: unknown constituent '"// &
                             trim(buf(i0:i - 1))//"'", ierr, OCEAN_STATUS_ERR_SETUP)
                   return
                end if
@@ -336,7 +336,7 @@ contains
       ! the barotropic substep (default on).
       ocean_state%dyn%bt_work%bt_bc_pgf_forcing = cfg%ocean%bt%bc_pgf_forcing
       if (compute_rank == 0 .and. .not. cfg%ocean%bt%bc_pgf_forcing) then
-         call logger%warning("&ocean_bt_nml bc_pgf_forcing = .false.: LEGACY split — the "// &
+         call logger%warning("[ocean.bt] bc_pgf_forcing = false: LEGACY split — the "// &
                              "barotropic mode does not feel the depth-mean baroclinic "// &
                              "pressure gradient (no JEBAR / bottom-pressure torque)")
       end if
@@ -363,7 +363,7 @@ contains
       ocean_state%dyn%bt_work%bt_strong_drag = cfg%ocean%bt%strong_drag
       ocean_state%dyn%bt_work%bt_rescale_strong_drag = cfg%ocean%bt%rescale_strong_drag
 
-      ! frhat port (&ocean_bt_nml frhat_scheme): the per-layer face-thickness
+      ! frhat port ([ocean.bt] frhat_scheme): the per-layer face-thickness
       ! closure every barotropic depth mean reads (MOM6 btcalc HYBRID vs the
       ! plain two-abutting-cell arithmetic mean). Default "arithmetic" ==
       ! bit-identical to the pre-port tree.
@@ -390,7 +390,7 @@ contains
       ocean_state%dyn%bt_work%substep_zeta_ke = cfg%ocean%bt%substep_zeta_ke
       if (compute_rank == 0 .and. .not. cfg%ocean%bt%substep_zeta_ke) then
          call logger%info("BT substep:       planetary Coriolis only "// &
-                          "(substep_zeta_ke=.false.; MOM6 q=f/D parity — "// &
+                          "(substep_zeta_ke=false; MOM6 q=f/D parity — "// &
                           "live ζ_bt/∇KE off, frozen copies stay in F_bt)")
       end if
 
@@ -450,8 +450,8 @@ contains
       ocean_state%dyn%pc_be = cfg%ocean%bt%pc_be
       ! Print the RESOLVED scheme for BOTH branches, not just the non-default
       ! one.  A banner that only speaks up for one value cannot answer "which
-      ! scheme did this namelist actually run", which is the only reliable way
-      ! to enumerate what a default flip touches -- grepping the namelists
+      ! scheme did this input actually run", which is the only reliable way
+      ! to enumerate what a default flip touches -- grepping the inputs
       ! cannot (a key may be absent, commented out, or set in an included
       ! group).
       if (compute_rank == 0) then
@@ -474,7 +474,7 @@ contains
       ! PR-8 / D1 follow-up: every `*_visc_rem` consumer couples against
       ! `visc_rem_u/v`, which are only ever filled away from their
       ! `source=1.0` default by the implicit bottom-drag diagonal fold
-      ! (`&ocean_vdiff_nml implicit_drag`) or `bbl_glue` breaking vdiff's
+      ! (`[ocean.vdiff] implicit_drag`) or `bbl_glue` breaking vdiff's
       ! per-row unit-sum normalisation — without either the chain is
       ! exactly gamma==1 (a x1.0). Warn rather than abort (tidal_mixing
       ! e_uniform=0 precedent): PR-19 (visc_rem) is the named owner that
@@ -482,9 +482,9 @@ contains
       ! carries this check at configure; repeated here for the rank-0 log.)
       if (compute_rank == 0 .and. ocean_bt_visc_rem_producer_on(cfg) .and. &
           .not. (cfg%ocean%vdiff%implicit_drag .or. ocean_state%vdiff%bbl_glue)) then
-         call logger%warning("&ocean_bt_nml forcing_visc_rem/renorm_visc_rem/"// &
+         call logger%warning("[ocean.bt] forcing_visc_rem/renorm_visc_rem/"// &
                              "bt_rem_from_visc_rem/visc_rem_chain has no effect without "// &
-                             "&ocean_vdiff_nml implicit_drag=.true. or bbl_glue=.true. "// &
+                             "[ocean.vdiff] implicit_drag=true or bbl_glue=true "// &
                              "(visc_rem_u/v stay at their source=1.0 default; PR-19 owns filling them)")
       end if
 
@@ -527,7 +527,7 @@ contains
          if (cfg%ocean%bt%use_cont_type) then
             call logger%info("BT_cont_type:     ON  (flux-bounded BT continuity)")
             if (cfg%ocean%bt%cont_corr_bounds) then
-               call logger%info("                  BT_CONT_CORR_BOUNDS=.true. (η-corr bound from BT_cont)")
+               call logger%info("                  BT_CONT_CORR_BOUNDS=true (η-corr bound from BT_cont)")
             end if
          end if
          if (cfg%ocean%bt%upstream_h_face) then
@@ -604,7 +604,7 @@ contains
          end block
       end if
 
-      ! `&ocean_bt_nml dtbt`: OM3-style step definition (see
+      ! `[ocean.bt] dtbt`: OM3-style step definition (see
       ! `rdb_barotropic_dtbt`).  Initial n_inner from the seeded bathymetry
       ! `b` (Sigma h_layer = b at t = 0); `dtbt_reset_period >= 0` re-derives
       ! it from the live thicknesses every step / period in `engine_step`.

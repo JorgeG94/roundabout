@@ -2,25 +2,25 @@
 # jra_ryf_1deg.toml (JRA55-do bulk forcing, zstar, Wright EOS, PGF fv_mom6, same
 # grid/IC/closures) plus
 #
-#   freshwater = "mass" (&ocean_forcing_nml): precipitation, evaporation and
+#   freshwater = "mass" ([ocean.forcing]): precipitation, evaporation and
 #       runoff change the column VOLUME (evaporation that would empty a layer
 #       is passed down the column) instead of the virtual salt flux;
-#   scheme = "cice" (&ocean_ice_nml): the CICE6/Icepack port, which hands real
+#   scheme = "cice" ([ocean.ice]): the CICE6/Icepack port, which hands real
 #       water (melt, freezing, snow) to the ocean; update_ocn_f
-#       (&ocean_ice_thermo_nml) lets the ice's own exchange enter the ocean fluxes;
-#   enable + ice_load (&ocean_psurf_nml): the sea-ice + snow mass is a surface
+#       ([ocean.ice_thermo]) lets the ice's own exchange enter the ocean fluxes;
+#   enable + ice_load ([ocean.psurf]): the sea-ice + snow mass is a surface
 #       load on the free surface (REQUIRED by "mass" with sea ice);
 #       ice_load_balance_ic puts the cold-start sea level in balance with it;
-#   lrunoff_* / frunoff_* (&ocean_dataovr_nml): liquid river runoff and frozen
+#   lrunoff_* / frunoff_* ([ocean.dataovr]): liquid river runoff and frozen
 #       (calving) runoff from model-grid files, cyclic.
 #
 # atm_load is NOT enabled: the parent does not apply the atmospheric sea-level
-# pressure to the free surface, and this namelist does not change that.
+# pressure to the free surface, and this input does not change that.
 #
 # Everything else is the parent's, so a difference to jra_ryf_1deg.toml is the
-# fresh-water change and the CICE-port ice (which always moves: dynamics = .true.).
+# fresh-water change and the CICE-port ice (which always moves: dynamics = true).
 # The parent runs dt_therm_ratio = 1, so neither does this (the OM3 interval
-# order, diabatic_first = .false., needs a ratio above 1 and is not part of
+# order, diabatic_first = false, needs a ratio above 1 and is not part of
 # this step).
 #
 # INPUTS (not in the repository)
@@ -61,7 +61,7 @@ wind_stress_y = 0.0
 
 [ocean.forcing]
 freshwater        = "mass"
-# Required by `&ocean_atm_forcing_nml enable` (PLAN_C2c.md S3) --
+# Required by `[ocean.atm_forcing] enable` (PLAN_C2c.md S3) --
 # this run's surface fluxes are the bulk-flux components, not the
 # legacy scalar wind/heat knobs.
 enable_components = true
@@ -86,7 +86,7 @@ ice_load_balance_ic = true
 # JRA55-do-style prescribed atmospheric state -> bulk-flux ocean/ice
 # surface forcing (OM3 forcing wave-3). RYF 1990-05-01 (the OMIP/
 # JRA55-do spin-up convention): the reader wraps the single 1990-05-
-# 01 .. 1991-04-30 year forever, independent of `&time_nml
+# 01 .. 1991-04-30 year forever, independent of `[time]
 # start_date` above (which only sets the model's own calendar/
 # coszen epoch).
 enable          = true
@@ -113,7 +113,7 @@ ocean_albedo    = 0.066
 # measures BOTH wind and air temperature/humidity at 10 m (unlike the
 # CORE/OMIP convention of 2 m for the latter pair) -- set z_ta = 10
 # to match (PLAN_C2c.md S3 "z_ta=2 ... JRA: both 10 m => ship
-# namelists set z_ta=10").
+# inputs set z_ta=10").
 enable      = true
 n_iter      = 5
 z_wind      = 10.0
@@ -206,7 +206,7 @@ sw_zeta2       = 23.0
 # provider (hfreeze, OM3's 10 m) that scheme needs.  The SIS2 restoring
 # knobs (air_temp/restore_lambda/sw_down/snowfall) are inert: the ice
 # atmospheric seam is dispatched to `ice_atm_forcing_from_atm` whenever
-# `&ocean_atm_forcing_nml enable` holds.
+# `[ocean.atm_forcing] enable` holds.
 enable    = true
 scheme    = "cice"
 ncat      = 5

@@ -9,24 +9,24 @@ the set says *which part of the discretisation made it*.
 
 | file | lid | density | what it isolates |
 |---|---|---|---|
-| `cavity_flat_lid_rest.nml` | flat, 300 m | ISOMIP+ COLD stratification | the load bookkeeping + the datum. Every interface gap `Δe(K) = 0` ⇒ structurally bit-zero |
-| `cavity_uniform_rho_rest.nml` | sloping + calving front | **uniform** | the load bookkeeping alone. `N² = 0` ⇒ every trapezoid error `G(K) = 0`, however steep the lid |
-| `cavity_sloping_lid_rest.nml` | sloping + calving front | ISOMIP+ COLD stratification | **the headline**: the sigma-coordinate pressure-gradient truncation under a tilted ice base |
+| `cavity_flat_lid_rest.toml` | flat, 300 m | ISOMIP+ COLD stratification | the load bookkeeping + the datum. Every interface gap `Δe(K) = 0` ⇒ structurally bit-zero |
+| `cavity_uniform_rho_rest.toml` | sloping + calving front | **uniform** | the load bookkeeping alone. `N² = 0` ⇒ every trapezoid error `G(K) = 0`, however steep the lid |
+| `cavity_sloping_lid_rest.toml` | sloping + calving front | ISOMIP+ COLD stratification | **the headline**: the sigma-coordinate pressure-gradient truncation under a tilted ice base |
 
 All three share the geometry (48 × 6 × 15 @ dx = dy = 2 km, flat bed 720 m),
 the ISOMIP+ linear EOS, the f-plane at 75 °S, `VCOORD_SIGMA`,
-`&ocean_pgf_nml form="fv_mom6"` + `p_top_in_bc=.true.`, and the analytic
+`[ocean.pgf] form="fv_mom6"` + `p_top_in_bc=true`, and the analytic
 geopotential initial condition. None pins `split_scheme`, so the stability
 suite builds an `__ssp_rk2` twin of each automatically.
 
 ## How to run
 
 ```bash
-./build/rdb validation_examples/ocean/ice_shelf_cavity/cavity_sloping_lid_rest.nml
+./build/rdb validation_examples/ocean/ice_shelf_cavity/cavity_sloping_lid_rest.toml
 ```
 
 ~36 s for the 30-day run on one CPU core (gfortran Release). The three
-namelists, and their three scheme twins, are rows in
+inputs, and their three scheme twins, are rows in
 `tests/regression/stability_manifest.py`:
 
 ```bash
@@ -37,19 +37,19 @@ python3 tests/regression/stability.py --tier 2 --build-dir build_gcc \
 ## The initial condition is the subtle part
 
 Under `VCOORD_SIGMA` the layer interfaces **tilt with the ice base**. The
-shipped analytic stratifications — `&tracer_nml T_init_surface` /
+shipped analytic stratifications — `[tracer] T_init_surface` /
 `T_init_bottom` and their `S_init_*` twins — lay a profile out linearly in
 **layer index**, i.e. *along the tilted coordinate*. Under a sloping lid that
 tilts the isopycnals with the lid, which is a real available potential energy
 and a real baroclinic adjustment: the run would measure physics, not
 truncation, and would be wrong about both.
 
-These cases therefore use `&ocean_zinit_nml source = "linear"`, which
+These cases therefore use `[ocean.zinit] source = "linear"`, which
 evaluates `T(z)`/`S(z)` at each layer centre's **true geopotential depth**
 (the column top sits at `z = −z_draft`, not at `z = 0`). Isopycnals are then
 flat in `z` on every column, sloping lid included. That path — the draft
 offset in `build_z_ctr` plus the analytic source — is what P5.3 added; before
-it, `&ocean_cavity_dyn_nml` and `&ocean_zinit_nml` refused each other.
+it, `[ocean.cavity_dyn]` and `[ocean.zinit]` refused each other.
 
 ### …and the column top has to be trimmed to the load
 
@@ -62,12 +62,12 @@ ocean at the same `z` — a **depth-uniform** bottom-pressure gradient
 `(g/ρ₀)(ρ(−z_draft) − ρ₀)·∇z_draft`, up to `1.8e-5 m/s²` on the sloping lid
 (zero at `z_draft = 343 m`, where `ρ = ρ₀`), some 5000× the truncation below.
 The legacy split discarded it with the depth mean; the MOM6 barotropic split
-(`&ocean_bt_nml bc_pgf_forcing`, the default since 2026-09-25) hands it to
+(`[ocean.bt] bc_pgf_forcing`, the default since 2026-09-25) hands it to
 the barotropic mode, which adjusted to it on day 1 (En `1.061E-06`, over the
 gate).
 
-The sloping-lid case therefore sets `&ocean_cavity_dyn_nml
-trim_ic_for_p_surf = .true.` — MOM6's `TRIM_IC_FOR_P_SURF` (`trim_for_ice`):
+The sloping-lid case therefore sets `[ocean.cavity_dyn]
+trim_ic_for_p_surf = true` — MOM6's `TRIM_IC_FOR_P_SURF` (`trim_for_ice`):
 the **load is kept** (the ice mass is what is prescribed) and each loaded
 column's initial top moves to the depth `s` where the water above weighs it,
 `g·∫_{−s}^0 ρ dz = p_ice_ref`, an initial `η = z_draft − s` of −3.0 mm at the
@@ -128,7 +128,7 @@ Budget residuals stay at 8e-13 relative in every run; `MaxCFL ≤ 1e-3` at day
 Controls for the sloping lid (pred_corr, same tree): **untrimmed**, the
 barotropic adjustment to the load shortfall reads `1.061E-06` (d1),
 `1.020E-08` (d10), `1.316E-07` (d30); the **legacy split**
-(`bc_pgf_forcing = .false.`, untrimmed), which discards the depth mean, reads
+(`bc_pgf_forcing = false`, untrimmed), which discards the depth mean, reads
 `1.626E-09` (d10), `3.043E-08` (d30), `3.894E-06` (d60) — the table this file
 carried through 2026-09-24, within 30 % of the trimmed default at every daily
 sample. The substitution table and the cross-toolchain check below were
@@ -178,7 +178,7 @@ So the sloping-lid PGF truncation is the **source**, and no defensible
 dissipation removes it — it only postpones it. `ssp_rk2` then amplifies the
 same internal-wave field catastrophically from day 12 (`1.85E-04` at day 30,
 8000× the default), which is what EXPERIMENTAL on that scheme means, stated as
-a number; the same separation `validation_examples/ocean/eady/resting_stratified_channel.nml`
+a number; the same separation `validation_examples/ocean/eady/resting_stratified_channel.toml`
 records for a lid-free channel.
 
 ### The gate, and what it deliberately does not do
@@ -254,7 +254,7 @@ The gap is the work, not the measurement. Phase 6 is where it closes.
 
 ## Known limits of these cases
 
-- **Single rank.** `&ocean_cavity_dyn_nml` fences on `px*py > 1` in v1.
+- **Single rank.** `[ocean.cavity_dyn]` fences on `px*py > 1` in v1.
 - **No steep calving cliff.** The front here is an 11 m step, chosen so the
   biggest `Δe` in the domain is the 13.8 m interior slope step. A 100 m
   ISOMIP+-style cliff is cubic-ally worse and would dominate the run; Yung
@@ -262,10 +262,10 @@ The gap is the work, not the measurement. Phase 6 is where it closes.
   the ice front "to minimise pressure gradient errors", and MPAS-Ocean caps
   the coordinate's Haney number at 5 for the same reason. Measuring the cliff
   regime honestly needs the corrections first.
-- **No melt, no thermodynamics.** `&ocean_cavity_melt_nml` is off: a melt flux
+- **No melt, no thermodynamics.** `[ocean.cavity_melt]` is off: a melt flux
   is an energy source and would destroy the "any motion is spurious" property.
 - **Linear EOS, so the in-EOS load is inert.** Configure warns that
-  `&ocean_psurf_nml in_eos` is off and the in-situ EOS therefore ignores the
+  `[ocean.psurf] in_eos` is off and the in-situ EOS therefore ignores the
   5.26 MPa load. With `eos = "linear"` there is no pressure dependence at all,
   so the warning is informational here; it matters for the nonlinear
   thermodynamic cases.

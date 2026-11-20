@@ -223,7 +223,7 @@ contains
          call destroy_cartesian_metrics(metrics)
 
          call check(error, ierr == OCEAN_STATUS_OK, &
-                    "bound_kh=.true. must downgrade the same config to a pass "// &
+                    "bound_kh=true must downgrade the same config to a pass "// &
                     "(the FINDINGS.md fix)")
       end block checks
    end subroutine test_audit_viscous_cfl_bound_kh_downgrades
@@ -297,7 +297,7 @@ contains
 
    subroutine test_audit_kappa_h_spherical_uses_real_metric(error)
       !! The FIXED kappa_h check: on a spherical grid the nominal
-      !! &grid_nml dx/dy are DEGREES (meaningless as a length), but the
+      !! [grid] dx/dy are DEGREES (meaningless as a length), but the
       !! real per-cell metric (metrics%dxT/dyT, metres) still shrinks
       !! toward the pole exactly like the viscous check needs. Build a
       !! spherical sector reaching high latitude so the ACTUAL minimum

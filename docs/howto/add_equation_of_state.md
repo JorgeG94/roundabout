@@ -2,7 +2,7 @@
 
 One EOS module: `src/equation_of_state/rdb_eos.F90`. It already has a
 variant enum + `select case` dispatch (linear, Wright 1997 nonlinear, Roquet
-specific-volume polynomial), a namelist selector, and a device-callability gate.
+specific-volume polynomial), an input selector, and a device-callability gate.
 Adding a variant is filling in an arm plus wiring the parse.
 
 ## The seam
@@ -18,7 +18,7 @@ in `eos_validate` — it is not device-callable). Each arm calls a `pure *_impl`
 `do concurrent(k,j,i)` with a vanishing-layer fallback to `rho_0`. The variant
 lives on `eos_t%variant`.
 
-**Config wiring** — `&ocean_eos_nml eos` (default `"linear"`) is parsed by
+**Config wiring** — `[ocean.eos] eos` (default `"linear"`) is parsed by
 `parse_eos_variant` and assigned in `configure_ocean_drag`
 (`src/core/ocean/state/setup/rdb_ocean_setup_vmix.F90`):
 `ocean_state%eos%variant = parse_eos_variant(cfg%ocean%eos%eos)`, followed by
@@ -59,11 +59,11 @@ variant + column sweep.
 5. **New coefficients** on `eos_t` if needed (scalar defaults; any allocatable
    scratch must be released in `eos_destroy` *and* wired into
    `ocean_state_enter_data`).
-6. **Namelist** — add the string to the `&ocean_eos_nml eos` enum registration
+6. **Input** — add the string to the `[ocean.eos] eos` enum registration
    in `register_ocean_eos` (`src/core/config/rdb_config_register_vmix.F90`) and the matching
    `case` in `parse_eos_variant` — the two must stay in sync (the registration's
    FORD comment says so explicitly). See
-   [add_namelist_knob.md](add_namelist_knob.md).
+   [add_input_knob.md](add_input_knob.md).
 7. **PGF arm** (only if pressure-dependent) — add an `OPGF_VARIANT_*` and the
    column-sweep call in
    `src/pressure_force/rdb_ocean_pressure_force.F90`, and extend
@@ -134,7 +134,7 @@ Analytical point-value asserts, one per branch of the formula:
   `parse_opgf_variant`, the in-situ re-eval call.
 - `src/core/ocean/dynamics/split_rk2/rdb_ocean_dyn.F90` — EOS-before-PGF call order.
 - `src/core/config/rdb_config_register_vmix.F90` — `register_ocean_eos`
-  (`&ocean_eos_nml`);
+  (`[ocean.eos]`);
   `src/core/ocean/state/setup/rdb_ocean_setup_vmix.F90` — the `parse_eos_variant`
   assignment (`configure_ocean_drag`).
 - The "Equation of state" section of [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md).

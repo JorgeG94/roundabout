@@ -72,11 +72,11 @@ module rdb_ice_melt_potential
    !!     cells only).  A consumer that averages `frzmlt` to faces or reads a
    !!     neighbour must halo-exchange it first.
    !!  7. The two output arrays exist on the ice slot only when
-   !!     `&ocean_ice_nml hfreeze > 0`; it is refused under an ice-shelf
-   !!     cavity (`&ocean_cavity_dyn_nml enable`), where melt potential must
+   !!     `[ocean.ice] hfreeze > 0`; it is refused under an ice-shelf
+   !!     cavity (`[ocean.cavity_dyn] enable`), where melt potential must
    !!     not be offered to sea ice.
    !!
-   !! Off by default (`&ocean_ice_nml hfreeze = -1`): the kernel is then never
+   !! Off by default (`[ocean.ice] hfreeze = -1`): the kernel is then never
    !! called and nothing changes.
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp, RHO_WATER, H_VANISHED, H_DIV_EPS, GRAVITY, NZ_STACK_MAX

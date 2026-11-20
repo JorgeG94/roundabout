@@ -44,7 +44,7 @@ module rdb_coriolis_adv
    ! PV-scheme variant tags.  Both `SADOURNY` and `SADOURNY_HK` ship;
    ! `AL81` is reserved.  The default below points at the safe
    ! enstrophy-conserving branch — flip to `SADOURNY_HK` for eddy-
-   ! resolving runs via `&ocean_setup_nml ocean_coriolis_form`.
+   ! resolving runs via `[ocean.setup] ocean_coriolis_form`.
    integer, parameter, public :: PV_VARIANT_SADOURNY = 1
       !! Sadourny enstrophy-conserving — the default.
    integer, parameter, public :: PV_VARIANT_AL81 = 2
@@ -136,7 +136,7 @@ module rdb_coriolis_adv
       integer :: pv_variant = PV_VARIANT_SADOURNY
          !! Active PV/Coriolis scheme variant.  Defaults to Sadourny;
          !! set to `PV_VARIANT_SADOURNY_HK` to engage the Arakawa-Hsu
-         !! correction.  Driven from `&ocean_setup_nml
+         !! correction.  Driven from `[ocean.setup]
          !! ocean_coriolis_form` via `parse_pv_variant`.
       logical :: use_hk_correction = .false.
          !! Convenience flag mirroring `pv_variant == SADOURNY_HK`.
@@ -147,16 +147,16 @@ module rdb_coriolis_adv
          !! `PV_ADV_CENTERED` (default, 2-pt corner average -> bit-identical)
          !! or `PV_ADV_WENO{3,5,7}` (upwind-biased WENO-Z reconstruction of the
          !! corner absolute vorticity onto the faces in the Sadourny path).
-         !! Driven from `&ocean_coriolis_nml pv_adv_scheme` via
+         !! Driven from `[ocean.coriolis] pv_adv_scheme` via
          !! `parse_pv_adv_scheme`; weno5/weno7 require nghost>=4/5
          !! (`pv_adv_required_nghost`).
       logical :: weno_velocity_smooth = .false.
-         !! `&ocean_coriolis_nml weno_velocity_smooth` (MOM6
+         !! `[ocean.coriolis] weno_velocity_smooth` (MOM6
          !! `WENO_VELOCITY_SMOOTH`, default off): when on, the WENO
          !! smoothness indicators are computed from the tangential velocity
          !! rather than the vorticity.  Off = vorticity-based (MOM6 default).
       logical :: state_fluxes = .false.
-         !! `&ocean_coriolis_nml use_state_fluxes` — mass-consistent
+         !! `[ocean.coriolis] use_state_fluxes` — mass-consistent
          !! CorAdCalc.  Config guarantees `form="sadourny_energy"` +
          !! `split_scheme="pred_corr"`; the dyn driver forwards it to
          !! `coriolis_adv_compute_tendencies(use_state_fluxes=)` in the
@@ -169,11 +169,11 @@ module rdb_coriolis_adv
          !! contributes zero rel-vort (tangential velocity free at the
          !! wall, MOM6's free-slip closure).  `.true.` = NO-SLIP:
          !! the factor becomes `2 - wet_q` (image vorticity, MOM6's no-slip).
-         !! Set from `&ocean_hvisc_nml no_slip` (shared with the lateral
+         !! Set from `[ocean.hvisc] no_slip` (shared with the lateral
          !! strain).  All-wet ⇒ `wet_q≡1` ⇒ factor `≡1` ⇒ bit-identical.
       logical :: hk_pair_floor = .false.
          !! Run the `sadourny_hk` PAIR-FLOORED passes (the pair coefficient inlined in passes 5f/6f) even
-         !! with `&vcoord_nml zfixed_closed_faces` off.  Latched at setup
+         !! with `[vcoord] zfixed_closed_faces` off.  Latched at setup
          !! for the coordinates that lay STATIC bed fillers (`z_fixed`,
          !! `zstar`, `zstar_full`): over a stepped bed an OPEN face then
          !! pairs a live cell with a `zstar_h_min` filler, so an HK "cross"
@@ -190,13 +190,13 @@ module rdb_coriolis_adv
          !! mean, `CORIOLIS_H_MIN_PV`-capped.  `CORNER_H_MOM6_AREA` — MOM6's
          !! `q = abs_vort·Area_q/(hArea_q + PV_VOL_NEGLECT)`.  The two are
          !! algebraically identical above the floor; they differ only in the
-         !! vanishing-thickness guard.  Set from `&ocean_coriolis_nml corner_h`
+         !! vanishing-thickness guard.  Set from `[ocean.coriolis] corner_h`
          !! at setup (config fail-loud on non-energy forms); read host-side
          !! into a local flag in the kernel.
       logical :: bound_coriolis = .false.
          !! MOM6 `BOUND_CORIOLIS`.  When
          !! `.true.` (energy scheme, or enstrophy `sadourny` with centred PV
-         !! interpolation — `&ocean_coriolis_nml bound_coriolis`, config
+         !! interpolation — `[ocean.coriolis] bound_coriolis`, config
          !! fail-loud on any other form) the Coriolis term is
          !! clamped into the range of the four neighbouring `(f+ζ)·v`
          !! velocity-form estimates BEFORE the KE-gradient subtraction, capping
@@ -935,7 +935,7 @@ contains
       !! and the kernel collapses to the Sadourny `(f+ζ)·v` form
       !! bit-identically.  This is the basis for the regression test.
       !!
-      !! Under `&vcoord_nml zfixed_closed_faces` (`metrics%use_closed_faces`)
+      !! Under `[vcoord] zfixed_closed_faces` (`metrics%use_closed_faces`)
       !! Passes 5/6 run a PAIR-FLOORED twin: every PV in a pair coefficient
       !! is evaluated with a corner thickness of at least half the larger of
       !! the pair's two face thicknesses (the pair coefficient inlined in passes 5f/6f).  Without it the
@@ -1095,7 +1095,7 @@ contains
                                this%mass_flux_v%data)
       end if
 
-      ! ---- z-level closed faces (&vcoord_nml zfixed_closed_faces) ----
+      ! ---- z-level closed faces ([vcoord] zfixed_closed_faces) ----
       ! The SAME argument as the porous pass above, and a SEPARATE factor:
       ! the transport-Coriolis PV flux must see the same per-layer walls
       ! continuity does, or a closed layer contributes transport the mass
@@ -1119,7 +1119,7 @@ contains
 
       if (metrics%use_closed_faces .or. this%hk_pair_floor) then
          ! ---- Passes 5f/6f: the same stencil, PAIR-FLOORED PV ----
-         ! `&vcoord_nml zfixed_closed_faces`, or an OPEN staircase of static
+         ! `[vcoord] zfixed_closed_faces`, or an OPEN staircase of static
          ! bed fillers (`hk_pair_floor`: z_fixed / zstar / zstar_full);
          ! otherwise the ELSE branch, the original Passes 5/6, textually
          ! untouched ⇒ bit-identical.  Inline,
@@ -1908,7 +1908,7 @@ contains
    end subroutine coriolis_adv_apply_tendencies_barotropic
 
    pure function parse_pv_variant(name) result(code)
-      !! Translate a namelist string into a `PV_VARIANT_*` code.
+      !! Translate an input string into a `PV_VARIANT_*` code.
       !! An unrecognised string returns `PV_VARIANT_INVALID` (PR-6:
       !! fail-loud — a typo must NOT silently degrade to `SADOURNY`,
       !! which is a materially different conservation law).  `"al81"`
@@ -1964,7 +1964,7 @@ contains
    end function pv_variant_is_implemented
 
    pure function parse_pv_adv_scheme(name) result(code)
-      !! Translate a namelist string into a `PV_ADV_*` code.  An
+      !! Translate an input string into a `PV_ADV_*` code.  An
       !! unrecognised string returns `PV_ADV_INVALID` (fail-loud — a typo
       !! must not silently degrade the PV interpolation).  `weno5`/`weno7`
       !! are implemented; they additionally require `nghost >= 4`/`5`

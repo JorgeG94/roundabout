@@ -17,9 +17,9 @@ module rdb_ice_cice_run
    !! (`ice_cice_state_t%register_restart`), and the dynamics slot its stresses/masks.
    !!
    !! **Uniform atmosphere.**  `uni_*` are the nine fields of `atm_state_t` as constant
-   !! arrays (`&ocean_ice_atm_nml uni_*`, `&ocean_ice_nml sw_down`, `snowfall`), used by
-   !! the `atm_prepare` hook when `&ocean_atm_forcing_nml enable = .false.`.  The heights
-   !! of the forcing are `&ocean_bulk_flux_nml z_wind` and the fixed 10 m of the scalars.
+   !! arrays (`[ocean.ice_atm] uni_*`, `[ocean.ice] sw_down`, `snowfall`), used by
+   !! the `atm_prepare` hook when `[ocean.atm_forcing] enable = false`.  The heights
+   !! of the forcing are `[ocean.bulk_flux] z_wind` and the fixed 10 m of the scalars.
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp
    use rdb_config, only: config_t
@@ -53,12 +53,12 @@ module rdb_ice_cice_run
       integer :: nx = 0
       integer :: ny = 0
       real(wp) :: hfreeze = -1.0_wp
-         !! `&ocean_ice_nml hfreeze` [m]: depth of the melt-potential provider.
+         !! `[ocean.ice] hfreeze` [m]: depth of the melt-potential provider.
       real(wp) :: z_wind = 10.0_wp
-         !! Height of the wind and state forcing [m] (`&ocean_bulk_flux_nml z_wind`).
+         !! Height of the wind and state forcing [m] (`[ocean.bulk_flux] z_wind`).
       logical :: resume_cold = .false.
          !! The restart read found NO ice state (an ocean-only checkpoint): the ice cold-starts from
-         !! `&ocean_ice_ic_nml` (the engine applies it) and says so in the log.
+         !! `[ocean.ice_ic]` (the engine applies it) and says so in the log.
       integer :: n_steps = 0
          !! Ice steps taken (host counter, diagnostics only).
       type(ice_flux_t) :: flux
@@ -77,7 +77,7 @@ module rdb_ice_cice_run
          !! bitwise record is `ledger%cum_clip`, restart scalars `ice_led_clip_*`).  Entries `ICE_LCUM_NCLIP`
          !! (clipped cells, as a real), `_AREA`, `_VICE`, `_VSNO`, `_EICE`, `_ESNO`: the fields of `remap_ledger_t`.
       type(ice_term_ledger_t) :: ledger
-         !! The named-term conservation ledger (`&ocean_ice_nml ledger`; inert otherwise).
+         !! The named-term conservation ledger (`[ocean.ice] ledger`; inert otherwise).
       logical :: skip_thermo = .false.
          !! DIAGNOSTIC: skip the thermodynamic stages (the dynamics-only invariance test).  Never set in a run.
       real(wp), allocatable :: cosA(:, :), sinA(:, :)

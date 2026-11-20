@@ -680,7 +680,7 @@ contains
       !! depths **in metres** (`min(z_ref_global(k), column_total)`), but
       !! the only writer of that array on the ocean path is the
       !! dimensionless `z_ref_global(k) = k/nz` init in
-      !! `ocean_vcoord_init`.  Nothing on the namelist path ever replaces
+      !! `ocean_vcoord_init`.  Nothing on the input path ever replaces
       !! it, so every z-level interval is `1/nz` **metres** and the whole
       !! column lands in the bed layer through the deficit line.
       !!

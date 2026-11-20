@@ -1228,7 +1228,7 @@ contains
          if (allocated(error)) exit checks
 
          call check(error, m_ice_a == m_ice_b, &
-                    "m_ice must be bit-identical across two do_snow_ice=.false. runs")
+                    "m_ice must be bit-identical across two do_snow_ice=false runs")
          if (allocated(error)) exit checks
          call check(error, m_snow_a == m_snow_b, "m_snow must be bit-identical")
          if (allocated(error)) exit checks

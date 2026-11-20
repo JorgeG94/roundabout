@@ -17,7 +17,7 @@ module rdb_atm_state
    !! and regrids independently.
    !!
    !! **`rsds` -- held interval + diurnal cosine-zenith factor
-   !! (`sw_interp = "coszen"`, the namelist default, C2c-2b).**  The JRA55-
+   !! (`sw_interp = "coszen"`, the input default, C2c-2b).**  The JRA55-
    !! do `rsds` file carries 3-hour interval MEANS stamped at the interval
    !! CENTRE (01:30, 04:30, ...), record `k` meaning the mean over the UTC
    !! bucket `[3k h, 3k h + 3 h)`.  Registering it with `hold = .true.` and
@@ -93,7 +93,7 @@ module rdb_atm_state
    !! **Bucket length** is not a constant: `atm_sw_check_axis` derives it at
    !! configure from the `rsds` record spacing (must divide 86400 s, the
    !! records must be uniform and stamped at the interval CENTRE) and
-   !! refuses a `sw_offset_s` that is not half of it (a namelist still
+   !! refuses a `sw_offset_s` that is not half of it (an input still
    !! carrying `-5400` would silently reproduce the old one-bucket-late
    !! record).  The reader is given `sw_offset_s + 0.5 s` so the record
    !! switch never rides a float-equality tie on the `dt` grid.
@@ -117,7 +117,7 @@ module rdb_atm_state
    !! are each sized to ONE weight set's source footprint
    !! (`regrid_window`) and reused by every field that uses that weight
    !! set: `tas, huss, uas, vas, psl` always use the bilinear set (`wb`,
-   !! `&ocean_atm_forcing_nml states_regrid` has no other legal value);
+   !! `[ocean.atm_forcing] states_regrid` has no other legal value);
    !! `rlds, rsds, prra, prsn` use `wb` or the conservative set (`wc`)
    !! together, selected once at configure by `fluxes_regrid`.  Both
    !! weight sets are always built (bit-identical either way the knob is
@@ -201,12 +201,12 @@ module rdb_atm_state
       !! arrays and therefore owns no device-mapped state of its own.
       logical :: enable = .false.
          !! `.true.` once `atm_state_configure` has registered every
-         !! field (mirrors `&ocean_atm_forcing_nml enable`).  `.false.`
+         !! field (mirrors `[ocean.atm_forcing] enable`).  `.false.`
          !! makes `atm_state_update` (and every lifecycle method below)
          !! an immediate no-op -- the default, bit-identical state.
       logical :: on_device = .false.
       logical :: sw_coszen = .false.
-         !! `.true.` iff `&ocean_atm_forcing_nml sw_interp = "coszen"`
+         !! `.true.` iff `[ocean.atm_forcing] sw_interp = "coszen"`
          !! (the default) -- `rsds` is registered `hold = .true.` with
          !! `t_offset = sw_offset_s` and `atm_state_update` runs the
          !! diurnal cosine-zenith kernel every step.  `.false.`
@@ -217,12 +217,12 @@ module rdb_atm_state
          !! from the file's record spacing (`atm_sw_check_axis`; JRA55-do: 3 h).
          !! `coszen` only.
       type(date_t) :: epoch
-         !! `&time_nml start_date`, parsed once at configure -- the
+         !! `[time] start_date`, parsed once at configure -- the
          !! calendar epoch `atm_state_update`'s Spencer (1971) solar
          !! position needs every step (`t` is seconds since this).
       logical :: fluxes_conservative = .false.
          !! `.true.` => `rlds/rsds/prra/prsn` regrid through `wc`
-         !! (`fluxes_regrid = "conservative"`, the namelist default);
+         !! (`fluxes_regrid = "conservative"`, the input default);
          !! `.false.` => through `wb` (`"bilinear"`).  `tas/huss/uas/
          !! vas/psl` always use `wb` (`states_regrid` has no other
          !! legal value).
@@ -402,13 +402,13 @@ contains
    ! ======================================================================
 
    subroutine atm_state_configure(cfg, reader, grid, metrics, this, ierr)
-      !! A no-op when `&ocean_atm_forcing_nml enable = .false.` (the
+      !! A no-op when `[ocean.atm_forcing] enable = false` (the
       !! default) -- nothing registers, `this%enable` stays `.false.`,
       !! `atm_state_update` is then a no-op too: bit-identical.
       !!
       !! Fails loud (never silently falls back) on: an unrecognised
       !! `sw_interp`/`fluxes_regrid`/`states_regrid` value, a malformed
-      !! `&time_nml start_date`, a missing or empty filelist, or a
+      !! `[time] start_date`, a missing or empty filelist, or a
       !! `rdb_regrid_latlon` weight-build failure. `validate_config` has
       !! already refused a cartesian grid, a blank `start_date`, a
       !! missing ninth filelist, a non-default `orb_year`, and
@@ -440,7 +440,7 @@ contains
       case ("linear")
          this%sw_coszen = .false.
       case default
-         call fail("atm_state_configure: unknown &ocean_atm_forcing_nml sw_interp '"// &
+         call fail("atm_state_configure: unknown [ocean.atm_forcing] sw_interp '"// &
                    trim(sw_interp_l)//"' (expected 'coszen' or 'linear')", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -448,7 +448,7 @@ contains
 
       call parse_date(trim(cfg%start_date), this%epoch, epoch_ok)
       if (.not. epoch_ok) then
-         call fail("atm_state_configure: bad &time_nml start_date '"//trim(cfg%start_date)// &
+         call fail("atm_state_configure: bad [time] start_date '"//trim(cfg%start_date)// &
                    "' (want 'YYYY-MM-DD' or 'YYYY-MM-DD hh:mm:ss') -- the coszen kernel's "// &
                    "Spencer (1971) solar position needs a calendar epoch", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
@@ -457,7 +457,7 @@ contains
 
       states_regrid_l = trim(cfg%ocean%atm_forcing%states_regrid)
       if (states_regrid_l /= "bilinear") then
-         call fail("atm_state_configure: &ocean_atm_forcing_nml states_regrid='"// &
+         call fail("atm_state_configure: [ocean.atm_forcing] states_regrid='"// &
                    trim(states_regrid_l)//"' is not implemented (only 'bilinear' is)", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -470,7 +470,7 @@ contains
       case ("bilinear")
          this%fluxes_conservative = .false.
       case default
-         call fail("atm_state_configure: unknown &ocean_atm_forcing_nml fluxes_regrid '"// &
+         call fail("atm_state_configure: unknown [ocean.atm_forcing] fluxes_regrid '"// &
                    trim(fluxes_regrid_l)//"' (expected 'conservative' or 'bilinear')", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -777,7 +777,7 @@ contains
          return
       end if
       if (abs(sw_offset_s - 0.5_wp*spacing) > 1.0_wp) then
-         call fail("atm_state_configure: &ocean_atm_forcing_nml sw_offset_s = "// &
+         call fail("atm_state_configure: [ocean.atm_forcing] sw_offset_s = "// &
                    to_string(sw_offset_s)//" is inconsistent with the rsds file: records every "// &
                    to_string(spacing)//" s stamped at the interval centre need sw_offset_s = +"// &
                    to_string(0.5_wp*spacing)//" (a negative value selects the PREVIOUS interval's record)", &

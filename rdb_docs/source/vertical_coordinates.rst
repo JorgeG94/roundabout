@@ -60,13 +60,13 @@ column's total depth and its free surface?** Every family below answers that
 question differently, and then goes through the identical remap.
 
 The remap itself is a conservative reconstruct-and-reintegrate operation
-selected by ``&vcoord_nml remap_method``, whose accepted values are ``pcm``,
+selected by ``[vcoord] remap_method``, whose accepted values are ``pcm``,
 ``plm``, ``ppm`` (the default), ``ppm_h4`` and ``pqm``. It conserves
 :math:`h\theta` for every registered tracer to round-off; the regression
 gate is drift :math:`\le 10^{-15}` over ten remaps.
 
 The remap is gated on the thermodynamic cadence
-(``&ocean_vmix_nml dt_therm_ratio``) rather than running every dynamics
+(``[ocean.vmix] dt_therm_ratio``) rather than running every dynamics
 step.
 
 .. note::
@@ -79,7 +79,7 @@ step.
 The coordinate families
 =======================
 
-``&vcoord_nml vcoord_type`` selects the family. The accepted spellings are
+``[vcoord] vcoord_type`` selects the family. The accepted spellings are
 ``sigma`` (the default), ``zsigma``, ``zstar``, ``zstar_full``,
 ``zstar_sigma``, ``z``, ``eulerian_z``, ``isopycnal``, ``lagrangian``,
 ``gprime``, ``z_fixed``, ``rho`` and ``hycom`` — thirteen spellings over ten
@@ -118,14 +118,14 @@ Fixed-depth
 
       ``eulerian_z`` is outside the ``pred_corr`` outer-scheme envelope.
       Since ``pred_corr`` is the default, a ``eulerian_z`` configuration
-      must also set ``&ocean_bt_nml split_scheme = "ssp_rk2"``, and
+      must also set ``[ocean.bt] split_scheme = "ssp_rk2"``, and
       ``validate_config`` will refuse the run fail-loud otherwise, naming
       the fix.
 
 ``z_fixed`` / ``gprime``
    A prescribed stack of interface depths. This is the reduced-gravity
    setup: a small number of thick layers whose interfaces you specify,
-   typically paired with ``&ocean_pgf_nml form = "gprime"``. The
+   typically paired with ``[ocean.pgf] form = "gprime"``. The
    MOM6-reference double gyre is configured this way.
 
 z-star
@@ -144,14 +144,14 @@ surface, so that the coordinate tracks the SSH instead of being cut by it.
 ``zstar_full``
    *Full per-column z\*.* Each column builds its own
    :math:`z_{\mathrm{ref}}(0{:}N_z)` from its own bathymetry, and the
-   surface layer is anchored at ``&vcoord_nml zstar_h_surf_target``
+   surface layer is anchored at ``[vcoord] zstar_h_surf_target``
    regardless of the total depth — so near-surface resolution stays
    uniform across a domain with wildly varying depth, which is exactly what
    you want when the boundary layer is the thing you are resolving.
 
    The price is that **bed-side layers can vanish** where the water is
    shallower than the reference stack is deep. They are floored at
-   ``&vcoord_nml zstar_h_min`` (default :math:`10^{-4}\ \mathrm{m}`), and
+   ``[vcoord] zstar_h_min`` (default :math:`10^{-4}\ \mathrm{m}`), and
    every operator that divides by a layer thickness gates on the vanished-
    layer tolerance.
 
@@ -170,7 +170,7 @@ surface, so that the coordinate tracks the SSH instead of being cut by it.
 ``zsigma``
    A smoothstep blend from sigma near the surface to z at depth,
    conservatively remapped. The blend depth and width are internal
-   constants on the coordinate object, not namelist knobs.
+   constants on the coordinate object, not input knobs.
 
 Isopycnal and hybrid
 --------------------
@@ -178,13 +178,13 @@ Isopycnal and hybrid
 ``isopycnal`` / ``lagrangian``
    No remap at all — the layer *is* the coordinate, and it goes wherever
    the flow puts it. This is a true isopycnal model in the stacked
-   shallow-water sense. Pair it with the ``&ocean_isopycnal_nml`` grounding
+   shallow-water sense. Pair it with the ``[ocean.isopycnal]`` grounding
    controls.
 
 ``rho``
    Places layer interfaces on prescribed potential-density surfaces
    :math:`\rho_{\mathrm{target}}(0{:}N_z)` — lightest at the surface,
-   densest at the bed — referenced to ``&vcoord_nml rho_ref_pressure``
+   densest at the bed — referenced to ``[vcoord] rho_ref_pressure``
    (default :math:`2\times10^{7}\ \mathrm{Pa}`). The column density profile
    is PPM-reconstructed from :math:`T` and :math:`S` through the EOS and
    then inverted, by a bracketing sweep followed by a fixed eight-iteration
@@ -233,7 +233,7 @@ Choosing one
      - ``zstar_full``, with ``zstar_h_surf_target`` set to the resolution
        you need.
    * - Running a reduced-gravity or idealised layered setup
-     - ``z_fixed`` with ``&ocean_pgf_nml form = "gprime"``.
+     - ``z_fixed`` with ``[ocean.pgf] form = "gprime"``.
    * - Doing interior water-mass work where spurious diapycnal mixing is
        the enemy
      - ``hycom``. (``rho`` only if you can guarantee stratification
@@ -241,7 +241,7 @@ Choosing one
 
 .. note::
 
-   ``&vcoord_nml thickness_config`` selects the **initial** layer-thickness
+   ``[vcoord] thickness_config`` selects the **initial** layer-thickness
    profile — accepted values ``sigma`` (default) and ``uniform_z`` — and is
    a separate thing from the running coordinate. It is easy to conflate the
    two; they answer different questions, one about the state at

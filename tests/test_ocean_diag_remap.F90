@@ -690,9 +690,9 @@ contains
    end subroutine test_dispatch_extensive
 
    subroutine test_density_vgrid_from_namelist(error)
-      !! PR-9 §9.4 (namelist-reachability half — the numerics are covered
+      !! PR-9 §9.4 (input-reachability half — the numerics are covered
       !! by `diag_remap_density_bins`/`_conserves` above, which predate
-      !! this PR).  Proves the "density" `&ocean_diag_nml vgrid` string
+      !! this PR).  Proves the "density" `[ocean.diag] vgrid` string
       !! now reaches the SAME remap procedure the state-level API uses:
       !!   1. `diag_vgrid_from_name("density")` (driver) -> DIAG_VGRID_DENSITY
       !!   2. `coord_remap_proc(DIAG_VGRID_DENSITY, ...)` -> remap_layer_to_density

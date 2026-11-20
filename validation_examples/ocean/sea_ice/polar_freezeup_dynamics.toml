@@ -5,14 +5,14 @@
 # Same freeze-up scenario (identical grid/topo/thermo/ice-thermo knobs as
 # polar_freezeup_thermo.toml — see that file's header for the physics
 # rationale), but with a steady EASTWARD wind stress from t=0 and
-# `&ocean_ice_nml dynamics = .true.` turned on.  Ice still has to
+# `[ocean.ice] dynamics = true` turned on.  Ice still has to
 # nucleate from the frazil path first (there is no ice-IC-seeding knob —
 # see the thermo file's header), so this run starts ice-free exactly like
 # the thermo case and asks a second question on top of "does it grow": once
 # ice exists, does the EVP solver respond to wind stress (nonzero u_ice/
-# v_ice) and does it pile up against the east wall (all &ocean_bc_nml
-# edges default to "wall", which satisfies the &ocean_ice_nml
-# dynamics=.true. configure-time envelope requiring every edge to be
+# v_ice) and does it pile up against the east wall (all [ocean.bc]
+# edges default to "wall", which satisfies the [ocean.ice]
+# dynamics=true configure-time envelope requiring every edge to be
 # wall or periodic)?
 #
 # Shorter run than the thermo case (20 days, not 90) — this file's job is
@@ -107,8 +107,8 @@ vcoord_type = "sigma"
 auto_n_inner  = true
 cfl_bt_safety = 0.65
 
-# All four ocean_bc_nml edges default to "wall" -- required by the
-# &ocean_ice_nml dynamics=.true. configure-time envelope (every edge must
+# All four [ocean.bc] edges default to "wall" -- required by the
+# [ocean.ice] dynamics=true configure-time envelope (every edge must
 # be wall or periodic) and gives the ice pack something solid to pile
 # against on the downwind (east) side.
 
@@ -119,17 +119,17 @@ nk_ice         = 2
 air_temp       = -20.0
 restore_lambda = 20.0
 sw_down        = 0.0
-# transport=.true. is what lets ice MASS actually redistribute
+# transport=true is what lets ice MASS actually redistribute
 # (advect) in response to the EVP velocity field -- dynamics alone
 # only computes u_ice/v_ice, it does not move m_ice/part_size around.
-# Needs ncat>1 (5, ok), enable_thermodynamics=.true. (ok), no
+# Needs ncat>1 (5, ok), enable_thermodynamics=true (ok), no
 # periodic edges (all wall, ok), single-rank (ok) -- satisfies the
-# &ocean_ice_nml transport=.true. configure-time envelope.
+# [ocean.ice] transport=true configure-time envelope.
 transport      = true
 dynamics       = true
 evp_sub_steps  = 432
 # PR 36: ship SIS2's OWN defaults on this example (the house code
-# default is OFF for byte-identity elsewhere -- see &ocean_ice_nml
+# default is OFF for byte-identity elsewhere -- see [ocean.ice]
 # cfl_trunc/project_ci docstrings, rdb_config.F90).
 #   cfl_trunc = 0.5 is a pure numerics backstop and, by arithmetic
 #     (peak EVP drift ~0.13 m/s vs the transport-CFL bound
@@ -137,7 +137,7 @@ evp_sub_steps  = 432
 #     fire in this run; it is present only as the same safety net a
 #     production configuration would carry, not the fix for the
 #     downwind pile-up below.
-#   project_ci = .true. IS live physics wherever ci < 1 (it stiffens
+#   project_ci = true IS live physics wherever ci < 1 (it stiffens
 #     the rheology as the pack converges) -- expect it to shave the
 #     APPROACH to the wall. At the wall itself ci has already
 #     saturated to 1, where project_ci is provably inert (the strength

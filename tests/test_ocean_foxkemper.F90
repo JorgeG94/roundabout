@@ -875,10 +875,10 @@ contains
                            maxval(abs(ms_b%tracers(ms_b%idx_temperature)%c - ms_a%tracers(ms_a%idx_temperature)%c)))
 
          call check(error, max_diff_ba == 0.0_wp, &
-                    "T8: mle_fold_active=.false. h_layer differs from no-mle baseline (fold not suppressed)")
+                    "T8: mle_fold_active=false h_layer differs from no-mle baseline (fold not suppressed)")
          if (allocated(error)) exit checks
          call check(error, max_hTr_diff_ba == 0.0_wp, &
-                    "T8: mle_fold_active=.false. tracers differ from no-mle baseline (fold not suppressed)")
+                    "T8: mle_fold_active=false tracers differ from no-mle baseline (fold not suppressed)")
          if (allocated(error)) exit checks
 
          ! --- Assert (C) != (A) (fold fired => FK flux changed state) ---
@@ -888,7 +888,7 @@ contains
                            maxval(abs(ms_c%tracers(ms_c%idx_temperature)%c - ms_a%tracers(ms_a%idx_temperature)%c)))
 
          call check(error, max_diff_ca > 0.0_wp .or. max_hTr_diff_ca > 0.0_wp, &
-                    "T8: mle_fold_active=.true. produced no change vs no-mle baseline (fold did not fire)")
+                    "T8: mle_fold_active=true produced no change vs no-mle baseline (fold did not fire)")
 
       end block checks
 

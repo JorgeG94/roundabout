@@ -91,7 +91,7 @@ contains
       logical, intent(in) :: per_y
          !! South/north edges are periodic.
       logical, intent(in) :: thermo_active
-         !! `&ocean_thermo_nml enable_thermodynamics`.
+         !! `[ocean.thermo] enable_thermodynamics`.
       integer, intent(out), optional :: ierr
 
       integer :: nx, ny, nz, ng, nxt, nyt, it, is, ntr, ierr_local
@@ -151,7 +151,7 @@ contains
             end do
             if (tr_idx(is) == 0) then
                call fail("stage_tracer: no tracer named '"//trim(staged_tracers(is)%name)// &
-                         "' in the registry (S, T, and any tracer enabled by the namelist "// &
+                         "' in the registry (S, T, and any tracer enabled by the input "// &
                          "or registered in the pending window are stageable)", &
                          ierr_local, OCEAN_STATUS_ERR_NOT_FOUND)
                if (present(ierr)) ierr = ierr_local

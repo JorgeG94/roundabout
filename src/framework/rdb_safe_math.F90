@@ -13,7 +13,7 @@ module rdb_safe_math
    !! which is why a model kernel that must reproduce bitwise across decompositions
    !! calls these instead.
    !!
-   !! **Always on.**  There is no build option and no namelist knob: the `safe_*`
+   !! **Always on.**  There is no build option and no input knob: the `safe_*`
    !! names ARE the reproducible implementations.
    !!
    !! **One source text.**  The bodies live in `rdb_safe_math_{core,pow,trig,atan,hyp,erfc}.inc`

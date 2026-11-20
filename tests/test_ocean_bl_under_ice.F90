@@ -1475,11 +1475,11 @@ contains
          if (allocated(error)) exit checks
 
          call check(error, all(e_zero%kd_int == e_loaded%kd_int), &
-                    "in_eos = .false. is not bit-identical under a loaded "// &
+                    "in_eos = false is not bit-identical under a loaded "// &
                     "column -- the gate is leaking p_top into the EPBL stack")
          if (allocated(error)) exit checks
          call check(error, all(e_zero%mld == e_loaded%mld), &
-                    "in_eos = .false. moved the EPBL MLD under a loaded column")
+                    "in_eos = false moved the EPBL MLD under a loaded column")
          if (allocated(error)) exit checks
          call check(error, maxval(e_zero%kd_int) > 0.0_wp, &
                     "the reference run must actually mix, else the identity is "// &

@@ -53,7 +53,7 @@ module rdb_ocean_halo_width
       !! Minimum `nghost` for an MPI-decomposed (multi-rank) run (rule 6).
    integer, parameter :: REQUIRED_HALO_KAPPA_SHEAR_VERTEX = 2
       !! Minimum `nghost` for kappa-shear's opt-in vertex form
-      !! (`&ocean_kappa_shear_nml at_vertex = .true.`).
+      !! (`[ocean.kappa_shear] at_vertex = true`).
 
 contains
 
@@ -65,10 +65,10 @@ contains
       !! centered/PPM/non-periodic/single-rank floor), an absent logical
       !! contributes nothing (as if `.false.`).
       character(len=*), intent(in), optional :: pv_adv_scheme
-         !! `&ocean_coriolis_nml pv_adv_scheme` string ("centered", "weno3",
+         !! `[ocean.coriolis] pv_adv_scheme` string ("centered", "weno3",
          !! "weno5", "weno7"). Unrecognised/absent -> baseline (2).
       character(len=*), intent(in), optional :: tracer_recon
-         !! `&ocean_tracers_nml recon`-style string ("ppm", "weno5",
+         !! `[ocean.tracers] recon`-style string ("ppm", "weno5",
          !! "weno7", "weno9"). Unrecognised/absent -> baseline (2).
       logical, intent(in), optional :: periodic
          !! `.true.` if EITHER grid axis is periodic (rule 4).
@@ -77,7 +77,7 @@ contains
       logical, intent(in), optional :: decomposed
          !! `.true.` for a multi-rank (MPI-decomposed) run (rule 6).
       logical, intent(in), optional :: kappa_shear_at_vertex
-         !! `.true.` when `&ocean_kappa_shear_nml at_vertex = .true.`.
+         !! `.true.` when `[ocean.kappa_shear] at_vertex = true`.
       integer :: ng
 
       character(len=:), allocatable :: pv_s, tr_s

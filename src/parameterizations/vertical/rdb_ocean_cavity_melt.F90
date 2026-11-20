@@ -1,6 +1,6 @@
 !! Ice-shelf basal-melt interface thermodynamics — the three-equation
 !! kernel for an ice-shelf cavity.  **KERNEL ONLY: nothing in this module
-!! is called by the ocean step yet** (no namelist group, no state slot, no
+!! is called by the ocean step yet** (no input group, no state slot, no
 !! engine wiring — that is the coupling PR).  What ships here is the
 !! scalar, `pure`, `!$acc routine seq` physics, under unit test against a
 !! 17-significant-digit golden oracle.
@@ -57,7 +57,7 @@
 !! **THE LIQUIDUS IS NOT DUPLICATED HERE.**  (E1) is evaluated by
 !! `eos_freezing_point(eos, S, p)` and its three coefficients are read off
 !! the shared `eos_t` handle (`tfr_s`/`tfr_0`/`tfr_p`), selected as a named
-!! set by `&ocean_eos_nml tfreeze_set` (`"seaice"` — the SIS2 form — or
+!! set by `[ocean.eos] tfreeze_set` (`"seaice"` — the SIS2 form — or
 !! `"isomip"`).  The two sets are 0.03 degC apart at S = 34.5, which is
 !! enough to flip the SIGN of the melt rate over a 0.03 degC band of
 !! far-field temperature, so a cavity run configures the set deliberately.
@@ -190,7 +190,7 @@ module rdb_ocean_cavity_melt
       !! yet.  See the per-enum `!!` notes for what the prototype has.
    integer, parameter, public :: CAVITY_MELT_LAW_INVALID = 7
       !! The law / ice-mode code is not one of the enum values at all
-      !! (e.g. `CAVITY_LAW_INVALID` straight out of a mistyped namelist
+      !! (e.g. `CAVITY_LAW_INVALID` straight out of a mistyped input
       !! string).  Distinct from NOT_IMPLEMENTED: this one is a typo.
    integer, parameter, public :: CAVITY_MELT_NO_CORIOLIS = 8
       !! The Holland & Jenkins (1999) law was asked for at `f = 0`.  Their
@@ -309,7 +309,7 @@ module rdb_ocean_cavity_melt
       !! `k_ice`/`h_ice` to the parameter bundles.
 
    ! ======================================================================
-   ! Meltwater DELIVERY (`&ocean_cavity_melt_nml freshwater`) and the
+   ! Meltwater DELIVERY (`[ocean.cavity_melt] freshwater`) and the
    ! sea-level compensation that goes with it.  Enumerated here, next to
    ! the exchange-law and ice-conduction codes, so the one file that owns
    ! the melt vocabulary owns all of it; the coupling layer
@@ -346,7 +346,7 @@ module rdb_ocean_cavity_melt
       !! protocol has participants TUNE it until the Ocean0 mean melt
       !! lands in the prescribed band, and Yung et al. (2026) Table 2
       !! p. 2058 shows the twelve ISOMIP+ submissions landing anywhere
-      !! from 0.011 to 0.2.  A namelist knob in the coupling PR, never a
+      !! from 0.011 to 0.2.  An input knob in the coupling PR, never a
       !! hard-wired number.
    real(wp), parameter, public :: CAVITY_GAMMA_RATIO_ISOMIP = 35.0_wp
       !! `Gamma_T/Gamma_S`, the ratio the ISOMIP+ protocol adopts —
@@ -354,7 +354,7 @@ module rdb_ocean_cavity_melt
       !! Nicholls & Corr (2010) p. 2309: the ratio "should lie somewhere
       !! in the range 35-70.  Adopting a value at the lower end of this
       !! range...".  Named because the coupling layer resolves the
-      !! `&ocean_cavity_melt_nml gamma_s` "unset" sentinel through it,
+      !! `[ocean.cavity_melt] gamma_s` "unset" sentinel through it,
       !! and a second literal 35 in a second file is how the two drift.
    real(wp), parameter, public :: CAVITY_GAMMA_S_ISOMIP = &
                                   CAVITY_GAMMA_T_ISOMIP/CAVITY_GAMMA_RATIO_ISOMIP
@@ -370,7 +370,7 @@ module rdb_ocean_cavity_melt
       !! Table 1 p. 1790) to 9.7e-3 (Jenkins, Nicholls & Corr 2010 Table 2
       !! p. 2309) — a factor of 6.5 — and Yung et al. (2025) p. 5831
       !! reports order-of-magnitude variation within a single crevasse.
-      !! Must be a namelist knob.
+      !! Must be an input knob.
    real(wp), parameter, public :: CAVITY_U_TIDE_ISOMIP = 1.0e-2_wp
       !! ISOMIP+ RMS tidal velocity `u_tidal` (m/s) entering the MELT
       !! friction velocity — Asay-Davis et al. (2016) Table 4 p. 2483 and
@@ -650,7 +650,7 @@ contains
 #include "rdb_safe_math_pow.inc"
 
    ! ======================================================================
-   ! Namelist-string parsing.  Both mirror `parse_tfreeze_set`: an
+   ! Input-string parsing.  Both mirror `parse_tfreeze_set`: an
    ! unrecognised string becomes the INVALID code and the CALLER fails
    ! loud, because silently defaulting a mistyped closure is a physics
    ! change with no run-time symptom.
@@ -710,7 +710,7 @@ contains
    end function parse_cavity_ice_mode
 
    pure function parse_cavity_freshwater(name) result(code)
-      !! Translate a `&ocean_cavity_melt_nml freshwater` string into a
+      !! Translate a `[ocean.cavity_melt] freshwater` string into a
       !! `CAVITY_FW_*` code.  The accepted set MIRRORS the `nml_enum`
       !! registration in `register_ocean_cavity_melt` — the two lists
       !! move together.
@@ -729,7 +729,7 @@ contains
    end function parse_cavity_freshwater
 
    pure function parse_cavity_volume_comp(name) result(code)
-      !! Translate a `&ocean_cavity_melt_nml volume_compensation` string
+      !! Translate a `[ocean.cavity_melt] volume_compensation` string
       !! into a `CAVITY_VC_*` code.  Mirrors the `nml_enum` list.
       character(len=*), intent(in) :: name
       character(len=:), allocatable :: key
@@ -1215,7 +1215,7 @@ contains
    ! implemented in the prototype as `three_equation_bracketed` and agrees
    ! with the closed form to ~1e-14 on a linear liquidus.  It is NOT
    ! ported here because `eos_freezing_point` is linear by construction —
-   ! this is where it would go if `&ocean_eos_nml` ever grows a
+   ! this is where it would go if `[ocean.eos]` ever grows a
    ! Millero/TEOS-10 `tfreeze_form`.
    ! ======================================================================
 
@@ -2381,11 +2381,11 @@ contains
       !! `f_cor` is a per-column ARRAY (not `par%f_cor`):
       !! `CAVITY_LAW_HJ99` divides by `|f|` and takes `ln(.../|f| h_nu)`,
       !! so on a beta plane or a spherical sector the law's domain is a
-      !! property of the COLUMN, not of the namelist.
+      !! property of the COLUMN, not of the input.
       !! It reaches the law as a scalar (`cavity_melt_point_gamma_f`), and
       !! `CAVITY_MELT_NO_CORIOLIS` comes back for any covered column at
       !! `f = 0` instead of a plausible number.  `S_i` stays SCALAR: the
-      !! ice salinity is a namelist constant in v1 (`s_ice`, 0 by the
+      !! ice salinity is an input constant in v1 (`s_ice`, 0 by the
       !! ISOMIP+ protocol), and a 2-D array of one repeated number is
       !! device traffic for nothing.
       !!

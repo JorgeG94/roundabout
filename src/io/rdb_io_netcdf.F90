@@ -66,7 +66,7 @@ module rdb_io_netcdf
 
    integer, parameter :: NC_R4 = nf90_float
       !! Explicit 32-bit NetCDF element type.  Used ONLY by the ocean
-      !! diagnostic stream when `&ocean_diag_nml output_precision="single"`
+      !! diagnostic stream when `[ocean.diag] output_precision="single"`
       !! asks for a halved-width output file.  Restarts, gauges, coastal
       !! output and console/conservation totals stay on `NC_WP` — a lossy
       !! restart must not be requestable.  The 64-bit counterpart is
@@ -694,8 +694,8 @@ contains
       !! Create `path` via libc `mkdir(2)` if it does not already exist
       !! (single path component — not a recursive `mkdir -p`; a missing
       !! grandparent still fails, loudly, at the `inquire` re-check
-      !! below). Exists to close the headline P7 crash: `&ocean_diag_nml`/
-      !! `&output_nml` default `output_dir = "./output"`
+      !! below). Exists to close the headline P7 crash: `[ocean.diag]`/
+      !! `[output]` default `output_dir = "./output"`
       !! (`rdb_config_register_core.F90 :: register_output`), so a first-time `create()` against a
       !! fresh checkout with no `./output/` directory would otherwise
       !! reach `nc_create_file` -> `nf90_create` -> ENOENT ->

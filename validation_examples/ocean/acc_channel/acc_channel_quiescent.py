@@ -108,7 +108,7 @@ def build_model():
 
         closures=[
             EPBL(mstar_scheme="om4", mld_use_prev_guess=True),
-            # EPBL() above already sets use_kpp = .false. itself.
+            # EPBL() above already sets use_kpp = false itself.
             KappaShear(),
             Smagorinsky(C=0.15, biharmonic=True, C_biharmonic=0.06,
                         bound_kh=False, nu_h=10000.0, kh_vel_scale=3.0e-3),

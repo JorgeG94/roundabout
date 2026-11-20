@@ -123,7 +123,7 @@ module rdb_ocean_boundary_types
          !! (concentration held toward `clamped_tracer(:)`, mass `h_layer`
          !! left untouched) in the edge band. Default .false. is
          !! bit-identical. `h_layer` relaxation is a separate, map-driven
-         !! capability gated by `&ocean_sponge_nml relax_h` (PR-23b),
+         !! capability gated by `[ocean.sponge] relax_h` (PR-23b),
          !! restricted to `VCOORD_LAGRANGIAN` — see `rdb_ocean_sponge.F90`.
    end type ocean_bc_face_tag_t
 
@@ -172,7 +172,7 @@ module rdb_ocean_boundary_types
          !! Global switch (capability C3): apply the 18.6-yr nodal factor `f_c`
          !! + equilibrium/nodal phase `(V_c + u_c)` to the OBC tidal elevation
          !! forcing. Baked into the per-edge `tidal_fnodal`/`tidal_arg` at setup
-         !! from the shared `&ocean_tides_nml` reference epoch. Cached into the
+         !! from the shared `[ocean.tides]` reference epoch. Cached into the
          !! barotropic substep like `periodic_x`. Default .false. ⇒ bit-identical
          !! legacy static-phase sum. When .true. the phase convention flips: the
          !! Greenwich phase `tidal_phase` becomes a LAG (subtracted).
@@ -623,19 +623,19 @@ contains
       !! Pre-create GRID TOPOLOGY injection (Python runtime API plan,
       !! P2.5): force per-dimension periodicity the Oceananigans way
       !! (`docs/ocean_python_api_plan.md` S5b) — "the grid owns
-      !! periodicity", not the per-edge `&ocean_bc_nml` tags. Sets
+      !! periodicity", not the per-edge `[ocean.bc]` tags. Sets
       !! `periodic_x`/`periodic_y` directly and back-fills the edge tags
       !! on every axis the caller marks periodic (both edges together, so
       !! a west/east — or south/north — mismatch is structurally
-      !! unrepresentable through this entry point, unlike the namelist
+      !! unrepresentable through this entry point, unlike the input
       !! path which needs `ocean_bc_validate_periodic` to catch one). An
       !! axis the caller does NOT mark periodic is left untouched: its
       !! edge tags keep whatever physical BC `configure_ocean_bc` already
-      !! derived from `&ocean_bc_nml` — periodicity is a GRID property,
+      !! derived from `[ocean.bc]` — periodicity is a GRID property,
       !! but the wall/open/clamped/... physics for a Bounded dimension
-      !! stays the namelist's job.
+      !! stays the input's job.
       !!
-      !! Call AFTER `configure_ocean_bc` (whose namelist-derived tags this
+      !! Call AFTER `configure_ocean_bc` (whose input-derived tags this
       !! may override) and BEFORE anything that reads `periodic_x`/`_y` —
       !! the init-time periodic ghost wrap, `ocean_halo_init`,
       !! `configure_ocean_land_mask` (`engine_setup`'s ordering).
@@ -673,7 +673,7 @@ contains
    end subroutine ocean_bc_state_set_topology
 
    pure function ocean_bc_type_from_string(name) result(bc_type)
-      !! Convert a config-namelist edge string → integer OBC tag.
+      !! Convert a config-input edge string → integer OBC tag.
       !! Case-INSENSITIVE (`to_lower`), so "OPEN"/"Open"/"open" all parse
       !! to `OBC_OPEN`.  An unrecognised name returns `OBC_INVALID`
       !! (PR-6 fail-loud): a typo must NOT silently close the boundary to

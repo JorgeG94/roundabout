@@ -151,11 +151,11 @@ contains
       if (allocated(error)) return
       call check(error,.not. ct, &
                  "set_tracer must leave prescribed rho_layer bit-identical when "// &
-                 "enable_thermodynamics = .false.")
+                 "enable_thermodynamics = false")
       if (allocated(error)) return
       call check(error,.not. ch, &
                  "set_h must leave prescribed rho_layer bit-identical when "// &
-                 "enable_thermodynamics = .false.")
+                 "enable_thermodynamics = false")
    end subroutine test_thermo_off
 
    subroutine test_thermo_on(error)

@@ -93,7 +93,7 @@ module rdb_barotropic_workstate
          !! `apply_bt_correction` weights the per-layer barotropic
          !! increment by `visc_rem_*(k)/⟨visc_rem⟩_h` instead of
          !! uniformly, biasing the Δu distribution toward layers LESS
-         !! damped by vertical viscosity (`&ocean_bt_nml
+         !! damped by vertical viscosity (`[ocean.bt]
          !! correction_visc_rem`, now fail-loud at configure outside
          !! direct test construction of `cfg`). MOM6's split-explicit
          !! barotropic solver (Hallberg 1997; Hallberg & Adcroft 2009)
@@ -127,10 +127,10 @@ module rdb_barotropic_workstate
       logical :: bt_forcing_visc_rem = .false.
          !! MOM6 `wt_u` parity for the BT forcing assembly: weight the
          !! `F_bt_u/v` depth-mean (and the PGF-projection subtraction) by
-         !! `h_face·visc_rem(k)` (`&ocean_bt_nml forcing_visc_rem`).
+         !! `h_face·visc_rem(k)` (`[ocean.bt] forcing_visc_rem`).
       logical :: bt_renorm_visc_rem = .false.
          !! MOM6 continuity-inversion parity (SPEC S2b): γ-weighted
-         !! transport-matching renormaliser (`&ocean_bt_nml
+         !! transport-matching renormaliser (`[ocean.bt]
          !! renorm_visc_rem`) — `visc_rem_u/v` forwarded into the slow
          !! continuity so `u_cor = u + du·γ_k` and the fluxes carry the
          !! same weights.
@@ -168,7 +168,7 @@ module rdb_barotropic_workstate
          !! is never taken there.
 
       logical :: bt_rem_from_visc_rem = .false.
-         !! PR-2 (bt-rem-from-av-rem, `&ocean_bt_nml
+         !! PR-2 (bt-rem-from-av-rem, `[ocean.bt]
          !! bt_rem_from_visc_rem`): `compute_bt_rem_from_visc_rem` builds
          !! `bt_rem_u/v` from `av_rem_u/v` (`:= Σ_k frhat_k·visc_rem_k`,
          !! `frhat_k` the face layer fraction `derive_bt_from_layers`
@@ -184,7 +184,7 @@ module rdb_barotropic_workstate
          !! `bt_strong_drag`.
 
       integer :: frhat_scheme = FRHAT_ARITHMETIC
-         !! `&ocean_bt_nml frhat_scheme` (`rdb_constants::FRHAT_*`,
+         !! `[ocean.bt] frhat_scheme` (`rdb_constants::FRHAT_*`,
          !! `parse_frhat_scheme`; default `FRHAT_ARITHMETIC`, bit-identical
          !! to the pre-port tree).  `FRHAT_HYBRID` ports MOM6's `btcalc`
          !! HVEL_SCHEME=HYBRID face-thickness closure
@@ -210,7 +210,7 @@ module rdb_barotropic_workstate
          !! the `pbce` / `gtot_*` / `e_anom` / `eta_PF` fields filled.
 
       logical :: bt_bc_pgf_forcing = .true.
-         !! `&ocean_bt_nml bc_pgf_forcing` (default `.true.`, MOM6
+         !! `[ocean.bt] bc_pgf_forcing` (default `.true.`, MOM6
          !! parity).  When `.true.` the fast forcing is
          !! `F_bt_*_fast = F_bt + g_pf·∇(η_PF − η_seam)` — the depth
          !! mean of the FULL slow PGF stays in the forcing and only the
@@ -249,13 +249,13 @@ module rdb_barotropic_workstate
          !! the per-substep damping `|λ|² = 1 − bebt·a²` and the stability
          !! limit `a ≤ 2/√(1+2·bebt)` are MOM6's.  `bebt = 0` ⇒
          !! `ubt_trans = ubt^n` (neutral forward-backward Euler).  Set via
-         !! `&ocean_bt_nml bebt`.
+         !! `[ocean.bt] bebt`.
 
       logical :: substep_zeta_ke = .true.
          !! Live `(ζ_bt+f)·v − ∇KE` in the fast loop (default,
          !! bit-identical).  `.false.` = MOM6-parity planetary-only
          !! substeps; the `subtract_fast_cor_ref` reference reduces to
-         !! `f·v̄` to match.  See `&ocean_bt_nml substep_zeta_ke`.
+         !! `f·v̄` to match.  See `[ocean.bt] substep_zeta_ke`.
 
       ! ---- Primary barotropic-substep state ----
       real(wp), allocatable :: bt_eta(:, :)
@@ -326,7 +326,7 @@ module rdb_barotropic_workstate
       !   * `pred_corr` — slow tendencies are evaluated on `u_av/v_av`,
       !     so this is the depth mean of `u_av/v_av` under the SAME
       !     weights the forcing depth-mean used (h, or h·visc_rem when
-      !     `&ocean_bt_nml forcing_visc_rem`).  MOM6 `MOM_barotropic`
+      !     `[ocean.bt] forcing_visc_rem`).  MOM6 `MOM_barotropic`
       !     builds `Cor_ref_u` from `ubt_Cor = Σ_k wt_u·U_Cor` with
       !     `U_Cor = u_av`, i.e. the same velocity `CorAdCalc` used.
       real(wp), allocatable :: cor_ref_u(:, :)
@@ -450,7 +450,7 @@ module rdb_barotropic_workstate
       ! same "arrays stay unallocated" contract as `use_bt_cont_type`
       ! below.  `lwd_` (not `wd_`) because `wd_` is taken by wet/dry.
       logical :: lwd_enable = .false.
-         !! Driver writes from `&ocean_bt_nml wave_drag`.
+         !! Driver writes from `[ocean.bt] wave_drag`.
       real(wp), allocatable :: lwd_drag_u(:, :)
          !! u-face piston velocity `r_H` [m/s], shape (nx+1, ny).
          !! Static after `configure_ocean_wave_drag`; allocated only
@@ -464,7 +464,7 @@ module rdb_barotropic_workstate
       ! `use_bt_cont_type = .false.` the arrays stay unallocated and
       ! every BT path is bit-identical.
       logical :: use_bt_cont_type = .false.
-         !! Driver writes from the `ocean_use_bt_cont_type` namelist.
+         !! Driver writes from the `ocean_use_bt_cont_type` input.
       type(local_BT_cont_u_type), allocatable :: BTCL_u(:, :)
          !! Per-u-face flux-closure coefficients, shape (nx+1, ny).
          !! Allocated only when `use_bt_cont_type = .true.`.
@@ -480,7 +480,7 @@ module rdb_barotropic_workstate
       ! slopes.  `use_upstream_h_face = .false.` ⇒ unallocated, legacy
       ! centred-h (bit-identical).
       logical :: use_upstream_h_face = .false.
-         !! Driver writes from the `ocean_bt_upstream_h_face` namelist.
+         !! Driver writes from the `ocean_bt_upstream_h_face` input.
       real(wp), allocatable :: h_face_up_x(:, :)
          !! East-face upstream-h column sum (m), shape (nx+1, ny).
          !! `Σ_k h_layer(upstream_cell, j, k)` where the per-layer
@@ -495,15 +495,15 @@ module rdb_barotropic_workstate
       ! branch.  `wetdry_enable = .false.` (default) leaves every wd_*
       ! array unallocated and the substep on its unmodified centred-face
       ! path — byte-identical.  Allocated by `configure_ocean_wetdry`
-      ! (rdb_ocean_setup) when `&ocean_wetdry_nml enable` is on.
+      ! (rdb_ocean_setup) when `[ocean.wetdry] enable` is on.
       logical :: wetdry_enable = .false.
-         !! Driver writes from `&ocean_wetdry_nml enable`.
+         !! Driver writes from `[ocean.wetdry] enable`.
       real(wp) :: wd_dry_depth = 0.05_wp
          !! Total-depth dry threshold (m); cells with `D < wd_dry_depth`
-         !! are dynamically dry.  From `&ocean_wetdry_nml dry_depth`.
+         !! are dynamically dry.  From `[ocean.wetdry] dry_depth`.
       real(wp) :: wd_rewet_depth = 0.10_wp
          !! Hysteresis re-wet threshold (m), > `wd_dry_depth`.  From
-         !! `&ocean_wetdry_nml rewet_depth`.
+         !! `[ocean.wetdry] rewet_depth`.
       real(wp), allocatable :: wd_wet_dyn(:, :)
          !! Dynamic cell wet mask (1 = wet, 0 = dry), shape (nx, ny).
          !! PERSISTENT hysteresis state: updated every BT substep from
@@ -610,7 +610,7 @@ contains
       allocate (this%av_rem_v(nx, ny + 1), source=1.0_wp)
 
       ! BT_cont_type coefficient packs are allocated lazily by the
-      ! driver after the namelist toggle is read.
+      ! driver after the input toggle is read.
 
       this%is_init = .true.
    end subroutine barotropic_workstate_init

@@ -66,13 +66,11 @@ per-layer apply, and the config.
    reservoirs.
 4. `rdb_continuity.F90` — decide whether FOO is closed to mass flux (the
    `OBC_WALL` zeroing) and whether the renormalisation may skip it.
-5. `rdb_config.F90` — add any new `&ocean_bc_nml` keys to `read_ocean_bc_nml`
-   (declare on `ocean_bc_config_t`, add to the `namelist /ocean_bc_nml/`
-   statement, seed the local from `cfg%`, copy back) per
-   [add_namelist_knob.md](add_namelist_knob.md). `&ocean_bc_nml` is the one
-   group still on the native reader — it is registered with
-   `schema%add_external_group("ocean_bc")` so the strict parser accepts it. Add
-   any range/consistency check to `validate_config`.
+5. `rdb_config.F90` — add any new `[ocean.bc]` keys: declare them on
+   `ocean_bc_config_t` and register them in `register_ocean_bc`
+   (`src/core/config/rdb_config_register_forcing.F90`) per
+   [add_input_knob.md](add_input_knob.md). Add any range/consistency check to
+   `validate_config`.
 6. `src/core/ocean/state/setup/rdb_ocean_setup_bc.F90` — copy the parsed config onto the
    edge tags in `configure_ocean_bc`.
 7. **GPU map** any new *allocatable* persistent ghost array in
@@ -147,7 +145,7 @@ without your BC is byte-for-byte unchanged.
 - `src/core/ocean/boundary/{rdb_ocean_sponge,rdb_ocean_periodic,rdb_ocean_fold,rdb_ocean_fold_apply,rdb_ocean_boundary_data}.F90`.
 - `src/core/ocean/kernels/continuity_ppm/rdb_continuity.F90` — wall
   mass-flux zeroing.
-- `src/core/rdb_config.F90` — `read_ocean_bc_nml`;
+- `src/core/rdb_config.F90` — `ocean_bc_config_t`;
   `src/core/config/rdb_config_validate.F90` — `validate_config`;
   `src/core/ocean/state/setup/rdb_ocean_setup_bc.F90` — `configure_ocean_bc`.
 - The "Boundaries" bullet of the top-level [`CLAUDE.md`](../../CLAUDE.md).

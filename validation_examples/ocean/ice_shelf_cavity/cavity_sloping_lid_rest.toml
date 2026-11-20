@@ -9,7 +9,7 @@
 # velocity is the PRESSURE-GRADIENT DISCRETISATION, which is exactly what
 # the case is here to measure.
 #
-# The load partition under test (`&ocean_cavity_dyn_nml` + `p_top_in_bc`):
+# The load partition under test (`[ocean.cavity_dyn]` + `p_top_in_bc`):
 #
 #     bt_H_ref  = b - z_draft                   the barotropic DATUM
 #     p_ice_ref = rho_ref*GRAVITY*z_draft       the Boussinesq-isostatic load
@@ -28,7 +28,7 @@
 # (-8.4e-6 at the grounding end, +1.8e-5 near the front, zero at
 # z_draft = 343 m), ~5000x the truncation this case measures.  The legacy
 # split discarded it with the depth mean; the MOM6 split
-# (`&ocean_bt_nml bc_pgf_forcing`, default) hands it to the barotropic
+# (`[ocean.bt] bc_pgf_forcing`, default) hands it to the barotropic
 # mode, which adjusted to it on day 1 (En 1.06E-06, over the bar).  As in
 # MOM6, the LOAD is kept (the ice mass is what is prescribed) and the
 # initial column top moves to the depth s where the water above weighs
@@ -41,9 +41,9 @@
 # So the barotropic mode starts balanced and the residual is the FV-MOM6
 # truncation error alone.
 #
-# WHY THE INITIAL CONDITION USES `&ocean_zinit_nml source = "linear"`.
+# WHY THE INITIAL CONDITION USES `[ocean.zinit] source = "linear"`.
 # Under `VCOORD_SIGMA` the layer interfaces TILT with the ice base.  The
-# `&tracer_nml T_init_surface` / `S_init_*` family lays a profile out
+# `[tracer] T_init_surface` / `S_init_*` family lays a profile out
 # linearly in LAYER INDEX, i.e. along the tilted coordinate — which tilts
 # the isopycnals with the lid and is NOT a state of rest, so the run would
 # measure a real baroclinic adjustment rather than a numerical error.  The
@@ -124,11 +124,11 @@
 #     day 11   1.577E-09      day 20   4.237E-05
 #
 #   Controls on the same tree (pred_corr):
-#     * UNtrimmed (trim_ic_for_p_surf = .false.): the barotropic mode
+#     * UNtrimmed (trim_ic_for_p_surf = false): the barotropic mode
 #       adjusts to the load shortfall on day 1 and the late mode grows
 #       from that larger seed -- 1.061E-06 (d1, over the REST_1MM_S bar),
 #       2.108E-07 (d5), 1.020E-08 (d10), 4.371E-09 (d20), 1.316E-07 (d30).
-#     * the legacy split (`&ocean_bt_nml bc_pgf_forcing = .false.`, no
+#     * the legacy split (`[ocean.bt] bc_pgf_forcing = false`, no
 #       trim), which discards the depth mean and so both the shortfall and
 #       the in-layer term: 1.030E-09 (d1), 1.346E-09 (d5), 1.626E-09
 #       (d10), 2.070E-09 (d20), 5.275E-09 (d25), 3.043E-08 (d30),
@@ -220,7 +220,7 @@
 # Run:
 #   ./build/rdb validation_examples/ocean/ice_shelf_cavity/cavity_sloping_lid_rest.toml
 #
-# NOTE the configure-time WARNING about `&ocean_psurf_nml in_eos`: the
+# NOTE the configure-time WARNING about `[ocean.psurf] in_eos`: the
 # in-situ EOS ignores the 5.26 MPa ice load.  With the LINEAR equation of
 # state selected here there is no pressure dependence at all, so the load
 # in the EOS is literally inert and the warning is informational.  It

@@ -1,5 +1,5 @@
 !! Unit tests for PR-2 (bt-rem-from-av-rem): `bt_rem_u/v` built from the
-!! viscous remnant the layered momentum solve uses (`&ocean_bt_nml
+!! viscous remnant the layered momentum solve uses (`[ocean.bt]
 !! bt_rem_from_visc_rem`), MOM6's `bt_rem` construction from the
 !! vertical-friction remnant.
 !!

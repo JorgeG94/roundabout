@@ -1,4 +1,4 @@
-# Preparing a runoff file for `&ocean_dataovr_nml lrunoff / frunoff`
+# Preparing a runoff file for `[ocean.dataovr] lrunoff / frunoff`
 
 The model reads runoff from a file that is ALREADY on its grid, with every
 non-zero value on a wet cell (a value on a land cell aborts at the read: that
@@ -30,7 +30,7 @@ value is a river put on the wrong coast, so look at it. Missing values (fill, Na
 reported. The output keeps the source time axis and its `units`; point
 `lrunoff_file` / `frunoff_file` at it with `lrunoff_var = "runoff"` and the
 `time_mode` you want (`linear`, `cyclic`, `static`). It needs
-`&ocean_forcing_nml enable_components = .true.` and `freshwater = "virtual"` or
+`[ocean.forcing] enable_components = true` and `freshwater = "virtual"` or
 `"mass"`. One file per tool call: concatenate years offline (a multi-file IAF
 list is not supported yet).
 

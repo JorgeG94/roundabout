@@ -1,5 +1,5 @@
-!! `&ocean_bt_nml upstream_h_face` (and `substep_drag` / `wave_drag`)
-!! under the partial-step z-level face closure (`&vcoord_nml
+!! `[ocean.bt] upstream_h_face` (and `substep_drag` / `wave_drag`)
+!! under the partial-step z-level face closure (`[vcoord]
 !! zfixed_closed_faces`) — the barotropic face depth must be the OPEN
 !! column's.
 !!

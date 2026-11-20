@@ -209,7 +209,7 @@ module rdb_ocean_pressure_force
          !! `allocated(...)` — tracks GPU device attachment too.
       integer :: variant = OPGF_VARIANT_MONT
          !! Active pressure-force scheme variant.  MONT is the default
-         !! here AND the `&ocean_pgf_nml form` default, so a state built
+         !! here AND the `[ocean.pgf] form` default, so a state built
          !! straight from this type and one built through the config
          !! agree.  MONT is general-purpose: valid over variable
          !! bathymetry and every vcoord.
@@ -248,12 +248,12 @@ module rdb_ocean_pressure_force
          !! `compute_pbce` in the barotropic coupling.
          !!
          !! ASSIGNED FROM CONFIG by `configure_ocean_pgf`
-         !! (`&ocean_ic_nml rho_0` → `eos%rho0`, the single ρ₀ of record —
+         !! (`[ocean.ic] rho_0` → `eos%rho0`, the single ρ₀ of record —
          !! the EOS, the `eta_ib` surface-pressure seam, EPBL, kappa-shear,
          !! tidal mixing, MEKE/GM and the isopycnal slopes all take the same
          !! scalar).  The literal here is only the pre-configure default for
          !! direct `pgf%init(...)` call sites (tests, benchmarks) that never
-         !! run the configure pass; it matches the `&ocean_ic_nml rho_0`
+         !! run the configure pass; it matches the `[ocean.ic] rho_0`
          !! default so a state built either way agrees.
          !!
          !! Host scalar: every read is host-side (into a local `inv_rho0`,
@@ -284,7 +284,7 @@ module rdb_ocean_pressure_force
          !! silently interchanged (MOM6 carries the same pair, `GV%Rho0` vs
          !! the `PressureForce_FV` `rho_ref`).  Both are nonetheless SOURCED
          !! FROM THE SAME CONFIGURED ρ₀ by `configure_ocean_pgf`
-         !! (`&ocean_ic_nml rho_0` → `eos%rho0`): roundabout has no separate
+         !! (`[ocean.ic] rho_0` → `eos%rho0`): roundabout has no separate
          !! anomaly-reference knob, and `rho_ref ≠ rho0` would put a constant
          !! `g·(ρ_ref−ρ₀)/ρ₀` offset in `pa(top)` that the Boussinesq
          !! divisor no longer cancels.  Same host-scalar note as `rho0` —
@@ -294,7 +294,7 @@ module rdb_ocean_pressure_force
          !! `(h_L + h_R + h_neglect)`. Prevents division by zero when both
          !! adjacent cells have vanishing bed layers.
       logical :: skip_nonoverlap = .false.
-         !! Grounded-layer PGF gate (`&ocean_isopycnal_nml pgf_skip_nonoverlap`,
+         !! Grounded-layer PGF gate (`[ocean.isopycnal] pgf_skip_nonoverlap`,
          !! set by the driver ONLY under VCOORD_LAGRANGIAN).  When `.true.` the
          !! face PGF is zeroed wherever the layer's z-extents in the two
          !! abutting columns do NOT overlap — a layer that has wedged out
@@ -354,7 +354,7 @@ module rdb_ocean_pressure_force
          !! when `reconstruct_for_pressure = .true.`.
       logical :: insitu_density = .true.
          !! FV_MOM6 constant-by-layer (PCM) density at its IN-SITU pressure
-         !! (`&ocean_pgf_nml insitu_density`, MOM6 parity).  `.true.`
+         !! (`[ocean.pgf] insitu_density`, MOM6 parity).  `.true.`
          !! (default): each layer's `dpa`/`intz_dpa` and the cross-face
          !! `intx_dpa`/`inty_dpa` integrate `EOS(T, S, p = -g·rho0·z)` with
          !! the layer-mean T/S (`compute_fv_mom6_insitu_pcm_impl`).  Under
@@ -365,7 +365,7 @@ module rdb_ocean_pressure_force
          !! EOS hoisted out of the pressure points (`roquet_pcm_dpa_intz`: 1
          !! T/S polynomial + 5 pressure Horners per layer, 3 + 15 per face).
          !! `.false.`: the legacy PCM integral of `ms%rho_layer`, a
-         !! POTENTIAL density at the single `&ocean_eos_nml p_ref`, which
+         !! POTENTIAL density at the single `[ocean.eos] p_ref`, which
          !! drops the pressure dependence of the horizontal density
          !! gradient below the reference level.  Consulted only by FV_MOM6
          !! with `reconstruct_for_pressure = .false.`, an EOS handle and
@@ -374,7 +374,7 @@ module rdb_ocean_pressure_force
          !! the legacy path runs and answers are bit-identical.
       logical :: p_top_in_bc = .false.
          !! FV_MOM6 top-of-column pressure in the surface boundary
-         !! condition (`&ocean_pgf_nml p_top_in_bc`). `.false.` (default):
+         !! condition (`[ocean.pgf] p_top_in_bc`). `.false.` (default):
          !! `pa(nz+1) = rho_ref·g·eta_geo`, bit-identical. `.true.`: the
          !! load `multilayer_state_t%p_top` (Pa) is ADDED there, so the
          !! pressure stack measures down from the loaded surface —
@@ -510,7 +510,7 @@ contains
       !! at-floor band — while staying orders of magnitude below any layer
       !! that carries real mass.
       real(wp), intent(in) :: angstrom_h
-         !! `&ocean_isopycnal_nml angstrom_h` (m); 0 when the floor is off.
+         !! `[ocean.isopycnal] angstrom_h` (m); 0 when the floor is off.
       real(wp) :: tol
       tol = 2.0_wp*max(angstrom_h, H_VANISHED)
    end function nonoverlap_vanish_tol_for
@@ -567,7 +567,7 @@ contains
       ! testing for exactly those three variants.  The Pass-4 grounded-layer
       ! gate reads it too, and that pass runs for FV_MOM6 as well — but ONLY
       ! when `skip_nonoverlap` is on, which is a pure config-time decision
-      ! (vcoord + namelist) that the caller latches before `init`.  So FV_MOM6
+      ! (vcoord + input) that the caller latches before `init`.  So FV_MOM6
       ! gets the buffer exactly when something will read it, and an ungated
       ! FV_MOM6 run still pays nothing.  No other module references it.
       need_z_centre = .not. gate .or. &
@@ -1325,7 +1325,7 @@ contains
       !! to the `h_neglect` divisor (a relative `h_n/h_k ≈ 1e-10` for a
       !! metre-thick layer, `≈7e-7` for one at `H_VANISHED`).
       !!
-      !! Consequence for the SPLIT solver (`&ocean_bt_nml bc_pgf_forcing`,
+      !! Consequence for the SPLIT solver (`[ocean.bt] bc_pgf_forcing`,
       !! default, MOM6 `BT_force`): the depth mean of the layer PGF FORCES
       !! the barotropic substep, so a depth-uniform `δPFu` reaches the
       !! barotropic mode.  The part of `p_top` that is the atmospheric /
@@ -1620,7 +1620,7 @@ contains
       !! `boole_dpa_intz_layer` (`p = −g·ρ₀·z` from the surface-relative
       !! interface height) and that one is NOT offset by `p_top` — which
       !! is exactly why `validate_config` refuses
-      !! `&ocean_psurf_nml in_eos` together with
+      !! `[ocean.psurf] in_eos` together with
       !! `reconstruct_for_pressure`. The BC injection here is a PRESSURE
       !! boundary condition, not an EOS argument; the two are independent
       !! seams.
@@ -3768,7 +3768,7 @@ contains
    end function recon_rho_surf
 
    pure function parse_opgf_variant(name) result(code)
-      !! Translate a namelist string into an `OPGF_VARIANT_*` code.
+      !! Translate an input string into an `OPGF_VARIANT_*` code.
       !! Unrecognised values fall back to `OPGF_VARIANT_FV_LITE` (the
       !! production default).
       character(len=*), intent(in) :: name

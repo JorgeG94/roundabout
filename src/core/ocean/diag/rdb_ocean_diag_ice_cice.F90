@@ -1,6 +1,6 @@
 !! CICE-named sea-ice history diagnostics of the CICE/Icepack-port scheme (roundabout-original).
 module rdb_ocean_diag_ice_cice
-   !! The fills behind the CICE history names under `&ocean_ice_nml scheme = "cice"`.  They are STEP
+   !! The fills behind the CICE history names under `[ocean.ice] scheme = "cice"`.  They are STEP
    !! quantities: each fill reads what the LAST ice step left in the flux slot (`ice_flux_t`: the
    !! merged fluxes, the per-step `[m per step]` thickness bookkeeping, and the post-thermodynamics
    !! aggregate snapshot `aice_th, vice_th`), the radiation slot (albedo partial sums) and the

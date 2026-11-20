@@ -1,4 +1,4 @@
-!! Model-grid z-level T/S climatology -> the `&ocean_zinit_nml source = "file"` layout.
+!! Model-grid z-level T/S climatology -> the `[ocean.zinit] source = "file"` layout.
 program om_zclim_to_zinit
    !! Converts a z-level ocean climatology that is ALREADY on the model's
    !! horizontal tracer grid — e.g. MOM6's `WOA05_ptemp_salt_annual.nc` style
@@ -24,7 +24,7 @@ program om_zclim_to_zinit
    !!     cells out of 969441 wet) is filled from the nearest column (in a
    !!     growing box) that has data, at every level.
    !! Every column is fully valid on exit; downstream, dry (bathymetry-land)
-   !! columns are overwritten by the namelist `land_fill_t`/`land_fill_s`
+   !! columns are overwritten by the input `land_fill_t`/`land_fill_s`
    !! regardless of what this file carries there, so case 2 only matters for
    !! wet cells.
    !!

@@ -8,12 +8,12 @@ contains
 
    module subroutine configure_ocean_bc(cfg, ocean_state, compute_rank, ierr)
       !! Populate `ocean_state%bc` edge tags + per-edge data values from
-      !! `cfg%ocean%bc` (read from `&ocean_bc_nml`).  Run this after
+      !! `cfg%ocean%bc` (read from `[ocean.bc]`).  Run this after
       !! `configure_ocean_bt_split` and before `ocean_state_enter_data`
       !! so the BC state is set before the first dyn step.
       !!
       !! All defaults in `ocean_bc_config_t` resolve to OBC_WALL, so
-      !! namelist files that omit `&ocean_bc_nml` are bit-identical to
+      !! input files that omit `[ocean.bc]` are bit-identical to
       !! prior behaviour.
       !!
       !! After populating tags, calls `ocean_bc_validate_periodic` when any
@@ -123,7 +123,7 @@ contains
          ! ---- OBC tidal nodal/astronomical correction (capability C3) ----
          ! When on, bake the 18.6-yr nodal factor f_c and the equilibrium+nodal
          ! phase (V_c + u_c) into each edge's tidal_fnodal/tidal_arg, using the
-         ! SHARED &ocean_tides_nml reference epoch so the boundary tide stays
+         ! SHARED [ocean.tides] reference epoch so the boundary tide stays
          ! phase-consistent with the interior body tide (C1).  Host setup —
          ! plain loops, no do concurrent.  Default off ⇒ f=1, arg=0 (the
          ! defaults) ⇒ legacy static-phase OBC sum bit-identical.
@@ -140,7 +140,7 @@ contains
                ! Equilibrium argument V_c at the model-t=0 reference date.
                call parse_date_string(cfg%ocean%tides%ref_date, yr, mo, dy, date_ok)
                if (.not. date_ok) then
-                  call fail("OBC tides: unparseable &ocean_tides_nml ref_date '"// &
+                  call fail("OBC tides: unparseable [ocean.tides] ref_date '"// &
                             trim(cfg%ocean%tides%ref_date)//"'", ierr, OCEAN_STATUS_ERR_SETUP)
                   return
                end if
@@ -151,7 +151,7 @@ contains
                if (len_trim(nodal_str) == 0) nodal_str = cfg%ocean%tides%ref_date
                call parse_date_string(nodal_str, yr, mo, dy, date_ok)
                if (.not. date_ok) then
-                  call fail("OBC tides: unparseable &ocean_tides_nml nodal_ref_date '"// &
+                  call fail("OBC tides: unparseable [ocean.tides] nodal_ref_date '"// &
                             trim(nodal_str)//"'", ierr, OCEAN_STATUS_ERR_SETUP)
                   return
                end if
@@ -376,7 +376,7 @@ contains
 
    module subroutine configure_ocean_sponge(cfg, ocean_state, grid, compute_rank)
       !! Populate `ocean_state%sponge`'s per-cell `idamp_h`/`idamp_u`/
-      !! `idamp_v` maps from `cfg%ocean%sponge` (`&ocean_sponge_nml`) + the
+      !! `idamp_v` maps from `cfg%ocean%sponge` (`[ocean.sponge]`) + the
       !! already-configured `ocean_state%bc` edge tags. Run AFTER
       !! `configure_ocean_bc` (reads the edge tags + `has_*` flags) and
       !! BEFORE `ocean_state_enter_data`.
@@ -391,7 +391,7 @@ contains
       !! (`exp(-a*dt)*exp(-b*dt) = exp(-(a+b)*dt)`).
       !!
       !! Per-edge `west_width`/`west_strength` etc. (sentinel `< 0` ⇒
-      !! inherit the single global `&ocean_bc_nml sponge_width`/
+      !! inherit the single global `[ocean.bc] sponge_width`/
       !! `sponge_strength` already fanned out onto `bc%<edge>%sponge_*` by
       !! `configure_ocean_bc`) close the audit gap that the per-edge tag
       !! fields were previously unreachable (no config path could ever make

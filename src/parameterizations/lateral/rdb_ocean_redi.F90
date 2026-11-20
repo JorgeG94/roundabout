@@ -9,7 +9,7 @@
 !! flux scatter (native k = nz+1-Ko).  Do NOT call the sweep routines with
 !! bottom-up arrays without flipping first.
 !!
-!! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
+!! ### Partial-step z-level faces (`[vcoord] zfixed_closed_faces`)
 !!
 !! Under `z_fixed` a face column is not the whole water column: a layer that
 !! is an inert FILLER on either side (inside the bed, or inside the ice
@@ -182,7 +182,7 @@ module rdb_ocean_redi
       integer, allocatable :: vKoL(:, :, :), vKoR(:, :, :)
       real(wp), allocatable :: vhEff(:, :, :)
       ! ---- Per-face OPEN WINDOW (native, bottom-up layer range) ----
-      ! `&vcoord_nml zfixed_closed_faces`: a face pairs only native layers
+      ! `[vcoord] zfixed_closed_faces`: a face pairs only native layers
       ! `K*b..K*t` (module header).  Knob off ⇒ `1..nz` on every face.
       ! `K*t < K*b` marks a face with no open layer (inert).
       integer, allocatable :: uKb(:, :), uKt(:, :)
@@ -721,7 +721,7 @@ contains
    end subroutine redi_calc_coeffs
 
    pure subroutine redi_open_windows_x(nx, ny, nz, h_layer, open_u, uKb, uKt)
-      !! Fill every interior u-face's OPEN WINDOW (`&vcoord_nml
+      !! Fill every interior u-face's OPEN WINDOW (`[vcoord]
       !! zfixed_closed_faces`; module header): `ok(k) = open_u .and.` live
       !! on both sides (`rdb_vl_is_live`), then `redi_open_window`.
       integer, intent(in) :: nx, ny, nz

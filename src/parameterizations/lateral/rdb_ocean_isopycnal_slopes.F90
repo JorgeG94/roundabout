@@ -30,7 +30,7 @@ module rdb_ocean_isopycnal_slopes
    !! MPI seams), before `enter_data`; an enabled `ocean_slopes_compute`
    !! fails loud if it was never set.
    !!
-   !! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
+   !! ### Partial-step z-level faces (`[vcoord] zfixed_closed_faces`)
    !!
    !! The z_fixed target hangs every nominal interface at a fixed depth
    !! below `z = 0`, so with geopotential `e_int` two columns' common
@@ -45,7 +45,7 @@ module rdb_ocean_isopycnal_slopes
    !!     (`open(ka) .and. open(kb)`), so no consumer (GM, its `gm_src`,
    !!     VarMix) reads a gradient formed against a filler.
    !!
-   !! Default off (`&ocean_slopes_nml enable=.false.`) ⇒ slot allocated but
+   !! Default off (`[ocean.slopes] enable=false`) ⇒ slot allocated but
    !! `ocean_slopes_compute` no-ops ⇒ bit-identical.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, GRAVITY, H_VANISHED, H_DIV_EPS
@@ -78,7 +78,7 @@ module rdb_ocean_isopycnal_slopes
          !! True between `init` and `destroy`.  Guard on this, never on
          !! `allocated(...)` (host pointer only; misses GPU mapping).
       logical :: enable = .false.
-         !! Master switch (`&ocean_slopes_nml enable`).  Default off ⇒
+         !! Master switch (`[ocean.slopes] enable`).  Default off ⇒
          !! `ocean_slopes_compute` no-ops ⇒ bit-identical.
       real(wp) :: kd_smooth = 1.0e-6_wp
          !! Vertical diffusivity (m²/s) used by `vert_fill_TS` to fill
@@ -351,7 +351,7 @@ contains
       !! Zero slope / N² at every interior interface `K` that is NOT
       !! strictly inside its face's open column, i.e. unless both layers it
       !! separates (`K` above, `K-1` below) are open at that face
-      !! (`&vcoord_nml zfixed_closed_faces`).  Assigned under a test, never
+      !! (`[vcoord] zfixed_closed_faces`).  Assigned under a test, never
       !! multiplied by the 0/1 mask, so a non-finite value formed against a
       !! filler cannot survive as `NaN·0`.
       integer, intent(in) :: nx, ny, nz

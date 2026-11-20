@@ -1,5 +1,5 @@
 !! Per-face harmonic-viscosity CFL clamp on the velocity-Laplacian
-!! paths (`&ocean_hvisc_nml bound_kh`, MOM6 `BOUND_KH` analogue).
+!! paths (`[ocean.hvisc] bound_kh`, MOM6 `BOUND_KH` analogue).
 !!
 !! When `bound_kh = .true.` the effective Laplacian viscosity at each
 !! face is clamped to

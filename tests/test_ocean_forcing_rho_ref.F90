@@ -2,13 +2,13 @@
 !!
 !! The defect these pin
 !! --------------------
-!! `&ocean_ic_nml rho_0` lands on `eos%rho0` — the one ρ₀ of record.  Eleven
+!! `[ocean.ic] rho_0` lands on `eos%rho0` — the one ρ₀ of record.  Eleven
 !! slots already copy it in their `configure_ocean_*` (EPBL, kappa-shear,
 !! tidal mixing, wave speed, the `eta_ib` seam, GM / MEKE / Redi / MLE, the
 !! isopycnal slopes, and — since the preceding commit — the PGF).  Four did
 !! NOT: `surface_flux%rho0`, `surface_stress%rho0`, `vmix%rho0` and
 !! `geothermal%rho0` each declared `= 1035.0_wp` and nothing ever assigned
-!! them.  A namelist setting `rho_0 /= 1035` therefore ran its equation of
+!! them.  An input setting `rho_0 /= 1035` therefore ran its equation of
 !! state on the configured density while
 !!
 !!   * every surface heat source used `dt/(1035·cp)` and every surface salt
@@ -69,7 +69,7 @@ module test_ocean_forcing_rho_ref
    real(wp), parameter :: DX = 1000.0_wp
    real(wp), parameter :: RHO0_DEFAULT = 1035.0_wp
       !! The literal every one of these slots defaulted to, and the
-      !! `&ocean_ic_nml rho_0` default.  Named here only so the non-vacuity
+      !! `[ocean.ic] rho_0` default.  Named here only so the non-vacuity
       !! arms can show the test is not comparing 1035 against 1035.
    real(wp), parameter :: RHO0_CFG = 1000.0_wp
       !! Deliberately NOT the default.
@@ -149,7 +149,7 @@ contains
    ! ---------------------------------------------------------------------
 
    subroutine test_forcing_rho0_plumbing(error)
-      !! `&ocean_ic_nml rho_0` must reach all four remaining reference
+      !! `[ocean.ic] rho_0` must reach all four remaining reference
       !! densities, and they must agree with the EOS.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
@@ -167,7 +167,7 @@ contains
          if (allocated(error)) exit checks
 
          call check(error, abs(state%eos%rho0 - RHO0_CFG) < TOL_SCALAR, &
-                    "eos%rho0 did not follow &ocean_ic_nml rho_0")
+                    "eos%rho0 did not follow [ocean.ic] rho_0")
          if (allocated(error)) exit checks
          call check(error, abs(state%surface_flux%rho0 - state%eos%rho0) < TOL_SCALAR, &
                     "surface_flux%rho0 did not follow the configured rho_0 — every "// &

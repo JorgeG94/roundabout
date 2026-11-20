@@ -1,5 +1,5 @@
-!! `&ocean_coriolis_nml form = "sadourny_hk"` next to a `z_fixed` STAIRCASE
-!! (`&vcoord_nml zfixed_closed_faces`): thin live partial bottom cells,
+!! `[ocean.coriolis] form = "sadourny_hk"` next to a `z_fixed` STAIRCASE
+!! (`[vcoord] zfixed_closed_faces`): thin live partial bottom cells,
 !! inert fillers and closed face-layers.
 !!
 !! ### The defect this file guards

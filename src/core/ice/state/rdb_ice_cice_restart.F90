@@ -33,7 +33,7 @@ module rdb_ice_cice_restart
    !! `ice_update_state(.true.)` (the aggregates are not restart state).
    !!
    !! Wired into the engine's restart read (`resume_cice_ice`): the SIS2 counts are
-   !! `&ocean_ice_nml ncat` / `nk_ice` (a SIS2 file must have been written with the
+   !! `[ocean.ice] ncat` / `nk_ice` (a SIS2 file must have been written with the
    !! same ones), and `Tf = -depressT*S_ref` of the EOS reference salinity.
    use rdb_constants, only: wp
    use pic_logger, only: logger => global_logger

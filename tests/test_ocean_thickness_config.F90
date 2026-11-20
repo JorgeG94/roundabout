@@ -1,4 +1,4 @@
-!! Analytical tests for `&vcoord_nml thickness_config = "uniform_z"` —
+!! Analytical tests for `[vcoord] thickness_config = "uniform_z"` —
 !! the MOM6 `initialize_thickness_uniform` initial-thickness seed.
 !!
 !! Why the knob exists.  Under the linear density-coordinate IC (MOM6

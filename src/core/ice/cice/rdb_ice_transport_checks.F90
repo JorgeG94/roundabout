@@ -21,7 +21,7 @@ module rdb_ice_transport_checks
    ! Baumgardner (2000, J. Comput. Phys. 160 318).
    !
    !! Six runtime checks around the horizontal transport, switched together by
-   !! `&ocean_ice_dyn_nml transport_check`.  Each is a device kernel; the
+   !! `[ocean.ice_dyn] transport_check`.  Each is a device kernel; the
    !! per-cell ones set a bit in the per-cell word `ice_err(nx, ny)` of
    !! `rdb_ice_errors` (a thread owns its cell, so no race and no atomics) and
    !! return the number of flagged cells through a ONE-accumulator

@@ -1,6 +1,6 @@
-!! Ocean slot configuration from a parsed namelist config.
+!! Ocean slot configuration from a parsed input config.
 module rdb_ocean_setup
-   !! Applies the per-concern `&ocean_*` namelist knobs onto an
+   !! Applies the per-concern `&ocean_*` input knobs onto an
    !! `ocean_state_t`'s kernel slots (bottom drag, vmix, lateral
    !! viscosity, vertical coord, PGF, barotropic split).  Pure
    !! cfg → slot wiring + rank-0 logging — no I/O, no NetCDF — so it
@@ -559,7 +559,7 @@ module rdb_ocean_setup
 contains
 
    pure function tags_periodic_x(cfg) result(per_x)
-      !! `.true.` iff `&ocean_bc_nml` tags BOTH west and east `periodic` —
+      !! `.true.` iff `[ocean.bc]` tags BOTH west and east `periodic` —
       !! the rule `ocean_bc_state_init` applies, for callers that run before
       !! `configure_ocean_bc` (the grid metrics).
       type(config_t), intent(in) :: cfg
@@ -569,7 +569,7 @@ contains
    end function tags_periodic_x
 
    pure function tags_north_fold(cfg) result(fold)
-      !! `.true.` iff `&ocean_bc_nml north = "tripolar_fold"`.
+      !! `.true.` iff `[ocean.bc] north = "tripolar_fold"`.
       type(config_t), intent(in) :: cfg
       logical :: fold
       fold = ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD
@@ -696,7 +696,7 @@ contains
       real(wp), intent(in) :: dyT(nx, ny)
          !! T-cell y length (m).
       real(wp), intent(in) :: cfl_safety
-         !! `&ocean_bt_nml cfl_bt_safety`.
+         !! `[ocean.bt] cfl_bt_safety`.
       real(wp), intent(out) :: dt_bt
          !! Smallest per-wet-cell safe substep (s); `huge` if no wet cell.
       real(wp), intent(out) :: h_at
@@ -732,7 +732,7 @@ contains
    subroutine fill_coriolis_corner(cfg, metrics, grid, f_corner)
       !! Fill a C-grid corner Coriolis array via the single
       !! generator-driven routine `metrics_fill_coriolis`, honouring
-      !! `&ocean_grid_nml coriolis_scheme` (D7).  beta_plane (default)
+      !! `[ocean.grid] coriolis_scheme` (D7).  beta_plane (default)
       !! is BIT-IDENTICAL to the legacy `coriolis_adv_set_beta_plane`;
       !! planetary uses the metrics geography.  The centre output is
       !! discarded here (filled into local scratch).
@@ -816,7 +816,7 @@ contains
    end function hycom_top_dz
 
    pure function cavity_resolve_gamma_s(gamma_s, gamma_t) result(gamma_s_eff)
-      !! Resolve the `&ocean_cavity_melt_nml gamma_s` "unset" sentinel to
+      !! Resolve the `[ocean.cavity_melt] gamma_s` "unset" sentinel to
       !! the ISOMIP+ default `gamma_t/CAVITY_GAMMA_RATIO_ISOMIP`
       !! (Asay-Davis et al. (2016) Table 4 p. 2483; the 35 is Jenkins,
       !! Nicholls & Corr (2010) p. 2309).

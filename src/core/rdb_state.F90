@@ -1,6 +1,6 @@
 !! Shared tracer-registry defaults for the ocean dyn-core.
 module rdb_state
-   !! Overlay of the scalar `&tracer_nml` configuration onto the salinity /
+   !! Overlay of the scalar `[tracer]` configuration onto the salinity /
    !! temperature slots of a `tracer_t` registry.
    !!
    !! Historically this module also carried the A-grid coastal `state_t`
@@ -53,7 +53,7 @@ contains
       tr_T%eos_coeff = -cfg%alpha_T
       tr_T%eos_ref = cfg%T_ref
 
-      ! TEOS-10 convention (`&ocean_eos_nml ts_convention = "cons_abs"`):
+      ! TEOS-10 convention (`[ocean.eos] ts_convention = "cons_abs"`):
       ! the same slots now carry Conservative Temperature / Absolute
       ! Salinity (IOC/SCOR/IAPSO 2010).  Names stay `temperature` /
       ! `salinity` (registry lookups, diag keys); only the metadata

@@ -1,5 +1,5 @@
 !! The partial-step z-level FACE-CLOSURE mask builder
-!! (`&vcoord_nml zfixed_closed_faces`; Adcroft, Hill & Marshall 1997;
+!! (`[vcoord] zfixed_closed_faces`; Adcroft, Hill & Marshall 1997;
 !! Losch 2008 §2.1 for the ice-shelf cavity).
 !!
 !! `ocean_vcoord_closed_face_masks` is a `pure` procedure over explicit
@@ -493,9 +493,9 @@ contains
                  "z_fixed + open faces over a stepped bed must be refused at configure")
       if (allocated(error)) return
       msg = trim(error_ring_get(0))
-      call check(error, index(msg, "zfixed_closed_faces = .false.") > 0 .and. &
+      call check(error, index(msg, "zfixed_closed_faces = false") > 0 .and. &
                  index(msg, "staircase") > 0 .and. &
-                 index(msg, "zfixed_closed_faces = .true.") > 0, &
+                 index(msg, "zfixed_closed_faces = true") > 0, &
                  "the refusal must name the knob, the staircase and the fix; got: "//msg)
    end subroutine test_open_stepped_refused
 

@@ -270,11 +270,11 @@ contains
          !! Tracer concentration: read as `c_old`, overwritten with `c_new`.
       logical, intent(in) :: bnd_extrap
          !! Linear-exact boundary-cell reconstruction in the column kernel
-         !! (`&vcoord_nml remap_boundary_extrap`); `.false.` ⇒ the PCM
+         !! (`[vcoord] remap_boundary_extrap`); `.false.` ⇒ the PCM
          !! flatten.
       logical, intent(in) :: nonunif
          !! Non-uniform-grid PLM/PPM reconstruction weights in the column
-         !! kernel (`&vcoord_nml remap_nonuniform_weights`); `.false.` ⇒ the
+         !! kernel (`[vcoord] remap_nonuniform_weights`); `.false.` ⇒ the
          !! equal-thickness specialisations.
       real(wp), intent(inout), optional :: budget(nx, ny, nz)
       real(wp), intent(inout), optional :: c_new_out(nx, ny, nz)
@@ -372,7 +372,7 @@ contains
       real(wp), intent(out) :: clamp_amt(NZ_STACK_MAX)
       logical, intent(in) :: bnd_extrap
          !! The column kernel ran with the linear-exact boundary closure
-         !! (`&vcoord_nml remap_boundary_extrap`): widen the range of the two
+         !! (`[vcoord] remap_boundary_extrap`): widen the range of the two
          !! boundary cells to the line they carry (see above).
       real(wp) :: z_old(NZ_STACK_MAX), z_new(NZ_STACK_MAX)
       real(wp) :: zacc_o, zacc_n, zn_lo, zn_hi, zo_lo, zo_hi, overlap
@@ -495,7 +495,7 @@ contains
       !! `nz >= 3`, uniform-weight edges, PCM boundary cells) and needs its
       !! global scratch buffers; everything else (other methods,
       !! `nz <= 2`, `remap_boundary_extrap`, `remap_nonuniform_weights`,
-      !! `&vcoord_nml remap_kernel = "reference"`) takes the stack-based
+      !! `[vcoord] remap_kernel = "reference"`) takes the stack-based
       !! reference kernel.  The stream kernel itself contains no call into
       !! stack-based code, hence the decision is taken here, not per column.
       type(ocean_vcoord_t), intent(in) :: vcoord
@@ -933,7 +933,7 @@ contains
          !! Enable the KE-conserving baroclinic-anomaly rescale (default
          !! `.false.` ⇒ momentum-only remap, bit-identical).
       logical, intent(in), optional :: zlevel_faces
-         !! `&vcoord_nml zfixed_closed_faces` — build the face columns as
+         !! `[vcoord] zfixed_closed_faces` — build the face columns as
          !! `min(h_L, h_R)` and drop the closed layers, so the remap
          !! neither fills nor drains an inert filler.  Default `.false.`
          !! ⇒ bit-identical.  See `remap_x_face_velocity`.
@@ -977,7 +977,7 @@ contains
       real(wp), intent(inout) :: u_face_x(nx + 1, ny, nz)
       logical, intent(in) :: conserve_ke
       logical, intent(in) :: zlevel_faces
-         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !! `[vcoord] zfixed_closed_faces` — z-level partial steps.
          !! Builds the face column as the OVERLAP of the two cell
          !! columns, `min(h_L, h_R)`, instead of their arithmetic mean,
          !! and then drops any layer at or below `H_VANISHED` from BOTH
@@ -1059,7 +1059,7 @@ contains
       real(wp), intent(inout) :: v_face_y(nx, ny + 1, nz)
       logical, intent(in) :: conserve_ke
       logical, intent(in) :: zlevel_faces
-         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !! `[vcoord] zfixed_closed_faces` — z-level partial steps.
          !! Builds the face column as the OVERLAP of the two cell
          !! columns, `min(h_L, h_R)`, instead of their arithmetic mean,
          !! and then drops any layer at or below `H_VANISHED` from BOTH
@@ -1269,7 +1269,7 @@ contains
       ! `vcoord%remap_h_old` and `vcoord%target_h` are the exact pair every
       ! column kernel below consumes, and neither is overwritten by steps 4-7
       ! — so `ocean_remap_scan_preconditions` can assert them from the
-      ! (impure) driver AFTER this call.  See `&vcoord_nml
+      ! (impure) driver AFTER this call.  See `[vcoord]
       ! remap_check_preconditions` and `rdb_ocean_dyn :: ocean_dyn_step_split`.
 
       ! 4. Tracer remap (centre cells)

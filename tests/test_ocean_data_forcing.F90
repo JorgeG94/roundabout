@@ -60,7 +60,7 @@
 !!                                    of one step under the full TAU.
 !!
 !!   data_forcing_config_predicates — T9: both branches of every
-!!                                    `&ocean_dataovr_nml` validity
+!!                                    `[ocean.dataovr]` validity
 !!                                    predicate.  These are what
 !!                                    `validate_config` turns into an
 !!                                    abort, so this is the coverage for
@@ -75,10 +75,10 @@
 !! Why the predicates live in `rdb_config` and run in `validate_config`
 !! rather than at registration: a broken config must not run at all.
 !! `ocean_data_forcing_configure` executes deep in the driver setup,
-!! after the grid, bathymetry and IC are built; a namelist typo caught
+!! after the grid, bathymetry and IC are built; an input typo caught
 !! there has already cost the user all of that. Everything checkable
 !! from `cfg` alone is therefore checked before any work happens. The
-!! registration-time guards remain for the programmatic (non-namelist)
+!! registration-time guards remain for the programmatic (non-input)
 !! caller.
 module test_ocean_data_forcing
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -235,7 +235,7 @@ contains
    end subroutine make_slots
 
    subroutine tau_x_config(cfg, file, var)
-      !! `&ocean_dataovr_nml` with only the tau_x tag driven.
+      !! `[ocean.dataovr]` with only the tau_x tag driven.
       type(ocean_dataovr_config_t), intent(out) :: cfg
       character(len=*), intent(in) :: file, var
       cfg%enable = .true.
@@ -1141,7 +1141,7 @@ contains
       !! Each predicate is exercised on BOTH branches.  A one-sided test
       !! (`ok` for a good config) would pass against a predicate hard-
       !! wired to `.true.`, which is precisely the regression that would
-      !! let a broken namelist through.
+      !! let a broken input through.
       type(error_type), allocatable, intent(out) :: error
 
       type(ocean_dataovr_config_t) :: cfg

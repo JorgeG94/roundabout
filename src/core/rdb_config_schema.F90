@@ -1,6 +1,6 @@
-!! Central Roundabout namelist schema (strict validation + parameter dumps).
+!! Central Roundabout input schema (strict validation + parameter dumps).
 module rdb_config_schema
-   !! Re-export shim for Roundabout's strict namelist schema. Re-exports
+   !! Re-export shim for Roundabout's strict input schema. Re-exports
    !! `build_rdb_schema` (defined in `rdb_config`, kept here to avoid a
    !! circular dependency) and owns the `nml_dirname` helper.
    use rdb_config, only: build_rdb_schema

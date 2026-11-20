@@ -25,7 +25,7 @@ module test_ocean_cavity_grounded_budget
    !!
    !! ### The defect this suite was written for
    !!
-   !! An ice-shelf column that GROUNDS (`b - z_draft < &ocean_cavity_dyn_nml
+   !! An ice-shelf column that GROUNDS (`b - z_draft < [ocean.cavity_dyn]
    !! h_min_cavity`) becomes LAND through `seed_wet_mask_impl`, exactly as
    !! an ordinary shallow-bathymetry column does.  Its water column
    !! `b - z_draft` is NEGATIVE — by hundreds of metres for a real draft
@@ -149,7 +149,7 @@ contains
    end subroutine collect_ocean_cavity_grounded_budget_tests
 
    ! ------------------------------------------------------------------
-   ! Namelists
+   ! Inputs
    ! ------------------------------------------------------------------
 
    function base_nml(topo, tfreeze) result(nml)
@@ -157,12 +157,12 @@ contains
       !! all round: the only things that may move the salt and heat
       !! totals are the ones the budget names.
       character(len=*), intent(in) :: topo
-         !! The whole `&ocean_topo_nml` group — `flat` for the cavity
+         !! The whole `[ocean.topo]` group — `flat` for the cavity
          !! runs, `island` for the cavity-free twin.  Passed as a group
-         !! rather than appended, because a namelist may not carry the
+         !! rather than appended, because an input may not carry the
          !! same group twice.
       character(len=*), intent(in) :: tfreeze
-         !! `&ocean_eos_nml tfreeze_set` — `isomip` is REQUIRED by the
+         !! `[ocean.eos] tfreeze_set` — `isomip` is REQUIRED by the
          !! melt package (the two shipped liquidi differ by enough to
          !! flip the sign of the melt rate), `seaice` elsewhere.
       character(len=:), allocatable :: nml

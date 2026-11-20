@@ -1,5 +1,5 @@
 """Isolated balanced vortex on a beta-plane -- Python-API port of the
-three namelists in this directory.
+three inputs in this directory.
 
     python3 vortex_beta.py             # vortex_beta.toml (warm core, anticyclone)
     python3 vortex_beta.py cyclone     # vortex_beta_cyclone.toml (cold core)

@@ -111,10 +111,10 @@ contains
          !$acc exit data delete(ms, sf)
 
          call check(error, maxval(abs(sf%Q_heat - Q_heat_before)) == 0.0_wp, &
-                    "assemble() with use_components=.false. must not touch Q_heat")
+                    "assemble() with use_components=false must not touch Q_heat")
          if (allocated(error)) exit checks
          call check(error, maxval(abs(sf%Q_salt - Q_salt_before)) == 0.0_wp, &
-                    "assemble() with use_components=.false. must not touch Q_salt")
+                    "assemble() with use_components=false must not touch Q_salt")
          if (allocated(error)) exit checks
 
          call check(error, sf%bytes() == sf_ref%bytes(), &

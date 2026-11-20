@@ -25,7 +25,7 @@ module rdb_ocean_cavity
    !!   * BAROTROPIC — the datum (D), and nothing else on the seam.  The
    !!     datum puts the free surface the PGF sees at `eta_geo = -z_draft`
    !!     and `p_ice_ref` in the `pa(nz+1)` BC cancels exactly that, so
-   !!     under the MOM6 split (`&ocean_bt_nml bc_pgf_forcing`, where the
+   !!     under the MOM6 split (`[ocean.bt] bc_pgf_forcing`, where the
    !!     depth-mean layer PGF forces the barotropic mode) the static load
    !!     is balanced, and under the legacy split it was discarded with the
    !!     depth mean.  Either way `p_ice_ref` never joins `sf%p_surf`, out
@@ -64,11 +64,11 @@ module rdb_ocean_cavity
    !!     the FV pressure force).  Without a cavity they coincide; with one
    !!     `bt_eta ~ 0` while `eta_geo ~ -z_draft`, and both are correct.
    !!   * The datum and the PGF boundary condition must carry the SAME
-   !!     static load.  Under the default split (`&ocean_bt_nml
+   !!     static load.  Under the default split (`[ocean.bt]
    !!     bc_pgf_forcing`) the depth mean of the layer PGF forces the
    !!     barotropic mode, so `bt_H_ref = b - z_draft` (free surface at
    !!     `eta_geo = -z_draft`) must be balanced by `p_ice_ref` in
-   !!     `pa(nz+1)`.  Hence `&ocean_pgf_nml p_top_in_bc` is REQUIRED for a
+   !!     `pa(nz+1)`.  Hence `[ocean.pgf] p_top_in_bc` is REQUIRED for a
    !!     cavity whose draft varies: fail-loud at configure, deliberately not
    !!     auto-enabled.  A draft uniform over the whole array is exempt (a
    !!     load with no gradient is bit-identically inert in the top BC).
@@ -76,7 +76,7 @@ module rdb_ocean_cavity
    !!     not the true weight `g*integral(rho)`.  In a stratified column the
    !!     difference leaves a depth-uniform residual `N^2 z_draft grad(z_draft)`
    !!     in the raw PGF (5.8e-6 m/s^2 at N^2 = 1e-5, z_draft = 280 m, slope
-   !!     2e-3) that the barotropic mode adjusts to.  `&ocean_cavity_dyn_nml
+   !!     2e-3) that the barotropic mode adjusts to.  `[ocean.cavity_dyn]
    !!     trim_ic_for_p_surf` (default off) starts it balanced by moving each
    !!     loaded column's initial top (`bt_eta = eta_trim /= 0` at t = 0; the
    !!     datum is unchanged).  `draft_source="in_situ"` is deferred.
@@ -118,11 +118,11 @@ module rdb_ocean_cavity
    !!
    !! ### Units
    !!
-   !! Every knob in `&ocean_cavity_dyn_nml` is in METRES; the setters
+   !! Every knob in `[ocean.cavity_dyn]` is in METRES; the setters
    !! below work in GRID coordinate units (metres on a Cartesian grid,
    !! DEGREES on spherical/curvilinear).  `cavity_fill_draft` converts at
    !! the dispatch with `topo_length_to_grid_units`, exactly as
-   !! `&ocean_topo_nml slope_scale` is converted for the formula
+   !! `[ocean.topo] slope_scale` is converted for the formula
    !! bathymetry — without it a metres position against a degrees grid
    !! puts the shelf outside the domain.
    !!
@@ -158,7 +158,7 @@ module rdb_ocean_cavity
    real(wp), parameter :: CAVITY_BOUND_INF = 1.0e29_wp
       !! "No limit on this side" sentinel for the shelf-box corners.  A
       !! bound whose magnitude is at or above this is IGNORED, which is
-      !! what the `&ocean_cavity_dyn_nml draft_x0/x1/y0/y1` defaults of
+      !! what the `[ocean.cavity_dyn] draft_x0/x1/y0/y1` defaults of
       !! +/-1e30 mean.  It is a sentinel rather than a sign convention
       !! because a NEGATIVE position is legitimate: the ghost band sits at
       !! negative global x/y, and a shelf that reaches the west wall must
@@ -208,7 +208,7 @@ module rdb_ocean_cavity
 contains
 
    pure function parse_cavity_draft_config(name) result(code)
-      !! `&ocean_cavity_dyn_nml draft_config` -> `CAVITY_DRAFT_*`.
+      !! `[ocean.cavity_dyn] draft_config` -> `CAVITY_DRAFT_*`.
       !! Returns `CAVITY_DRAFT_INVALID` on an unrecognised spelling — the
       !! caller fails loud; there is no silent default.
       character(len=*), intent(in) :: name
@@ -228,7 +228,7 @@ contains
    end function parse_cavity_draft_config
 
    pure function parse_cavity_draft_source(name) result(code)
-      !! `&ocean_cavity_dyn_nml draft_source` -> `CAVITY_SOURCE_*`.
+      !! `[ocean.cavity_dyn] draft_source` -> `CAVITY_SOURCE_*`.
       character(len=*), intent(in) :: name
       integer :: code
       select case (trim(adjustl(name)))
@@ -244,7 +244,7 @@ contains
    end function parse_cavity_draft_source
 
    pure function parse_cavity_draft_sign(name) result(code)
-      !! `&ocean_cavity_dyn_nml draft_sign` -> `CAVITY_SIGN_*`.
+      !! `[ocean.cavity_dyn] draft_sign` -> `CAVITY_SIGN_*`.
       !! Returns `CAVITY_SIGN_INVALID` on an unrecognised spelling — the
       !! caller fails loud.
       character(len=*), intent(in) :: name
@@ -295,7 +295,7 @@ contains
       !! zero outside it (open ocean, including everything beyond the
       !! calving front at `x1`).  Any bound at or beyond
       !! `CAVITY_BOUND_INF` is ignored — the shelf is then open on that
-      !! side, which is what the namelist defaults ask for.
+      !! side, which is what the input defaults ask for.
       !!
       !! Positions are in GRID coordinate units and are compared against
       !! the CELL-CENTRE position, built the same way every formula
@@ -345,7 +345,7 @@ contains
       !! and zero outside the box.
       !!
       !! `slope` is in draft-metres per GRID unit; the dispatch converts
-      !! the dimensionless namelist slope.  Ghost rule as `set_draft_flat`.
+      !! the dimensionless input slope.  Ghost rule as `set_draft_flat`.
       real(wp), intent(inout) :: z_draft(:, :)
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(in) :: draft0
@@ -380,7 +380,7 @@ contains
    pure function in_shelf_box(x, y, x0, x1, y0, y1) result(inside)
       !! `.true.` inside the shelf box.  Each of the four bounds is
       !! applied only when it is FINITE in the `CAVITY_BOUND_INF` sense,
-      !! so the namelist defaults (+/-1e30) describe an unbounded shelf
+      !! so the input defaults (+/-1e30) describe an unbounded shelf
       !! and a user who only wants a calving front in x need not describe
       !! y at all.
       real(wp), intent(in) :: x, y, x0, x1, y0, y1
@@ -521,7 +521,7 @@ contains
       !! `trim_for_ice`): the free-surface anomaly `eta_trim` that puts a
       !! loaded column top exactly where the displaced water's own weight
       !! equals the load, so the initial state is at rest under the MOM6
-      !! barotropic split (`&ocean_bt_nml bc_pgf_forcing`).
+      !! barotropic split (`[ocean.bt] bc_pgf_forcing`).
       !!
       !! ### Why a trim is needed at all
       !!
@@ -547,7 +547,7 @@ contains
       !!
       !! The column top lands at `eta_geo = -z_draft + eta` (the cavity
       !! datum, `rdb_ocean_cavity` header), so `eta_trim = z_draft - s`.
-      !! With the LINEAR equation of state and the affine `&ocean_zinit_nml
+      !! With the LINEAR equation of state and the affine `[ocean.zinit]
       !! source="linear"` profile, `rho(z) = rho_surf + drho_dz*z` (`z`
       !! positive UP), the condition is the quadratic
       !! `(drho_dz/2)*s^2 - rho_surf*s + rho_ref*z_draft = 0`, whose
@@ -591,7 +591,7 @@ contains
       real(wp), intent(in) :: water(nx, ny)
          !! Reference water column `b - z_draft` (m) — the grounding test.
       real(wp), intent(in) :: h_min_cavity
-         !! Grounding cutoff (m), `&ocean_cavity_dyn_nml h_min_cavity`.
+         !! Grounding cutoff (m), `[ocean.cavity_dyn] h_min_cavity`.
       real(wp), intent(in) :: rho_ref
          !! The load's reference density (kg/m^3), `eos%rho0`.
       real(wp), intent(in) :: rho_surf
@@ -691,7 +691,7 @@ contains
       real(wp), intent(in) :: b(nx, ny)
       real(wp), intent(in) :: z_draft(nx, ny)
       real(wp), intent(in) :: h_min
-         !! `&ocean_cavity_dyn_nml h_min_cavity` (m, validated `> 0`) —
+         !! `[ocean.cavity_dyn] h_min_cavity` (m, validated `> 0`) —
          !! the SAME grounding cutoff the wet-mask seed applies, passed
          !! rather than re-spelled so the two decisions cannot drift.
       real(wp) :: water

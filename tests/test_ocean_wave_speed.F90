@@ -25,7 +25,7 @@
 !!        equator-crossing spherical sector; equatorial Rd matches the
 !!        Gill form — metric bug 2 + its tail.
 !!   T10 — beta-plane build_static is bit-identical to the legacy
-!!        set_f_centre; beta_centre == the namelist beta in the interior.
+!!        set_f_centre; beta_centre == the input beta in the interior.
 !!   T11 — EBT, constant N: c_ebt = 2NH/pi (and = 2 cg1), O(dz^2) in nz;
 !!        phi = cos(pi*depth/(2H)); phi(surface) = 1, monotone, >= 0.
 !!   T12 — EBT, exponential N = N0 exp(z/d): Bessel-function mode.
@@ -672,7 +672,7 @@ contains
 
          ! (iii) equatorial (nearest-to-equator) row: rd finite and matches
          ! the Gill form sqrt(cg1/(2*beta_centre)) — the leg that fails if
-         ! f_centre is fixed but beta stays a namelist scalar (Rd would be
+         ! f_centre is fixed but beta stays an input scalar (Rd would be
          ! ~3e10 m).  Deliberately the row NEAREST lat=0, not one forced
          ! exactly onto it (see the LAT_SOUTH/DLAT comment above).
          found_eq = .false.
@@ -691,7 +691,7 @@ contains
 
          ic = grid%nghost + 1
          call check(error, ws%rd(ic, jeq) > 0.0_wp .and. ws%rd(ic, jeq) < 1.0e9_wp, &
-                    "equatorial Rd not finite (namelist-scalar-beta regression)")
+                    "equatorial Rd not finite (input-scalar-beta regression)")
          if (allocated(error)) exit checks
          gill = sqrt(ws%cg1(ic, jeq)/(2.0_wp*ws%beta_centre(ic, jeq)))
          rel = abs(ws%rd(ic, jeq) - gill)/gill
@@ -707,7 +707,7 @@ contains
 
    ! -----------------------------------------------------------------
    ! T10 — beta-plane build_static bit-identity with the legacy
-   ! set_f_centre; beta_centre == the namelist beta in the interior.
+   ! set_f_centre; beta_centre == the input beta in the interior.
    ! -----------------------------------------------------------------
    subroutine test_beta_plane_bit_identical(error)
       type(error_type), allocatable, intent(out) :: error
@@ -751,7 +751,7 @@ contains
          jc = grid%nghost + NY/2
          rel = abs(ws%beta_centre(ic, jc) - BETA)/BETA
          call check(error, rel < 1.0e-12_wp, &
-                    "beta_centre != namelist beta on a linear beta-plane field")
+                    "beta_centre != input beta on a linear beta-plane field")
 
          call ws%destroy()
          call metrics%destroy()

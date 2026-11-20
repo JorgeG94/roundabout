@@ -391,12 +391,12 @@ contains
             ! shared engine as the dyn-core advance -- see
             ! `engine_step_ice`'s docstring (the "MANDATED ORDER" contract
             ! moved there verbatim, unchanged). No-op when
-            ! `&ocean_ice_nml enable = .false.`.
+            ! `[ocean.ice] enable = false`.
             call engine_step_ice(engine, cfg, dt, t_current, ierr=step_ierr)
             if (step_ierr /= OCEAN_STATUS_OK) call comm_env_abort(1)
 
             ! PR-12: derive Q_heat/Q_salt from the component set (no-op
-            ! unless &ocean_forcing_nml enable_components), then (when
+            ! unless [ocean.forcing] enable_components), then (when
             ! configured) one diag-manager step.  MUST sit here —
             ! immediately after the ice block closes, before t_current
             ! advances — to preserve the ice coupler's documented one-step

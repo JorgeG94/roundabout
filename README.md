@@ -294,7 +294,7 @@ Cross-backend validation:
 - [`docs/CAPABILITIES_AND_LIMITATIONS.md`](docs/CAPABILITIES_AND_LIMITATIONS.md) — what the solver can / can't do today
 - [`docs/CLOSURE_MATRIX.md`](docs/CLOSURE_MATRIX.md) — which closure/scheme is enabled in which regime + the tunable knobs
 - [`src/core/ocean/README.md`](src/core/ocean/README.md) — a short orientation to the dyn-core (directory map, design rules, one outer step); contracts are in [`docs/codebase/CONTRACTS.md`](docs/codebase/CONTRACTS.md)
-- [`docs/REFERENCE.md`](docs/REFERENCE.md) — physics + numerics + namelist reference
+- [`docs/REFERENCE.md`](docs/REFERENCE.md) — physics + numerics + input reference
 - [`rdb_docs/source/references.rst`](rdb_docs/source/references.rst) — acknowledgement of NOAA-GFDL (MOM6, SIS2), licensing, and the papers the physics comes from
 - [`FORTRAN_STYLE.md`](FORTRAN_STYLE.md) — coding style + the GPU (`do concurrent` + OpenACC) programming guide
 - [`docs/codebase/INDEX.md`](docs/codebase/INDEX.md) — repo map + run lifecycle

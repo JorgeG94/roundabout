@@ -25,7 +25,7 @@ module rdb_ocean_wave_speed
    !! k=nz surface); the eigensolve is surface-down so the column kernel
    !! FLIPS on gather (local k_loc=1 is the surface layer).
    !!
-   !! Diagnostic, default off (`&ocean_wavespeed_nml enable=.false.`) ⇒
+   !! Diagnostic, default off (`[ocean.wavespeed] enable=false`) ⇒
    !! kernel never called, bit-identical.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, GRAVITY
@@ -47,7 +47,7 @@ module rdb_ocean_wave_speed
    public :: wavespeed_mode_column
    public :: wavespeed_rd
 
-   ! ---- Fixed numerical constants (NOT namelist knobs) ----
+   ! ---- Fixed numerical constants (NOT input knobs) ----
 #ifdef LFORTRAN_PASSING
    integer, parameter :: NZ_STACK_MAX = 64
       !! LFortran workaround: kept module-local rather than imported from
@@ -121,13 +121,13 @@ module rdb_ocean_wave_speed
       real(wp), allocatable :: f_centre(:, :)
          !! |f| at cell centres (1/s); filled by `build_static` from
          !! `metrics_fill_coriolis` (planetary or beta-plane, per
-         !! `&ocean_grid_nml coriolis_scheme`).
+         !! `[ocean.grid] coriolis_scheme`).
       real(wp), allocatable :: beta_centre(:, :)
          !! |grad f| at cell centres (1/(m*s)); static, filled at
          !! configure by `build_static` from the same Coriolis field
          !! (the `meke_length_scales` centred-difference idiom).  Feeds
          !! the equatorial branch of `wavespeed_rd` — replaces the old
-         !! namelist-scalar `beta`.
+         !! input-scalar `beta`.
       real(wp), allocatable :: cg1(:, :)
          !! First-baroclinic gravity-wave speed (m/s).
       real(wp), allocatable :: cg1_ebt(:, :)

@@ -973,7 +973,7 @@ contains
          call ms%exit_data()
          !$acc exit data delete(ms)
 
-         call check(error, ok, "disabled: guarded no-op still returns ok=.true.")
+         call check(error, ok, "disabled: guarded no-op still returns ok=true")
          if (allocated(error)) exit checks
          call check(error,.not. ice%is_init, "is_init must remain false")
 
@@ -1020,7 +1020,7 @@ contains
 
       call run_transport(grid, metrics, ms, ice, DT_THERM, 1, 1.0_wp, ok)
       call check(error,.not. ok, &
-                 "runaway_truncates_and_completes: CFL=2 must hit the abort path (ok=.false.)")
+                 "runaway_truncates_and_completes: CFL=2 must hit the abort path (ok=false)")
       call teardown(metrics, ms, ice)
       if (allocated(error)) return
 
@@ -1039,7 +1039,7 @@ contains
          call run_transport_truncated(grid, metrics, ms, ice, DT_THERM, 1, 1.0_wp, 0.5_wp, ok)
          call check(error, ok, &
                     "runaway_truncates_and_completes: CFL-clipped velocity must "// &
-                    "complete (ok=.true.)")
+                    "complete (ok=true)")
          if (allocated(error)) exit checks
          call check(error, minval(ice%part_size) >= -1.0e-12_wp, &
                     "runaway_truncates_and_completes: part_size stays >= 0 "// &

@@ -1,6 +1,6 @@
 !! Analytical tests for the ALE remap's boundary-cell closure.
 module test_remap_boundary_extrap
-   !! `&vcoord_nml remap_boundary_extrap` (MOM6 `BOUNDARY_EXTRAPOLATION`)
+   !! `[vcoord] remap_boundary_extrap` (MOM6 `BOUNDARY_EXTRAPOLATION`)
    !! replaces the PCM flatten at `k=1` / `k=nz` with the linear-exact
    !! one-sided edge pair, so the whole column reproduces a profile that is
    !! LINEAR IN z exactly — for any source and any target thickness set.

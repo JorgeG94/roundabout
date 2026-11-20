@@ -208,7 +208,7 @@ the sum running over the layers *above* :math:`k` — which, in the bottom-up
 convention, are the ones with the larger index. The half-layer term
 evaluates the pressure at the mid-depth of layer :math:`k` itself.
 :math:`p_{\mathrm{surf}}` is the load at the free surface: atmospheric
-pressure when ``&ocean_psurf_nml`` is enabled, sea-ice mass loading
+pressure when ``[ocean.psurf]`` is enabled, sea-ice mass loading
 when that is wired, and zero otherwise.
 
 Because Roundabout is a **layered** model, :math:`-\nabla_h p` cannot be
@@ -274,7 +274,7 @@ Density closes the system:
 
 with :math:`S` the practical salinity (PSU) and :math:`T` the potential
 temperature (:math:`{}^\circ\mathrm{C}`). Four variants ship, selected by
-``&ocean_eos_nml eos``, whose accepted values are ``linear`` (the
+``[ocean.eos] eos``, whose accepted values are ``linear`` (the
 **default**), ``wright``, ``roquet_spv`` and ``teos10``:
 
 **Wright (1997)** (``wright``) — the recommended production path, and what
@@ -295,7 +295,7 @@ expansion coefficients analytically, which several closures need.
 
 **Roquet et al. (2015)** (``roquet_spv``) — a specific-volume polynomial
 fitted to TEOS-10, available for validation. It is mutually exclusive with
-``&ocean_pgf_nml form="fv_wright"``, and the combination is refused at
+``[ocean.pgf] form="fv_wright"``, and the combination is refused at
 configure time.
 
 **TEOS-10** (``teos10``) — a further TEOS-10-flavoured variant.
@@ -322,11 +322,11 @@ the MOM6-reference double gyre is run.
    default to :math:`\rho_0 = 1035\ \mathrm{kg\,m^{-3}}`,
    :math:`\alpha_T = 1.7\times10^{-4}\ \mathrm{kg\,m^{-3}\,{}^\circ C^{-1}}`
    and :math:`\beta_S = 7.6\times10^{-4}\ \mathrm{kg\,m^{-3}\,PSU^{-1}}`.
-   Only :math:`\alpha_T` and :math:`\rho_0` are namelist-settable, as
-   ``&ocean_ic_nml alpha_T`` and ``&ocean_ic_nml rho_0``;
+   Only :math:`\alpha_T` and :math:`\rho_0` are input-settable, as
+   ``[ocean.ic] alpha_T`` and ``[ocean.ic] rho_0``;
    :math:`\beta_S`, :math:`S_{\mathrm{ref}}` and :math:`T_{\mathrm{ref}}`
-   are compiled-in. The similarly-named ``&tracer_nml alpha_T`` and
-   ``&tracer_nml beta_S`` keys are **coastal-era leftovers and are dead on
+   are compiled-in. The similarly-named ``[tracer] alpha_T`` and
+   ``[tracer] beta_S`` keys are **coastal-era leftovers and are dead on
    the ocean path** — the configuration schema marks them as such, and
    setting them changes nothing.
 

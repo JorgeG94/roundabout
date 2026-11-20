@@ -18,7 +18,7 @@ module rdb_ocean_meke
    !! thermo step.
    !!
    !! Clean-room (no source ported).  `meke` is PROGNOSTIC (restart-persistent).
-   !! Default off (`&ocean_meke_nml enable = .false.`) ⇒ `meke_step` never
+   !! Default off (`[ocean.meke] enable = false`) ⇒ `meke_step` never
    !! called ⇒ bit-identical.  Bottom-up convention (k=1 bed, k=nz surface);
    !! only the column mass sum touches k and it is orientation-independent.
    !!
@@ -68,13 +68,13 @@ module rdb_ocean_meke
    type :: ocean_meke_t
       !! Mesoscale eddy kinetic energy state.  All fields default to the
       !! inert (`enable=.false.`) configuration so an ocean run that never
-      !! sets `&ocean_meke_nml` is bit-identical.
+      !! sets `[ocean.meke]` is bit-identical.
       logical :: is_init = .false.
          !! True between `init` and `destroy`; gate on this (never on
          !! `allocated`, which misses the GPU mapping).
       logical :: enable = .false.
          !! Master switch.  Off ⇒ `meke_step` is never called.  Requires
-         !! `&ocean_gm_nml enable` (needs `gm%gm_src`); loud configure check.
+         !! `[ocean.gm] enable` (needs `gm%gm_src`); loud configure check.
 
       ! ---- Source / sink coefficients ----
       real(wp) :: gmcoeff = -1.0_wp
@@ -120,7 +120,7 @@ module rdb_ocean_meke
          !! Scale factor accelerating MEKE time-stepping (nondim).
       real(wp) :: cdrag = 2.5e-3_wp
          !! Bottom drag coefficient for MEKE (nondim).  Copied from
-         !! `&ocean_bdrag_nml cdrag_side` at configure if that is > 0,
+         !! `[ocean.bdrag] cdrag_side` at configure if that is > 0,
          !! else this default; enters drag_rate + Lfrict.
       logical :: use_bbl_drag = .false.
          !! Add the resolved bed-layer eddy velocity `|u_bed|²` to the MEKE
@@ -949,7 +949,7 @@ contains
       integer, intent(in) :: k_bot_u(nx + 1, ny)
       integer, intent(in) :: k_bot_v(nx, ny + 1)
       logical, intent(in) :: zlevel_faces
-         !! `&vcoord_nml zfixed_closed_faces` (`metrics%use_closed_faces`).
+         !! `[vcoord] zfixed_closed_faces` (`metrics%use_closed_faces`).
       real(wp), intent(inout) :: u_bbl2(nx, ny)
       integer :: i, j, k, i_lo, i_hi, j_lo, j_hi
       integer :: kb_w, kb_e, kb_s, kb_n, kbl_w, kbl_e, kbl_s, kbl_n
@@ -1085,7 +1085,7 @@ contains
       !! Uses the PREVIOUS thermo step's `ku` (a one-step lag, like the
       !! kh→KhTh feedback) — `meke_step` refreshes `ku` once per outer step.
       !!
-      !! REQUIRES a flow-aware lateral closure (`&ocean_hvisc_nml
+      !! REQUIRES a flow-aware lateral closure (`[ocean.hvisc]
       !! lateral_closure` = `leith`/`smag` ⇒ `LMIX_*`): the hvisc Laplacian
       !! only reads `ah_face_*` when `closure /= LMIX_NONE`.  With the
       !! default scalar-`nu_h` path the modified faces are never consumed,

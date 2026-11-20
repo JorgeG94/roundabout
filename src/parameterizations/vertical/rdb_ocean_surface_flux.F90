@@ -10,7 +10,7 @@
 !! excess, or sea-ice brine rejection via `rdb_ice_ocean_coupler`).
 !!
 !! The 2D fields `Q_heat(:,:)` / `Q_salt(:,:)` are seeded at configure
-!! time from the `&ocean_thermo_nml q_heat / q_salt` scalars via
+!! time from the `[ocean.thermo] q_heat / q_salt` scalars via
 !! `set_surface_flux_const`.  They live on the device between
 !! `enter_data` and `exit_data`; Area-A3 data-override and Area-A4
 !! restoring write directly into these fields after seeding.
@@ -26,10 +26,10 @@
 !!
 !! Restart: the fields are configure-time-filled static forcing; they
 !! are NOT registered in the restart registry (re-seeded from the
-!! namelist scalar on every resume — see `rdb_driver.F90` for the
+!! input scalar on every resume — see `rdb_driver.F90` for the
 !! seeding call-site).
 !!
-!! **Component set (PR-12, `&ocean_forcing_nml enable_components`).**
+!! **Component set (PR-12, `[ocean.forcing] enable_components`).**
 !! `Q_heat` / `Q_salt` are the derived views every downstream kernel
 !! keeps reading; when `use_components` is on, `ocean_surface_flux_assemble`
 !! rebuilds them every thermo step from `Q_heat_const`/`Q_salt_const`
@@ -48,7 +48,7 @@
 !!       source owns the enthalpy of the mass it injects; the ocean can
 !!       only compute the enthalpy of mass it loses, `heat_content_massout`,
 !!       which the assembler derives from SST — never write it yourself);
-!! **Ice-shelf cover (`&ocean_cavity_dyn_nml`).**  Under a shelf there
+!! **Ice-shelf cover (`[ocean.cavity_dyn]`).**  Under a shelf there
 !! is no atmosphere, so every ATMOSPHERIC contribution must be zero in a
 !! covered cell and unchanged everywhere else, while the cavity's own
 !! `heat_cavity` / `salt_cavity` must NOT be masked.  The mask is an
@@ -104,8 +104,8 @@
 !!   * `q_sw`, `q_lw`, `q_lat`, `q_sens` (W/m^2, positive DOWN): a forcing
 !!     reader (`rdb_ocean_data_forcing`) OR the bulk-flux consumer
 !!     (`rdb_ocean_bulk_forcing`), mutually exclusive by `validate_config`
-!!     (`&ocean_atm_forcing_nml enable` conflicts with any
-!!     `&ocean_dataovr_nml tau_x/tau_y/heat/evap/lprec` file).  `q_sw` also
+!!     (`[ocean.atm_forcing] enable` conflicts with any
+!!     `[ocean.dataovr] tau_x/tau_y/heat/evap/lprec` file).  `q_sw` also
 !!     gates `has_q_sw`.
 !!   * `q_fus` (W/m^2, <= 0, positive DOWN): the latent heat of FUSION of
 !!     frozen mass landing on open water, `-L_f*fprec`; written by whoever
@@ -114,14 +114,14 @@
 !!     `heat_content_fprec` (the sensible enthalpy of the mass).  Inert (all
 !!     zero) unless that writer fills it, so no other configuration moves.
 !!   * `q_fus_rof` (W/m^2, <= 0, positive DOWN): the same latent heat for FROZEN
-!!     RUNOFF / calving, `-L_f*frunoff`; written by the `&ocean_dataovr_nml
+!!     RUNOFF / calving, `-L_f*frunoff`; written by the `[ocean.dataovr]
 !!     frunoff` consumer (`ocean_data_forcing_apply`), nobody else; summed by the
 !!     assembler like `q_fus`.  Zero unless a `frunoff` file is registered.
 !!   * `heat_added` (either sign) and `salt_flux` (positive SALINIFIES): the
-!!     `&ocean_dataovr_nml heat`/`salt` reader, and no one else.
+!!     `[ocean.dataovr] heat`/`salt` reader, and no one else.
 !!   * `heat_ice`, `salt_ice`, `sw_ice`: the sea-ice hand-off of WHICHEVER
 !!     scheme is on, never both in one run: the SIS2-derived coupler
-!!     (`ice_ocean_{heat,brine,sw}_flux`, `&ocean_ice_nml scheme="sis2"`) or the
+!!     (`ice_ocean_{heat,brine,sw}_flux`, `[ocean.ice] scheme="sis2"`) or the
 !!     CICE-port adapters (`ice_cice_to_surface_flux`, `scheme="cice"`; `fhocn`,
 !!     `1000*fsalt - S_surf*fresh`, `fswthru`).  A FULL OVERWRITE at every
 !!     thermo hand-off, right before the assembler sums them next to
@@ -131,25 +131,25 @@
 !!     transmitted through the ice penetrates under `sw_source="q_sw"` for
 !!     either scheme.  The cover-aware assembler twin scales them by the
 !!     ice-SHELF open fraction `1 - cover_frac`; that twin runs only under
-!!     `&ocean_cavity_dyn_nml enable`, which `scheme="cice"` refuses (no ice
+!!     `[ocean.cavity_dyn] enable`, which `scheme="cice"` refuses (no ice
 !!     under a shelf), so the CICE-port fluxes are never scaled.
 !!   * `heat_cavity` (`= -q_ocean`, melting cools) and `salt_cavity`
 !!     (`= -m_mass*(S_far - s_ice)`, melting freshens): the ice-shelf cavity
 !!     (`ocean_cavity_flux_step`) and nothing else.  They are separate from
 !!     `heat_added`/`salt_flux` precisely because the ice coupler overwrites
-!!     those.  Under `&ocean_cavity_melt_nml freshwater="mass"`,
+!!     those.  Under `[ocean.cavity_melt] freshwater="mass"`,
 !!     `salt_cavity` stays assembled UNCHANGED as the `B_0` buoyancy forcing
 !!     and `ocean_cavity_mass_step` removes it again from the tracer.
 !!   * mass fluxes (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`,
 !!     `seaice_melt`) and their `heat_content_*` twins: a forcing reader OR
 !!     the bulk-flux consumer; a mass flux owes its enthalpy companion.  Today
 !!     only `evap`, `lprec`, `fprec` (+ `heat_content_lprec/fprec`) have a
-!!     writer, plus the `&ocean_dataovr_nml lrunoff/frunoff` reader (which writes no
+!!     writer, plus the `[ocean.dataovr] lrunoff/frunoff` reader (which writes no
 !!     `heat_content_*`: runoff enters at the layer temperature under `"mass"` and is
 !!     refused under `"none"`); nothing writes `vprec`, and `seaice_melt` is written only by the
 !!     CICE-port hand-off under `freshwater = "mass"` (`ice_cice_to_surface_flux`).
 !!   * `salt_fw` (positive SALINIFIES): `ocean_surface_flux_fw_virtual_step`
-!!     (`&ocean_forcing_nml freshwater = "virtual"` or `"mass"`) and nothing else.  The
+!!     (`[ocean.forcing] freshwater = "virtual"` or `"mass"`) and nothing else.  The
 !!     virtual salt flux `-S_surf*F` of the open-ocean fresh-water mass flux
 !!     `F = lprec + fprec + evap + lrunoff + frunoff`; a FULL OVERWRITE of the
 !!     owned cells right before the assembler, so not restart state.  Under it
@@ -163,7 +163,7 @@
 !!     (`ocean_surface_flux_assemble`) ONLY.  A filler writing these is a bug.
 !!   * `fw_net` (kg m-2 s-1, positive INTO the ocean) and `Q_salt_tracer` (`Q_salt`
 !!     without the virtual `salt_fw`): the assembler ONLY, and only under
-!!     `&ocean_forcing_nml freshwater = "mass"`.  `fw_net` is the one assembled
+!!     `[ocean.forcing] freshwater = "mass"`.  `fw_net` is the one assembled
 !!     snapshot of `lprec + fprec + evap + lrunoff + frunoff + (seaice_melt + vprec)`
 !!     that `ocean_surface_fw_mass_step` spends as REAL volume; `Q_salt_tracer` is what
 !!     the tracer deposit reads in place of `Q_salt` (which keeps the virtual term for
@@ -174,7 +174,7 @@
 !!   * `p_surf_atm` (Pa): a reader, a configure seed, or the bulk consumer
 !!     (`= psl`); `p_surf` is the assembled total and is NOT open-water
 !!     weighted (a pressure-loading term, not a flux).  `p_surf` joins `p_surf_atm`
-!!     ONLY under `&ocean_psurf_nml atm_load`; otherwise its atmospheric part is the
+!!     ONLY under `[ocean.psurf] atm_load`; otherwise its atmospheric part is the
 !!     configure seed `p_surf_seed` whatever the bulk forcing writes into `p_surf_atm`.
 !!
 !! Which of these change real column MASS is in `docs/codebase/CONTRACTS.md`.
@@ -229,7 +229,7 @@ module rdb_ocean_surface_flux
    ! (specified in m/day) to MKS m/s at the seed call.
    real(wp), parameter :: SECONDS_PER_DAY = 86400.0_wp
 
-   ! `&ocean_forcing_nml freshwater` codes (mirrors the `nml_enum` list).
+   ! `[ocean.forcing] freshwater` codes (mirrors the `nml_enum` list).
    integer, parameter :: SURF_FW_NONE = 0
    integer, parameter :: SURF_FW_VIRTUAL = 1
    integer, parameter :: SURF_FW_MASS = 2
@@ -250,7 +250,7 @@ module rdb_ocean_surface_flux
          !! so the apply-tracers kernel fires.  Host-side flag only
          !! (early-return guard in `ocean_surface_flux_apply_tracers`).
       logical :: bound_salinity = .false.
-         !! OM3 `BOUND_SALINITY` (`&ocean_ice_nml bound_salinity`): after
+         !! OM3 `BOUND_SALINITY` (`[ocean.ice] bound_salinity`): after
          !! the surface salt flux, floor the top-layer salinity at
          !! `min_salinity`.  Host-side scalar latched at configure.
       real(wp) :: min_salinity = 0.0_wp
@@ -266,7 +266,7 @@ module rdb_ocean_surface_flux
          !! `Q_heat`/`Q_salt`.
          !!
          !! ASSIGNED FROM CONFIG by `configure_ocean_reference_density`,
-         !! which copies the single rho0 of record (`&ocean_ic_nml rho_0`
+         !! which copies the single rho0 of record (`[ocean.ic] rho_0`
          !! -> `eos%rho0`).  The literal here is only the pre-configure
          !! type default; do not read it as the value a run uses.  Host
          !! scalar: the divisor is folded into the `inv_scale` argument on
@@ -279,11 +279,11 @@ module rdb_ocean_surface_flux
          !! pinches out.
       real(wp) :: Q_heat_const = 0.0_wp
          !! Scalar fill source for `Q_heat(:,:)`.  Seeded from
-         !! `&ocean_thermo_nml q_heat` by `set_surface_flux_const`.
+         !! `[ocean.thermo] q_heat` by `set_surface_flux_const`.
          !! Kept for diagnostic logging; kernels read `Q_heat` directly.
       real(wp) :: Q_salt_const = 0.0_wp
          !! Scalar fill source for `Q_salt(:,:)`.  Seeded from
-         !! `&ocean_thermo_nml q_salt` by `set_surface_flux_const`.
+         !! `[ocean.thermo] q_salt` by `set_surface_flux_const`.
 
       logical :: has_sw = .false.
          !! True when shortwave penetration is active (set by
@@ -318,7 +318,7 @@ module rdb_ocean_surface_flux
          !! Band-2 e-folding depth (m) — the slowly-absorbed
          !! blue/green band.
       logical :: sw_chl = .false.
-         !! `.true.` under `&ocean_thermo_nml sw_scheme = "manizza05"`: the
+         !! `.true.` under `[ocean.thermo] sw_scheme = "manizza05"`: the
          !! deposition kernel, the KPP `B_0` coupling and the EPBL SW ledger
          !! then use the N-band `sw_frac`/`sw_kappa` instead of the two-band
          !! `sw_band_ratio`/`sw_zeta1/2`.  Set by `set_sw_chl`; host-side
@@ -348,7 +348,7 @@ module rdb_ocean_surface_flux
          !! True when SSS restoring is active (`enable_restore_salt .and.
          !! restore_piston_S /= 0`).
       real(wp) :: restore_piston_T = 0.0_wp
-         !! SST piston velocity (m/s), seeded from `&ocean_restore_nml
+         !! SST piston velocity (m/s), seeded from `[ocean.restore]
          !! piston_t` (m/day) via `/86400`.  The surface relaxation rate
          !! for a top layer of thickness `h_top` is
          !! `lambda = restore_piston_T / h_top` [1/s].
@@ -393,7 +393,7 @@ module rdb_ocean_surface_flux
 
       ! ---- PR-12 component set — allocated iff `use_components` ----
       logical :: use_components = .false.
-         !! Master gate (`&ocean_forcing_nml enable_components`).  `.false.`
+         !! Master gate (`[ocean.forcing] enable_components`).  `.false.`
          !! (default): none of the arrays below are allocated,
          !! `ocean_surface_flux_assemble` is a no-op, and `Q_heat`/`Q_salt`
          !! are filled exactly as today — bit-identical.  `.true.`:
@@ -417,7 +417,7 @@ module rdb_ocean_surface_flux
          !! freshwater kernel (real-mass PR).  Same contract as
          !! `has_heat` (`:56-62`) — never set from a device reduction.
       logical :: fw_virtual = .false.
-         !! `&ocean_forcing_nml freshwater = "virtual"`: the net fresh-water
+         !! `[ocean.forcing] freshwater = "virtual"`: the net fresh-water
          !! mass flux becomes the virtual salt flux `salt_fw`
          !! (`ocean_surface_flux_fw_virtual_step`), summed by the assembler,
          !! and the enthalpy of that mass no longer enters `Q_heat` (no mass
@@ -425,7 +425,7 @@ module rdb_ocean_surface_flux
          !! latched by `set_freshwater`; `.false.` is the bit-identical
          !! default.
       logical :: fw_mass = .false.
-         !! `&ocean_forcing_nml freshwater = "mass"`: the net fresh-water mass
+         !! `[ocean.forcing] freshwater = "mass"`: the net fresh-water mass
          !! flux `fw_net` moves REAL Boussinesq volume into / out of the first
          !! live layer (`ocean_surface_fw_mass_step`, module
          !! `rdb_ocean_surface_fw_mass`).  The virtual salt flux `salt_fw` is
@@ -433,22 +433,22 @@ module rdb_ocean_surface_flux
          !! and is excluded from `Q_salt_tracer`, which the tracer deposit
          !! reads.  Host-side gate, latched by `set_freshwater`.
       logical :: ice_load = .false.
-         !! `&ocean_psurf_nml ice_load`: `p_surf` carries the sea-ice + snow weight
+         !! `[ocean.psurf] ice_load`: `p_surf` carries the sea-ice + snow weight
          !! (`ocean_surface_flux_apply_ice_load`).  Host-side gate, latched by
          !! `set_ice_load`, which also allocates `p_ice_load`.
       logical :: atm_load = .false.
-         !! `&ocean_psurf_nml atm_load`: `p_surf` carries the bulk forcing's `p_surf_atm`
+         !! `[ocean.psurf] atm_load`: `p_surf` carries the bulk forcing's `p_surf_atm`
          !! (ghosts exchanged by the engine before the assembly).  Host-side gate, latched by
          !! `set_atm_load`.  `.false.`: the atmospheric part of `p_surf` is `p_surf_seed`.
       real(wp) :: p_surf_seed = 0.0_wp
-         !! The configure-time uniform pressure (`&ocean_psurf_nml p_surf_const`) that `p_surf`
+         !! The configure-time uniform pressure (`[ocean.psurf] p_surf_const`) that `p_surf`
          !! held before the loads existed, kept so the per-step assembly can rebuild it.
       integer :: fw_mode = SURF_FW_NONE
          !! `SURF_FW_*` code latched by `set_freshwater` (the assembler's
          !! by-value selector).  `fw_virtual` / `fw_mass` are its logical views.
       real(wp) :: fw_evap_cfl_limit = 0.8_wp
          !! Largest fraction of a live layer's thickness one evaporative
-         !! withdrawal may take (`&ocean_forcing_nml fw_evap_cfl_limit`, range
+         !! withdrawal may take (`[ocean.forcing] fw_evap_cfl_limit`, range
          !! (0, 1) -- 1 is refused, it could empty a layer); the unmet remainder is passed down the column.
       logical :: has_q_sw = .false.
          !! Host-side latch — set by a filler after writing `q_sw`
@@ -479,7 +479,7 @@ module rdb_ocean_surface_flux
          !! Latent heat of FUSION of frozen RUNOFF / calving (W/m^2, **<= 0**,
          !! positive down): `q_fus_rof = -L_f * frunoff`.  The runoff twin of
          !! `q_fus`, kept separate so each has ONE owner: this one is written by
-         !! the `&ocean_dataovr_nml frunoff` consumer (`ocean_data_forcing_apply`)
+         !! the `[ocean.dataovr] frunoff` consumer (`ocean_data_forcing_apply`)
          !! and nobody else, `q_fus` by the writer of `fprec`.  Summed into
          !! `Q_heat` by the assembler (atmospheric group: masked by the shelf
          !! cover).  Rewritten every outer step, so not restart state.  Zero
@@ -507,7 +507,7 @@ module rdb_ocean_surface_flux
          !! `ice_cice_to_surface_flux` (`rdb_ice_cice_adapters`), never both in
          !! one run -- a FULL OVERWRITE on every thermo step, immediately
          !! before the assembler sums it -- and a SEPARATE field from `heat_added` precisely so a
-         !! second writer of `heat_added` (the `&ocean_dataovr_nml heat`
+         !! second writer of `heat_added` (the `[ocean.dataovr] heat`
          !! reader, every step) is never clobbered by the ice, nor the ice by
          !! it.  Zero when ice is off.  Not restart state: re-derived from the
          !! restart-carried `ice%heat_flux_diag` before every read.
@@ -530,7 +530,7 @@ module rdb_ocean_surface_flux
       real(wp), allocatable :: heat_cavity(:, :)
          !! **Ice-shelf cavity basal-melt heat component** (W/m^2, same
          !! positive-DOWN-into-the-ocean convention as every other heat
-         !! band; `&ocean_cavity_melt_nml`).  OWNED by
+         !! band; `[ocean.cavity_melt]`).  OWNED by
          !! `rdb_ocean_cavity_flux`; written `heat_cavity = -q_ocean`,
          !! where `q_ocean = rho_w*c_w*gamma_t*(T_w - T_b) > 0` is the
          !! kernel's turbulent heat flux OCEAN -> INTERFACE, so warm
@@ -598,7 +598,7 @@ module rdb_ocean_surface_flux
       real(wp), allocatable :: salt_cavity(:, :)
          !! **Ice-shelf cavity basal-melt salt component**, same units
          !! and sign as `salt_flux` (positive salinifies;
-         !! `&ocean_cavity_melt_nml`).  OWNED by `rdb_ocean_cavity_flux`
+         !! `[ocean.cavity_melt]`).  OWNED by `rdb_ocean_cavity_flux`
          !! and never written by the ice coupler, which full-overwrites
          !! `salt_flux`.
          !!
@@ -611,7 +611,7 @@ module rdb_ocean_surface_flux
          !! `rdb_ocean_cavity_flux`'s module docstring.  Melting
          !! (`m_mass > 0`, `S_far > s_ice`) therefore FRESHENS.
          !!
-         !! Under `&ocean_cavity_melt_nml freshwater="virtual"` (the
+         !! Under `[ocean.cavity_melt] freshwater="virtual"` (the
          !! default) that IS the meltwater's whole effect: no mass moves.
          !!
          !! Under `freshwater="mass"` the meltwater is a REAL volume
@@ -657,7 +657,7 @@ module rdb_ocean_surface_flux
          !! (otherwise zero and never read); read by EPBL's river-mixing term in the
          !! ghost columns, which `lrunoff`/`frunoff` (physical cells only) cannot serve.
       logical :: river_runoff_on = .false.
-         !! `&ocean_epbl_nml rivermix_depth > 0` (set by `configure_ocean_epbl`): builds +
+         !! `[ocean.epbl] rivermix_depth > 0` (set by `configure_ocean_epbl`): builds +
          !! exchanges `runoff` each step.  `.false.` => nothing built, bit-identical.
       real(wp), allocatable :: p_surf_atm(:, :)
          !! **Input component.**  Atmospheric surface-pressure load
@@ -1024,7 +1024,7 @@ contains
    end function sw_transmission_nb
 
    pure function sw_source_is_implemented(name) result(ok)
-      !! Fail-loud predicate for the `&ocean_thermo_nml sw_source`
+      !! Fail-loud predicate for the `[ocean.thermo] sw_source`
       !! selector — `validate_config` aborts on any string this rejects.
       !! The two recognised sources are the net-heat legacy path and the
       !! PR-12 `q_sw` component.
@@ -1085,12 +1085,12 @@ contains
 
    subroutine ocean_surfflux_set_p_surf_const(this, p_surf_val)
       !! Seed the atmospheric surface-pressure INPUT component
-      !! `p_surf_atm` (Pa) uniformly from a scalar namelist value (PR-17
-      !! `&ocean_psurf_nml p_surf_const`).  Full overwrite of the pristine
+      !! `p_surf_atm` (Pa) uniformly from a scalar input value (PR-17
+      !! `[ocean.psurf] p_surf_const`).  Full overwrite of the pristine
       !! atmospheric base; the assembled total `p_surf` is built from it
       !! once per outer step in `p_surf_update_seam`.  No-op when the
       !! component set is not allocated (`use_components=.false.`) — the
-      !! `&ocean_psurf_nml enable` guard in `validate_config` already
+      !! `[ocean.psurf] enable` guard in `validate_config` already
       !! requires `enable_components=.true.`, so a live consumer never hits
       !! the no-op.  Host only — call `enter_data` afterwards (or `!$acc
       !! update device` if already mapped) to sync to the GPU.
@@ -1109,8 +1109,8 @@ contains
 
    subroutine ocean_surfflux_set_components(this, grid, enable)
       !! Configure-time gate for the PR-12 component set
-      !! (`&ocean_forcing_nml enable_components`).  `init` runs before the
-      !! namelist gate is known, so allocation happens HERE rather than in
+      !! (`[ocean.forcing] enable_components`).  `init` runs before the
+      !! input gate is known, so allocation happens HERE rather than in
       !! `init`: `enable = .false.` (default) leaves `use_components`
       !! false and allocates nothing — bit-identical, zero extra device
       !! memory.  `enable = .true.` allocates the full component set
@@ -1388,7 +1388,7 @@ contains
                                                  Q_field, inv_scale, k_top, nz, nx, ny)
       !! Wet/dry variant of `apply_surface_src_2d_impl`: the DYNAMIC cell
       !! wet mask composes multiplicatively with the static one, so a
-      !! dynamically dry column (total depth below `&ocean_wetdry_nml
+      !! dynamically dry column (total depth below `[ocean.wetdry]
       !! dry_depth`) receives NO surface flux — heating a mm-scale
       !! residual sliver would blow its temperature up
       !! (docs/ocean_wetdry_plan.md §4.4).  Separate _impl (not an
@@ -1551,7 +1551,7 @@ contains
          !! where `Q_heat` is already assembler-masked: this kernel's
          !! job is to MOVE a surface lump down the column, and on a
          !! masked column the lump it would remove was never deposited
-         !! (the same argument `&ocean_wetdry_nml` makes for a dry
+         !! (the same argument `[ocean.wetdry]` makes for a dry
          !! column).  Absent ⇒ the original kernel, byte-identical.
       ! assumed-shape-ok: thermo-cadence shim, forwarded to an
       ! explicit-shape `_impl` before the device loop.
@@ -2355,8 +2355,8 @@ contains
       !! the configure-time `set_surface_flux_const` fill and nothing
       !! rewrites them per step — so masking them once, at configure
       !! after the cover is built, is the whole job.  Without this, a
-      !! geometry-only cavity run (`&ocean_cavity_dyn_nml` with no melt)
-      !! would still push a uniform `&ocean_thermo_nml q_heat` through
+      !! geometry-only cavity run (`[ocean.cavity_dyn]` with no melt)
+      !! would still push a uniform `[ocean.thermo] q_heat` through
       !! the ice.
       !!
       !! No-op when the component set is on, when the fields are
@@ -2395,7 +2395,7 @@ contains
    end subroutine ocean_surfflux_cover_const_impl
 
    subroutine ocean_surfflux_set_ice_load(this, enable)
-      !! Latch `&ocean_psurf_nml ice_load` and allocate the carried ice load (zero).  Host,
+      !! Latch `[ocean.psurf] ice_load` and allocate the carried ice load (zero).  Host,
       !! after `set_components` (it needs the extents of `p_surf`).  `.false.` is a no-op, so
       !! every other configuration allocates, maps and registers nothing.
       class(ocean_surface_flux_t), intent(inout) :: this
@@ -2432,7 +2432,7 @@ contains
    end subroutine ocean_surface_flux_apply_ice_load
 
    subroutine ocean_surfflux_set_atm_load(this, enable)
-      !! Latch `&ocean_psurf_nml atm_load`.  Host; a no-op without the component set (the
+      !! Latch `[ocean.psurf] atm_load`.  Host; a no-op without the component set (the
       !! `p_surf_atm` field lives there), so the knob is inert exactly where `validate_config`
       !! would have refused it.
       class(ocean_surface_flux_t), intent(inout) :: this
@@ -2505,7 +2505,7 @@ contains
    end subroutine ocean_surface_flux_ice_load_impl
 
    pure function parse_surface_freshwater(name) result(code)
-      !! Translate a `&ocean_forcing_nml freshwater` string into a
+      !! Translate a `[ocean.forcing] freshwater` string into a
       !! `SURF_FW_*` code.  The accepted set is EXACTLY the `nml_enum` list of
       !! `register_ocean_forcing` (`none`, `virtual`, `mass`) -- no aliases; the two
       !! lists move together.
@@ -2524,7 +2524,7 @@ contains
    end function parse_surface_freshwater
 
    subroutine ocean_surfflux_set_freshwater(this, code, evap_cfl_limit)
-      !! Latch `&ocean_forcing_nml freshwater` (a `SURF_FW_*` code).  Host
+      !! Latch `[ocean.forcing] freshwater` (a `SURF_FW_*` code).  Host
       !! only.  `SURF_FW_VIRTUAL` sets `fw_virtual` and `has_salt` (the
       !! apply kernel's early-return guard: with it unset, a run whose only
       !! salt source is `salt_fw` would never deposit it); `SURF_FW_MASS` sets
@@ -2550,7 +2550,7 @@ contains
 
    pure subroutine ocean_surface_flux_fw_virtual_step(grid, sf, ms, active)
       !! **The one writer of `salt_fw`** (virtual fresh-water salt flux,
-      !! `&ocean_forcing_nml freshwater = "virtual"`, and under `"mass"` for the boundary-layer
+      !! `[ocean.forcing] freshwater = "virtual"`, and under `"mass"` for the boundary-layer
       !! buoyancy: `F` then also carries `seaice_melt + vprec`, as in `fw_net`).  A full overwrite of
       !! the OWNED cells, run right before `ocean_surface_flux_assemble`
       !! every thermo step (`engine_step_finalize`), which sums it into
@@ -2561,7 +2561,7 @@ contains
       !!
       !! Limits: there is no limiter in the deposit, so a very thin first live
       !! layer under a large `F` can reach negative salinity (the same exposure as
-      !! the ice path; `&ocean_ice_nml bound_salinity` floors it); and under
+      !! the ice path; `[ocean.ice] bound_salinity` floors it); and under
       !! `dt_therm_ratio > 1` the term is built from the interval-mean P - E (the
       !! components are replaced by their means just before this call).
       !!

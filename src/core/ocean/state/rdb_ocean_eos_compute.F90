@@ -8,7 +8,7 @@ module rdb_ocean_eos_compute
    !! This shim is the ONLY EOS code that touches the ocean C-grid
    !! state, and it lives here — not in `rdb_eos` — so the shared
    !! EOS module carries zero ocean dependencies: the coastal opt-in
-   !! nonlinear EOS (`&tracer_nml eos_form`, via
+   !! nonlinear EOS (`[tracer] eos_form`, via
    !! `rdb_ml_eos::ml_equation_of_state_shared`) reaches
    !! `eos_compute_arrays` without transitively dragging in
    !! `rdb_multilayer_state`.
@@ -32,7 +32,7 @@ contains
       !!   EOS_VARIANT_WRIGHT_97 — `eos_wright_impl` at `eos%p_ref`
       !!
       !! `ms%rho_layer` is a POTENTIAL density at the single, horizontally
-      !! uniform `eos%p_ref` (`&ocean_eos_nml p_ref`).  It is deliberately
+      !! uniform `eos%p_ref` (`[ocean.eos] p_ref`).  It is deliberately
       !! NOT offset by the surface load `ms%p_top`: its consumers
       !! difference it along a layer and vertically, so a per-column
       !! reference pressure would manufacture a spurious along-layer

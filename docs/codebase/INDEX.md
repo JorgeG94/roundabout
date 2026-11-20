@@ -15,7 +15,7 @@ branch.
 > - **The dyn-core (Arakawa C-grid + continuity-PPM)**: [`src/core/ocean/README.md`](../../src/core/ocean/README.md) — short orientation: directory map, design rules, one outer step
 > - **Which closure/scheme is enabled where + tunable knobs**: [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md)
 > - **Capabilities + limitations**: [`docs/CAPABILITIES_AND_LIMITATIONS.md`](../CAPABILITIES_AND_LIMITATIONS.md)
-> - **Physics + namelist reference**: [`docs/REFERENCE.md`](../REFERENCE.md)
+> - **Physics + input reference**: [`docs/REFERENCE.md`](../REFERENCE.md)
 > - **Per-module / procedure detail**: the source `!!` docstrings, rendered by **FORD** (built on PR to `main`)
 
 ## Directory Structure
@@ -77,10 +77,10 @@ rdb/
 │       └── single/                       Single-process stubs
 ├── tests/                             Flat test_*.F90 — testdrive unit + analytical
 │   └── mpi/                            MPI integration (halo, dyn-core)
-├── benchmarks/                         bench_ocean — namelist-driven dyn-core throughput
+├── benchmarks/                         bench_ocean — input-driven dyn-core throughput
 ├── validation_examples/ocean/          Canonical / analytical benchmark configs
 ├── tools/                              Lint scripts, post-processing, OpenMP↔OpenACC translators
-├── docs/                               REFERENCE.md (physics + namelist), codebase/ map,
+├── docs/                               REFERENCE.md (physics + input), codebase/ map,
 │                                       ROADMAP_OCEAN.md, …
 ├── cmake/                              Build options, toolchain guards, compiler flags,
 │                                    dependency finders
@@ -107,7 +107,7 @@ generate — are:
 | [CONTRACTS.md](CONTRACTS.md) | Where each cross-module contract lives (vanished layers, `p_top`, `eta_forcing`, `F_slow`, cavity datum, ...) plus the conventions with no single owner. Read only when touching that seam. |
 | [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md) | Which closure/scheme is enabled + the tunable knobs. |
 | [`docs/CAPABILITIES_AND_LIMITATIONS.md`](../CAPABILITIES_AND_LIMITATIONS.md) | What the solver can / can't do today. |
-| [`docs/REFERENCE.md`](../REFERENCE.md) | Physics, numerics, namelist keys. |
+| [`docs/REFERENCE.md`](../REFERENCE.md) | Physics, numerics, input keys. |
 | [`FORTRAN_STYLE.md`](../../FORTRAN_STYLE.md) | Style + the GPU (`do concurrent` + OpenACC) programming guide. |
 | [`docs/OPENMP_VARIANT_STATUS.md`](../OPENMP_VARIANT_STATUS.md) | Status of the generated OpenMP variant branches on ROCm — which build, and the flang bug that stops `dc-openmp-target`. |
 
@@ -115,7 +115,7 @@ generate — are:
 
 ```
 comm_env_init                    MPI phase 1
-read_config(namelist)
+read_config(input)
 comm_env_setup_roles(...)        MPI phase 2 (split communicators)
 decomp_init_from_config          subdomain extents
 ocean_state%init_from_config     allocate
@@ -132,14 +132,14 @@ ocean_state_enter_data           map state to the GPU (once)
     ocean_data_input_update_all  time-interpolated forcing (NetCDF builds)
     ocean_dyn_step_split         one split-explicit RK2 outer step
                                  (or ocean_dyn_step, unsplit)
-    ice_* (frazil / EVP / thermo / transport)   when &ocean_ice_nml enable
+    ice_* (frazil / EVP / thermo / transport)   when [ocean.ice] enable
     diag / restart               at their cadences
 
 ocean_state_exit_data            map back from the GPU (once)
 diag close / finalize
 ```
 
-`rdb --validate-only <nml>` stops after `configure_ocean_*` (`driver_validate`:
+`rdb --validate-only <input.toml>` stops after `configure_ocean_*` (`driver_validate`:
 `validate_config` + the whole `engine_setup`, no diag stream opened, no
 `enter_data`, no step) and exits 0 if the configuration is accepted, 3 if it is
 refused — the entry point the compatibility matrix

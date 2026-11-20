@@ -155,12 +155,12 @@ module rdb_ocean_vmix
 
    ! Source of the thermal-expansion / haline-contraction pair the KPP
    ! `B_0` and the double-diffusion density ratio consume
-   ! (`&ocean_vmix_nml buoyancy_coeffs`, E4).  Keep these arms in lockstep
+   ! (`[ocean.vmix] buoyancy_coeffs`, E4).  Keep these arms in lockstep
    ! with `parse_buoyancy_coeffs` AND with the `nml_enum allowed=` list in
    ! `register_ocean_vmix` (rdb_config.F90) — an allowed string with no
    ! `case` arm parses to the fallback and silently does the wrong thing.
    integer, parameter, public :: BUOY_COEFFS_CONSTANT = 1
-      !! `constant` (DEFAULT): the scalar `&ocean_ic_nml alpha_T`/`beta_S`
+      !! `constant` (DEFAULT): the scalar `[ocean.ic] alpha_T`/`beta_S`
       !! off the EOS handle, whatever the active EOS.  Exactly right for
       !! `eos = "linear"` (they ARE that EOS's coefficients); a constant
       !! stand-in under `wright`/`roquet`.
@@ -179,7 +179,7 @@ module rdb_ocean_vmix
       !! (`henyey_lat_factor_impl`) to avoid the 1/0 singularity exactly at
       !! the equator — Henyey, Wright & Flatte (1986) JGR 91:8487; the
       !! constant-`N0` simplification implemented here is Harrison &
-      !! Hallberg (2008) JPO 38:1894.  A fixed constant, not a namelist
+      !! Hallberg (2008) JPO 38:1894.  A fixed constant, not an input
       !! knob.  The OUTER multiplication in the factor uses the TRUE
       !! (unfloored) |sin(latitude)|, so the assembled factor still goes
       !! smoothly to zero at the equator rather than blowing up.  PUBLIC so
@@ -221,7 +221,7 @@ module rdb_ocean_vmix
       logical :: use_kpp = .false.
          !! Enable KPP surface-boundary-layer scheme (future).
       integer :: interior_closure = VMIX_INTERIOR_PP81
-         !! Interior mixing closure tag (`&ocean_vmix_nml interior_closure`):
+         !! Interior mixing closure tag (`[ocean.vmix] interior_closure`):
          !! `VMIX_INTERIOR_PP81` (default, bit-identical) runs the
          !! Pacanowski & Philander (1981) Richardson-number kernel;
          !! `VMIX_INTERIOR_NONE` runs no shear-driven interior closure —
@@ -247,7 +247,7 @@ module rdb_ocean_vmix
          !! surface buoyancy flux B_0.
          !!
          !! ASSIGNED FROM CONFIG by `configure_ocean_reference_density`,
-         !! which copies the single rho0 of record (`&ocean_ic_nml rho_0`
+         !! which copies the single rho0 of record (`[ocean.ic] rho_0`
          !! -> `eos%rho0`).  The literal here is only the pre-configure
          !! type default.  UNLIKE the other reference densities this one
          !! IS read on-device (`this%rho0` inside the `do concurrent`
@@ -273,7 +273,7 @@ module rdb_ocean_vmix
       ! turns them into a buoyancy flux.
       type(eos_t) :: eos
 
-      ! ---- Source of the α/β pair (E4, `&ocean_vmix_nml buoyancy_coeffs`) ----
+      ! ---- Source of the α/β pair (E4, `[ocean.vmix] buoyancy_coeffs`) ----
       ! The handle members above are the LINEAR EOS's true coefficients.
       ! Under a NONLINEAR EOS they are a constant stand-in for a strongly
       ! state-dependent pair, and `BUOY_COEFFS_EOS` replaces them with
@@ -288,7 +288,7 @@ module rdb_ocean_vmix
          !! it rides the same configure-precedes-`enter_data` contract as
          !! `rho0` and the `pp81_*` scalars beside it.
       logical :: p_top_in_eos = .false.
-         !! Mirror of `&ocean_psurf_nml in_eos` — whether
+         !! Mirror of `[ocean.psurf] in_eos` — whether
          !! `multilayer_state_t%p_top` carries a surface load that the
          !! in-situ EOS pressure must be measured down from.  Seeded at
          !! configure from the same knob EPBL's `in_eos` takes, so the two
@@ -483,7 +483,7 @@ module rdb_ocean_vmix
          !! it to activate the optional poleward cutoff.
 
       ! ---- Convective adjustment (Brunt-Vaisala trigger, CVMix_conv-style) ----
-      ! `&ocean_conv_nml`.  A CONTRIBUTOR that raises kv/kt via max() where
+      ! `[ocean.conv]`.  A CONTRIBUTOR that raises kv/kt via max() where
       ! the interior N^2 < n2_thresh, applied strictly below the active
       ! surface boundary layer.  Default off => bit-identical.  See the
       ! module docstring for the D1-D4 divergences from MOM6's
@@ -504,7 +504,7 @@ module rdb_ocean_vmix
          !! does not trigger.
 
       ! ---- Double diffusion (salt fingering + diffusive convection) ----
-      ! `&ocean_ddiff_nml`.  NOT a kv/kt contributor -- it is folded INTO
+      ! `[ocean.ddiff]`.  NOT a kv/kt contributor -- it is folded INTO
       ! `vmix_split_kd_heat_salt` (a pre-split ks write would be clobbered
       ! by `ks := kt`), producing an ASYMMETRIC ks-vs-kt divergence:
       !   ks = kt_pre + kd_extra_s ;  kt = kt_pre + kd_extra_t
@@ -631,7 +631,7 @@ contains
       !! and `VMIX_INTERIOR_CVMIX` are declared-but-unimplemented
       !! reservations (no kernel); selecting one would leave `kv`/`kt`
       !! stale (no interior mixing at all), so `parse_vmix_interior_closure`
-      !! never returns them from a namelist string and the dispatch in
+      !! never returns them from an input string and the dispatch in
       !! `vmix_apply_in_stage` refuses them.
       integer, intent(in) :: code
       logical :: ok
@@ -639,7 +639,7 @@ contains
    end function vmix_interior_closure_is_implemented
 
    pure function parse_vmix_interior_closure(name) result(code)
-      !! `&ocean_vmix_nml interior_closure` string to `VMIX_INTERIOR_*` tag:
+      !! `[ocean.vmix] interior_closure` string to `VMIX_INTERIOR_*` tag:
       !! `"pp81"` (Pacanowski & Philander 1981, default) or `"none"`
       !! (no shear-driven interior closure).  Anything else, including the
       !! reserved `large94`/`cvmix` spellings, returns `-1` so the caller
@@ -826,7 +826,7 @@ contains
       allocate (this%kd_bg(nx, ny, nz + 1))
       ! kv_bg/kt_bg/ks_bg + kv/kt/ks/kd_bg all seed from pp81_* here
       ! (structural invariant, see `vmix_seed_backgrounds`).  The SAME
-      ! call re-derives them after `&ocean_vmix_nml pp81_*` reaches the
+      ! call re-derives them after `[ocean.vmix] pp81_*` reaches the
       ! slot at configure — see `rdb_ocean_setup.F90:configure_ocean_lateral`.
       call this%seed_backgrounds()
       allocate (this%bl_depth(nx, ny), source=0.0_wp)
@@ -844,7 +844,7 @@ contains
       !! `ocean_vmix_init` (§2E structural invariant: `kv_bg == pp81_nu_bg`,
       !! `kt_bg == ks_bg == pp81_kappa_bg`, so `vmix_assemble`'s background
       !! floor is a no-op for the shipped PP81 closure) so BOTH the initial
-      !! seed and the `&ocean_vmix_nml pp81_*` config-copy re-derive
+      !! seed and the `[ocean.vmix] pp81_*` config-copy re-derive
       !! consistently — a bare field copy without this call would leave
       !! the assembly floor clamped against the OLD (type-default)
       !! background even after a user sets a new one.  Requires
@@ -1255,7 +1255,7 @@ contains
       ! at.  `B_0` is a SURFACE buoyancy flux, so the natural pressure is
       ! the one at the TOP of the column:
       !
-      !   * `&ocean_psurf_nml in_eos` on  -> `ms%p_top(i,j)`, the ice /
+      !   * `[ocean.psurf] in_eos` on  -> `ms%p_top(i,j)`, the ice /
       !     atmospheric load in Pa (the E3 seam), and nothing else.
       !   * off                           -> `eos%p_ref`, the pressure the
       !     model's own `ms%rho_layer` is referenced to, so α stays
@@ -1559,7 +1559,7 @@ contains
    end function kpp_surface_buoyancy_flux
 
    pure function parse_kpp_sw_method(name) result(tag)
-      !! Map the `&ocean_thermo_nml kpp_sw_method` string to a
+      !! Map the `[ocean.thermo] kpp_sw_method` string to a
       !! `KPP_SW_*` tag; `-1` for an unrecognised string (fail-loud at
       !! `validate_config`).
       character(len=*), intent(in) :: name
@@ -1577,7 +1577,7 @@ contains
    end function parse_kpp_sw_method
 
    pure function parse_buoyancy_coeffs(name) result(tag)
-      !! Map the `&ocean_vmix_nml buoyancy_coeffs` string to a
+      !! Map the `[ocean.vmix] buoyancy_coeffs` string to a
       !! `BUOY_COEFFS_*` tag; `BUOY_COEFFS_INVALID` for an unrecognised
       !! string, which `configure_ocean_vmix` turns into a fail-loud abort
       !! (never a silent fallback to the constants).  The accepted set
@@ -2083,7 +2083,7 @@ contains
       real(wp), intent(in) :: h_layer(nx, ny, nzp1 - 1)
       real(wp), intent(in) :: p_top(nx, ny)
          !! Surface load (Pa) — `multilayer_state_t%p_top`, the zero array
-         !! unless `&ocean_psurf_nml in_eos`.
+         !! unless `[ocean.psurf] in_eos`.
       type(eos_t), intent(in) :: eos
          !! Active EOS handle, by value.
       real(wp), intent(in) :: rho0
@@ -2538,9 +2538,9 @@ contains
       !! mutation-survivable hole.  Same shape as
       !! `pseudo_salt_conflicts_restore` / `lateral_closure_conflicts_smag_ah`.
       logical, intent(in) :: bkgnd_henyey
-         !! `&ocean_vmix_nml bkgnd_henyey`.
+         !! `[ocean.vmix] bkgnd_henyey`.
       logical, intent(in) :: bkgnd_profile
-         !! `&ocean_vmix_nml bkgnd_profile` (Bryan-Lewis).
+         !! `[ocean.vmix] bkgnd_profile` (Bryan-Lewis).
       logical :: conflict
 
       conflict = bkgnd_henyey .and. bkgnd_profile

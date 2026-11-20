@@ -1,4 +1,4 @@
-!! Unit tests for rdb_config_schema: the central Roundabout namelist schema.
+!! Unit tests for rdb_config_schema: the central Roundabout input schema.
 module test_config_schema
    use rdb_constants, only: wp
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -161,7 +161,7 @@ contains
    end subroutine test_range
 
    subroutine test_retired_mom6_pc(error)
-      !! `&ocean_bt_nml split_scheme = "mom6_pc"` -- the spelling this
+      !! `[ocean.bt] split_scheme = "mom6_pc"` -- the spelling this
       !! scheme shipped under until 2026-09-14 -- must fail LOUD and name
       !! its successor.  The two ways this could go wrong are both silent
       !! and both worse than an error: falling through to the default
@@ -230,7 +230,7 @@ contains
 
       call build_rdb_schema(cfg, schema)
       call check(error, trim(cfg%ocean%bt%split_scheme) == "pred_corr", &
-                 "&ocean_bt_nml split_scheme default must be 'pred_corr'")
+                 "[ocean.bt] split_scheme default must be 'pred_corr'")
    end subroutine test_split_scheme_default
 
    subroutine test_doc_short(error)
@@ -260,9 +260,9 @@ contains
 
    subroutine test_strict_groups(error)
       !! Every group is on the strict schema (there is no skipped group).
-      !! An ocean group (ocean_topo_nml) is strictly validated: a known key
+      !! An ocean group ([ocean.topo]) is strictly validated: a known key
       !! applies, an unknown key errors, and a bad enum value errors.  A
-      !! coastal group (physics_nml) likewise rejects garbage.
+      !! coastal group ([physics]) likewise rejects garbage.
       type(error_type), allocatable, intent(out) :: error
       type(config_t), target :: cfg
       type(nml_schema_t) :: schema
@@ -272,36 +272,36 @@ contains
 
       call build_rdb_schema(cfg, schema)
 
-      ! A clean ocean_topo_nml validates and applies.
+      ! A clean [ocean.topo] validates and applies.
       call write_file(fn, "[ocean.topo]"//achar(10)//"max_depth = 4000.0"//achar(10)//'topo_config = "spoon"')
       call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
-      call check(error, stat == 0, "clean ocean_topo_nml validates")
+      call check(error, stat == 0, "clean [ocean.topo] validates")
       if (allocated(error)) return
 
-      ! ocean_topo_nml is now strict — an unknown key must error.
+      ! [ocean.topo] is now strict — an unknown key must error.
       call write_file(fn, "[ocean.topo]"//achar(10)//"max_depth = 4000.0"//achar(10)//"some_garbage = 3")
       call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
-      call check(error, stat == 1, "migrated ocean_topo_nml rejects unknown key")
+      call check(error, stat == 1, "migrated [ocean.topo] rejects unknown key")
       if (allocated(error)) return
 
       ! A bad enum value (topo_config) must error too.
       call write_file(fn, "[ocean.topo]"//achar(10)//'topo_config = "nonsense"')
       call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
-      call check(error, stat == 1, "ocean_topo_nml rejects bad topo_config enum")
+      call check(error, stat == 1, "[ocean.topo] rejects bad topo_config enum")
       if (allocated(error)) return
 
-      ! physics_nml is a strict group — an unknown key must error.
+      ! [physics] is a strict group — an unknown key must error.
       call write_file(fn, "[physics]"//achar(10)//"manning_n = 0.025"//achar(10)//"some_garbage = 3")
       call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
-      call check(error, stat == 1, "migrated physics_nml rejects unknown key")
+      call check(error, stat == 1, "migrated [physics] rejects unknown key")
    end subroutine test_strict_groups
 
    subroutine test_ocean_bc(error)
-      !! P4.5: `&ocean_bc_nml` is now a strictly-validated schema group
+      !! P4.5: `[ocean.bc]` is now a strictly-validated schema group
       !! (no more hand-rolled `read_ocean_bc_nml`).  Covers: defaults
       !! reproduce a closed-wall run, a clean block applies + canonicalises
       !! its enums, an unknown key errors, a bad edge-type enum errors
@@ -324,7 +324,7 @@ contains
       call write_file(fn, "[ocean.bc]"//achar(10)//'west = "PERIODIC"'//achar(10)//'east = "periodic"')
       call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
-      call check(error, stat == 0, "clean ocean_bc_nml validates")
+      call check(error, stat == 0, "clean [ocean.bc] validates")
       if (allocated(error)) return
       call check(error, trim(cfg%ocean%bc%west) == "periodic", "west canonicalised to lowercase")
       if (allocated(error)) return
@@ -332,12 +332,12 @@ contains
       if (allocated(error)) return
 
       ! An unknown key must error (was silently ignored by the native
-      ! namelist reader before P4.5).
+      ! input reader before P4.5).
       call build_rdb_schema(cfg, schema)
       call write_file(fn, "[ocean.bc]"//achar(10)//'west = "wall"'//achar(10)//"some_garbage = 3")
       call toml_schema_parse_file(schema, fn, status=stat, errors=errs)
       call rm_file(fn)
-      call check(error, stat >= 1, "migrated ocean_bc_nml rejects unknown key")
+      call check(error, stat >= 1, "migrated [ocean.bc] rejects unknown key")
       if (allocated(error)) return
 
       ! A bad edge-type enum must error naming the allowed set (was a

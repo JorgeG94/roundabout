@@ -92,7 +92,7 @@ model did on the day it was captured. Neither catches a defect that takes
 hours of simulated time to appear, and a golden captured from a
 misconfigured run will keep passing forever.
 
-The stability suite closes both gaps. It runs shipped namelists for long
+The stability suite closes both gaps. It runs shipped inputs for long
 enough that their physics actually manifests, and it asserts on the model's
 **own console time series** — no stored baseline at all. Five families of
 assertion:
@@ -102,7 +102,7 @@ assertion:
    round-off.
 #. **Energy** — kinetic energy behaves as the case's regime requires.
 #. **CFL** — the Courant number stays bounded.
-#. **The case's own claim** — the testable statements in the namelist
+#. **The case's own claim** — the testable statements in the input
    header.
 
 Regimes
@@ -166,7 +166,7 @@ share a name.
 The scheme axis
 ---------------
 
-``&ocean_bt_nml split_scheme`` selects the outer time integration
+``[ocean.bt] split_scheme`` selects the outer time integration
 (:ref:`discretisation`), and results are not bit-identical between the two
 values. Both are therefore kept under test.
 
@@ -176,7 +176,7 @@ assertions. The reasoning is that a change of integrator must not change
 what a case is *allowed* to do — so anywhere the two disagree, the
 disagreement is itself the finding.
 
-Cases that pin a scheme in their own namelist are excluded from the axis,
+Cases that pin a scheme in their own input are excluded from the axis,
 and that exclusion is **derived from the file** rather than maintained as a
 hand-written list. Tier 2 runs the full axis; tier 1 runs a curated subset
 chosen to cover each vertical-coordinate family, both pressure-gradient-
@@ -213,7 +213,7 @@ One line per case:
 
 .. code-block:: text
 
-   [ PASS] eady                              123.4s  validation_examples/ocean/eady/eady.nml
+   [ PASS] eady                              123.4s  validation_examples/ocean/eady/eady.toml
 
 with ``[*FAIL]``, ``[XFAIL]`` and ``[XPASS]`` as the other states. Only
 failing assertions print unless you pass ``-v``.
@@ -234,7 +234,7 @@ Exit codes: ``0`` no failures, ``1`` at least one failure, ``2`` binary not
 found, ``3`` a downscale rule violation (nothing ran).
 
 Artefacts land in ``tmp_local_artifacts/stability/tier<N>/<case>/``: the
-patched namelist actually used — the committed file is never modified — and
+patched input actually used — the committed file is never modified — and
 ``run.log``, the full output of the run.
 
 
@@ -273,7 +273,7 @@ The project's standing order, in order:
    a stale cell in a table is a bug. Where a document and the code
    disagree, **the code is the authority and the document is the bug**.
 
-When adding a capability, the shape is: a namelist knob defaulting **off**
+When adding a capability, the shape is: an input knob defaulting **off**
 so existing configurations stay bit-identical; the kernel behind that knob;
 an analytical test covering the new path; then the three checks above. One
 capability per commit, one per pull request.

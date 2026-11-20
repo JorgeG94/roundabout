@@ -1,6 +1,6 @@
 !! Default-off guard for the surface-pressure loading seam (PR-17).
 !!
-!! `&ocean_psurf_nml enable=.false.` must be byte-for-byte identical to the
+!! `[ocean.psurf] enable=false` must be byte-for-byte identical to the
 !! path that never carried the knob at all.  This exercises the 3-way stage
 !! dispatch in `ocean_dyn_step_split` at the level where PR-17 changed it —
 !! ABOVE the barotropic substep kernel that `test_ocean_tides_disabled_bitident`

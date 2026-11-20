@@ -36,24 +36,24 @@ TESTS_CMAKE = ROOT / "tests" / "CMakeLists.txt"
 # Named closure / forcing selector knobs (besides the auto-discovered
 # vmix_use_* family).  Each must exist in the config AND have a matrix cell.
 CURATED_KNOBS = [
-    "ocean_hvisc_nml",
-    "ocean_bdrag_nml",
-    "ocean_kappa_shear_nml",
+    "[ocean.hvisc]",
+    "[ocean.bdrag]",
+    "[ocean.kappa_shear]",
     # Static ice-shelf cavity geometry + the barotropic datum that absorbs
     # it.  Listed here because the datum silently changes what `bt_eta`
     # MEANS (deviation from the loaded equilibrium, not from z = 0), which
     # is exactly the kind of thing prose forgets.
-    "ocean_cavity_dyn_nml",
+    "[ocean.cavity_dyn]",
     # Ice-shelf basal-melt thermodynamics.  Listed because the capability
     # is delivered as a VIRTUAL salt flux with no mass, and because the
     # v1 gaps (no cover mask on atmospheric forcing, no top drag) are
     # configure REFUSALS — exactly the kind of scoping prose forgets.
-    "ocean_cavity_melt_nml",
+    "[ocean.cavity_melt]",
     # Ice-shelf TOP drag.  Listed because the FACE cover rule (OR, so the
     # calving-front face is dragged) and the ONE-C_d agreement rule with
-    # &ocean_cavity_melt_nml cdrag_top are both deliberate choices that a
+    # [ocean.cavity_melt] cdrag_top are both deliberate choices that a
     # reader cannot recover from the code without being told.
-    "ocean_tdrag_nml",
+    "[ocean.tdrag]",
 ]
 
 CURATED_KEYS = [
@@ -81,14 +81,14 @@ CURATED_KEYS = [
     "zfixed_closed_faces",
 ]
 
-# Named sea-ice selector knobs (&ocean_ice_nml).  The shipped subsystem —
+# Named sea-ice selector knobs ([ocean.ice]).  The shipped subsystem —
 # Winton column thermodynamics, multi-category ITD, category transport +
 # compress_ice, and C-grid EVP dynamics — is gated by these.  Each distinctive
 # token must exist in the config AND appear in the sea-ice section of the matrix
 # so the whole subsystem can't drift out of the enabled-closure ground truth
 # (the group name + one knob per shipped component/family).
 ICE_KNOBS = [
-    "ocean_ice_nml",
+    "[ocean.ice]",
     "nk_ice",
     "adv_substeps",
     "evp_sub_steps",
@@ -107,7 +107,7 @@ def check_tracer_defaults(config: str, matrix: str) -> List[str]:
 
     NOT covered here (no config symbol to grep, so a future maintainer must not
     assume they're guarded):
-      * ocean HORIZONTAL tracer advection is HARDCODED PPM — no namelist knob
+      * ocean HORIZONTAL tracer advection is HARDCODED PPM — no input knob
         (tracer_advect_{zonal,meridional}_one_impl in rdb_continuity.F90).
       * ocean VERTICAL (in-z) tracer advection is HARDCODED 1st-order upwind
         (tracer_advect_vertical_one_impl in rdb_ocean_vertical_advection.F90).

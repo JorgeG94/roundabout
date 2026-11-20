@@ -1,7 +1,7 @@
 # Physics-coverage regression suite — ocean (run-clean gate + golden compare)
 
 A stdlib-only Python harness that runs a curated set of **bathymetry-free ocean**
-namelist cases for a handful of timesteps each and asserts every one **runs
+input cases for a handful of timesteps each and asserts every one **runs
 clean** (P0 — exit 0, no non-finite / crash markers) **and does not drift**
 against a committed golden final-state summary (P1 — high-tolerance, not
 bitwise).
@@ -23,7 +23,7 @@ See `docs/regression_suite_plan.md` for the full design.
 ## What the suite runs
 
 **35 bathymetry-free ocean cases**, each run for a handful of outer timesteps
-(the runner rewrites `&time_nml` so `t_end = n_steps * dt_fixed`). Every case is
+(the runner rewrites `[time]` so `t_end = n_steps * dt_fixed`). Every case is
 formula bathymetry (no DEM/file load) and finishes in O(seconds). The single
 source of truth is `manifest.py` (each case carries the `tags` = closures it
 exercises); this table is the human summary.
@@ -78,14 +78,14 @@ exercises); this table is the human summary.
 | `eady_weno5` | Eady front + windowed tracer-advect drain (`dt_tracer_advect_ratio=2`) with **WENO5-Z** face reconstruction (`tracer_recon="weno5"`) — the weno5 + PLM swept-average face helpers + rung-degradation ladder in `rdb_recon_weno.F90` |
 | `eady_weno7` | same base + drain, **WENO7-Z** (`tracer_recon="weno7"`, `nghost=4`) — reaches the higher-order cubic-candidate stencil (`weno7_face_swept`) weno5 can't |
 
-### Outer split scheme (`&ocean_bt_nml split_scheme`)
+### Outer split scheme (`[ocean.bt] split_scheme`)
 The base corpus runs the default `split_scheme="pred_corr"` (the MOM6
 predictor-corrector; it became the default on 2026-09-14), so the
 `SPLIT_SCHEME_PRED_CORR` branches in `rdb_ocean_dyn.F90` — predictor stage,
 corrector on the time-mean `u_av/h_av`, `restore_state`, the `is_pc`
 conditionals — are the ones the whole corpus exercises. The `ssp_rk2`
 branches are covered by `eady_weno5` and `eady_weno7`, which pin `"ssp_rk2"`
-in their own namelists because the `pred_corr` v1 envelope REFUSES their
+in their own inputs because the `pred_corr` v1 envelope REFUSES their
 windowed tracer-advect configuration, so both branches of the dispatcher stay
 golden-covered.
 
@@ -96,7 +96,7 @@ case keeps its old file. Five goldens (`double_gyre_mom6`,
 sat stale that way: the NaN missing-data sentinel in the T/S diagnostics made
 their console `mean` print `NaN`, the gate rejected them, and every
 regeneration skipped them — so three still held `ssp_rk2`-era answers under an
-unpinned namelist after the 2026-09-14 default flip, and `coriolis_coast` held
+unpinned input after the 2026-09-14 default flip, and `coriolis_coast` held
 its pre-wind-fix (En = 0) answer. The console reduction now skips non-finite
 cells (`missing=<n>/<total>` on the line), all five were regenerated, and an
 update that skips any case now names the stale goldens and exits non-zero.
@@ -108,7 +108,7 @@ and because each is a distinct configuration in its own right (a
 non-Lagrangian ALE vcoord under the pc loop, #395).
 
 The STABILITY suite carries the broader axis: it re-runs every case whose
-namelist does not pin a scheme under a forced `ssp_rk2` as `<case>__ssp_rk2`
+input does not pin a scheme under a forced `ssp_rk2` as `<case>__ssp_rk2`
 (43 twins, ~2.5 min of extra tier-2 wall on 4 CPU workers), which is what
 keeps the experimental scheme from rotting and is where its one open defect
 (resting-state internal-gravity-wave growth) is recorded as a scoped XFAIL.
@@ -139,7 +139,7 @@ diagnostics (low physics value). Run
 | `coverage.py` | P2 gcov coverage mode — measures ocean-closure coverage of the corpus + emits the gap list |
 | `run_all.py` | **single entry point** for the golden suite — invokes compare (CPU/GPU) + coverage, aggregates to one pass/fail + CI-ready exit code |
 | `stability.py` | **the two-tier stability suite** (see below) — parses the model's own console time series and asserts on PHYSICS, not on a golden |
-| `stability_manifest.py` | its case list: every tracked ocean namelist (73 base cases), with per-case run length, physics assertions, tier-2 downscale spec and known-failure markers |
+| `stability_manifest.py` | its case list: every tracked ocean input (73 base cases), with per-case run length, physics assertions, tier-2 downscale spec and known-failure markers |
 | `downscale.py` | the dimensionless-number rules a tier-2 twin must satisfy, plus the standalone checker that validates every twin |
 | `compat_matrix.py` | **the pairwise compatibility matrix** (see the last section): the synthetic domain, the seeded IPOG covering-array generator, the `rdb --validate-only` driven fixed point, checks 1–3 and the report |
 | `compat_expect.py` | what the matrix EXPECTS to fail: `PHYSICAL` rows (forever) and `KNOWN_GAP` rows (reason, owner, v0.1.0 tracker item) |
@@ -185,10 +185,10 @@ For every manifest case the runner:
 
 1. Copies the committed nml into a per-case scratch dir (default
    `tmp_local_artifacts/regression/<case>/`, which is git-ignored).
-2. Patches `&time_nml` so the run is `n_steps` **outer** steps — it reads
+2. Patches `[time]` so the run is `n_steps` **outer** steps — it reads
    `dt_fixed` and sets `t_end = n_steps * dt_fixed` seconds, normalizing
    `time_unit` to `"second"`. The committed nml is never mutated.
-3. Redirects `&output_nml output_dir` to the scratch dir **and** runs the
+3. Redirects `[output] output_dir` to the scratch dir **and** runs the
    process with `cwd=<scratch>`, so no run ever writes into the repo tree.
 4. Runs `rdb <temp.toml>` with the per-case `timeout_s`, capturing exit code
    + combined stdout/stderr.
@@ -371,7 +371,7 @@ defects ship:
    run passes forever. `eady` passed its golden for months *because* the golden was the
    over-damped answer.
 
-`stability.py` is the answer to both. It runs each namelist long enough that
+`stability.py` is the answer to both. It runs each input long enough that
 its physics manifests and asserts on the model's **own console time series** —
 `[stats]` (En, MaxCFL, Mass, Salt, Temp) and the per-step closed-budget
 residuals — against statements about *physics*. There is no stored answer, so
@@ -409,7 +409,7 @@ entirely** — which is the whole reason the windowed rate exists.
 | where | local box / self-hosted GPU runner / nightly | standard GitHub-hosted runner |
 | toolchain | NVHPC `nvfortran`, `RDB_ENABLE_GPU=ON` | **gfortran**, `RDB_ENABLE_GPU=OFF` |
 | hardware | 1–4 GPUs | 2–4 CPU cores, ~7 GB RAM, no NVIDIA hardware |
-| cases | **all 62** tracked ocean namelists | **49** (13 are tier-1 only — see below) |
+| cases | **all 62** tracked ocean inputs | **49** (13 are tier-1 only — see below) |
 | run length | per case, sized to when the physics appears (`eady` 60 d, `seamount` 30 d, `baroclinic_2layer` 40 d) | 40–140 simulated hours |
 | wallclock | **21 min across 4 GPUs (1270 s)** — `baroclinic_15layer` alone is 1030 s of it, because its instability does not appear until day 30 | **155 s on 4 workers; ~575 s serial** |
 | drops | — | the assertions that genuinely need a long integration (a baroclinic growth rate cannot be measured in 40 simulated hours). They are reported as `SKIP … TIER 1 ONLY`, never weakened to pass. |
@@ -452,7 +452,7 @@ file.
 | `energy:responds` | a **forced** case must actually move. A forcing path that is silently a no-op passes every NaN, budget and golden check ever written — doing nothing is exactly conservative. This is the only thing that sees it, and it caught one (`coriolis_coast`). |
 | `energy:bounded` / `energy:saturating` | a forced case stays inside a physical envelope, and is saturating by the end of a spin-up-length run. |
 | `cfl:bounded` / `cfl:no-runaway` | MaxCFL under its ceiling, and a monotone climb already past 10 % of the ceiling must not project to a trip within one more run length. |
-| `claim:<name>` | the namelist header's **own** testable statement. Never weakened to pass and never satisfied by editing the namelist: when a header and the code disagree, that *is* the finding. |
+| `claim:<name>` | the input header's **own** testable statement. Never weakened to pass and never satisfied by editing the input: when a header and the code disagree, that *is* the finding. |
 
 ### Statuses
 
@@ -479,8 +479,8 @@ an `ARTIFACT` line. That the mean is unusable is itself a defect worth fixing
 
 # The vertical-coordinate REST MATRIX (`vcoord_matrix.py`)
 
-Everything above runs each shipped namelist under **whatever vertical
-coordinate that namelist chose**. Nothing ran ONE problem under ALL of them, so
+Everything above runs each shipped input under **whatever vertical
+coordinate that input chose**. Nothing ran ONE problem under ALL of them, so
 nothing could answer the question a user actually has:
 
 > **Which vertical coordinate is trustworthy on which geometry?**
@@ -489,22 +489,22 @@ That gap is not theoretical. In two days on the cavity branch it hid, at the
 same time: `VCOORD_ZSIGMA` collapsing its whole column into the bed layer (with
 `Σ target_h = H + η` still exact, which is why no conservation test caught it);
 `VCOORD_ZSTAR_SIGMA` being numerically indistinguishable from `VCOORD_SIGMA` in
-all 21 shipped namelists that select it; `VCOORD_ZSTAR_FULL` resolving the
+all 21 shipped inputs that select it; `VCOORD_ZSTAR_FULL` resolving the
 *wrong half* of the column under a lid; a rest-state growth mode over **any**
 sloping boundary that no shipped case saw because every sloping case carries
 viscosity or runs short; and sigma failing outright at `rx0 = 0.73`.
 
-Every one of those is invisible to a per-namelist suite and obvious in a
+Every one of those is invisible to a per-input suite and obvious in a
 family × geometry table. **The table is the product.**
 
 ## How it is built
 
 One canonical template — [`vcoord_templates/rest_matrix.toml.in`](vcoord_templates/rest_matrix.toml.in)
 — plus one parameter dict per **problem** and one per **family**, in
-[`vcoord_matrix.py`](vcoord_matrix.py). `build_matrix()` emits one namelist per
+[`vcoord_matrix.py`](vcoord_matrix.py). `build_matrix()` emits one input per
 cell into `tmp_local_artifacts/vcoord_matrix/` at manifest-import time and
 registers the rows through the ordinary `_case(...)`. Dozens of
-near-identical namelists are deliberately **not** checked in: they rot, a
+near-identical inputs are deliberately **not** checked in: they rot, a
 reader cannot tell which cell of the matrix a given file is, and a change to
 the shared problem then has to be applied by hand N times. The emitted files
 are plain text, carry a generated header naming their cell, and are left on
@@ -543,7 +543,7 @@ terminal.
 **One problem, at rest.** A motionless, stably stratified ocean on an f-plane
 (48 × 6 × 15 at 2 km, `dt = 600 s`, `f = −1.409e-4`), with **no forcing and no
 vertical mixing**, and with the isopycnals laid **flat in geopotential `z`** by
-`&ocean_zinit_nml source="linear"` — *not* by a layer-index profile, which
+`[ocean.zinit] source="linear"` — *not* by a layer-index profile, which
 would tilt them with a terrain-following coordinate and hand the run real
 available potential energy to convert. Over a slope that distinction is the
 whole experiment.
@@ -560,17 +560,17 @@ the configuration v0.1.0 recommends for any run over sloping topography**:
 
 | knob | why |
 |---|---|
-| `&ocean_pgf_nml form = "fv_mom6", reconstruct_for_pressure = .true.` | the exact finite-volume PGF: the sigma rest-state seed falls from 2.6e-8 to 9.6e-16 m s⁻² and the slope plateaus fall 12–17 decades to machine zero |
-| `&vcoord_nml remap_boundary_extrap = .true.` | linear-exact boundary cells in the remap (the first-order boundary cell was the rest-state amplifier: growth 0.355 → 0.047 /day) |
-| `&vcoord_nml remap_nonuniform_weights = .true.` | PLM/PPM linear-exact on a stretched column (1.5e-01 → 3e-14) |
-| `&vcoord_nml remap_check_preconditions = .true.` | fail loud the first step the remap is handed a negative layer or a mismatched column total, instead of silently creating or deleting tracer |
-| `&vcoord_nml zfixed_closed_faces = .true.` (`z_fixed` only) | closed staircase faces with an open-column barotropic mode — without it the staircase PGF residual is unbounded |
+| `[ocean.pgf] form = "fv_mom6", reconstruct_for_pressure = true` | the exact finite-volume PGF: the sigma rest-state seed falls from 2.6e-8 to 9.6e-16 m s⁻² and the slope plateaus fall 12–17 decades to machine zero |
+| `[vcoord] remap_boundary_extrap = true` | linear-exact boundary cells in the remap (the first-order boundary cell was the rest-state amplifier: growth 0.355 → 0.047 /day) |
+| `[vcoord] remap_nonuniform_weights = true` | PLM/PPM linear-exact on a stretched column (1.5e-01 → 3e-14) |
+| `[vcoord] remap_check_preconditions = true` | fail loud the first step the remap is handed a negative layer or a mismatched column total, instead of silently creating or deleting tracer |
+| `[vcoord] zfixed_closed_faces = true` (`z_fixed` only) | closed staircase faces with an open-column barotropic mode — without it the staircase PGF residual is unbounded |
 
 `stability.py --self-test` asserts that every emitted cell carries all of
 them.
 
-The FINDING B fix, `&ocean_continuity_nml renorm_consistent_flux = .true.`,
-and MOM6's fast-loop damping `&ocean_bt_nml bebt = 0.1` are the model
+The FINDING B fix, `[ocean.continuity] renorm_consistent_flux = true`,
+and MOM6's fast-loop damping `[ocean.bt] bebt = 0.1` are the model
 DEFAULTS since 2026-09-22 (MOM6 parity), so the template does not list them —
 every cell runs them. Re-pinned on both toolchains with them in: every
 viscous cell of `sigma`, `zstar`, `zstar_sigma` and `zstar_full` passes, rx0
@@ -579,8 +579,8 @@ viscous cell of `sigma`, `zstar`, `zstar_sigma` and `zstar_full` passes, rx0
 ### Two legs
 
 The legs share the template and differ **only** in the dissipation (the
-self-test diffs every viscous namelist against its inviscid twin with the
-`&ocean_hvisc_nml` / `&ocean_bdrag_nml` groups removed):
+self-test diffs every viscous input against its inviscid twin with the
+`[ocean.hvisc]` / `[ocean.bdrag]` groups removed):
 
 * **INVISCID** (`vcm_*`, 115 cells) — `nu_h = 0`, no drag. **The hard probe.**
   A viscosity that removes a spurious mode removes the measurement with it
@@ -605,10 +605,10 @@ resolved `MOM_parameter_doc.all`) ships `LAPLACIAN = True`, `KH = 1000 m² s⁻�
 
 | MOM6 | roundabout (viscous leg) | the mapping, and why |
 |---|---|---|
-| `LAPLACIAN`, `KH` | `nu_h = 160 m² s⁻¹`, `stress_tensor = .true.` | **Definition:** both are the `ν` of `∂u/∂t = ν∇²u`. MOM6's thickness-weighted stress-tensor operator (Griffies & Hallberg 2000), `diffu = (1/h)∇·(h·Kh·S)` with tension `S_xx = u_x − v_y` and shear `S_xy = v_x + u_y`, reduces to `Kh∇²u` on a uniform grid with uniform `h` — the cross terms cancel — and so does roundabout's scalar path (`hvisc_compute_scalar_impl`, 5-point velocity Laplacian). They differ where `h` varies between neighbours: MOM6 thickness-weights and conserves momentum, the scalar path does neither. roundabout's `stress_tensor = .true.` **is** MOM6's operator (thickness-weighted stress, `÷(h_u + h_neglect)`, per-cell BOUND_KH clamp, coast masks), so the leg selects it. **Magnitude:** translated, not copied. What a Laplacian does to a grid-scale mode is damp it at `ν·k²_grid ∝ ν/Δx²`, and the modes this matrix exists for are 2–3 Δx wide; MOM6's `KH/Δx² = 1000/5000² = 4.0e-5 s⁻¹`, i.e. `160 m² s⁻¹` at 2 km. Copying `1000 m² s⁻¹` would be 6.25× MOM6's grid-scale damping — and MOM6 itself would not run it here: its BOUND_KH ceiling `0.1·Δx²/dt` is 667 m² s⁻¹ at (2 km, 600 s). |
+| `LAPLACIAN`, `KH` | `nu_h = 160 m² s⁻¹`, `stress_tensor = true` | **Definition:** both are the `ν` of `∂u/∂t = ν∇²u`. MOM6's thickness-weighted stress-tensor operator (Griffies & Hallberg 2000), `diffu = (1/h)∇·(h·Kh·S)` with tension `S_xx = u_x − v_y` and shear `S_xy = v_x + u_y`, reduces to `Kh∇²u` on a uniform grid with uniform `h` — the cross terms cancel — and so does roundabout's scalar path (`hvisc_compute_scalar_impl`, 5-point velocity Laplacian). They differ where `h` varies between neighbours: MOM6 thickness-weights and conserves momentum, the scalar path does neither. roundabout's `stress_tensor = true` **is** MOM6's operator (thickness-weighted stress, `÷(h_u + h_neglect)`, per-cell BOUND_KH clamp, coast masks), so the leg selects it. **Magnitude:** translated, not copied. What a Laplacian does to a grid-scale mode is damp it at `ν·k²_grid ∝ ν/Δx²`, and the modes this matrix exists for are 2–3 Δx wide; MOM6's `KH/Δx² = 1000/5000² = 4.0e-5 s⁻¹`, i.e. `160 m² s⁻¹` at 2 km. Copying `1000 m² s⁻¹` would be 6.25× MOM6's grid-scale damping — and MOM6 itself would not run it here: its BOUND_KH ceiling `0.1·Δx²/dt` is 667 m² s⁻¹ at (2 km, 600 s). |
 | `KH_VEL_SCALE` | not set | `KH_VEL_SCALE·Δx` = 6 m² s⁻¹ at 2 km (15 at 5 km) is below `KH` on both grids, so it never binds. (roundabout's `kh_vel_scale` only seeds `ah_bg` for the flow-aware closures and is inert on the constant-`nu_h` path.) |
 | `LINEAR_DRAG`, `CDRAG·DRAG_BG_VEL`, `HBBL` | `form = "linear"`, `r = 1.0e-5 s⁻¹`, `hbbl = 10 m` | MOM6's linear drag is a bottom **stress** `τ/ρ₀ = CDRAG·DRAG_BG_VEL·u_bbl = 1.0e-4 m s⁻¹ · u_bbl`, grid-independent, over the bottom `HBBL`. roundabout's distributed linear form applies `∂u_k/∂t = −r·u_k·h_in_bbl,k/h_k`, whose column integral is `r·hbbl·u_bbl`; `r = 1e-4/10` reproduces the stress exactly. |
-| `KV = 1e-4` | not carried | its damping of the first baroclinic mode, `KV·(π/H)² ≈ 1e-9 s⁻¹`, is four decades under the rates measured here, and `use_closure = .false.` keeps `KD = 0`, which the tracer-extrema gate needs. |
+| `KV = 1e-4` | not carried | its damping of the first baroclinic mode, `KV·(π/H)² ≈ 1e-9 s⁻¹`, is four decades under the rates measured here, and `use_closure = false` keeps `KD = 0`, which the tracer-extrema gate needs. |
 
 `stress_tensor` is refused under `zfixed_closed_faces`, so the `z_fixed` cells
 of the viscous leg carry the scalar operator (with the closed-face free-slip
@@ -696,8 +696,8 @@ dependencies, no NetCDF reader.
 | spurious energy **rate** | `energy:rest-growth-rate` | least squares of `log En` over the **tail** (last 60 %) of the run; `En ~ exp(2σt)`, so the reported amplitude rate is `slope/2`. **R² is reported, not gated** — a plateau has a near-zero slope and a meaningless R², an instability has both, and letting the reader see the pair is honest where picking an R² threshold would not be. Tier 1 only: the bar is a 20-day e-folding and a 3.3-day twin cannot fit one. |
 | **truncation estimate** | printed in the row's note | `a_peak = N²·Δe³/(6·Δx·H̄)`, derived in [`validation_examples/ocean/ice_shelf_cavity/README.md`](../../validation_examples/ocean/ice_shelf_cavity/README.md) and verified there against a four-decade slope ladder to within 33 %. A rotating run balances it geostrophically at `U = a_peak/\|f\|`, so `En_plateau ≈ ½U²`. It is an **estimate** (one dominant face step, geostrophic balance) and is labelled as one; the bar never derives from it. |
 | tracer bounds | `tracer:no-new-extrema` | `[diag]` `temperature` / `salinity` extrema may not leave the **first sample's** range by more than max(1e-6, 1.5 print quanta). The console line is `ES13.5`, so salinity near 34 is resolved to 1e-4 PSU: a one-last-digit flip is rounding of two printed numbers, not a measurement (it was the one gfortran-vs-V100 flip on `slope × zstar_full`). At rest, with no flux and no mixing, a new extremum is spurious diapycnal mixing from the coordinate's own regrid. |
-| remap guard | `remap:preconditions` | the run never tripped `&vcoord_nml remap_check_preconditions` (a negative layer or a mismatched column total handed to the remap). Evaluated even when the run aborted — the guard's job is to abort. On nvfortran the guard's line can be split by the interleaved `ERROR STOP`; the parser records the firing either way. |
-| thickness positivity | `thickness:positive` | `min h_layer` over the run, from the `h_layer` derived diagnostic (`&ocean_diag_nml diags = "h_layer"`), strictly positive. |
+| remap guard | `remap:preconditions` | the run never tripped `[vcoord] remap_check_preconditions` (a negative layer or a mismatched column total handed to the remap). Evaluated even when the run aborted — the guard's job is to abort. On nvfortran the guard's line can be split by the interleaved `ERROR STOP`; the parser records the firing either way. |
+| thickness positivity | `thickness:positive` | `min h_layer` over the run, from the `h_layer` derived diagnostic (`[ocean.diag] diags = "h_layer"`), strictly positive. |
 | budget residuals | `conserve:{Mass,Salt,Heat}` | the model's own closed-budget `Error`, 1e-11 relative. |
 | clamp / truncation counters | `counters:no-truncation` | the solver's `CFL truncations: N total` line. A rest case that truncates is not resting, whatever its energy says. |
 | stiffness | recorded in the JSON | the configure-time audit's own `rx0 = …` line. |
@@ -724,7 +724,7 @@ checks it fails the first and passes the second — who tests the test.
 **Tier 1 — the real horizon.** 205 cells (115 inviscid + 90 viscous), 30
 simulated days each, `pred_corr`, `RDB_ENABLE_MPI=OFF`, measured on **both**
 toolchains with the MOM6-parity defaults of 2026-09-22 (`bebt = 0.1`,
-`renorm_consistent_flux = .true.`) AND the vanished-layer content rule I1′
+`renorm_consistent_flux = true`) AND the vanished-layer content rule I1′
 (PR #50; removed when tracers became concentrations, the measurements below are history) together: gfortran 15.1.0 Release on the CPU (8 workers, 26 min)
 and nvfortran 26.5 on four V100s, cc70 (one worker per device, 56 min — the
 GPU is launch-bound at 48 × 6 × 15). `ok` = every
@@ -822,7 +822,7 @@ the lagrangian re-pin: `rx0_060 × lagrangian` and its twin).
    `z_fixed_staircase` reason. Confirmed, not assumed: the 12 numbers are
    identical to the `z_fixed` twins to every printed digit and the
    salinity `[diag]` series diffs zero lines (toolchain-independent, H1);
-   with `remap_boundary_extrap = .false.` the salinity-minimum drift
+   with `remap_boundary_extrap = false` the salinity-minimum drift
    vanishes completely (pinned at the initial surface-cell mean for the
    whole run, En +2.8%) and comes back once it is re-enabled, so the
    mechanism is the unlimited boundary-cell reconstruction, not spurious
@@ -851,7 +851,7 @@ the lagrangian re-pin: `rx0_060 × lagrangian` and its twin).
    regrids — and rests on EVERY geometry in both legs (re-pinned
    2026-10-04, lagrangian column only, both toolchains). Its old failures
    over a step (`✗ d4`–`d16` from rx0 0.078 up) were not layer collapse:
-   the grounded-layer PGF gate (`&ocean_isopycnal_nml pgf_skip_nonoverlap`)
+   the grounded-layer PGF gate (`[ocean.isopycnal] pgf_skip_nonoverlap`)
    zeroed the PGF of layers that are massive on BOTH sides of the step but
    sit in disjoint z-intervals, which a sigma-shaped stack over a step
    always has. The gate now also requires a vanished side.
@@ -879,7 +879,7 @@ measured geometries are rx0 = 0, 0.0071 (slope), 0.0138 (sloping lid), 0.030
 | `rho`, `hycom` | **flat only** | slope (FINDING A) | flat only | ≤ 0.0071 |
 
 Measured 2026-09-23 with the MOM6-parity defaults (`bebt = 0.1`,
-`renorm_consistent_flux = .true.`), gfortran 15.1 CPU and nvfortran 26.5
+`renorm_consistent_flux = true`), gfortran 15.1 CPU and nvfortran 26.5
 V100, identical viscous verdicts on both. The classical Beckmann–Haidvogel
 bound is 0.2; the terrain-following viscous envelopes now reach the top of
 the measured ladder (0.8). Before those defaults they stopped at 0.078 / 0.1,
@@ -961,8 +961,8 @@ On `rx0_060` with the scalar operator the same sequence starts at day 8.5.
 and, on `rx0_060` with the scalar operator and no drag (14.6-day probes;
 "onset" = first sample to jump ×100): `nu_h` 40/80/160 onset d6.7/d6.5/d8.8;
 `bound_kh` no effect (160 is under its 333 m² s⁻¹ ceiling);
-`remap_boundary_extrap = .false.` **earlier** (d3.8); PCM remap much earlier
-(d2.1); `pc_be = 1` earlier (d5.0); `remap_nonuniform_weights = .false.` /
+`remap_boundary_extrap = false` **earlier** (d3.8); PCM remap much earlier
+(d2.1); `pc_be = 1` earlier (d5.0); `remap_nonuniform_weights = false` /
 `correction_h_weighted` (since retired) later (d10.8 / d10.2); y-periodic earlier (d2.3, so
 the walls are not the cause); `nghost = 3` bit-identical; a frozen regrid
 (`regrid_time_scale = 10 d`), `N² = 0`, `f = 0`, `ssp_rk2` and `dt = 300/450`
@@ -1005,8 +1005,8 @@ rx0 = 0.1 and 21 % at 0.3 on one layer, at `f = 0`, inviscid, no remap;
 layer's flux at `u + du` with its own donor (continuous) and brackets Newton
 with bisection, so it cannot do this.
 
-**Fix:** `&ocean_continuity_nml renorm_consistent_flux = .true.` — the
-DEFAULT since 2026-09-22 (MOM6 parity), together with MOM6's `&ocean_bt_nml
+**Fix:** `[ocean.continuity] renorm_consistent_flux = true` — the
+DEFAULT since 2026-09-22 (MOM6 parity), together with MOM6's `[ocean.bt]
 bebt = 0.1`; faces where no donor flips are byte-identical to the historical
 model. Gates: `test_continuity_multilayer`
 (`renorm_donor_flip_lands_on_uhbt_x`/`_vhbt_y`,
@@ -1027,9 +1027,9 @@ outer steps 4–8 (−5e-5 m … −0.3 m). Flat geometries are clean.
 
 | substitution | outcome |
 |---|---|
-| gate (`stress_tensor = .true.`, drag) | remap guard, step 7 |
+| gate (`stress_tensor = true`, drag) | remap guard, step 7 |
 | no drag | still fails (remap guard, step 7 — identical) |
-| scalar operator (`stress_tensor = .false.`), with drag, 30 d | **rests**, En 2.0e-23 (hycom: 7.0e-25) |
+| scalar operator (`stress_tensor = false`), with drag, 30 d | **rests**, En 2.0e-23 (hycom: 7.0e-25) |
 | no viscosity | clean over the 0.4 d probed (the inviscid cell completes 30 d, En 2.3e-06) |
 
 So it is the thickness-weighted operator on the thin, keep-alive layers a
@@ -1049,7 +1049,7 @@ and reaches the same verdict as on gfortran. The record below is kept as the
 history of the finding.
 
 **Where.** nvfortran 26.5 / V100 (cc70), every `rho` or `hycom` run with
-`&ocean_eos_nml eos = "wright"`: the matrix's `slope × hycom × wright` in both
+`[ocean.eos] eos = "wright"`: the matrix's `slope × hycom × wright` in both
 legs, and — probed on purpose — `flat × hycom × wright` (a flat bed at rest)
 and `slope × rho × wright`. gfortran completes the same inviscid cell to day
 30 (En 2.2e-06).
@@ -1072,7 +1072,7 @@ proposed (fix item 2) would turn both into fail-loud messages.
 
 * **A new coordinate family** — append it to `FAMILIES` in `vcoord_matrix.py`
   with its `vcoord_type`, its status (`run` or `refused`), any extra
-  `&vcoord_nml` lines it needs, and a one-paragraph note saying what the row
+  `[vcoord]` lines it needs, and a one-paragraph note saying what the row
   *measures*. If it is refused under a cavity, it also belongs outside
   `CAVITY_ACCEPTED`. [`docs/howto/add_vertical_coordinate.md`](../../docs/howto/add_vertical_coordinate.md)
   makes this a required step: a family that is not in the matrix has no
@@ -1121,7 +1121,7 @@ split-step change lands, and the pinned table is regenerated from it.
 ## Not done, and not stubbed
 
 * **The NONLINEAR (exponential thermocline) stratification axis.**
-  `&ocean_zinit_nml source="linear"` is affine in `z` by construction and
+  `[ocean.zinit] source="linear"` is affine in `z` by construction and
   `source="file"` aborts at `validate_config` (PR-23b), so there is no way to
   lay a non-affine rest state today without a new analytic profile or the file
   reader. The axis is absent rather than faked.
@@ -1149,7 +1149,7 @@ rather than quietly testing different physics.
 |---|---|---|
 | **R1** Munk layer | `nu_h >= beta * (2*dy)**3` | under two cells the western boundary current is unresolved and you get grid-scale wall noise that looks like physics. At −45 S with `dy = 0.5°` that floor is 2.2e4. |
 | **R2** `ah_max` clamps `nu_h` | `ah_max >= nu_h` | `ah_max` is a magnitude **ceiling** on the assembled viscosity. Raising `nu_h` to satisfy R1 without raising `ah_max` is **inert** — the clamp throws the increase away. |
-| **R3** viscous CFL | `nu_h*dt/dx² <= 0.125`, or `bound_kh = .true.` | explicit Laplacian friction is forward-Euler. `ah_max` does **not** help here: it bounds magnitude, not CFL. `bound_kh` is the per-cell CFL clamp. |
+| **R3** viscous CFL | `nu_h*dt/dx² <= 0.125`, or `bound_kh = true` | explicit Laplacian friction is forward-Euler. `ah_max` does **not** help here: it bounds magnitude, not CFL. `bound_kh` is the per-cell CFL clamp. |
 | **R4** deformation radius | `Rd/dx >= 4` for an eddying case | below ~2 cells per `Rd` no eddies form at **any** run length. |
 | **R5** available potential energy | an eddying twin must declare its APE source | a uniform-density IC produces no eddies at any resolution — `acc_channel` as shipped never would have. |
 | **R6** `nghost` vs scheme | weno5 → 3, weno7 → 4, periodic-x → 3 | a downscale must not quietly drop `nghost` to save cells. |
@@ -1231,29 +1231,29 @@ Add an entry to `stability_manifest.py`:
    `overrides` + `dimensionless` if the twin changes the grid — then run
    `python3 tests/regression/downscale.py` to check it.
 4. If the case's header makes a testable claim, encode it as a `claim`. **Do
-   not** edit the namelist to make a number match; if it fails, that is the
+   not** edit the input to make a number match; if it fails, that is the
    finding.
 5. If it fails today for a known reason, add `known_failure` with a one-line
    reason and a pointer. Do **not** silence it by weakening an assertion.
 
-## The known-failing namelists (as of 2026-09-13)
+## The known-failing inputs (as of 2026-09-13)
 
 Six cases fail today (nine on 2026-09-12; the three `eady` cases were fixed). Each is marked `known_failure` in
 `stability_manifest.py` with a reason and a pointer, so CI red stays
 informative — **none of them is silenced by weakening an assertion or editing a
-namelist.** They are grouped by the defect they expose.
+input.** They are grouped by the defect they expose.
 
 ### 1. `coriolis_coast` — the wind is not wired up (`energy:responds`)
 
-The file sets `&ocean_topo_nml taux_magnitude = 0.05` under
+The file sets `[ocean.topo] taux_magnitude = 0.05` under
 `wind_config = "constant"`, where that knob is **inert** — `rdb_config`
 documents `taux_magnitude` as *"peak zonal wind stress for
-`wind_config = 2gyre/neverworld2`"* — and leaves `&physics_nml
+`wind_config = 2gyre/neverworld2`"* — and leaves `[physics]
 wind_stress_x = 0.0`, which is the knob the constant path actually reads. The
 case therefore runs its full 10 days at `En = 0.000E+00`, and has never tested
 the coastal Coriolis energy budget its header describes ("an eastward wind
 0.05 N/m² spins up a gyre that wraps the island and builds relative vorticity at
-the free-slip corners"). Verified by re-running with `&physics_nml
+the free-slip corners"). Verified by re-running with `[physics]
 wind_stress_x = 0.05`: `En` reaches 1.3e-6 and `MaxCFL` 2.6e-4 within half a day.
 
 This is the class of defect nothing else can see: a forcing path that is
@@ -1343,7 +1343,7 @@ metres* apart in z, the interval between them is filled with other density
 classes, and what survives the cancellation is
 `g*(rho_layer - rho_ambient)*dz/dx` of acceleration on a resting ocean.
 
-Measured at t = 0 on the shipped namelist: the PGF is **exactly zero**
+Measured at t = 0 on the shipped input: the PGF is **exactly zero**
 (1e-16 … 1e-18) on every face whose layer is massive on both sides, and
 non-zero on precisely the faces that touch a vanished cell, with the amplitude
 falling off linearly in the number of density classes between the layer and the
@@ -1354,13 +1354,13 @@ whose own PGF is identically zero — ended up moving at 11 cm/s).
 
 **What it was not.** The coordinate itself is innocent, and so is the PGF form:
 `fv_mom6` reproduced the same defect (4.16e-4 at day 1, 2.17e-3 at day 2, and
-it is gated now too — see below); running the same namelist under
+it is gated now too — see below); running the same input under
 `sigma` / `zstar_sigma` / `zstar_full` was 100× *worse* (that IC is only
 meaningful in an isopycnal coordinate); and at `angstrom_h = 1e-10`, where the
 floored layers carry no mass at all, the spurious energy was unchanged — so it
 was never a thin-layer bookkeeping artefact.
 
-**Fix.** `&ocean_isopycnal_nml pgf_skip_nonoverlap` (**default ON**,
+**Fix.** `[ocean.isopycnal] pgf_skip_nonoverlap` (**default ON**,
 `VCOORD_LAGRANGIAN` only, `fv_lite` / `fv_wright` / `fv_mom6`) zeroes the face
 PGF wherever the layer's z-extents in
 the two abutting columns do not overlap — exactly where the layer has wedged
@@ -1378,7 +1378,7 @@ zero, held for 30 simulated days. The case now carries the `REST_1UM_S`
 "must be bit-zero" bar instead of the 1 cm/s seamount tolerance. Pinned by
 `tests/test_ocean_pgf_grounded.F90`.
 
-The same namelist run with `form="fv_mom6"` goes 2.17e-3 → **1.91e-27** at
+The same input run with `form="fv_mom6"` goes 2.17e-3 → **1.91e-27** at
 day 2 on the same gate. `form="mont"` is still NOT gated and still NaNs on this
 case at day 1 — that form differences layer-centre pressure with no
 z-correction whatsoever, which is structurally wrong on any coordinate whose
@@ -1419,17 +1419,17 @@ The matrix asks the model, not a Python copy of its rules, what it refuses:
 ./rdb --validate-only case.toml     # exit 0 = accepted, 3 = refused
 ```
 
-parses the namelist, runs `validate_config` (logging EVERY failed check, not
+parses the input, runs `validate_config` (logging EVERY failed check, not
 just the first) and then the whole `engine_setup` sequence (`driver_validate`)
 — so every fail-loud configure-time refusal in the `configure_ocean_*` stages
 of `rdb_ocean_setup.F90`, the stability audit and the IC seed is exercised —
 and exits before mapping the device or taking a step. No output is written:
 the diag selection is still parsed, but the per-rank stream is not opened and
 the output directory and parameter-doc dumps are not created. With
-`&logging_nml log_level = "error"` stdout carries exactly the refusal reasons.
+`[logging] log_level = "error"` stdout carries exactly the refusal reasons.
 About 0.02 s on the matrix domain. ctest `rdb_validate_only` holds the
 contract (accept → 0 and no file, with a positive control that the same
-namelist run for one step DOES write; a `validate_config` and an
+input run for one step DOES write; a `validate_config` and an
 `engine_setup` refusal → 3 with the reason).
 
 ## The domain
@@ -1443,7 +1443,7 @@ go through a stdlib classic-NetCDF writer — nothing to install):
   one row wider over i = 8..15 so steps face both ways; rx0 <= 0.5) and a
   3 x 2 ISLAND — z-like coordinates get closed faces and filler layers, and
   every cell has land columns;
-* stratified T/S (`&ocean_zinit_nml source="file"`) with a front whose
+* stratified T/S (`[ocean.zinit] source="file"`) with a front whose
   position tilts 40 m north per metre of depth — slopes, GM and Redi act;
 * 0.1 Pa of wind and a surface heat flux (`forcing`: -60 W/m2, or +60 W/m2
   with 40 % penetrating shortwave);
@@ -1543,7 +1543,7 @@ Per cell, in order, stopping at the first failure:
    exactly the refusal reasons, and EVERY reason must be explained by a row.
 2. **CRASH / NONFINITE** — non-zero exit or short run, a `[nan-catch]`, the I1′
    vanished-content tripwire, the remap precondition guard, a non-finite
-   console scalar. A crashing cell is re-run with `&ocean_debug_nml chksum`
+   console scalar. A crashing cell is re-run with `[ocean.debug] chksum`
    over its last steps and the first non-finite `CHKSUM` row (via
    `tools/read_chksum.py`) names the minting phase.
 3. **BUDGET** — the model's own Mass / Salt / Heat closed-budget residuals,
@@ -1583,7 +1583,7 @@ Classes: `PASS`, `REFUSED_PHYSICAL`, `REFUSED_GAP`, `XFAIL`, `XPASS`, `FAIL`
 row with `backend="gpu"` exists only for a `--backend gpu-*` run.
 
 `compat_expect.py` holds the rows. Each matches on FEATURES read off the cell's
-merged namelist (with the model's defaults), never on axis value names, AND on
+merged input (with the model's defaults), never on axis value names, AND on
 a signature: a `refused` row's regex must match the logged reason, a `runtime`
 row's must match the crash text or budget line, so a cell a row covers that
 fails for a DIFFERENT reason is still a FAIL.

@@ -84,7 +84,7 @@ contains
       !!   T = c_T,  S = c_S,  T_f = eos_freezing_point(S, 0)
       !!   (OCEAN side: under `ts_convention = "cons_abs"` T, S, T_f are
       !!   CT, SA and the CT liquidus -- no conversion here; `Cp` is
-      !!   `eos%c_p`, `&ocean_eos_nml c_p`, default 3992.)
+      !!   `eos%c_p`, `[ocean.eos] c_p`, default 3992.)
       !!   if T < T_f:  frazil_heat += ρ·Cp·h·(T_f − T)  and
       !!                c_T = T_f   (exact clamp)
       !!
@@ -137,7 +137,7 @@ contains
                                                 heat_budget_frazil, &
                                                 pressure_dependent, reclaim)
       !! Full-column, optionally pressure-dependent frazil with reclaim
-      !! (`&ocean_ice_nml frazil_column`; OM3 `FRAZIL` +
+      !! (`[ocean.ice] frazil_column`; OM3 `FRAZIL` +
       !! `PRESSURE_DEPENDENT_FRAZIL` + `RECLAIM_FRAZIL`).  Outer shim:
       !! dereferences the tracer registry on the host and forwards bare
       !! arrays to `ice_frazil_accumulate_column_impl`.  No-op when S or

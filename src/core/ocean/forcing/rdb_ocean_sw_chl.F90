@@ -86,12 +86,12 @@ contains
       if (trim(cfg%sw_scheme) /= "manizza05") return
 
       if (len_trim(cfg%sw_chl_file) == 0) then
-         call fail("&ocean_thermo_nml sw_scheme='manizza05' requires sw_chl_file", &
+         call fail("[ocean.thermo] sw_scheme='manizza05' requires sw_chl_file", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
       if (cfg%sw_pen_frac /= 0.0_wp .and. cfg%sw_pen_frac /= 1.0_wp) then
-         call fail("&ocean_thermo_nml sw_scheme='manizza05' band-absorbs the WHOLE "// &
+         call fail("[ocean.thermo] sw_scheme='manizza05' band-absorbs the WHOLE "// &
                    "shortwave: sw_pen_frac must be 0 or 1, got "// &
                    to_string(cfg%sw_pen_frac), ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -103,7 +103,7 @@ contains
          this%b(n) = cfg%sw_opacity_coef(2*n)
          this%p(n) = cfg%sw_chl_power(n)
          if (this%a(n) <= 0.0_wp) then
-            call fail("&ocean_thermo_nml sw_opacity_coef: band "//to_string(n)// &
+            call fail("[ocean.thermo] sw_opacity_coef: band "//to_string(n)// &
                       " needs a positive clear-water opacity a_n", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if

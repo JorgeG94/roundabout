@@ -1,5 +1,5 @@
 !! Unit tests for `ppm_h3` inside the windowed tracer-advection drain
-!! (`&ocean_vmix_nml tracer_advection_scheme = "ppm_h3"`,
+!! (`[ocean.vmix] tracer_advection_scheme = "ppm_h3"`,
 !! `dt_tracer_advect_ratio > 1`).  The drain moves per-pass VOLUMES
 !! (`uhh`), not rates, so the tests drive `drain_swept_flux_x_h3` with
 !! volumes and update `hTr`/`hprev` exactly as `continuity_tracer_drain`

@@ -229,8 +229,8 @@ else()
 endif()
 
 # Executable — depends on rdb_driver, which is part of the NetCDF I/O subsystem.
-# Without NetCDF the namelist-driven simulation has no way to write output, so
-# we skip the executable entirely; the library + benchmarks are still useful for
+# Without NetCDF the input-driven simulation has no way to write output, so we
+# skip the executable entirely; the library + benchmarks are still useful for
 # portability testing.
 if(RDB_ENABLE_NETCDF)
   add_executable(${exe_name} ${PROJECT_SOURCE_DIR}/app/main.F90)
@@ -239,7 +239,7 @@ if(RDB_ENABLE_NETCDF)
   target_link_libraries(${exe_name} PRIVATE ${core_dist})
 endif()
 
-# Namelist knob-reference generator (host-only). Walks the strict schema and
+# Input knob-reference generator (host-only). Walks the strict schema and
 # renders every knob: `./rdb_nml_doc docs/generated_nml_knobs.md`.
 add_executable(rdb_nml_doc ${PROJECT_SOURCE_DIR}/app/nml_doc.F90)
 target_include_directories(rdb_nml_doc PRIVATE "${CMAKE_BINARY_DIR}/modules"
@@ -254,7 +254,7 @@ target_include_directories(rdb_nml_json PRIVATE "${CMAKE_BINARY_DIR}/modules"
 target_link_libraries(rdb_nml_json PRIVATE ${core_dist})
 
 # Resolved-configuration dump (read_config + write_doc_all/write_resolved):
-# `./rdb_cfg_dump <input.nml|input.toml> <out>`. Same output for the same
+# `./rdb_cfg_dump <input.toml|input.toml> <out>`. Same output for the same
 # configuration whatever the input format -- the equivalence oracle.
 add_executable(rdb_cfg_dump ${PROJECT_SOURCE_DIR}/app/cfg_dump.F90)
 target_include_directories(rdb_cfg_dump PRIVATE "${CMAKE_BINARY_DIR}/modules"

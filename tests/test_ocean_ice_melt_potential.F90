@@ -651,10 +651,10 @@ contains
          comm_inited = .true.
       end if
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
-      call check(error, ierr == 0, name//": namelist parses")
+      call check(error, ierr == 0, name//": input parses")
       if (allocated(error)) return
       call validate_config(cfg, ierr)
-      call check(error, ierr == 0, name//": namelist validates")
+      call check(error, ierr == 0, name//": input validates")
       if (allocated(error)) return
       call engine_setup(engine, cfg, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, name//": engine_setup")

@@ -4,7 +4,7 @@ Headline correctness check for the ocean **static land-masking** foundation
 (CHUNK A). Mirrors the seamount quiescent trap that caught three latent
 dyn-core bugs: a domain that *must* stay at rest, where any motion is a bug.
 
-## Setup (`island_at_rest.nml`)
+## Setup (`island_at_rest.toml`)
 
 - 32 × 32 closed basin @ 5 km (160 km square), 4 σ-layers.
 - `topo_config = "island"`: flat 1000 m basin with a **central LAND square**

@@ -22,9 +22,9 @@ phase (e-folding ~a few days for the tuned jet).
 
 ## Cases
 
-| namelist | N | jet L | Δξ | dt | purpose |
+| input | N | jet L | Δξ | dt | purpose |
 |---|---|---|---|---|---|
-| `bc_inst_tuned_512.nml` | 512 | 40 km | 200 m | 427 s | **headline perf case** (u_peak ~0.76 m/s, Ro ~0.15) |
+| `bc_inst_tuned_512.toml` | 512 | 40 km | 200 m | 427 s | **headline perf case** (u_peak ~0.76 m/s, Ro ~0.15) |
 
 ## Run
 
@@ -32,5 +32,5 @@ phase (e-folding ~a few days for the tuned jet).
 # build with GPU on the NVHPC toolchain (single-GPU perf comparison)
 module load nvhpc && cmake -B build -S . -DRDB_ENABLE_GPU=ON && cmake --build build -j
 cd validation_examples/ocean/bc_inst
-CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb bc_inst_tuned_512.nml
+CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb bc_inst_tuned_512.toml
 ```

@@ -1,5 +1,5 @@
 !! Analytical + device tests for MEKE's GM energy source from the work of the
-!! FINAL bolus transports, `&ocean_gm_nml gm_src_form = "work"`
+!! FINAL bolus transports, `[ocean.gm] gm_src_form = "work"`
 !! (`rdb_ocean_gm :: gm_work_source`, the inverse of MOM6 `MEKE_GM_SRC_ALT`).
 !!
 !! Bottom-up convention: layer k lies between interfaces k (bed side) and

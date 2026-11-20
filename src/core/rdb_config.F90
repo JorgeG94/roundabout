@@ -1,6 +1,6 @@
-!! Runtime configuration via Fortran namelists
+!! Runtime configuration (TOML input)
 module rdb_config
-   !! Reads simulation parameters from a namelist input file
+   !! Reads simulation parameters from a TOML input file
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, DEG2RAD, SEAWATER_CP_DEFAULT, &
                             nz_stack_required, nz_stack_is_sufficient
@@ -31,26 +31,26 @@ module rdb_config
 #endif
 
    ! ------------------------------------------------------------------
-   ! Retired coastal-legacy `&tracer_nml` linear-EOS quartet.
+   ! Retired coastal-legacy `[tracer]` linear-EOS quartet.
    !
    ! These four keys fed `tracer_t%eos_coeff` / `tracer_t%eos_ref` via
    ! `register_default_tracers` — a path the A-grid coastal solvers read
    ! and the C-grid ocean path never did.  They are now RETIRED rather
    ! than merely annotated dead: `validate_config` fails loud whenever a
-   ! namelist moves one off its historical default, naming the live
-   ! `&ocean_ic_nml` replacement.  The defaults are named here so the
+   ! input moves one off its historical default, naming the live
+   ! `[ocean.ic]` replacement.  The defaults are named here so the
    ! type declaration and the guard can never drift apart.
    ! ------------------------------------------------------------------
    real(wp), parameter, public :: BT_DTBT_UNSET = -1.0e30_wp
-      !! Sentinel for `&ocean_bt_nml dtbt` "not given".
+      !! Sentinel for `[ocean.bt] dtbt` "not given".
    real(wp), parameter :: LEGACY_TRACER_S_REF = 0.0_wp
-      !! Historical `&tracer_nml S_ref` default (PSU).
+      !! Historical `[tracer] S_ref` default (PSU).
    real(wp), parameter :: LEGACY_TRACER_BETA_S = 0.78_wp
-      !! Historical `&tracer_nml beta_S` default (kg/m^3 per PSU).
+      !! Historical `[tracer] beta_S` default (kg/m^3 per PSU).
    real(wp), parameter :: LEGACY_TRACER_T_REF = 15.0_wp
-      !! Historical `&tracer_nml T_ref` default (degC).
+      !! Historical `[tracer] T_ref` default (degC).
    real(wp), parameter :: LEGACY_TRACER_ALPHA_T = 0.17_wp
-      !! Historical `&tracer_nml alpha_T` default (kg/m^3 per degC).
+      !! Historical `[tracer] alpha_T` default (kg/m^3 per degC).
 
    public :: MAX_SW_BANDS
    public :: config_t
@@ -109,9 +109,9 @@ module rdb_config
    integer, parameter :: ATM_PREREQ_OK = 0
       !! `atm_forcing_prereq_code`: every prerequisite holds.
    integer, parameter :: ATM_PREREQ_START_DATE = 1
-      !! `&time_nml start_date` is blank.
+      !! `[time] start_date` is blank.
    integer, parameter :: ATM_PREREQ_COMPONENTS = 2
-      !! `&ocean_forcing_nml enable_components` is off.
+      !! `[ocean.forcing] enable_components` is off.
    integer, parameter :: ATM_PREREQ_CARTESIAN = 3
       !! `grid_config = "cartesian"` (no geographic lon/lat).
    integer, parameter :: ATM_PREREQ_FILELIST = 4
@@ -119,11 +119,11 @@ module rdb_config
    integer, parameter :: ATM_PREREQ_SW_SOURCE = 5
       !! `sw_pen_frac > 0` without `sw_source = "q_sw"`.
    integer, parameter :: ATM_PREREQ_DATAOVR = 6
-      !! A `&ocean_dataovr_nml` wind/heat/evap/lprec file is set.
+      !! A `[ocean.dataovr]` wind/heat/evap/lprec file is set.
    integer, parameter :: ATM_PREREQ_BULK_FLUX = 7
-      !! `&ocean_bulk_flux_nml enable` is not set.
+      !! `[ocean.bulk_flux] enable` is not set.
    integer, parameter :: ATM_PREREQ_N_ITER = 8
-      !! `&ocean_bulk_flux_nml n_iter < 1`.
+      !! `[ocean.bulk_flux] n_iter < 1`.
    integer, parameter :: ATM_PREREQ_ORB_YEAR = 9
       !! `orb_year` is not the default (not wired into the coszen kernel).
    public :: ocean_bt_forcing_visc_rem_on
@@ -143,7 +143,7 @@ module rdb_config
    public :: ice_hlim_spec_is_valid
 
    integer, parameter :: BT_HALO_AUTO_SENTINEL = -1
-      !! `&ocean_bt_nml bt_halo` default: AUTO.  Resolved at configure (in the
+      !! `[ocean.bt] bt_halo` default: AUTO.  Resolved at configure (in the
       !! driver, where `compute_size` is known).  AUTO resolves to 0 — the
       !! march-in is OPT-IN (set `bt_halo` explicitly) because it is not yet
       !! bit-reproducible against the serial run.  See `resolve_bt_halo`.
@@ -152,8 +152,8 @@ module rdb_config
       !! width).  AUTO no longer selects it — see `resolve_bt_halo`.
 
    real(wp), parameter :: ZFIXED_CAVITY_NU_H_MIN = 2.0_wp
-      !! Lower envelope of `&ocean_hvisc_nml nu_h` (m²/s) under
-      !! `vcoord_type = "z_fixed"` x `&ocean_cavity_dyn_nml enable`.  Below
+      !! Lower envelope of `[ocean.hvisc] nu_h` (m²/s) under
+      !! `vcoord_type = "z_fixed"` x `[ocean.cavity_dyn] enable`.  Below
       !! it `validate_config` WARNS (see
       !! `zfixed_cavity_nu_h_below_envelope` for the measurement).
 
@@ -165,25 +165,25 @@ module rdb_config
       !! z* grid needs every model interface available as a z_fixed/
       !! sigma/zstar/density diag level.  Sizes four fixed `config_t`
       !! arrays only (`z_levels`, `sigma_levels`, `zstar_levels`,
-      !! `rho_levels`, all host-side namelist storage, never mapped to
+      !! `rho_levels`, all host-side input storage, never mapped to
       !! device); the diag manager's actual output buffers are
       !! allocated to the USED count (`n_z_levels`, ...), not this bound,
       !! and are independently capped by `NZ_STACK_MAX` (128 by default,
       !! `rdb_constants`) which already covered 128 before this change.
-      !! Existing namelists are unaffected: `n_z_levels` (etc.) they set
+      !! Existing inputs are unaffected: `n_z_levels` (etc.) they set
       !! stays <= 64 <= 128, so this is bit-identical for them.
    integer, parameter :: MAX_OCEAN_LAYER_RHO_INIT = 64
       !! Maximum number of per-layer density init entries.
    integer, parameter :: MAX_Z_FIXED_DZ = 128
-      !! Maximum number of `&vcoord_nml z_fixed_dz` entries (nominal
+      !! Maximum number of `[vcoord] z_fixed_dz` entries (nominal
       !! `z_fixed` layer thicknesses).
    integer, parameter :: MAX_SW_BANDS = 6
       !! Maximum number of penetrating-shortwave bands under
-      !! `&ocean_thermo_nml sw_scheme = "manizza05"`.
+      !! `[ocean.thermo] sw_scheme = "manizza05"`.
    real(wp), parameter :: CFL_BT_SAFETY_DEFAULT = 0.65_wp
-      !! Default `&ocean_bt_nml cfl_bt_safety`; `validate_config` compares against it.
+      !! Default `[ocean.bt] cfl_bt_safety`; `validate_config` compares against it.
    integer, parameter :: MAX_ICE_HLIM_VALS = 16
-      !! Maximum number of `&ocean_ice_nml hlim` entries a user may STATE
+      !! Maximum number of `[ocean.ice] hlim` entries a user may STATE
       !! (PR-58). Caps how many edges may be listed, not `ncat` (unbounded
       !! elsewhere) — production ITDs are 5-10 categories, so 16 is a
       !! generous soft cap; exceeding it is not possible for `ncat<=15`,
@@ -196,7 +196,7 @@ module rdb_config
    ! `config_t%ocean`.
 
    type :: ocean_grid_config_t
-      !! `&ocean_grid_nml`: horizontal-grid generator + geometry knobs.
+      !! `[ocean.grid]`: horizontal-grid generator + geometry knobs.
       character(len=16) :: grid_config = "cartesian"
          !! Grid generator: "cartesian" (default, uniform), "spherical"
          !! (lon-lat sector), "supergrid" (MOM6 mosaic NetCDF), "tripolar".
@@ -223,8 +223,8 @@ module rdb_config
          !! Units of the Cartesian domain extent (`grid_config="cartesian"`),
          !! mirroring MOM6 AXIS_UNITS: "meters" (default), "degrees", "km".
          !! With "degrees"/"km" the domain is sized by `len_lon`/`len_lat`
-         !! below and `&grid_nml dx`/`dy` are DERIVED (ignored as inputs).
-         !! "meters" ⇒ `&grid_nml dx`/`dy` used verbatim (bit-identical).
+         !! below and `[grid] dx`/`dy` are DERIVED (ignored as inputs).
+         !! "meters" ⇒ `[grid] dx`/`dy` used verbatim (bit-identical).
       real(wp) :: len_lon = 0.0_wp
          !! Total x-extent of the Cartesian domain in `axis_units` (MOM6
          !! LENLON).  <= 0 (default) ⇒ unset.  > 0 ⇒ a uniform
@@ -234,12 +234,12 @@ module rdb_config
       real(wp) :: len_lat = 0.0_wp
          !! Total y-extent of the Cartesian domain in `axis_units` (MOM6
          !! LENLAT).  Paired with `len_lon`; > 0 ⇒ `dy = to_metres(len_lat)/ny`.
-      !! NOTE: spherical cell sizes reuse `&grid_nml dx`/`dy` as dlon/dlat
+      !! NOTE: spherical cell sizes reuse `[grid] dx`/`dy` as dlon/dlat
       !! in DEGREES when `grid_config="spherical"`.
    end type ocean_grid_config_t
 
    type :: ocean_coriolis_config_t
-      !! `&ocean_coriolis_nml`.
+      !! `[ocean.coriolis]`.
       character(len=16) :: form = "sadourny"
          !! Coriolis-advection variant: "sadourny" (default, enstrophy form),
          !! "sadourny_energy" (energy-conserving transport form q·vh),
@@ -258,7 +258,7 @@ module rdb_config
          !! transports (`ms%mass_flux_*_layer` — the uh/vh from the same
          !! solve that produced `u_av`) instead of recomputing `u·h_face`
          !! from the evaluation-state prognostics.  Requires
-         !! `form="sadourny_energy"` + `&ocean_bt_nml split_scheme="pred_corr"`
+         !! `form="sadourny_energy"` + `[ocean.bt] split_scheme="pred_corr"`
          !! (fail-loud).  Default `.false.` = bit-identical.
       character(len=16) :: corner_h = "cell_mean"
          !! PV corner-thickness construction for the energy scheme.
@@ -312,7 +312,7 @@ module rdb_config
          !! bit-identical): `I0 = sw_pen_frac*q_heat`.  `"q_sw"`:
          !! `I0 = sw_pen_frac*q_sw` (the dedicated >= 0 shortwave
          !! component) — kills the night-time negative-`I0` hazard;
-         !! REQUIRES `&ocean_forcing_nml enable_components=.true.`
+         !! REQUIRES `[ocean.forcing] enable_components=true`
          !! (validate_config aborts otherwise).
       character(len=32) :: kpp_sw_method = "mxl_sw"
          !! (PR-21) KPP boundary-layer shortwave method (MOM6
@@ -364,17 +364,17 @@ module rdb_config
    end type ocean_thermo_config_t
 
    type :: ocean_forcing_config_t
-      !! `&ocean_forcing_nml`: PR-12 surface-flux component-set gate.
+      !! `[ocean.forcing]`: PR-12 surface-flux component-set gate.
       !! Default OFF ⇒ bit-identical (no component array allocated, no
       !! assembler kernel runs; `ocean_surface_flux_t%Q_heat`/`Q_salt`
-      !! are filled exactly as `&ocean_thermo_nml` always has).
+      !! are filled exactly as `[ocean.thermo]` always has).
       logical :: enable_components = .false.
          !! Allocate the surface-flux component set (`q_sw`, `evap`,
          !! `heat_content_*`, ...) on `ocean_surface_flux_t` and run
          !! `ocean_surface_flux_assemble` every thermo step to derive
          !! `Q_heat`/`Q_salt` from it.  Individual components carry no
          !! knobs of their own — they are filled by fillers (readers,
-         !! the ice coupler, ...), not by this namelist.
+         !! the ice coupler, ...), not by this input.
       character(len=16) :: freshwater = "none"
          !! What the surface fresh-water MASS fluxes (`lprec`, `fprec`,
          !! `evap`, `lrunoff`, `frunoff`) do.  `"none"` (default): nothing,
@@ -396,7 +396,7 @@ module rdb_config
    end type ocean_forcing_config_t
 
    type :: ocean_ice_config_t
-      !! `&ocean_ice_nml`: sea-ice model master switch + category/layer
+      !! `[ocean.ice]`: sea-ice model master switch + category/layer
       !! counts (SIS2 port, `PLAN_SEA_ICE.md`).  PR 0 scaffold — the knobs
       !! size the gated `ocean_sea_ice_t` slot.  PR 3c adds the v1 scalar
       !! restoring atmospheric-forcing filler (`air_temp`/`restore_lambda`/
@@ -569,17 +569,17 @@ module rdb_config
          !! code defaults) or `"cesm"` (the CESM-coupled override set).
       real(wp) :: dt_ice = -1.0_wp
          !! `scheme="cice"` ice time step [s]: `<= 0` (default) is the outer
-         !! ocean step; a positive value must equal `&time_nml dt_fixed`
+         !! ocean step; a positive value must equal `[time] dt_fixed`
          !! (the ice step IS the outer step under this scheme, so any other
          !! value is refused by `ice_config_check`).
    end type ocean_ice_config_t
 
    type :: ocean_ice_thermo_config_t
-      !! `&ocean_ice_thermo_nml`: CICE-port thermodynamics + ITD knobs
+      !! `[ocean.ice_thermo]`: CICE-port thermodynamics + ITD knobs
       !! (`scheme="cice"` only; inert under `"sis2"`).  Every default is the
       !! upstream CICE code default except `tfrz_option` (OM3's
       !! `linear_salt`; upstream's `mushy` is refused); OM3 values go in the OM3 example
-      !! namelist.  Options outside the supported set are refused by
+      !! input.  Options outside the supported set are refused by
       !! `validate_config`.
       integer :: ktherm = 1
          !! Thermodynamics: 1 = Bitz-Lipscomb (1999); 2 (mushy) is refused.
@@ -625,10 +625,10 @@ module rdb_config
    end type ocean_ice_thermo_config_t
 
    type :: ocean_ice_sw_config_t
-      !! `&ocean_ice_sw_nml`: CICE-port shortwave parameters of the CCSM3
+      !! `[ocean.ice_sw]`: CICE-port shortwave parameters of the CCSM3
       !! scheme (Briegleb et al. 2004, NCAR/TN-463+STR; `scheme="cice"`
       !! only).  Upstream code defaults; OM3 values go in the OM3 example
-      !! namelist.
+      !! input.
       character(len=16) :: shortwave = "ccsm3"
          !! Shortwave scheme.  Only `"ccsm3"` is ported; `"dEdd"` and
          !! `"dEdd_snicar_ad"` are accepted by the schema and refused by
@@ -666,7 +666,7 @@ module rdb_config
    end type ocean_ice_sw_config_t
 
    type :: ocean_ice_ridge_config_t
-      !! `&ocean_ice_ridge_nml`: CICE-port ridging and ice-strength knobs
+      !! `[ocean.ice_ridge]`: CICE-port ridging and ice-strength knobs
       !! (Thorndike et al. 1975; Rothrock 1975; Hibler 1979, 1980; Flato and
       !! Hibler 1995; Lipscomb et al. 2007).  `scheme="cice"` only.  Upstream
       !! code defaults, which OM3 also uses (it sets none of them).
@@ -689,7 +689,7 @@ module rdb_config
    end type ocean_ice_ridge_config_t
 
    type :: ocean_ice_atm_config_t
-      !! `&ocean_ice_atm_nml`: CICE-port atmosphere-ice boundary-layer knobs
+      !! `[ocean.ice_atm]`: CICE-port atmosphere-ice boundary-layer knobs
       !! (Monin-Obukhov similarity, Jordan et al. 1999 bulk transfer).
       !! `scheme="cice"` only.  Upstream code defaults (OM3: `highfreq = .true.`).
       logical :: highfreq = .false.
@@ -709,8 +709,8 @@ module rdb_config
          !! Compute the wind stress in the ice model: only `.true.` is supported.
       real(wp) :: uni_tas = 263.15_wp
          !! Uniform-atmosphere air temperature [K].  The `uni_*` knobs build the ice's
-         !! atmosphere when `&ocean_atm_forcing_nml enable = .false.` (no prescribed
-         !! atmospheric-state files): one value everywhere, with `&ocean_ice_nml sw_down`
+         !! atmosphere when `[ocean.atm_forcing] enable = false` (no prescribed
+         !! atmospheric-state files): one value everywhere, with `[ocean.ice] sw_down`
          !! (downward shortwave) and `snowfall` (snow flux) completing it; rain is zero.
       real(wp) :: uni_uas = 0.0_wp
          !! Uniform-atmosphere eastward 10 m wind [m/s] (earth-relative).
@@ -725,7 +725,7 @@ module rdb_config
    end type ocean_ice_atm_config_t
 
    type :: ocean_ice_dyn_config_t
-      !! `&ocean_ice_dyn_nml`: CICE-port ice dynamics and transport knobs (one group, two
+      !! `[ocean.ice_dyn]`: CICE-port ice dynamics and transport knobs (one group, two
       !! owners).  EVP keys: Hunke and Dukowicz 1997; Hunke 2001; Bouillon et al. 2013; Konig
       !! Beatty and Holland 2010; Lemieux et al. 2024 (upstream CICE code defaults for the
       !! C-grid dynamics; OM3 itself runs the B-grid dynamics).  Transport keys: `advection`,
@@ -791,7 +791,7 @@ module rdb_config
    end type ocean_ice_dyn_config_t
 
    type :: ocean_ice_ic_config_t
-      !! `&ocean_ice_ic_nml`: sea-ice ANALYTIC initial-condition path (PR
+      !! `[ocean.ice_ic]`: sea-ice ANALYTIC initial-condition path (PR
       !! 24). Default `conc_config="zero"` early-returns before touching
       !! a single ice array => byte-identical to today for every existing
       !! nml/test. v1 ships `"uniform"` (scalar) and `"latitudes"` (SIS2
@@ -825,7 +825,7 @@ module rdb_config
    end type ocean_ice_ic_config_t
 
    type :: ocean_restore_config_t
-      !! `&ocean_restore_nml`: surface buoyancy restoring of top-layer T/S
+      !! `[ocean.restore]`: surface buoyancy restoring of top-layer T/S
       !! toward scalar targets via a piston velocity.  Default OFF = bit-identical.
       logical :: enable_restore_temp = .false.
          !! Master switch for SST restoring (effective when `piston_t /= 0`).
@@ -887,7 +887,7 @@ module rdb_config
    end type ocean_restore_config_t
 
    type :: ocean_geothermal_config_t
-      !! `&ocean_geothermal_nml`: bottom-heat-flux knobs.  Default OFF = bit-identical.
+      !! `[ocean.geothermal]`: bottom-heat-flux knobs.  Default OFF = bit-identical.
       logical :: enable = .false.
          !! Master switch.  Default `.false.`.
       real(wp) :: q_geo = 0.0_wp
@@ -895,8 +895,8 @@ module rdb_config
    end type ocean_geothermal_config_t
 
    type :: ocean_sponge_config_t
-      !! `&ocean_sponge_nml`: the map-driven sponge (PR-23). Default OFF
-      !! (`enable = .false.`) ⇒ the legacy `&ocean_bc_nml` band kernels run
+      !! `[ocean.sponge]`: the map-driven sponge (PR-23). Default OFF
+      !! (`enable = false`) ⇒ the legacy `[ocean.bc]` band kernels run
       !! unchanged ⇒ bit-identical. See `rdb_ocean_sponge.F90`'s module
       !! docstring for the physics; `docs/plans/PLAN_PR23_real_sponge.md`
       !! for the design record.
@@ -912,7 +912,7 @@ module rdb_config
          !!
          !! `"ic"` (default, implemented): snapshot the seeded initial
          !! condition (reachable as a "nudge toward a parent climatology"
-         !! via `&ocean_zinit_nml`, no new reader).
+         !! via `[ocean.zinit]`, no new reader).
          !!
          !! `"linear_z"`: an ANALYTIC affine geopotential profile,
          !! `T(z) = lin_t_ref + lin_dt_dz*z` and the salinity twin,
@@ -943,19 +943,19 @@ module rdb_config
          !! the range.
       real(wp) :: lin_t_ref = 0.0_wp
          !! `target_source="linear_z"`: potential temperature (degC) at
-         !! the `z = 0` datum. Same convention as `&ocean_zinit_nml
+         !! the `z = 0` datum. Same convention as `[ocean.zinit]
          !! lin_t_ref`.
       real(wp) :: lin_dt_dz = 0.0_wp
          !! `target_source="linear_z"`: dT/dz (degC/m) with **z positive
          !! UP**, so a stable column has `lin_dt_dz > 0`. Same convention
-         !! as `&ocean_zinit_nml lin_dt_dz`.
+         !! as `[ocean.zinit] lin_dt_dz`.
       real(wp) :: lin_s_ref = 35.0_wp
          !! `target_source="linear_z"`: salinity (PSU) at the `z = 0`
-         !! datum. Same convention as `&ocean_zinit_nml lin_s_ref`.
+         !! datum. Same convention as `[ocean.zinit] lin_s_ref`.
       real(wp) :: lin_ds_dz = 0.0_wp
          !! `target_source="linear_z"`: dS/dz (PSU/m), z positive UP, so a
          !! stable column has `lin_ds_dz < 0`. Same convention as
-         !! `&ocean_zinit_nml lin_ds_dz`.
+         !! `[ocean.zinit] lin_ds_dz`.
       logical :: relax_uv = .true.
          !! Relax `u`/`v` toward `u_ref`/`v_ref`. Default `.true.` matches
          !! today's legacy path (momentum is the one thing the legacy
@@ -968,13 +968,13 @@ module rdb_config
          !! `validate_config` (deferred to PR-23b; see the plan §14 Q1).
       integer :: west_width = -1
          !! Per-edge sponge-band width override (cells). `< 0` ⇒ inherit
-         !! `&ocean_bc_nml sponge_width`.
+         !! `[ocean.bc] sponge_width`.
       integer :: east_width = -1
       integer :: south_width = -1
       integer :: north_width = -1
       real(wp) :: west_strength = -1.0_wp
          !! Per-edge peak relaxation-rate override (1/s). `< 0` ⇒ inherit
-         !! `&ocean_bc_nml sponge_strength`.
+         !! `[ocean.bc] sponge_strength`.
       real(wp) :: east_strength = -1.0_wp
       real(wp) :: south_strength = -1.0_wp
       real(wp) :: north_strength = -1.0_wp
@@ -1083,7 +1083,7 @@ module rdb_config
          !! MOM6 settled the BT-correction fold question): ONE switch for
          !! exactly MOM6's `vertvisc_remnant`/`av_rem`/`bt_rem` set —
          !! DEFAULT ON since PR-4 (the flip, 2026-10), TOGETHER with
-         !! `&ocean_vdiff_nml hvel_mom6`/`bbl_glue` — MOM6 gives the
+         !! `[ocean.vdiff] hvel_mom6`/`bbl_glue` — MOM6 gives the
          !! barotropic solver the same friction the layered vertical
          !! solve applies; without it the BBL glue's bed piston never
          !! reaches the fast mode (NaN at day 253 on the 1-degree
@@ -1102,7 +1102,7 @@ module rdb_config
          !! weights it by `visc_rem`, so neither does this chain; see
          !! `correction_visc_rem`'s docstring for why that fold is
          !! retired, not folded in here.  Same caveat as before: without
-         !! `&ocean_vdiff_nml implicit_drag=.true.` or `bbl_glue=.true.`,
+         !! `[ocean.vdiff] implicit_drag=true` or `bbl_glue=true`,
          !! `visc_rem` stays ≡ 1 and the whole chain is a legal, warned,
          !! no-op.  The three `*_visc_rem` consumer knobs
          !! (`forcing_visc_rem`/`renorm_visc_rem`/`bt_rem_from_visc_rem`)
@@ -1111,11 +1111,11 @@ module rdb_config
          !! never a superset, and each now SELF-SUFFICIENT (no longer
          !! "requires" a separate producer knob — the producer runs
          !! whenever any one of them is on).  `strong_drag`/
-         !! `rescale_strong_drag` stay separate namelist keys per D1
+         !! `rescale_strong_drag` stay separate input keys per D1
          !! (MOM6 has its own `BT_STRONG_DRAG`/`RESCALE_STRONG_DRAG`
          !! parameters for them) and require this switch (or
          !! `bt_rem_from_visc_rem`) on, same as before. `accel_visc_rem`
-         !! (`&ocean_vdiff_nml`) is likewise NOT part of this chain and is
+         !! (`[ocean.vdiff]`) is likewise NOT part of this chain and is
          !! RETIRED (see its own docstring) — no MOM6 state-update
          !! equivalent. Default `.false.` ⇒ no answer change (PR-4 is the
          !! default flip).  D2: mutually exclusive with `substep_drag`
@@ -1142,18 +1142,18 @@ module rdb_config
          !! different order.
          !!
          !! `validate_config` refuses `pred_corr` FAIL-LOUD, never silently,
-         !! outside its v1 envelope: `eulerian_z` and `&ocean_wetdry_nml
+         !! outside its v1 envelope: `eulerian_z` and `[ocean.wetdry]
          !! enable`.  `dt_tracer_advect_ratio > 1` is supported (also
          !! multi-rank): the corrector accumulates the whole step transport with
          !! weight 1.0 and the drain's budget weight follows
-         !! `ocean_budget_stage_weight`.  Shipped namelists pin `ssp_rk2`
+         !! `ocean_budget_stage_weight`.  Shipped inputs pin `ssp_rk2`
          !! for those reasons.
          !!
          !! `"ssp_rk2"` (**EXPERIMENTAL**) = two identical stages + SSP
          !! average.  Still fully supported and fully tested — experimental
          !! is a label on the ANSWER, not a deprecation of the code path,
          !! and the stability suite runs an `ssp_rk2` twin of every case
-         !! whose namelist does not pin a scheme.  It has the widest
+         !! whose input does not pin a scheme.  It has the widest
          !! envelope: every vcoord including `eulerian_z` and wet/dry
          !! (the only scheme that accepts them), and the windowed
          !! tracer-advection path (`dt_tracer_advect_ratio > 1`, 0.5 weight
@@ -1335,7 +1335,7 @@ module rdb_config
       real(wp) :: wave_drag_kappa = 6.2832e-4_wp
          !! Topographic wavenumber `kappa` (1/m) for
          !! `wave_drag_form = "roughness_proxy"`.  Same default as
-         !! `&ocean_tidal_mixing_nml kappa_itides` — keep them equal.
+         !! `[ocean.tidal_mixing] kappa_itides` — keep them equal.
       real(wp) :: wave_drag_n_bot = 1.0e-3_wp
          !! Reference near-bottom buoyancy frequency `N_bot` (1/s) for
          !! `wave_drag_form = "roughness_proxy"`.
@@ -1385,7 +1385,7 @@ module rdb_config
    end type ocean_bt_config_t
 
    type :: ocean_debug_config_t
-      !! `&ocean_debug_nml`: forensic probes for the ocean dyn-core.
+      !! `[ocean.debug]`: forensic probes for the ocean dyn-core.
       !! Every knob defaults off ⇒ bit-identical (untaken branches); all
       !! are HEAVY when on (device waits / serialised apply chains) —
       !! investigation tools, not production diagnostics.  Output is
@@ -1425,7 +1425,7 @@ module rdb_config
    end type ocean_debug_config_t
 
    type :: ocean_mpi_config_t
-      !! `&ocean_mpi_nml`: multi-rank MPI debug and tuning controls.
+      !! `[ocean.mpi]`: multi-rank MPI debug and tuning controls.
       logical :: poison_ghosts = .false.
          !! Debug knob — sentinel-NaN the exchange-covered ghost bands at
          !! each outer-step start; any unexchanged-ghost consumption becomes
@@ -1433,7 +1433,7 @@ module rdb_config
    end type ocean_mpi_config_t
 
    type :: ocean_wetdry_config_t
-      !! `&ocean_wetdry_nml`: dynamic wetting/drying for the split-explicit
+      !! `[ocean.wetdry]`: dynamic wetting/drying for the split-explicit
       !! barotropic substep (docs/ocean_wetdry_plan.md).  Default off ⇒
       !! byte-identical everywhere (the wd_* workspaces stay unallocated and
       !! the substep runs its unmodified centred-face path).
@@ -1441,8 +1441,8 @@ module rdb_config
          !! Master switch.  When `.true.` the BT substep switches to upwind
          !! face thickness + the positive-definite outflow limiter + the
          !! bed-blocking momentum gate; requires the sigma
-         !! vertical coordinate, `&ocean_continuity_nml ppm_limit_pos`
-         !! and `&ocean_bt_nml split_scheme = "ssp_rk2"` (fail-loud at configure).  Multi-rank: bit-identical to one rank
+         !! vertical coordinate, `[ocean.continuity] ppm_limit_pos`
+         !! and `[ocean.bt] split_scheme = "ssp_rk2"` (fail-loud at configure).  Multi-rank: bit-identical to one rank
          !! (needs `nghost >= 3`); refused on >1 rank with the tripolar fold,
          !! a clamped/chapman/sponge/nested/inflow/discharge edge, or Orlanski
          !! radiation / full Flather / nudging / tracer reservoirs on an open or tidal edge
@@ -1526,7 +1526,7 @@ module rdb_config
          !! `p = -g*rho0*z` (MOM6 `int_density_dz_generic_pcm`; MOM6
          !! parity, default).  `.false.` = the legacy integral of the
          !! POTENTIAL density `ms%rho_layer` at the uniform
-         !! `&ocean_eos_nml p_ref`, which loses the pressure dependence of
+         !! `[ocean.eos] p_ref`, which loses the pressure dependence of
          !! the horizontal density gradient away from `p_ref` (on the global
          !! 1-degree spin-up: Drake Passage ~80 Sv against MOM6's ~155 Sv).
          !! Consulted only by `form = "fv_mom6"` with
@@ -1560,7 +1560,7 @@ module rdb_config
          !! WHY IT IS NOT A DOUBLE COUNT.  A depth-uniform `p_top`
          !! perturbs EVERY layer's `PFu` by the same `-(1/rho_0)*grad
          !! p_top` (the theorem in `compute_fv_mom6_impl`'s docstring).
-         !! Under the MOM6 split (`&ocean_bt_nml bc_pgf_forcing`,
+         !! Under the MOM6 split (`[ocean.bt] bc_pgf_forcing`,
          !! default) the depth mean of the layer PGF forces the barotropic
          !! mode, so the `p_surf` part of `p_top` is shed from that
          !! forcing as `g*grad(eta_ib)` and the `eta_forcing` seam carries
@@ -1581,10 +1581,10 @@ module rdb_config
          !! FV_MOM6 ONLY (both the PCM and the `reconstruct_for_pressure`
          !! branch) — `validate_config` refuses it for any other `form`,
          !! which carries no `pa` stack to inject into.  Orthogonal to
-         !! `&ocean_psurf_nml in_eos`: that knob puts the same `p_top`
+         !! `[ocean.psurf] in_eos`: that knob puts the same `p_top`
          !! into the EOS's IN-SITU pressure ARGUMENTS, this one into the
          !! PGF's pressure BOUNDARY CONDITION.  Either, both or neither.
-         !! `p_top` itself is produced today only by the `&ocean_psurf_nml`
+         !! `p_top` itself is produced today only by the `[ocean.psurf]`
          !! seam, so with `enable = .false.` it is the zero array and this
          !! knob is inert — a warning says so rather than leaving it
          !! silent.
@@ -1674,7 +1674,7 @@ module rdb_config
          !! densities differing by `∂ρ/∂p·Δp` — a spurious along-layer
          !! gradient and hence a spurious pressure gradient force.  A
          !! spatially varying surface load goes to the IN-SITU builders via
-         !! `&ocean_psurf_nml in_eos`, never here.
+         !! `[ocean.psurf] in_eos`, never here.
          !!
          !! What it buys: the thermobaric state at which the effective
          !! α/β are evaluated.  Near the freezing point at ice-shelf-cavity
@@ -1682,7 +1682,7 @@ module rdb_config
          !! referenced to a representative depth (2.0e7 Pa ≈ 2000 dbar, the
          !! usual σ₂ choice) than to the surface.
          !!
-         !! Distinct from `&vcoord_nml rho_ref_pressure`, which references
+         !! Distinct from `[vcoord] rho_ref_pressure`, which references
          !! the RHO / HYCOM target-density COORDINATE and the density-space
          !! diagnostic remap.  For a density-coordinate run the two should
          !! normally be set to the SAME value so coordinate and dynamics
@@ -1705,21 +1705,21 @@ module rdb_config
          !!     `sea_water_absolute_salinity`.
          !!
          !! `cons_abs` REQUIRES `eos` in {roquet_rho, roquet_spv}.  It is
-         !! supported with `&ocean_ice_nml enable`: the ice-ocean boundary
+         !! supported with `[ocean.ice] enable`: the ice-ocean boundary
          !! converts once (theta = pt_from_ct(SA, CT), SP = sp_from_sr(SA),
          !! theta freezing point), so the ice stays theta/SP while the ocean
          !! heat budget stays CT/SA.  It is refused (fail-loud) with
-         !! `&ocean_cavity_melt_nml enable` (its liquidus is undecided).
+         !! `[ocean.cavity_melt] enable` (its liquidus is undecided).
          !!
          !! The other consumers convert or are in the model convention:
-         !!   * a file `&ocean_zinit_nml` holding theta / SP
+         !!   * a file `[ocean.zinit]` holding theta / SP
          !!     (`input_convention = "pot_prac"`) is converted at read time,
          !!     SA first then CT from SA;
-         !!   * `&ocean_bulk_flux_nml` evaluates its formulae on
+         !!   * `[ocean.bulk_flux]` evaluates its formulae on
          !!     `theta = pt_from_ct(SA, CT)` of the surface layer (the only
          !!     surface-side conversion; heat contents of the precipitation
          !!     streams keep the model T with `c_p`);
-         !!   * the `&ocean_restore_nml` `restore_sst` / `restore_sss`
+         !!   * the `[ocean.restore]` `restore_sst` / `restore_sss`
          !!     targets are read IN the model convention (CT / SA; OM3
          !!     restores toward a file variable that is already Absolute
          !!     Salinity, and does not restore temperature);
@@ -1789,14 +1789,14 @@ module rdb_config
    end type ocean_bdrag_config_t
 
    type :: ocean_tdrag_config_t
-      !! `&ocean_tdrag_nml` — ICE-SHELF TOP drag, the mirror of
-      !! `&ocean_bdrag_nml` at `k = nz`.  Requires
-      !! `&ocean_cavity_dyn_nml enable` (without a draft there is no ice
+      !! `[ocean.tdrag]` — ICE-SHELF TOP drag, the mirror of
+      !! `[ocean.bdrag]` at `k = nz`.  Requires
+      !! `[ocean.cavity_dyn] enable` (without a draft there is no ice
       !! base and `cover_frac` is identically zero, so the kernel would
       !! be a no-op with a cost).  Default `enable = .false.` ⇒ the slot
       !! is a placeholder, no kernel runs, every path is bit-identical.
       logical :: enable = .false.
-         !! Master switch.  Requires `&ocean_cavity_dyn_nml enable`.
+         !! Master switch.  Requires `[ocean.cavity_dyn] enable`.
       character(len=16) :: form = "quadratic"
          !! Top-drag variant: "quadratic" (default, `du/dt =
          !! -C_d*|U|*u/h`, the ISOMIP+ prescription) or "linear"
@@ -1805,7 +1805,7 @@ module rdb_config
       real(wp) :: cd = 0.0_wp
          !! Quadratic drag coefficient (dimensionless).  ISOMIP+ value
          !! 2.5e-3 (Asay-Davis et al. 2016 Table 4).  Zero disables the
-         !! quadratic branch.  When `&ocean_cavity_melt_nml enable`, this
+         !! quadratic branch.  When `[ocean.cavity_melt] enable`, this
          !! is THE `C_d` for both momentum and the melt friction
          !! velocity — see the `cdrag_top` agreement rule in
          !! `validate_config`.
@@ -1814,7 +1814,7 @@ module rdb_config
          !! `form = "linear"`.
       real(wp) :: htbl = 0.0_wp
          !! Top-boundary-layer thickness (m) the stress is distributed
-         !! over (the mirror of `&ocean_bdrag_nml hbbl`).  Zero (default)
+         !! over (the mirror of `[ocean.bdrag] hbbl`).  Zero (default)
          !! = layer-`nz`-only.  Positive values keep the explicit drag
          !! rate finite where a sigma coordinate thins the top layer near
          !! a grounding line.
@@ -1832,13 +1832,13 @@ module rdb_config
          !! top-layer thickness.  Default `.false.` = explicit forward
          !! Euler (bit-identical to the pre-knob path, but conditionally
          !! unstable when `lambda*dt > 1`).  Mutually exclusive with
-         !! `&ocean_vdiff_nml implicit_top_drag`.
+         !! `[ocean.vdiff] implicit_top_drag`.
    end type ocean_tdrag_config_t
 
    type :: ocean_hdiff_config_t
-      !! `&ocean_hdiff_nml` — along-coordinate tracer Laplacian
+      !! `[ocean.hdiff]` — along-coordinate tracer Laplacian
       !! (`rdb_ocean_hdiff_tracer`).  Diffusion along the MODEL
-      !! coordinate, not neutral surfaces (that is `&ocean_redi_nml`,
+      !! coordinate, not neutral surfaces (that is `[ocean.redi]`,
       !! a separate already-reachable capability).
       real(wp) :: kappa_h = 0.0_wp
          !! Constant horizontal tracer diffusivity (m^2/s).  Zero
@@ -2001,7 +2001,7 @@ module rdb_config
          !! `.true.` the dynamic Laplacian viscosity is multiplied by the
          !! VarMix resolution function `Res_fn ∈ [0,1]` before the `ah_max`
          !! clamp (biharmonic `nu_4` never scaled).  Requires
-         !! `&ocean_varmix_nml enable=.true.`.  Default `.false.` ⇒ bit-identical.
+         !! `[ocean.varmix] enable=true`.  Default `.false.` ⇒ bit-identical.
    end type ocean_hvisc_config_t
    type :: ocean_vmix_config_t
       logical :: use_closure = .true.
@@ -2129,10 +2129,10 @@ module rdb_config
       ! Each default equals the current `ocean_vmix_t` field default
       ! (rdb_ocean_vmix.F90) so an nml that never mentions these keys is
       ! bit-identical.  `kpp_*` names (not bare `ri_crit`/`cs_nonlocal`/
-      ! `c_vt2`) avoid a collision with `&ocean_kshear_nml ri_crit` (a
+      ! `c_vt2`) avoid a collision with `[ocean.kshear] ri_crit` (a
       ! DIFFERENT physical quantity, the JHL08 critical Ri).  These route
       ! to the OCEAN vmix slot — do not confuse with the similarly-named
-      ! `&nonhydrostatic_nml kpp_*` keys, which are the live COASTAL path.
+      ! `[nonhydrostatic] kpp_*` keys, which are the live COASTAL path.
       real(wp) :: pp81_nu0 = 1.0e-2_wp
          !! PP81 Richardson-dependent viscosity scale (m^2/s).
       real(wp) :: pp81_nu_bg = 1.0e-4_wp
@@ -2166,10 +2166,10 @@ module rdb_config
          !! (`rdb_ocean_vmix.F90`); keep the `allowed=` list and that
          !! routine's `case` arms in lockstep.
          !!
-         !!   * `"constant"` — the scalar `&ocean_ic_nml alpha_T` /
+         !!   * `"constant"` — the scalar `[ocean.ic] alpha_T` /
          !!     `beta_S` off the EOS handle, whatever the active EOS is.
          !!     Historical behaviour ⇒ **bit-identical** for every shipped
-         !!     namelist.  For `eos = "linear"` these ARE the true
+         !!     input.  For `eos = "linear"` these ARE the true
          !!     coefficients, so the setting is physically exact there.
          !!   * `"eos"` — `eos_buoyancy_coeffs` evaluated per column /
          !!     per interface from the ACTIVE equation of state
@@ -2198,7 +2198,7 @@ module rdb_config
          !! `"constant"`.
    end type ocean_vmix_config_t
    type :: ocean_vdiff_config_t
-      !! Backward-Euler vertical-friction solver knobs (`&ocean_vdiff_nml`).
+      !! Backward-Euler vertical-friction solver knobs (`[ocean.vdiff]`).
       !! The implicit folds default `.false.` (explicit wind-stress apply);
       !! MOM6's face treatment (`hvel_mom6` + `bbl_glue`) defaults ON.
       logical :: implicit_stress = .false.
@@ -2216,18 +2216,18 @@ module rdb_config
          !! `u_accel_bt` UNIFORMLY across every layer, with no `visc_rem`
          !! weight anywhere in that path.  The real MOM6 mechanisms that
          !! multiply a velocity correction by `visc_rem` are
-         !! `&ocean_bt_nml renorm_visc_rem` (continuity `u_cor = u +
+         !! `[ocean.bt] renorm_visc_rem` (continuity `u_cor = u +
          !! du·visc_rem`) and `rescale_strong_drag`.  The underlying
          !! kernels (`accel_visc_rem_snapshot`/`accel_visc_rem_reweight`
          !! in `rdb_ocean_dyn.F90`) and their direct unit tests
          !! (`tests/test_ocean_accel_visc_rem.F90`) are untouched — only
-         !! the configure-time path to reach them from a namelist is
+         !! the configure-time path to reach them from an input is
          !! refused.
       logical :: implicit_drag = .false.
          !! Fold the bottom drag into the vdiff bed-row diagonal (stress
          !! bottom-BC; the row is the face's first LIVE layer `k_bot_u/v`,
          !! `k = 1` off `z_fixed`) instead of the explicit pre-solve add.  Mutually
-         !! exclusive with `&ocean_bdrag_nml implicit` (split-apply) and,
+         !! exclusive with `[ocean.bdrag] implicit` (split-apply) and,
          !! without `bbl_glue`, incompatible with HBBL-distributed drag
          !! (`hbbl > 0`); both fail loud at configure.  Under `bbl_glue`
          !! the glue's piston replaces the fold.
@@ -2242,10 +2242,10 @@ module rdb_config
          !! MOM6 `HBBL` (m) for the `hvel_mom6` botfn blend without the
          !! BBL glue (under the glue each face's `bbl_thick` normalises the
          !! height above the bed), and the glue's HBBL when
-         !! `&ocean_bdrag_nml hbbl = 0`.
+         !! `[ocean.bdrag] hbbl = 0`.
       logical :: implicit_top_drag = .false.
          !! Fold the ICE-SHELF TOP drag into the vdiff `k = nz` DIAGONAL
-         !! (`&ocean_tdrag_nml`'s mirror of `implicit_drag`) instead of
+         !! (`[ocean.tdrag]`'s mirror of `implicit_drag`) instead of
          !! the explicit pre-solve add.  The wind stress already owns
          !! that row's RHS; a drag is a diagonal term, so the two
          !! compose — but on a face the ice covers, the wind RHS is
@@ -2255,8 +2255,8 @@ module rdb_config
          !! factor multiplies zero, and it stays so the fold is correct
          !! STANDALONE if a later forcing path ever writes `tau` after
          !! the configure-time mask.
-         !! Requires `&ocean_tdrag_nml enable`; mutually exclusive with
-         !! `&ocean_tdrag_nml implicit` (both would damp the top layer)
+         !! Requires `[ocean.tdrag] enable`; mutually exclusive with
+         !! `[ocean.tdrag] implicit` (both would damp the top layer)
          !! and with `htbl > 0` (the fold is one `k = nz` rate and
          !! cannot represent a distributed band).  All fail loud at
          !! configure.  Default `.false.` ⇒ bit-identical.
@@ -2280,7 +2280,7 @@ module rdb_config
          !! `(kv_bbl − KV)·botfn` near the bed and takes the bed row as the
          !! piston `kv_bbl/(min(hvel₁/2, bbl_thick))`, which REPLACES the
          !! explicit / folded bed drag.  The drag law and its parameters
-         !! come from `&ocean_bdrag_nml` (`form`, `cd` or `r`, `hbbl` —
+         !! come from `[ocean.bdrag]` (`form`, `cd` or `r`, `hbbl` —
          !! falling back to `hbbl_visc` when 0 — `bg_vel`,
          !! `bbl_thick_min`); with no drag configured the glue is inert.
          !! Requires `hvel_mom6` (fail-loud at configure).
@@ -2288,7 +2288,7 @@ module rdb_config
          !! Historical constant BBL piston velocity (m/s), `kv_bbl =
          !! bbl_piston·hbbl_visc`: read only by a hand-built vdiff slot
          !! without the per-face BBL (unit tests).  A configured run's glue
-         !! takes its drag from `&ocean_bdrag_nml`.
+         !! takes its drag from `[ocean.bdrag]`.
       logical :: hvel_upwind = .true.
          !! Near-bed upwind (arithmetic-donor) blend in the `hvel_mom6`
          !! face-thickness build.  Default `.true.` = MOM6 parity /
@@ -2298,7 +2298,7 @@ module rdb_config
          !! whichever faces flip (PGF_BUG.md §9.8).
    end type ocean_vdiff_config_t
    type :: ocean_epbl_config_t
-      !! Energetics-based planetary boundary layer (`&ocean_epbl_nml`).
+      !! Energetics-based planetary boundary layer (`[ocean.epbl]`).
       !! All defaults preserve bit-identity: `enable = .false.` keeps
       !! the existing PP81 + KPP path untouched.  Knob table + MOM6
       !! name mapping: `docs/generated_nml_knobs.md`.
@@ -2398,7 +2398,7 @@ module rdb_config
          !! set all to 0 for the unmodified La.
    end type ocean_epbl_config_t
    type :: ocean_wave_speed_config_t
-      !! `&ocean_wavespeed_nml`: first-baroclinic wave speed + deformation
+      !! `[ocean.wavespeed]`: first-baroclinic wave speed + deformation
       !! radius.  Diagnostic, default off — feeds GM/Redi/MEKE resolution scaling.
       logical :: enable = .false.
          !! Master switch.  Default off — bit-identity preserved.
@@ -2408,13 +2408,13 @@ module rdb_config
       logical :: use_ebt = .false.
          !! Also compute the equivalent-barotropic speed `cg1_ebt` and
          !! vertical structure `ebt_struct` (`cg1` stays first-baroclinic).
-         !! GM consumes the structure with `&ocean_gm_nml use_ebt_struct`.
+         !! GM consumes the structure with `[ocean.gm] use_ebt_struct`.
       integer :: n_wavespeed = 1
          !! Recompute cadence (every N steps); slow diagnostic.
    end type ocean_wave_speed_config_t
 
    type :: ocean_foxkemper_config_t
-      !! `&ocean_foxkemper_nml`: Fox-Kemper mixed-layer-eddy restratification.
+      !! `[ocean.foxkemper]`: Fox-Kemper mixed-layer-eddy restratification.
       !! Default off ⇒ bit-identical.  Reads `epbl%mld`.
       logical :: enable = .false.
          !! Master switch (off => bit-identity).
@@ -2450,7 +2450,7 @@ module rdb_config
    end type ocean_foxkemper_config_t
 
    type :: ocean_kappa_shear_config_t
-      !! `&ocean_kappa_shear_nml`: shear-driven interior turbulence (Jackson,
+      !! `[ocean.kappa_shear]`: shear-driven interior turbulence (Jackson,
       !! Hallberg & Legg 2008).  Coexists with KPP/EPBL/PP81 — kappa is ADDED
       !! to the interior diffusivities.  Default off ⇒ bit-identical.
       logical :: enable = .false.
@@ -2512,7 +2512,7 @@ module rdb_config
          !! `vertex_geometric_mean`).  OM5 configs use 1e-9.
    end type ocean_kappa_shear_config_t
    type :: ocean_slopes_config_t
-      !! `&ocean_slopes_nml`: isopycnal (neutral) slope diagnostics (Griffies
+      !! `[ocean.slopes]`: isopycnal (neutral) slope diagnostics (Griffies
       !! 1998) at C-grid interfaces.  Foundational gate for GM/Redi/VarMix.
       !! Default off ⇒ no-op.
       logical :: enable = .false.
@@ -2525,12 +2525,12 @@ module rdb_config
          !! denominator so vanished layers don't spike the slope.
    end type ocean_slopes_config_t
    type :: ocean_gm_config_t
-      !! `&ocean_gm_nml`: Gent-McWilliams thickness diffusion — eddy-induced
+      !! `[ocean.gm]`: Gent-McWilliams thickness diffusion — eddy-induced
       !! bolus transport folded into continuity.  Reads the slopes slot.
       !! Default off ⇒ no bolus flux.
       logical :: enable = .false.
          !! Master switch.  Default off ⇒ `gm_compute_transports` no-ops.
-         !! Requires `&ocean_slopes_nml enable` (configure-time error).
+         !! Requires `[ocean.slopes] enable` (configure-time error).
       real(wp) :: khth = 0.0_wp
          !! Thickness diffusivity KhTh, m^2/s (constant-fill for v1;
          !! production 1e2-1e3).  0 ⇒ no bolus transport even when enabled.
@@ -2543,7 +2543,7 @@ module rdb_config
          !! MOM6 `KHTH_USE_EBT_STRUCT`: multiply the 2-D face KhTh (base +
          !! Visbeck + MEKE, after the CFL clamp) by the equivalent-barotropic
          !! mode structure at each interface (Hallberg 2013; Killworth &
-         !! Blundell 2003).  Requires `&ocean_wavespeed_nml enable` +
+         !! Blundell 2003).  Requires `[ocean.wavespeed] enable` +
          !! `use_ebt` and GM enabled (configure-time errors).  Default off
          !! ⇒ bit-identical.
       logical :: use_fgnv = .false.
@@ -2551,7 +2551,7 @@ module rdb_config
          !! boundary-value problem for the GM streamfunction
          !! (MOM6 `KHTH_USE_FGNV_STREAMFUNCTION`).  Default off ⇒ the local
          !! `-KhTh*S` streamfunction, bit-identical.  Requires GM and
-         !! `&ocean_wavespeed_nml enable` (the first-baroclinic `cg1`).
+         !! `[ocean.wavespeed] enable` (the first-baroclinic `cg1`).
       real(wp) :: fgnv_filter_scale = 1.0_wp
          !! `FGNV_FILTER_SCALE`, > 0.  Scales the SMOOTHING TERM:
          !! `c^2 = fgnv_filter_scale * c_face^2`, and `psi_unlim` is amplified
@@ -2572,10 +2572,10 @@ module rdb_config
          !! slope.  `"work"` (OM3, `MEKE_GM_SRC_ALT = False`): the rate of
          !! potential-energy release by the FINAL bolus transports (FGNV,
          !! EBT structure, limiters included), per face then averaged to
-         !! cells; needs `&ocean_gm_nml enable`.
+         !! cells; needs `[ocean.gm] enable`.
    end type ocean_gm_config_t
    type :: ocean_redi_config_t
-      !! `&ocean_redi_nml`: Redi continuous neutral (along-isopycnal) tracer
+      !! `[ocean.redi]`: Redi continuous neutral (along-isopycnal) tracer
       !! diffusion — the rotated diffusion tensor.  Default off ⇒ no neutral flux.
       logical :: enable = .false.
          !! Master switch.  Default off ⇒ no-op ⇒ bit-identical.
@@ -2602,12 +2602,12 @@ module rdb_config
          !! `MAX_TR_DIFFUSION_CFL`; the OM3 value is 2.0.
    end type ocean_redi_config_t
    type :: ocean_varmix_config_t
-      !! `&ocean_varmix_nml`: spatially-varying GM/Redi lateral-diffusivity
+      !! `[ocean.varmix]`: spatially-varying GM/Redi lateral-diffusivity
       !! coefficients = (background + Visbeck) × resolution_fn, clamped.
       !! Reads the slopes + wavespeed slots.  Default off ⇒ GM keeps constant khth.
       logical :: enable = .false.
-         !! Master switch.  Default off.  Requires `&ocean_slopes_nml enable`
-         !! + `&ocean_wavespeed_nml enable` (configure-time errors).
+         !! Master switch.  Default off.  Requires `[ocean.slopes] enable`
+         !! + `[ocean.wavespeed] enable` (configure-time errors).
       logical :: use_visbeck = .false.
          !! Add the Visbeck/Eady `khth_slope_cff·L²·SN` baroclinicity term.
       logical :: resoln_scaled_khth = .false.
@@ -2646,11 +2646,11 @@ module rdb_config
          !! S² limiter scale; ≤ 0 ⇒ no S² limit.
    end type ocean_varmix_config_t
    type :: ocean_meke_config_t
-      !! `&ocean_meke_nml`: mesoscale eddy kinetic energy — a 2D prognostic
+      !! `[ocean.meke]`: mesoscale eddy kinetic energy — a 2D prognostic
       !! eddy-energy field fed back as a thickness/tracer diffusivity into
       !! VarMix's KhTh/KhTr.  Reads `gm%gm_src`.  Default off ⇒ no-op.
       logical :: enable = .false.
-         !! Master switch.  Default off.  Requires `&ocean_gm_nml
+         !! Master switch.  Default off.  Requires `[ocean.gm]
          !! enable=.true.` (configure-time error).
       real(wp) :: gmcoeff = -1.0_wp
          !! Efficiency of PE->MEKE conversion (nondim); < 0 ⇒ GM source off.
@@ -2702,7 +2702,7 @@ module rdb_config
          !! Barotropic-transport advection scaling (nondim); 0 ⇒ off (v1).
       real(wp) :: cdrag = 2.5e-3_wp
          !! Bottom drag coefficient for MEKE (nondim); enters drag_rate +
-         !! Lfrict.  Set from `&ocean_bdrag_nml cdrag_side` at configure if
+         !! Lfrict.  Set from `[ocean.bdrag] cdrag_side` at configure if
          !! that is > 0, else this default.
       logical :: use_bbl_drag = .false.
          !! Add the resolved bottom-boundary-layer eddy velocity to the MEKE
@@ -2723,7 +2723,7 @@ module rdb_config
    end type ocean_meke_config_t
    type :: ocean_tidal_mixing_config_t
       !! St-Laurent/Simmons internal-tide interior mixing
-      !! (`&ocean_tidal_mixing_nml`).  Bottom-intensified diapycnal
+      !! (`[ocean.tidal_mixing]`).  Bottom-intensified diapycnal
       !! diffusivity from the local dissipation of internal-tide energy
       !! over rough topography (Jayne & St Laurent 2001; St Laurent et
       !! al. 2002; Simmons et al. 2004).  An INTERIOR closure: its Kd is
@@ -2830,12 +2830,12 @@ module rdb_config
    end type ocean_tidal_mixing_config_t
    type :: ocean_bbl_mixing_config_t
       !! Law-of-the-wall bottom-boundary-layer diapycnal mixing
-      !! (`&ocean_bbl_mixing_nml`).  The mean-KE the bottom stress removes
+      !! (`[ocean.bbl_mixing]`).  The mean-KE the bottom stress removes
       !! in the viscous BBL, `effic * P_bbl`, mixes the water above the bed
       !! with a wall-law diffusivity `kappa u*^2 z (D-z)/(u* D + |f| z
       !! (D-z))` bounded by an upward-decaying energy ledger; ADDED to the
       !! tracer diffusivity only.  Needs the per-face viscous BBL
-      !! (`&ocean_vdiff_nml bbl_glue` + a bottom drag with `hbbl > 0`) and
+      !! (`[ocean.vdiff] bbl_glue` + a bottom drag with `hbbl > 0`) and
       !! thermodynamics.  Default off => bit-identical.  Knob table:
       !! `docs/generated_nml_knobs.md`.
       logical :: enable = .false.
@@ -2856,7 +2856,7 @@ module rdb_config
          !! (KD_MAX).
    end type ocean_bbl_mixing_config_t
    type :: ocean_porous_config_t
-      !! Porous barriers (`&ocean_porous_nml`): subgrid sill/strait
+      !! Porous barriers (`[ocean.porous]`): subgrid sill/strait
       !! blocking of the C-grid face widths via the Adcroft (2013)
       !! three-parameter fit.  The layer-averaged OPEN-AREA fraction
       !! multiplies `dy_cu` / `dx_cv` in the layer mass transport
@@ -2890,7 +2890,7 @@ module rdb_config
    end type ocean_porous_config_t
 
    type :: ocean_conv_config_t
-      !! Brunt-Vaisala-triggered convective adjustment (`&ocean_conv_nml`,
+      !! Brunt-Vaisala-triggered convective adjustment (`[ocean.conv]`,
       !! CVMix_conv-style).  Where the interior N^2 < n2_thresh
       !! (dense-over-light), raises kt -> max(kt, kd_conv) and
       !! kv -> max(kv, prandtl_conv*kd_conv), strictly below the active
@@ -2910,7 +2910,7 @@ module rdb_config
          !! Trigger threshold on N^2 (MOM6 `BV_SQR_CONV`), s^-2.
    end type ocean_conv_config_t
    type :: ocean_ddiff_config_t
-      !! Double diffusion (`&ocean_ddiff_nml`, CVMix_ddiff-style): salt
+      !! Double diffusion (`[ocean.ddiff]`, CVMix_ddiff-style): salt
       !! fingering (Large et al. 1994) + diffusive convection
       !! (Marmorino-Caldwell 1976 / Kelley 1990).  Folded INTO the
       !! heat/salt split (not a kv/kt contributor) to give an asymmetric
@@ -2944,7 +2944,7 @@ module rdb_config
          !! `.true.` = Kelley 1990.
    end type ocean_ddiff_config_t
    type :: ocean_tides_config_t
-      !! Equilibrium (astronomical) body-force tide (`&ocean_tides_nml`,
+      !! Equilibrium (astronomical) body-force tide (`[ocean.tides]`,
       !! capability C1).  Drives `-g grad(eta - eta_eq)` in the barotropic
       !! momentum solve from a set of harmonic constituents.  `enable =
       !! .false.` keeps the existing path bit-identical.  Requires a
@@ -2967,12 +2967,12 @@ module rdb_config
    end type ocean_tides_config_t
    type :: ocean_psurf_config_t
       !! Atmospheric surface-pressure loading / inverse barometer
-      !! (`&ocean_psurf_nml`, PR-17).  Folds `eta_ib = -p_surf/(rho0 g)`
+      !! (`[ocean.psurf]`, PR-17).  Folds `eta_ib = -p_surf/(rho0 g)`
       !! into the barotropic `eta_forcing` seam so an atmospheric high
       !! depresses SSH (~1 cm/hPa; Wunsch & Stammer 1997).  `enable =
       !! .false.` keeps the existing path bit-identical.  Split-solver only
-      !! and mutually exclusive with `&ocean_bt_nml bt_halo > 0`.  Requires
-      !! `&ocean_forcing_nml enable_components=.true.` (the `p_surf` field
+      !! and mutually exclusive with `[ocean.bt] bt_halo > 0`.  Requires
+      !! `[ocean.forcing] enable_components=true` (the `p_surf` field
       !! is allocated only with the component set).  ρ₀ is NOT a knob here —
       !! it is taken from `ocean_state%eos%rho0` (the single ρ₀ of record).
       logical :: enable = .false.
@@ -2990,13 +2990,13 @@ module rdb_config
          !!
          !! IN-SITU ONLY.  It deliberately does NOT touch `ms%rho_layer`,
          !! which is a POTENTIAL density at the horizontally uniform
-         !! `&ocean_eos_nml p_ref` — offsetting a potential-density
+         !! `[ocean.eos] p_ref` — offsetting a potential-density
          !! reference per column would manufacture an along-layer density
          !! gradient (see that knob's docstring).  The N² builders inherit
          !! `rho_layer` and are therefore unaffected and self-consistent.
          !!
          !! v1 reaches exactly ONE consumer: the FV_WRIGHT Picard column
-         !! sweep (`&ocean_pgf_nml form="fv_wright"`), the only in-situ EOS
+         !! sweep (`[ocean.pgf] form="fv_wright"`), the only in-situ EOS
          !! pressure in the dyn core today.  With any other PGF form and
          !! none of the closures below enabled the knob is INERT — a
          !! rank-0 warning says so rather than leaving it silent.  The
@@ -3012,9 +3012,9 @@ module rdb_config
          !! `sf%p_surf_atm` at configure.  A UNIFORM load is provably inert
          !! (gauge invariance — only grad(p_surf) is physical), so a
          !! non-zero value with no file/override path emits a rank-0
-         !! warning.  v1 fill path (the analogue of `&ocean_thermo_nml
+         !! warning.  v1 fill path (the analogue of `[ocean.thermo]
          !! q_heat`).  The NetCDF forcing reader itself ships
-         !! (`&ocean_dataovr_nml`); `p_surf` is simply not one of its six
+         !! (`[ocean.dataovr]`); `p_surf` is simply not one of its six
          !! tags (tau_x, tau_y, heat, salt, evap, lprec) yet, so a
          !! file-driven load needs a `register_tag` entry, not new reader
          !! machinery.
@@ -3026,11 +3026,11 @@ module rdb_config
          !! OVERWRITE of `sf%p_surf` once per outer step, sent through the `eta_forcing` seam.  The
          !! load follows the DELIVERY of the fresh water the ice exchanged with the ocean (thermo
          !! cadence), so the load and the water change on the same outer step.  Required `.true.`
-         !! by `&ocean_forcing_nml freshwater = "mass"` with `scheme = "cice"` (otherwise growing ice
+         !! by `[ocean.forcing] freshwater = "mass"` with `scheme = "cice"` (otherwise growing ice
          !! removes its water from under the ice only and drives a spurious flow), and refused
          !! WITHOUT mass (under `"none"`/`"virtual"` no water leaves, so a load would depress the
          !! sea surface under the ice for nothing).  Requires `enable = .true.` and
-         !! `&ocean_ice_nml scheme = "cice"`.  It adds ONLY the ice weight: the atmosphere's
+         !! `[ocean.ice] scheme = "cice"`.  It adds ONLY the ice weight: the atmosphere's
          !! pressure joins `p_surf` solely through `atm_load`.  Default off => bit-identical.
       logical :: atm_load = .false.
          !! Add the bulk forcing's sea-level pressure (`p_surf_atm = psl`, Pa) to `p_surf`:
@@ -3038,7 +3038,7 @@ module rdb_config
          !! hPa; Wunsch & Stammer 1997) and its gradient force.  Its seam ghosts are exchanged
          !! (periodic wrap and the tripolar fold, as a scalar) every outer step before the
          !! assembly, because the bulk forcing writes owned cells only.  Requires `enable = .true.`
-         !! and `&ocean_bulk_flux_nml enable` (its only writer).  Default off: `p_surf` stays the
+         !! and `[ocean.bulk_flux] enable` (its only writer).  Default off: `p_surf` stays the
          !! configure-time seed (`p_surf_const`) whatever the bulk forcing computes, which is what
          !! every run did before `ice_load` existed => bit-identical.
       logical :: ice_load_balance_ic = .true.
@@ -3054,7 +3054,7 @@ module rdb_config
          !! seam-exchanged load).  Ignored without `ice_load`.
    end type ocean_psurf_config_t
    type :: ocean_cavity_dyn_config_t
-      !! Static ice-shelf cavity GEOMETRY (`&ocean_cavity_dyn_nml`,
+      !! Static ice-shelf cavity GEOMETRY (`[ocean.cavity_dyn]`,
       !! Phase 5.1).  A prescribed, time-constant ice draft `z_draft(i,j)`
       !! (m, positive DOWN — the depth of the ice base below `z = 0`) is
       !! laid over the bed and absorbed into the barotropic DATUM:
@@ -3074,8 +3074,8 @@ module rdb_config
       !!     ms%p_top = metrics%p_ice_ref + sf%p_surf
       !!
       !! whose consumers are the FV_MOM6 surface BC
-      !! (`&ocean_pgf_nml p_top_in_bc`, REQUIRED unless the draft is
-      !! uniform) and the in-situ EOS pressure (`&ocean_psurf_nml
+      !! (`[ocean.pgf] p_top_in_bc`, REQUIRED unless the draft is
+      !! uniform) and the in-situ EOS pressure (`[ocean.psurf]
       !! in_eos`).  The load is deliberately NOT added to `sf%p_surf`:
       !! the datum `bt_H_ref = b - z_draft` already carries its whole
       !! barotropic effect, and `eta_ib` is built from the assembled
@@ -3086,7 +3086,7 @@ module rdb_config
       !! Knob table: `docs/generated_nml_knobs.md`.
       logical :: enable = .false.
          !! Master switch.  Requires the ocean multilayer path, the split
-         !! solver, `&ocean_pgf_nml form="fv_mom6"`, `vcoord_type` in
+         !! solver, `[ocean.pgf] form="fv_mom6"`, `vcoord_type` in
          !! {sigma, zstar} and a single rank; mutually exclusive with
          !! wet/dry, porous barriers, sea ice, `bt_halo > 0`, tidal SAL
          !! and `gfs_scale /= 1` (every one of those fails loud at
@@ -3121,7 +3121,7 @@ module rdb_config
          !! of x).  Positive deepens the ice base toward +x.  Converted
          !! from metres to GRID units at the dispatch (metres on a
          !! Cartesian grid, degrees on spherical/curvilinear), the same
-         !! way `&ocean_topo_nml slope_scale` is.
+         !! way `[ocean.topo] slope_scale` is.
       real(wp) :: draft_x0 = -1.0e30_wp
          !! Western edge of the shelf box (m, GLOBAL physical coordinate),
          !! and the ANCHOR of the `"linear"` profile (`draft_depth` is the
@@ -3146,7 +3146,7 @@ module rdb_config
          !! time coordinate variable; RECORD 1 is read and the field is
          !! never re-read.  There is NO horizontal interpolation: the file
          !! must already be on the model grid (`nx x ny` physical cells),
-         !! exactly as `bathymetry_file` and `&ocean_zinit_nml file`
+         !! exactly as `bathymetry_file` and `[ocean.zinit] file`
          !! require.  Single rank only (fail-loud otherwise).
       character(len=64) :: draft_var = "iceDraft"
          !! `draft_config="file"`: name of the 2-D variable to read.  The
@@ -3192,30 +3192,30 @@ module rdb_config
          !! REFERENCE density; a stratified column's displaced water weighs
          !! `g*int_{-z_draft}^{0} rho dz`, and the difference is a depth-
          !! uniform bottom-pressure gradient the MOM6 barotropic split
-         !! (`&ocean_bt_nml bc_pgf_forcing`) adjusts to.  With the knob on,
+         !! (`[ocean.bt] bc_pgf_forcing`) adjusts to.  With the knob on,
          !! the load is kept (the ice MASS is what is prescribed) and each
          !! loaded column's initial top is moved to the depth `s` where
          !! `g*int_{-s}^{0} rho dz = p_ice_ref`, i.e. an initial
          !! `eta = z_draft - s` (a few cm under ISOMIP+ COLD), with T/S
          !! then evaluated at the trimmed layer centres.  Closed form, exact at
-         !! the discrete FV interfaces: requires `&ocean_eos_nml
-         !! eos="linear"` and `&ocean_zinit_nml enable, source="linear"`
+         !! the discrete FV interfaces: requires `[ocean.eos]
+         !! eos="linear"` and `[ocean.zinit] enable, source="linear"`
          !! (the analytic profile is what defines `rho` above the ice
          !! base); anything else fails loud.  Default off => bit-identical.
    end type ocean_cavity_dyn_config_t
 
    type :: ocean_cavity_melt_config_t
-      !! Ice-shelf basal-melt THERMODYNAMICS (`&ocean_cavity_melt_nml`,
+      !! Ice-shelf basal-melt THERMODYNAMICS (`[ocean.cavity_melt]`,
       !! Phase 2b).  The three-equation interface of Holland & Jenkins
       !! (1999), solved once per thermo step on every ice-covered column
       !! and delivered to the ocean as two OWNED surface-flux components
       !! (`heat_cavity`, `salt_cavity`).
       !!
       !! GEOMETRY IS A DIFFERENT GROUP.  The draft, the cover mask and
-      !! the barotropic datum are `&ocean_cavity_dyn_nml`'s, and this
+      !! the barotropic datum are `[ocean.cavity_dyn]`'s, and this
       !! group REQUIRES it: without a draft there is no interface to melt
       !! and `cover_frac` is identically zero.  The split is the
-      !! per-concern sub-namelist convention, and it is also the honest
+      !! per-concern sub-input convention, and it is also the honest
       !! one — a datum-only cavity run is a legitimate configuration.
       !!
       !! VIRTUAL OR REAL MASS — `freshwater` picks (Phase 3).
@@ -3229,14 +3229,14 @@ module rdb_config
       !! component written, byte-identical.  Knob table:
       !! `docs/generated_nml_knobs.md`.
       logical :: enable = .false.
-         !! Master switch.  Requires `&ocean_cavity_dyn_nml enable`,
-         !! `&ocean_eos_nml tfreeze_set="isomip"` and
-         !! `&ocean_forcing_nml enable_components`; mutually exclusive
+         !! Master switch.  Requires `[ocean.cavity_dyn] enable`,
+         !! `[ocean.eos] tfreeze_set="isomip"` and
+         !! `[ocean.forcing] enable_components`; mutually exclusive
          !! with atmospheric surface forcing (wind stress, surface
          !! restoring, shortwave penetration, the uniform scalar
          !! `q_heat`/`q_salt`) until the per-cell cover mask lands, and
          !! with sea ice.  Every one of those fails loud at configure,
-         !! naming the knob and the follow-up.  `&ocean_psurf_nml`
+         !! naming the knob and the follow-up.  `[ocean.psurf]`
          !! composes freely: the liquidus reads the ASSEMBLED
          !! `ms%p_top = p_ice_ref + sf%p_surf`, so an atmospheric load
          !! under the shelf depresses the freezing point with no extra
@@ -3410,7 +3410,7 @@ module rdb_config
          !! at setup: `angstrom_h` on VCOORD_LAGRANGIAN, else 0 (⇒ the floor is
          !! inert on non-Lagrangian coords).  Default `.false.` ⇒ untaken
          !! branches only ⇒ bit-identical.  Fail-loud composed with
-         !! `&ocean_wetdry_nml enable` (that module owns its own barotropic
+         !! `[ocean.wetdry] enable` (that module owns its own barotropic
          !! limiter; composition deferred).
       logical :: renorm_consistent_flux = .true.
          !! Continuous flux model in the `uhbt`/`vhbt` Newton
@@ -3432,7 +3432,7 @@ module rdb_config
          !! model.  Ignored by the wet/dry single-step form.
    end type ocean_continuity_config_t
    type :: ocean_isopycnal_config_t
-      !! `&ocean_isopycnal_nml`: grounding-stability controls for the
+      !! `[ocean.isopycnal]`: grounding-stability controls for the
       !! Lagrangian (isopycnal-class, remap-free) vertical coordinate.
       !! Every knob here engages ONLY under sim_type='ocean' +
       !! VCOORD_LAGRANGIAN, so the whole group is bit-identical on every other
@@ -3450,7 +3450,7 @@ module rdb_config
          !! by the stored floored thickness, so tracer CONTENT is kept and c is
          !! diluted; exception: an overdrawn cell (h_new <= H_DIV_EPS) keeps c,
          !! so the floor creates at most angstrom_h*c there. NOT YET SUPPORTED
-         !! with `&ocean_vmix_nml dt_tracer_advect_ratio > 1` (the windowed
+         !! with `[ocean.vmix] dt_tracer_advect_ratio > 1` (the windowed
          !! drain does not carry the added thickness): `validate_config`
          !! refuses it unless `conservative_floor` is on. Temporary limit.
       logical :: reset_vanished_u = .false.
@@ -3535,9 +3535,9 @@ module rdb_config
       !! and Coriolis tilt (beta / y_ref) alongside the bathymetry
       !! profile, because all of them live in the same logical
       !! "set up the box and what's pushing it" slot at init — the
-      !! `&ocean_topo_nml` block is read once before the IC is
+      !! `[ocean.topo]` block is read once before the IC is
       !! seeded.  This grouping is settled (reviewed 2026-05-27);
-      !! the `form` knob in `&ocean_coriolis_nml` is the *scheme*
+      !! the `form` knob in `[ocean.coriolis]` is the *scheme*
       !! selector (Sadourny vs HK), distinct from the `beta`/`y_ref`
       !! *parameters* here.
       character(len=16) :: topo_config = "flat"
@@ -3739,7 +3739,7 @@ module rdb_config
          !! start of the geostrophic-adjustment problem).
    end type ocean_ic_config_t
    type :: ocean_zinit_config_t
-      !! Z-level T/S initial-condition overlay (`&ocean_zinit_nml`,
+      !! Z-level T/S initial-condition overlay (`[ocean.zinit]`,
       !! capability A2).  Reads pre-regridded T/S from a model-grid
       !! NetCDF and interpolates linearly in depth onto the seeded
       !! layer-centre depths, overwriting any analytical T/S.  All
@@ -3761,7 +3761,7 @@ module rdb_config
          !! lin_ds_dz*z` at every layer centre's true geopotential depth
          !! — no file, no interpolation, defined on ghosts and land too.
          !! This is the profile an idealised sloping-lid cavity (or any
-         !! ISOMIP+-style case) needs: the `&tracer_nml T_init_surface` /
+         !! ISOMIP+-style case) needs: the `[tracer] T_init_surface` /
          !! `T_init_bottom` family is linear in LAYER INDEX, so under a
          !! terrain-following coordinate with a tilted lid it tilts the
          !! isopycnals with the coordinate and the column is NOT at rest.
@@ -3770,7 +3770,7 @@ module rdb_config
          !!
          !!   * `"pot_prac"` (DEFAULT => bit-identical) -- potential
          !!     temperature (degC) and practical salinity, as World Ocean
-         !!     Atlas `ptemp` / `salt` do.  Under `&ocean_eos_nml
+         !!     Atlas `ptemp` / `salt` do.  Under `[ocean.eos]
          !!     ts_convention = "cons_abs"` they are converted on the host,
          !!     after the depth interpolation and before the device map:
          !!     SA = sr_from_sp(SP) FIRST, then CT = ct_from_pt(SA, theta)
@@ -3803,7 +3803,7 @@ module rdb_config
          !! `source = "linear"`: temperature (degC) at the `z = 0` datum.
       real(wp) :: lin_dt_dz = 0.0_wp
          !! `source = "linear"`: `dT/dz` (degC/m) with **z positive UP**
-         !! — the same convention as `&ocean_ic_nml eady_dT_dz`.  A
+         !! — the same convention as `[ocean.ic] eady_dT_dz`.  A
          !! thermally STABLE column has `lin_dt_dz > 0` (warm on top).
          !! `0` (the default) is a uniform column.
       real(wp) :: lin_s_ref = 35.0_wp
@@ -3815,14 +3815,14 @@ module rdb_config
          !! `lin_ds_dz < 0`.  `0` (the default) is a uniform column.
    end type ocean_zinit_config_t
    type :: ocean_data_config_t
-      !! `&ocean_data_nml`: the shared time-varying NetCDF input reader
+      !! `[ocean.data]`: the shared time-varying NetCDF input reader
       !! (`rdb_ocean_data_input`, PR-14).  Deliberately two knobs — this
       !! group carries NO per-field entries.  Registration is
       !! programmatic: each consumer (surface forcing, OBC segments,
       !! sponge targets, tidal-mixing maps, ...) calls
-      !! `ocean_data_input_register_2d/_3d` from its OWN namelist group
+      !! `ocean_data_input_register_2d/_3d` from its OWN input group
       !! at setup and gets back an opaque `id`.  A field never appears
-      !! here.  Zero registered fields on every shipped namelist today
+      !! here.  Zero registered fields on every shipped input today
       !! ⇒ `ocean_data_input_update_all` is a no-op ⇒ bit-identical.
       integer :: max_fields = 16
          !! Size of the reader's field registry.  A registration beyond
@@ -3833,7 +3833,7 @@ module rdb_config
          !! time) via `logger%info`.  Default off — quiet per-step path.
    end type ocean_data_config_t
    type :: dataovr_entry_config_t
-      !! One file-driven surface-forcing tag in `&ocean_dataovr_nml`.
+      !! One file-driven surface-forcing tag in `[ocean.dataovr]`.
       !! A blank `file` means "this tag is not file-driven" — the slot
       !! keeps whatever the configure-time scalar/formula path seeded.
       character(len=256) :: file = ""
@@ -3849,9 +3849,9 @@ module rdb_config
          !! Added after `scale`, once at read.
    end type dataovr_entry_config_t
    type :: ocean_dataovr_config_t
-      !! `&ocean_dataovr_nml`: file-backed surface forcing (PR-15, the A3
+      !! `[ocean.dataovr]`: file-backed surface forcing (PR-15, the A3
       !! keystone consumer).  Binds time-varying NetCDF fields, through
-      !! the shared PR-14 reader (`&ocean_data_nml`), onto the surface
+      !! the shared PR-14 reader (`[ocean.data]`), onto the surface
       !! stress and surface-flux slots.  `enable = .false.` registers
       !! nothing ⇒ `ocean_data_input_update_all` stays a no-op ⇒
       !! bit-identical.
@@ -3861,7 +3861,7 @@ module rdb_config
       !! `ocean_surface_flux_assemble` fully overwrites those two from
       !! the components every thermo step — a direct write would be
       !! silently clobbered.  They therefore require
-      !! `&ocean_forcing_nml enable_components = .true.` (fail-loud
+      !! `[ocean.forcing] enable_components = true` (fail-loud
       !! otherwise).  Sign conventions are inherited from the component
       !! slots: `evap <= 0`, `lprec >= 0`, both kg/m^2/s.
       logical :: enable = .false.
@@ -3900,7 +3900,7 @@ module rdb_config
          !! Liquid runoff mass flux (kg/m^2/s, >= 0, INTO the ocean) ->
          !! `surface_flux%lrunoff`.  Already on the model grid, non-zero only on
          !! WET cells (a value on a land cell aborts); see
-         !! `tools/om_runoff_to_model.f90`.  Needs `&ocean_forcing_nml freshwater`
+         !! `tools/om_runoff_to_model.f90`.  Needs `[ocean.forcing] freshwater`
          !! `"virtual"` or `"mass"` (inert, hence refused, under `"none"`).
       type(dataovr_entry_config_t) :: frunoff
          !! Frozen runoff / calving mass flux (kg/m^2/s, >= 0) ->
@@ -3909,7 +3909,7 @@ module rdb_config
    end type ocean_dataovr_config_t
 
    type :: ocean_atm_forcing_config_t
-      !! `&ocean_atm_forcing_nml`: JRA55-do-style prescribed atmospheric
+      !! `[ocean.atm_forcing]`: JRA55-do-style prescribed atmospheric
       !! state (PR-C2c), read through nine `register_2d_filelist`
       !! instances and driving the bulk-flux-computed ocean/ice surface
       !! fluxes.  Default `enable = .false.` registers nothing ⇒
@@ -4103,17 +4103,17 @@ module rdb_config
          !! catalog (`rdb_ocean_diag_derived`) is added.  Example:
          !! `"vorticity_z:1d  KE:off  temperature:6h:mean"`.  Default empty => the
          !! canonical set unchanged => bit-identical output for existing
-         !! namelists.  An unknown name fails loud at setup.  (Per-diagnostic
+         !! inputs.  An unknown name fails loud at setup.  (Per-diagnostic
          !! vertical-coordinate attributes — `z*`/`sigma` — land with the
          !! multi-coordinate remap; today every diag uses the global `vgrid`.)
    end type ocean_diag_config_t
 
    integer, parameter, public :: OBC_MAX_TIDAL_CFG = 8
-      !! Maximum tidal constituents per edge in the &ocean_bc_nml namelist.
+      !! Maximum tidal constituents per edge in the [ocean.bc] input.
       !! Mirrors OBC_MAX_TIDAL_CONSTITUENTS in rdb_ocean_boundary_types.
 
    type :: ocean_bc_config_t
-      !! Boundary-condition configuration read from `&ocean_bc_nml`.
+      !! Boundary-condition configuration read from `[ocean.bc]`.
       !! All defaults reproduce a closed-wall run — existing nmls that
       !! omit this block are bit-identical to prior behaviour.
       character(len=16) :: west = "wall"
@@ -4210,7 +4210,7 @@ module rdb_config
          !! Apply the 18.6-yr nodal factor `f_c` + equilibrium/nodal phase
          !! `(V_c + u_c)` to the open-boundary tidal elevation forcing, keeping
          !! the interior body tide and the boundary tide phase-consistent (same
-         !! generator, same shared `&ocean_tides_nml` reference epoch).  Default
+         !! generator, same shared `[ocean.tides]` reference epoch).  Default
          !! .false. ⇒ legacy static-phase OBC sum (bit-identical).  When .true.
          !! the `*_tidal_phase` becomes a Greenwich phase LAG (subtracted).
 
@@ -4246,23 +4246,23 @@ module rdb_config
       type(ocean_coriolis_config_t)   :: coriolis
       type(ocean_thermo_config_t)     :: thermo
       type(ocean_forcing_config_t)    :: forcing
-         !! Surface-flux component-set gate (`&ocean_forcing_nml`, PR-12).
+         !! Surface-flux component-set gate (`[ocean.forcing]`, PR-12).
          !! Default off ⇒ byte-identical.
       type(ocean_ice_config_t)        :: ice
-         !! Sea-ice slot config (`&ocean_ice_nml`).  Default off ⇒
+         !! Sea-ice slot config (`[ocean.ice]`).  Default off ⇒
          !! byte-identical (PR 0 scaffold).
       type(ocean_ice_thermo_config_t) :: ice_thermo
-         !! CICE-port thermo/ITD knobs (`&ocean_ice_thermo_nml`).
+         !! CICE-port thermo/ITD knobs (`[ocean.ice_thermo]`).
       type(ocean_ice_sw_config_t)     :: ice_sw
-         !! CICE-port albedo knobs (`&ocean_ice_sw_nml`).
+         !! CICE-port albedo knobs (`[ocean.ice_sw]`).
       type(ocean_ice_ridge_config_t)  :: ice_ridge
-         !! CICE-port ridging/strength knobs (`&ocean_ice_ridge_nml`).
+         !! CICE-port ridging/strength knobs (`[ocean.ice_ridge]`).
       type(ocean_ice_atm_config_t)    :: ice_atm
-         !! CICE-port atmosphere boundary-layer knobs (`&ocean_ice_atm_nml`).
+         !! CICE-port atmosphere boundary-layer knobs (`[ocean.ice_atm]`).
       type(ocean_ice_dyn_config_t)    :: ice_dyn
-         !! CICE-port ice dynamics/transport knobs (`&ocean_ice_dyn_nml`).
+         !! CICE-port ice dynamics/transport knobs (`[ocean.ice_dyn]`).
       type(ocean_ice_ic_config_t)     :: ice_ic
-         !! Sea-ice initial-condition config (`&ocean_ice_ic_nml`, PR 24).
+         !! Sea-ice initial-condition config (`[ocean.ice_ic]`, PR 24).
          !! Default `conc_config="zero"` ⇒ byte-identical.
       type(ocean_restore_config_t)    :: restore
       type(ocean_geothermal_config_t) :: geothermal
@@ -4270,16 +4270,16 @@ module rdb_config
       type(ocean_tracers_config_t)    :: tracers
       type(ocean_bt_config_t)         :: bt
       type(ocean_debug_config_t)      :: debug
-         !! Forensic probes (`&ocean_debug_nml`).  Default all-off ⇒
+         !! Forensic probes (`[ocean.debug]`).  Default all-off ⇒
          !! bit-identical.
       type(ocean_pgf_config_t)        :: pgf
       type(ocean_eos_config_t)        :: eos
       type(ocean_bdrag_config_t)      :: bdrag
       type(ocean_tdrag_config_t)      :: tdrag
-         !! Ice-shelf TOP drag (`&ocean_tdrag_nml`).  Default off ⇒
+         !! Ice-shelf TOP drag (`[ocean.tdrag]`).  Default off ⇒
          !! bit-identical.
       type(ocean_hdiff_config_t)      :: hdiff
-         !! Along-coordinate tracer Laplacian (`&ocean_hdiff_nml`).
+         !! Along-coordinate tracer Laplacian (`[ocean.hdiff]`).
          !! Default `kappa_h = 0.0` ⇒ bit-identical.
       type(ocean_hvisc_config_t)      :: hvisc
       type(ocean_vmix_config_t)       :: vmix
@@ -4301,44 +4301,44 @@ module rdb_config
       type(ocean_tides_config_t)      :: tides
       type(ocean_psurf_config_t)      :: psurf
       type(ocean_cavity_dyn_config_t) :: cavity_dyn
-         !! Static ice-shelf cavity geometry (`&ocean_cavity_dyn_nml`).
+         !! Static ice-shelf cavity geometry (`[ocean.cavity_dyn]`).
          !! Default-OFF ⇒ bit-identical.
       type(ocean_cavity_melt_config_t) :: cavity_melt
          !! Ice-shelf basal-melt thermodynamics
-         !! (`&ocean_cavity_melt_nml`).  Default-OFF ⇒ bit-identical.
+         !! (`[ocean.cavity_melt]`).  Default-OFF ⇒ bit-identical.
       type(ocean_continuity_config_t)  :: continuity
       type(ocean_isopycnal_config_t)   :: isopycnal
-         !! Lagrangian grounding-stability controls (`&ocean_isopycnal_nml`).
+         !! Lagrangian grounding-stability controls (`[ocean.isopycnal]`).
          !! Default-OFF ⇒ bit-identical.
       type(ocean_topo_config_t)        :: topo
       type(ocean_ic_config_t)         :: ic
       type(ocean_zinit_config_t)      :: zinit
       type(ocean_data_config_t)       :: data
-         !! Shared time-varying NetCDF input reader (`&ocean_data_nml`,
+         !! Shared time-varying NetCDF input reader (`[ocean.data]`,
          !! PR-14).  Two knobs only — see `ocean_data_config_t`.
       type(ocean_dataovr_config_t)    :: dataovr
-         !! File-backed surface forcing (`&ocean_dataovr_nml`, PR-15) —
+         !! File-backed surface forcing (`[ocean.dataovr]`, PR-15) —
          !! the first production consumer of `data`.  Default-OFF ⇒
          !! bit-identical.
       type(ocean_atm_forcing_config_t) :: atm_forcing
          !! JRA55-do-style prescribed atmospheric state
-         !! (`&ocean_atm_forcing_nml`, PR-C2c).  Default-OFF ⇒
+         !! (`[ocean.atm_forcing]`, PR-C2c).  Default-OFF ⇒
          !! bit-identical.
       type(bulk_flux_config_t)        :: bulk_flux
-         !! Bulk-flux kernel configuration (`&ocean_bulk_flux_nml`).
+         !! Bulk-flux kernel configuration (`[ocean.bulk_flux]`).
          !! Default-OFF ⇒ bit-identical. `enable` is REQUIRED (set it
          !! explicitly) whenever `atm_forcing%enable` is on --
          !! `validate_config` refuses atm forcing without it.
       type(ocean_diag_config_t)       :: diag
       type(ocean_bc_config_t)         :: bc
-         !! Open-boundary condition config (`&ocean_bc_nml`).
+         !! Open-boundary condition config (`[ocean.bc]`).
          !! All defaults = wall — existing nmls without this block are
          !! bit-identical to prior behaviour.
       type(ocean_wetdry_config_t)     :: wetdry
-         !! Dynamic wetting/drying (`&ocean_wetdry_nml`).  Default off ⇒
+         !! Dynamic wetting/drying (`[ocean.wetdry]`).  Default off ⇒
          !! byte-identical.
       type(ocean_mpi_config_t)        :: mpi
-         !! Multi-rank MPI debug / tuning controls (`&ocean_mpi_nml`).
+         !! Multi-rank MPI debug / tuning controls (`[ocean.mpi]`).
          !! Default off ⇒ bit-identical.
    end type ocean_config_t
 
@@ -4348,7 +4348,7 @@ module rdb_config
       ! Simulation regime.  "ocean" (Arakawa C-grid + continuity-PPM) is
       ! the only regime this build ships — the coastal A-grid path was
       ! carved out into its own repository.  Retained as a knob so an
-      ! existing namelist keeps parsing; validate_config rejects any other
+      ! existing input keeps parsing; validate_config rejects any other
       ! value.  See docs/ROADMAP_OCEAN.md.
       character(len=16) :: sim_type = "ocean"
          !! Simulation regime: "coastal" or "ocean"
@@ -4395,16 +4395,16 @@ module rdb_config
       integer :: cfl_interval = 1
          !! Recompute CFL timestep every N steps (1 = every step)
       character(len=32) :: start_date = ""
-         !! `&time_nml`: proleptic-Gregorian calendar date the model
+         !! `[time]`: proleptic-Gregorian calendar date the model
          !! clock's `t=0` corresponds to ("YYYY-MM-DD" or "YYYY-MM-DD
          !! hh:mm:ss"). Empty (the default) leaves `t` a plain relative
-         !! clock -- bit-identical to every namelist shipped before this
+         !! clock -- bit-identical to every input shipped before this
          !! knob existed. Validated at `validate_config` (parsed via
          !! `rdb_calendar::parse_date`); consumed by the absolute-date
          !! forcing readers of later OM3 waves, not by anything in this
          !! wave.
       character(len=24) :: calendar = "gregorian"
-         !! `&time_nml`: calendar backing `start_date`. Only proleptic
+         !! `[time]`: calendar backing `start_date`. Only proleptic
          !! Gregorian is implemented
          !! (`rdb_calendar::calendar_name_is_implemented` --
          !! gregorian/standard/proleptic_gregorian all mean the same day
@@ -4414,7 +4414,7 @@ module rdb_config
          !! Unit applied to the long-time fields: `t_end`,
          !! `status_interval` (logging cadence), `ocean_diag_dt_out`
          !! (diag-write cadence).  `dt_fixed` and `dt_max` stay in
-         !! seconds — see their docstrings.  Read at namelist parse,
+         !! seconds — see their docstrings.  Read at input parse,
          !! then multiplied through so the rest of the code keeps
          !! using seconds internally.  Valid values: `"s"`, `"min"`,
          !! `"hr"`, `"day"`, `"year"`.  Year is 365.25 days (Julian,
@@ -4520,7 +4520,7 @@ module rdb_config
          !! VESTIGIAL: its only consumers were the coastal solvers, which
          !! left with the carve-out, so nothing reads it today.  The
          !! along-coordinate equivalent is the separate
-         !! `&ocean_hdiff_nml kappa_h` knob (`rdb_ocean_hdiff_tracer`).
+         !! `[ocean.hdiff] kappa_h` knob (`rdb_ocean_hdiff_tracer`).
          !! Smooths sharp density fronts to reduce BPG overshoot.
          !! Typical values: 1-10 m^2/s depending on grid resolution.
 
@@ -4542,11 +4542,11 @@ module rdb_config
          !! Initial salinity at the bed (k=1, PSU).
       real(wp) :: S_ref = LEGACY_TRACER_S_REF
          !! RETIRED coastal-legacy EOS reference salinity (PSU).  The live
-         !! ocean-path spelling is `&ocean_ic_nml S_ref`; moving this one
+         !! ocean-path spelling is `[ocean.ic] S_ref`; moving this one
          !! off its default is a fail-loud configure error.
       real(wp) :: beta_S = LEGACY_TRACER_BETA_S
          !! RETIRED coastal-legacy haline contraction coefficient
-         !! (kg/m^3 per PSU).  Live spelling: `&ocean_ic_nml beta_S`.
+         !! (kg/m^3 per PSU).  Live spelling: `[ocean.ic] beta_S`.
       real(wp) :: S_min = 0.0_wp
          !! Lower physical bound for salinity (PSU)
       real(wp) :: S_max = 40.0_wp
@@ -4568,11 +4568,11 @@ module rdb_config
          !! Initial temperature at the bed (k=1, degC).
       real(wp) :: T_ref = LEGACY_TRACER_T_REF
          !! RETIRED coastal-legacy EOS reference temperature (degC).  The
-         !! live ocean-path spelling is `&ocean_ic_nml T_ref`; moving this
+         !! live ocean-path spelling is `[ocean.ic] T_ref`; moving this
          !! one off its default is a fail-loud configure error.
       real(wp) :: alpha_T = LEGACY_TRACER_ALPHA_T
          !! RETIRED coastal-legacy thermal expansion coefficient
-         !! (kg/m^3 per degC).  Live spelling: `&ocean_ic_nml alpha_T`.
+         !! (kg/m^3 per degC).  Live spelling: `[ocean.ic] alpha_T`.
       real(wp) :: T_min = -2.0_wp
          !! Lower physical bound for temperature (degC); seawater freezing
       real(wp) :: T_max = 40.0_wp
@@ -4745,7 +4745,7 @@ module rdb_config
          !! byte-identical), `"list"` (the thicknesses in `z_fixed_dz`,
          !! surface first) or `"tanh"` (a hyperbolic-tangent stretching
          !! from `z_fixed_dz_top` at the surface, scaled to sum to
-         !! `&ocean_topo_nml max_depth`; see `rdb_vcoord ::
+         !! `[ocean.topo] max_depth`; see `rdb_vcoord ::
          !! z_fixed_nominal_dz`).  The z_fixed target builder, the
          !! closed-face mask, `k_top`, the cavity partial-top rule and the
          !! bed partial-cell rule all read the profile.
@@ -4878,7 +4878,7 @@ module rdb_config
          !! topo, ic, diag).  PR-B1 migrates knobs from this struct's
          !! flat fields into the nested form one group at a time —
          !! callers go from `cfg%ocean_X` → `cfg%ocean%group%X`.
-         !! PR-B2 will split the giant `&ocean_setup_nml` to match.
+         !! PR-B2 will split the giant `[ocean.setup]` to match.
    end type config_t
 
    interface
@@ -5608,7 +5608,7 @@ module rdb_config
 contains
 
    pure function bt_dtbt_is_set(bt) result(is_set)
-      !! `.true.` when `&ocean_bt_nml dtbt` was given (differs from the
+      !! `.true.` when `[ocean.bt] dtbt` was given (differs from the
       !! `BT_DTBT_UNSET` sentinel).
       type(ocean_bt_config_t), intent(in) :: bt
       logical :: is_set
@@ -5617,7 +5617,7 @@ contains
 
    pure function bt_split_derived(bt) result(derived)
       !! `.true.` when `n_inner` is resolved at setup rather than read from
-      !! the namelist: `auto_n_inner` or an explicit `dtbt`.
+      !! the input: `auto_n_inner` or an explicit `dtbt`.
       type(ocean_bt_config_t), intent(in) :: bt
       logical :: derived
       derived = bt%auto_n_inner .or. bt_dtbt_is_set(bt)

@@ -388,7 +388,7 @@ contains
          max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic))
 
          call check(error, max_dT < 1.0e-14_wp, &
-                    "temperature hTr changed despite do_horizontal_advection = .false.")
+                    "temperature hTr changed despite do_horizontal_advection = false")
          if (allocated(error)) exit checks
          call check(error, max_dS > 1.0e-6_wp, &
                     "salinity hTr did not change — flow setup is insufficient")

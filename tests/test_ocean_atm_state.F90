@@ -275,7 +275,7 @@ contains
    end subroutine make_model
 
    subroutine base_cfg(cfg, start_date, filelist_path)
-      !! Every `&ocean_atm_forcing_nml` knob the provider reads, pointed
+      !! Every `[ocean.atm_forcing]` knob the provider reads, pointed
       !! at ONE shared filelist for all nine fields (the synthetic files
       !! below always carry all nine variable names). `var_<field>`
       !! keeps its default (== the JRA55-do tag), matching the variable
@@ -780,7 +780,7 @@ contains
       integer :: ierr
 
       call make_model(grid, metrics)
-      ! Default `config_t`: `&ocean_atm_forcing_nml enable = .false.`.
+      ! Default `config_t`: `[ocean.atm_forcing] enable = false`.
 
       call reader%init()
       call atm_state_configure(cfg, reader, grid, metrics, atm, ierr=ierr)
@@ -1247,7 +1247,7 @@ contains
    end subroutine test_sw_record_alignment
 
    subroutine test_sw_axis_checks(error)
-      !! Configure-time checks against the `rsds` file: (a) a namelist still
+      !! Configure-time checks against the `rsds` file: (a) an input still
       !! carrying `sw_offset_s = -5400` is REFUSED (it would silently
       !! reproduce the one-bucket-late record); (b) the averaging interval
       !! is derived from the file -- 6-hourly records with `sw_offset_s =

@@ -668,14 +668,14 @@ contains
 
       !$acc update self(A%ice%tau_ocn_x, A%ice%tau_ocn_y)
       call check(error, all(A%ice%tau_ocn_x == 0.0_wp) .and. all(A%ice%tau_ocn_y == 0.0_wp), &
-                 "dynamics=.false.: tau_ocn_x/y must stay exactly 0")
+                 "dynamics=false: tau_ocn_x/y must stay exactly 0")
       if (allocated(error)) then
          call teardown_ice(A, sfA)
          call cleanup_file(FN)
          return
       end if
       call check(error, A%ice%tau_ocn_valid < 0.5_wp, &
-                 "dynamics=.false.: tau_ocn_valid must stay 0.0")
+                 "dynamics=false: tau_ocn_valid must stay 0.0")
       if (allocated(error)) then
          call teardown_ice(A, sfA)
          call cleanup_file(FN)
@@ -699,10 +699,10 @@ contains
       !$acc update self(A%multilayer%h_layer, B%multilayer%h_layer)
       !$acc update self(A%barotropic%h, B%barotropic%h)
       ok = arrays_identical_3d(A%multilayer%h_layer, B%multilayer%h_layer)
-      call check(error, ok, "dynamics=.false.: h_layer not bit-identical")
+      call check(error, ok, "dynamics=false: h_layer not bit-identical")
       if (.not. allocated(error)) then
          ok = arrays_identical_2d(A%barotropic%h, B%barotropic%h)
-         call check(error, ok, "dynamics=.false.: barotropic h not bit-identical")
+         call check(error, ok, "dynamics=false: barotropic h not bit-identical")
       end if
 
       call teardown_ice(A, sfA)

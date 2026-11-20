@@ -1,4 +1,4 @@
-!! `&ocean_diag_nml output_precision` — diagnostic-stream output width.
+!! `[ocean.diag] output_precision` — diagnostic-stream output width.
 !!
 !! Diagnostic NetCDF output is write-bandwidth bound, so halving the
 !! element width is the lever on its cost.  The knob decouples the

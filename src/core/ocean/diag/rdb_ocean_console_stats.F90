@@ -148,7 +148,7 @@ contains
       !! surface-flux case (`acc_channel` -1.057E+15 -> -5.285E+14;
       !! `epbl_basin` -4.720E+16 -> -2.360E+16) while the Heat TOTAL matched
       !! to every printed digit, and the closed-budget residual went from
-      !! ~1e-13 to ~5e-4. Ten shipped namelists failed the stability suite's
+      !! ~1e-13 to ~5e-4. Ten shipped inputs failed the stability suite's
       !! conservation gate on that alone. Sole home of the mapping.
       logical, intent(in) :: is_pc
       real(wp) :: w
@@ -171,7 +171,7 @@ contains
       !! numerical-leak residual instead of flagging the source as a
       !! spurious leak (all three terms share the "positive into the ocean"
       !! sign convention). `sponge_sum` is `ms%heat_budget_sponge`'s
-      !! area-weighted reduction — zero unless `&ocean_sponge_nml
+      !! area-weighted reduction — zero unless `[ocean.sponge]
       !! enable=.true., relax_tracers=.true.` (the legacy band sponge's
       !! tracer sink stays un-instrumented; PR-23 replaced that gate with
       !! this fold, see `ocean_budget_is_active`'s docstring). Sole home of
@@ -190,7 +190,7 @@ contains
       !! sponge's tracer-relaxation source. Mirror of `ocean_heat_src_sum`
       !! without the geothermal term (salt has no geothermal analogue).
       !! `sponge_sum` is `ms%salt_budget_sponge`'s area-weighted reduction —
-      !! zero unless `&ocean_sponge_nml enable=.true., relax_tracers=.true.`.
+      !! zero unless `[ocean.sponge] enable=true, relax_tracers=true`.
       real(wp), intent(in) :: surface_sum, sponge_sum
       real(wp) :: s
       s = surface_sum + sponge_sum
@@ -230,7 +230,7 @@ contains
       !! skipped in `TR_MODE_ACCUMULATE`, so nothing filled the accumulator.
       !! That fall-back silently reported a live SURFACE HEAT FLUX as a 5e-5
       !! "leak" (the raw-drift column cannot subtract a source), which is what
-      !! the four `acc_channel` windowed namelists were failing on.  The
+      !! the four `acc_channel` windowed inputs were failing on.  The
       !! windowed path is now fully instrumented — `continuity_tracer_drain`'s
       !! sub-cycle and BOTH halves of the concentration hold accumulate into
       !! the same arrays (see `DRAIN_BUDGET_POST_AVERAGE_WEIGHT` in
@@ -343,7 +343,7 @@ contains
          !! Per-outer-step weight for the salt/heat budget accumulators, from
          !! `ocean_budget_stage_weight(is_pc)`.  Absent ⇒ the historical
          !! SSP-RK2 0.5 ⇒ bit-identical.  MUST be 1.0 under
-         !! `&ocean_bt_nml split_scheme="pred_corr"`, whose single prognostic
+         !! `[ocean.bt] split_scheme="pred_corr"`, whose single prognostic
          !! tracer update fills the accumulators once per step rather than
          !! twice; without it the reported `src`/`out` are exactly half and
          !! the closed-budget residual reads ~5e-4 instead of ~1e-13.
@@ -610,7 +610,7 @@ contains
       bud%mass_out = g_mass_out
       ! Tracked mass SOURCE — the mass twin of `salt_src`/`heat_src`.
       ! Zero on every path but the ice-shelf real-freshwater one
-      ! (`&ocean_cavity_melt_nml freshwater="mass"`) and its
+      ! (`[ocean.cavity_melt] freshwater="mass"`) and its
       ! `volume_compensation` sink, so the printed budget is unchanged
       ! elsewhere.  Already weighted per RK2 stage at accumulation time,
       ! exactly like `mass_out`, so no `bud_w` appears here.
@@ -620,7 +620,7 @@ contains
       ! Salt / heat closed budget: local per-cell integrals, allreduced, then
       ! the weight+sign+ρ scaling via the pure `ocean_budget_*` helpers.
       ! PR-23: `b_salt_sponge` / `b_heat_sponge` fold in alongside
-      ! `b_heat_geo` — zero unless `&ocean_sponge_nml enable=.true.,
+      ! `b_heat_geo` — zero unless `[ocean.sponge] enable=true,
       ! relax_tracers=.true.` OR the legacy `sponge_relax_tracers=.true.`.
       bud_w = RK2_STAGE_WEIGHT
       if (present(budget_stage_weight)) bud_w = budget_stage_weight
@@ -931,7 +931,7 @@ contains
    end function compute_total_ke
 
    ! -------- PR-32: EFP (order-invariant) reduction twins ------------
-   ! Behind `&ocean_diag_nml reproducing_sums` (default .false. ⇒ the FP
+   ! Behind `[ocean.diag] reproducing_sums` (default .false. ⇒ the FP
    ! kernels above run verbatim, byte-identical).  See `rdb_efp` for the
    ! fixed-point decomposition + the cross-rank combine
    ! (`halo_allreduce_efp_list`), and `docs/CAPABILITIES_AND_LIMITATIONS.md`
@@ -1302,7 +1302,7 @@ contains
       !!
       !! **GPU bug this works around** (reproduced on a V100, NVHPC 25.5,
       !! `validation_examples/ocean/sea_ice_pack/sea_ice_pack.toml`, the
-      !! default `&ocean_diag_nml reproducing_sums = .true.` path): the
+      !! default `[ocean.diag] reproducing_sums = true` path): the
       !! original implementation ran ONE `!$acc parallel loop
       !! reduction(...)` combining all 21 scalar accumulators
       !! (`ew*`/`ec*`/`eh*`) with ~17 more private scratch scalars AND an

@@ -14,7 +14,7 @@ contains
       !! land square is centred on the physical domain and spans the
       !! central `2*half_frac` fraction of each axis (e.g. `half_frac=0.2`
       !! ⇒ the middle 40 % is land).  `half_frac` is taken from
-      !! `&ocean_topo_nml slope_scale` at the call site (no new knob).
+      !! `[ocean.topo] slope_scale` at the call site (no new knob).
       !!
       !! Fills the FULL array including ghost rows (the formula-bathy
       !! ghost-fill gotcha): a ghost `b=0` at a wall-adjacent face sends
@@ -86,7 +86,7 @@ contains
       !! the NORTHERN `(1-2*half_frac)` fraction of the physical-y axis
       !! (north = pole), leaving the southern `2*half_frac` band fully
       !! open as the reentrant channel.  `half_frac` is taken from
-      !! `&ocean_topo_nml slope_scale` (no new knob), default 0.2
+      !! `[ocean.topo] slope_scale` (no new knob), default 0.2
       !! ⇒ southern 40 % of the basin is the open channel.
       !!
       !! Fills the FULL array incl. ghosts (formula-bathy ghost-fill
@@ -303,14 +303,14 @@ contains
       !! anywhere downstream.
       !!
       !! `max_depth` is the deep clip, i.e. `-z_b,deep`; the protocol
-      !! value is `ISOMIP_ZB_DEEP` ⇒ `&ocean_topo_nml max_depth = 720.0`.
+      !! value is `ISOMIP_ZB_DEEP` ⇒ `[ocean.topo] max_depth = 720.0`.
       !!
       !! MINIMUM WATER COLUMN.  The protocol (their Sect. 3.1.5) asks for
       !! "the minimum ocean column as thin as can reasonably be achieved"
       !! and leaves the value to the modeller, with the choice being
       !! either to modify the topography or to mark the column land.
       !! Roundabout takes the second option and it is NOT this routine's
-      !! job: `&ocean_cavity_dyn_nml h_min_cavity` is the threshold and
+      !! job: `[ocean.cavity_dyn] h_min_cavity` is the threshold and
       !! `seed_wet_mask_impl(water, land_cutoff=h_min_cavity)` is where it
       !! bites, on `water = b - z_draft`.
       !!

@@ -85,7 +85,7 @@ contains
 
    subroutine test_default_in_step(error)
       !! The two halves of the default live in different modules -- the
-      !! `&ocean_bt_nml split_scheme` string in `rdb_config.F90` and the
+      !! `[ocean.bt] split_scheme` string in `rdb_config.F90` and the
       !! `ocean_dyn_t%split_scheme` enum here -- and `ocean_setup` only
       !! ever writes the second from the first, so a divergence is
       !! invisible to every production run and silently hides a scheme
@@ -99,7 +99,7 @@ contains
                  "ocean_dyn_t%split_scheme default must be SPLIT_SCHEME_PRED_CORR")
       if (allocated(error)) return
       call check(error, trim(cfg%ocean%bt%split_scheme) == "pred_corr", &
-                 "&ocean_bt_nml split_scheme default must be 'pred_corr'")
+                 "[ocean.bt] split_scheme default must be 'pred_corr'")
    end subroutine test_default_in_step
 
    subroutine run_case(split_scheme, at_rest, finite, mass_rel_err, max_speed)

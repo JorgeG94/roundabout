@@ -74,7 +74,7 @@ contains
 
       ! P5.2 — THE LOAD MUST HAVE A CONSUMER WHEN IT HAS A GRADIENT.
       !
-      ! `&ocean_pgf_nml p_top_in_bc` is the only route by which a cavity
+      ! `[ocean.pgf] p_top_in_bc` is the only route by which a cavity
       ! load reaches the pressure stack, and a cavity whose draft VARIES
       ! is not in hydrostatic balance without it: `pa(nz+1)` then carries
       ! the uncancelled `-rho_ref*g*z_draft`, so the stack sits ~5e6 Pa
@@ -83,7 +83,7 @@ contains
       ! depth-mean replacement — feels a raw `g*grad(z_draft)` ~ 0.1 m/s^2,
       ! and a non-uniform barotropic-correction weight turns the
       ! uncancelled depth-uniform force into a real per-layer shear.
-      ! Refused, not auto-enabled: the namelist should say what the run does.
+      ! Refused, not auto-enabled: the input should say what the run does.
       !
       ! EXEMPTION, and it is a theorem rather than a courtesy: a draft
       ! that is UNIFORM over the whole array has a load with no gradient,
@@ -91,7 +91,7 @@ contains
       ! (`test_ocean_pgf_p_top_bc::uniform_p_top_bit_identical`).  Such a
       ! run — the flat-lid datum-equivalence case — is refused by nothing.
       !
-      ! Tested on the FILLED array, not on the namelist shape: land
+      ! Tested on the FILLED array, not on the input shape: land
       ! exclusion can zero `z_draft` under a formula that looks uniform.
       ! `validate_config` carries the same refusal on the config-level
       ! predicate so the user meets it before any state is built.
@@ -103,8 +103,8 @@ contains
          call grid_allreduce_min(grid, minval(ocean_state%metrics%z_draft), g_min)
          if (g_max /= g_min) then
             call grid_allreduce_max(grid, maxval(ocean_state%metrics%p_ice_ref), pice_max)
-            call fail("&ocean_cavity_dyn_nml enable=.true. with a NON-UNIFORM "// &
-                      "draft requires &ocean_pgf_nml p_top_in_bc=.true.  The "// &
+            call fail("[ocean.cavity_dyn] enable=true with a NON-UNIFORM "// &
+                      "draft requires [ocean.pgf] p_top_in_bc=true  The "// &
                       "isostatic load rho_ref*g*z_draft would otherwise never "// &
                       "reach the FV_MOM6 pa(nz+1) surface boundary condition, "// &
                       "leaving the pressure stack ~"// &
@@ -200,7 +200,7 @@ contains
                                                              cfg%ocean%cavity_dyn%h_min_cavity, &
                                                              nx, ny), resid)
          if (.not. (resid <= datum_tol)) then
-            call fail("&ocean_cavity_dyn_nml: the barotropic datum and the ice "// &
+            call fail("[ocean.cavity_dyn]: the barotropic datum and the ice "// &
                       "draft disagree (max |bt_H_ref - (b - z_draft)| = "// &
                       to_string(resid)//" m > "//to_string(datum_tol)//" m).  The "// &
                       "ice load would then be counted twice, or not at all — check "// &
@@ -223,7 +223,7 @@ contains
       !     source rather than the derived views is what also silences
       !     the implicit vdiff stress fold and the MLE front sampler,
       !     which read `ss%tau_x` raw;
-      !   * the SCALAR `&ocean_thermo_nml q_heat` / `q_salt` fill, but
+      !   * the SCALAR `[ocean.thermo] q_heat` / `q_salt` fill, but
       !     ONLY when the component set is off.  With components on those
       !     two are assembler outputs and the mask belongs in
       !     `ocean_surface_flux_assemble` (a second writer here would
@@ -254,18 +254,18 @@ contains
                           "which the eta_forcing seam is built from")
          if (ocean_state%pressure_force%p_top_in_bc) then
             call logger%info("                  consumed by the FV_MOM6 pa(nz+1) "// &
-                             "surface BC (&ocean_pgf_nml p_top_in_bc)")
+                             "surface BC ([ocean.pgf] p_top_in_bc)")
          else
             call logger%info("                  the draft is UNIFORM here, so the "// &
                              "load has no gradient and the PGF top BC is provably "// &
-                             "inert; &ocean_pgf_nml p_top_in_bc is not required")
+                             "inert; [ocean.pgf] p_top_in_bc is not required")
          end if
       end if
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_cavity
 
    module subroutine configure_ocean_cavity_melt(cfg, ocean_state, grid, compute_rank, ierr)
-      !! Configure the ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`,
+      !! Configure the ice-shelf basal-melt slot (`[ocean.cavity_melt]`,
       !! P2b): copy the knobs onto the slot's three flat parameter
       !! bundles, resolve the `gamma_s` sentinel, build the per-column
       !! Coriolis array the `hj99` law needs, and CHECK that the
@@ -335,10 +335,10 @@ contains
       ! salt correction has to be the EXACT negation of the increment
       ! `apply_surface_src_2d_impl` stamped with `dt/sf%rho0`.  One
       ! source, no second literal, and `configure_ocean_reference_density`
-      ! has already run (it seeds `sf%rho0` from `&ocean_ic_nml rho_0`).
+      ! has already run (it seeds `sf%rho0` from `[ocean.ic] rho_0`).
       ocean_state%cavity_flux%rho0 = ocean_state%surface_flux%rho0
       if (ocean_state%cavity_flux%rho0 <= 0.0_wp) then
-         call fail("&ocean_cavity_melt_nml: the Boussinesq reference density "// &
+         call fail("[ocean.cavity_melt]: the Boussinesq reference density "// &
                    "reaching the melt slot is non-positive, so the mass -> volume "// &
                    "conversion m/rho_0 has no value.  configure_ocean_reference_"// &
                    "density must run before configure_ocean_cavity_melt.", ierr, &
@@ -364,7 +364,7 @@ contains
       ! `beta_S` there are the melt law's own calibrated constants, not
       ! copies of the Boussinesq `rho_0` — the same "out of scope on
       ! purpose" category the README's reference-density table already
-      ! lists `RHO_WATER` and `&ocean_ice_nml rho_ocean` under.
+      ! lists `RHO_WATER` and `[ocean.ice] rho_ocean` under.
       ! Overriding them would silently break ISOMIP+ comparability,
       ! which is the reason this path exists.
 
@@ -381,7 +381,7 @@ contains
              .not. (ocean_state%cavity_flux%open_area > 0.0_wp)) then
             ! Global verdict (the area is already the exact global sum), so
             ! every rank refuses together.
-            call fail("&ocean_cavity_melt_nml volume_compensation = 'uniform_open_ocean' "// &
+            call fail("[ocean.cavity_melt] volume_compensation = 'uniform_open_ocean' "// &
                       "needs open (uncovered, wet) ocean to remove the melt volume from, "// &
                       "but the global open area is 0 (the shelf covers every wet column): "// &
                       "the sink would silently do nothing and the domain would gain "// &
@@ -408,7 +408,7 @@ contains
                     nxp, nyp)
          call grid_allreduce_sum_i8(grid, int(n_zero_f, int64), n_own_glob)
          if (nz_glob > 0) then
-            call fail("&ocean_cavity_melt_nml exchange_law='hj99': "// &
+            call fail("[ocean.cavity_melt] exchange_law='hj99': "// &
                       to_string(n_own_glob)//" owned ice-covered wet column(s) sit at "// &
                       "f = 0.  Holland & Jenkins (1999) eq. (15) takes "// &
                       "ln(.../|f| h_nu) and eq. (18) divides by f*L_O, so the law "// &
@@ -437,7 +437,7 @@ contains
                    nxp, nyp)
       call grid_allreduce_sum_i8(grid, int(n_unloaded, int64), n_own_glob)
       if (nz_glob > 0) then
-         call fail("&ocean_cavity_melt_nml: "//to_string(n_own_glob)//" owned column(s) "// &
+         call fail("[ocean.cavity_melt]: "//to_string(n_own_glob)//" owned column(s) "// &
                    "have ms%p_top < metrics%p_ice_ref, so the top-of-column load was "// &
                    "never assembled.  The melt liquidus is a CONSUMER of ms%p_top; "// &
                    "its sole producer is configure_ocean_cavity "// &
@@ -491,7 +491,7 @@ contains
             call logger%warning("Ice-shelf basal melt: the meltwater is a VIRTUAL SALT "// &
                                 "FLUX — it carries no mass, so it adds no volume and no "// &
                                 "direct buoyancy.  That is a first-order limitation for "// &
-                                "cavity circulation; set &ocean_cavity_melt_nml "// &
+                                "cavity circulation; set [ocean.cavity_melt] "// &
                                 "freshwater='mass' for the real volume source.")
          end if
       end if
@@ -499,14 +499,14 @@ contains
    end subroutine configure_ocean_cavity_melt
 
    module subroutine configure_ocean_top_drag(cfg, ocean_state, grid, compute_rank)
-      !! Ice-shelf TOP drag (`&ocean_tdrag_nml`, Phase 4a): copy the
+      !! Ice-shelf TOP drag (`[ocean.tdrag]`, Phase 4a): copy the
       !! variant + coefficients onto the slot, project the static
       !! cell-centred `metrics%cover_frac` onto the velocity FACES, and
       !! enforce the ONE-`C_d` rule against the melt slot.
       !!
       !! Runs AFTER `configure_ocean_cavity_melt` (which is where the melt
       !! slot's `cdrag_top` is seeded, and which this routine then
-      !! overwrites from `&ocean_tdrag_nml cd` — `validate_config` has
+      !! overwrites from `[ocean.tdrag] cd` — `validate_config` has
       !! already refused a disagreement, so the assignment is structural,
       !! not a silent override) and AFTER the `cover_frac` halo exchange,
       !! and BEFORE `ocean_state_enter_data` so the host-filled face masks
@@ -533,25 +533,25 @@ contains
       ocean_state%tdrag%drag_bg_vel = cfg%ocean%tdrag%bg_vel
       ocean_state%tdrag%tbl_thick_min = cfg%ocean%tdrag%tbl_thick_min
       ocean_state%tdrag%implicit = cfg%ocean%tdrag%implicit
-      ! `&ocean_vdiff_nml implicit_top_drag` is the OTHER implicit form:
+      ! `[ocean.vdiff] implicit_top_drag` is the OTHER implicit form:
       ! the fold into the vdiff `k = nz` diagonal.  Latched on both slots
       ! — the top-drag kernel needs it to fill `lambda_top_u/v`, and the
       ! driver reads `td%implicit_fold` to skip the explicit apply.
       ! `validate_config` has already refused the double-count
-      ! (`implicit_top_drag` × `&ocean_tdrag_nml implicit`) and the
+      ! (`implicit_top_drag` × `[ocean.tdrag] implicit`) and the
       ! distributed case (`htbl > 0`).
       ocean_state%tdrag%implicit_fold = cfg%ocean%vdiff%implicit_top_drag
       ocean_state%vdiff%implicit_top_drag = cfg%ocean%vdiff%implicit_top_drag
       ! `rho0` is only ever used to scale the `stress_top` diagnostic into
       ! N/m^2; no dynamics reads it.  The one rho0 of record is
-      ! `&ocean_ic_nml rho_0` -> `eos%rho0`, already resolved by
+      ! `[ocean.ic] rho_0` -> `eos%rho0`, already resolved by
       ! `configure_ocean_reference_density` well before this point.
       ocean_state%tdrag%rho0 = ocean_state%eos%rho0
 
       ! Static face cover, OR of the two abutting cells (see
       ! `rdb_ocean_top_drag`'s module docstring for why OR at a calving
       ! front), plus the cell-centred copy the `stress_top` diagnostic
-      ! reads.  `cover_frac` is `&ocean_cavity_dyn_nml` geometry: filled
+      ! reads.  `cover_frac` is `[ocean.cavity_dyn]` geometry: filled
       ! in the IC seed, halo-exchanged by the engine, never touched again.
       call top_drag_fill_face_cover_impl(ocean_state%tdrag%cover_u, &
                                          ocean_state%tdrag%cover_v, &
@@ -593,7 +593,7 @@ contains
                           to_string(int(sum(ocean_state%tdrag%cover_v)))// &
                           " (OR of the two abutting cells)")
          if (cfg%ocean%cavity_melt%enable) then
-            call logger%info("  melt u* C_d:    taken from &ocean_tdrag_nml cd "// &
+            call logger%info("  melt u* C_d:    taken from [ocean.tdrag] cd "// &
                              "(one coefficient for momentum and melt)")
          end if
       end if

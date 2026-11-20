@@ -48,7 +48,7 @@ contains
       !!
       !! Deliberately EXCLUDED:
       !!   sf%Q_heat / sf%Q_salt with the surface-flux component set OFF
-      !!     (default) — configure-static: re-seeded from `&ocean_thermo_nml
+      !!     (default) — configure-static: re-seeded from `[ocean.thermo]
       !!     q_heat / q_salt` on every resume, and the sea-ice couplers'
       !!     contributions are folded back in from the registered
       !!     `ice_salt_flux_diag` / `ice_heat_flux_diag` / `ice_sw_thru_diag`
@@ -64,13 +64,13 @@ contains
       !!   bt_H_ref — recomputed from `b` by configure_ocean_bt_split;
       !!     `b` is bathymetry (static), reconstructed at config time.
       !!   metrics%z_draft / cover_frac / p_ice_ref — the ice-shelf cavity
-      !!     statics (`&ocean_cavity_dyn_nml`) fall under the SAME rule,
+      !!     statics (`[ocean.cavity_dyn]`) fall under the SAME rule,
       !!     and for the same reason: the draft is a PRESCRIBED, static
       !!     geometry, rebuilt at configure by `seed_cavity_draft` from
-      !!     the namelist before the restart read runs, exactly as `b` and
+      !!     the input before the restart read runs, exactly as `b` and
       !!     `bt_H_ref` are.  Checkpointing it would create the
-      !!     file-vs-namelist ambiguity the derived-field exclusion exists
-      !!     to avoid (does a saved draft beat an edited namelist?), and a
+      !!     file-vs-input ambiguity the derived-field exclusion exists
+      !!     to avoid (does a saved draft beat an edited input?), and a
       !!     resume whose draft disagreed with its datum would be
       !!     silently wrong — `bt_H_ref = b − z_draft` ties the two
       !!     together, so they must be rebuilt together or not at all.
@@ -159,7 +159,7 @@ contains
             end do
          end if
          ! --- pred_corr step time-means (SPEC S1).  Under
-         !     `&ocean_bt_nml split_scheme="pred_corr"` these are CARRIED
+         !     `[ocean.bt] split_scheme="pred_corr"` these are CARRIED
          !     STATE, not scratch: the predictor's Coriolis-advection and
          !     horizontal viscosity read u_av/v_av/h_av, and the dyn loop
          !     seeds them from the initial state only at
@@ -936,7 +936,7 @@ contains
          end if
          cfg_id = merge(1, 0, state%ice%dync%is_init)
          if (file_id /= cfg_id) then
-            call fail("Ocean restart "//trim(filename)//" was written with &ocean_ice_dyn_nml "// &
+            call fail("Ocean restart "//trim(filename)//" was written with [ocean.ice_dyn] "// &
                       "dyn_scheme = '"//merge("cice_c", "sis2_c", file_id == 1)// &
                       "' (a file without the scheme id is the existing 'sis2_c'), but this run is "// &
                       "configured with dyn_scheme = '"//merge("cice_c", "sis2_c", cfg_id == 1)// &
@@ -1020,7 +1020,7 @@ contains
                   st = nf90_inquire_dimension(ncid, dimids(3), len=len3)
                   if (st == nf90_noerr .and. len3 /= state%ice%ncat + 1) then
                      call logger%error("ice restart: the SIS2 checkpoint has "//to_string(len3 - 1)// &
-                                       " ice categories, this run's &ocean_ice_nml ncat is "// &
+                                       " ice categories, this run's [ocean.ice] ncat is "// &
                                        to_string(state%ice%ncat)//"; refusing to convert")
                      ierr = 14
                   end if
@@ -1036,7 +1036,7 @@ contains
       call ocean_restart_read_local(filename, reg_legacy, decomp, meta, t2, step2, osc2, ierr=e2)
       if (e2 /= 0) then
          call logger%error("ice restart: the SIS2 tags of "//trim(filename)//" could not be read into the "// &
-                           "legacy registry (a different category count or extents than this run's namelist?)")
+                           "legacy registry (a different category count or extents than this run's input?)")
          ierr = 11
          call legacy%destroy()
          return
@@ -1051,7 +1051,7 @@ contains
       if (status == ICE_RESUME_COLD) then
          state%icec%resume_cold = .true.
          call logger%info("ice restart: the checkpoint holds no ice state (ocean-only file): the CICE-port "// &
-                          "ice cold-starts from &ocean_ice_ic_nml")
+                          "ice cold-starts from [ocean.ice_ic]")
       end if
       if (status == ICE_RESUME_V2 .and. state%icec%is_init) then
          if (.not. (reg%entry_found("ice_avg_n") .and. reg%entry_found("ice_avg_t") .and. &

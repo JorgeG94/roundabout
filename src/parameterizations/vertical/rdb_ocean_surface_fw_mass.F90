@@ -1,4 +1,4 @@
-!! Real fresh-water MASS at the ocean surface (`&ocean_forcing_nml freshwater = "mass"`).
+!! Real fresh-water MASS at the ocean surface (`[ocean.forcing] freshwater = "mass"`).
 !!
 !! The Boussinesq column carries VOLUME.  This module spends the one assembled snapshot of the
 !! net open-ocean fresh-water mass flux `sf%fw_net` (kg m-2 s-1, into the ocean; see
@@ -179,7 +179,7 @@ contains
       if (fw_mass_thin_is_fatal(ms%fw_n_thin_step)) then
          call global_logger%error("surface fresh-water mass: "//to_string(int(ms%fw_n_thin_step))// &
                                   " column(s) could not give up the requested thickness")
-         call fail("&ocean_forcing_nml freshwater='mass': "//to_string(int(ms%fw_n_thin_step))// &
+         call fail("[ocean.forcing] freshwater='mass': "//to_string(int(ms%fw_n_thin_step))// &
                    " column(s) cannot supply the evaporative withdrawal from their whole live "// &
                    "stack at fw_evap_cfl_limit (or carry a non-finite fresh-water flux).  The "// &
                    "withdrawal was clamped so the state stays finite, but a clamped withdrawal "// &

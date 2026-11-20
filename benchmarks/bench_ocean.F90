@@ -1,6 +1,6 @@
 !! Standalone NetCDF-free ocean throughput benchmark.
 !!
-!! Drives the production ocean dyn-core on a namelist-configured basin
+!! Drives the production ocean dyn-core on an input-configured basin
 !! through the SAME lifecycle the driver runs: `engine_setup` (config
 !! validation of the process grid, IC/bathymetry seed, every
 !! `configure_ocean_*` stage in driver order, halo/periodic/fold seeding,
@@ -19,7 +19,7 @@
 !! per-kernel profiler breakdown.
 !!
 !! Usage:
-!!   ./build/benchmarks/bench_ocean [namelist] [max_steps]
+!!   ./build/benchmarks/bench_ocean [input] [max_steps]
 !!   (default: validation_examples/ocean/double_gyre/double_gyre_mom6.toml;
 !!    `max_steps` > 0 truncates the run to that many outer steps — the CTest
 !!    smoke guard uses it.)
@@ -52,7 +52,7 @@ program bench_ocean
    real(wp) :: t_current, dt, wall_sec, mcells_per_sec
    real(wp) :: next_status, status_interval
 
-   ! ---- Namelist path (CLI arg #1, else the double-gyre MOM6 reference) ----
+   ! ---- Input path (CLI arg #1, else the double-gyre MOM6 reference) ----
    if (command_argument_count() >= 1) then
       call get_command_argument(1, nml_path)
    else
@@ -73,7 +73,7 @@ program bench_ocean
    call validate_config(cfg)   ! aborts on invalid config
 
    if (trim(cfg%sim_type) /= "ocean") then
-      write (error_unit, "(a)") "bench_ocean: namelist sim_type must be 'ocean' (got '"// &
+      write (error_unit, "(a)") "bench_ocean: input sim_type must be 'ocean' (got '"// &
          trim(cfg%sim_type)//"')"
       stop 1
    end if
@@ -94,7 +94,7 @@ program bench_ocean
    n_inner = engine%n_inner
    if (n_inner < 1) then
       write (error_unit, "(a)") "bench_ocean: needs split-explicit barotropic "// &
-         "(ocean_bt n_inner >= 1 or auto_n_inner = .true.)"
+         "(ocean_bt n_inner >= 1 or auto_n_inner = true)"
       stop 1
    end if
 
@@ -103,7 +103,7 @@ program bench_ocean
       " grid       :", cfg%nx, cfg%ny, cfg%nz_layers, cfg%dx
    write (output_unit, '(a, f10.1, " s  dt = ", f8.1, " s   n_inner = ", i4)') &
       " duration   :", cfg%t_end, cfg%dt_fixed, n_inner
-   write (output_unit, "(a)") " namelist   : "//trim(nml_path)
+   write (output_unit, "(a)") " input   : "//trim(nml_path)
    write (output_unit, "(a)") ""
 
    ! ---- Device placement (the driver's engine_enter_data) ----

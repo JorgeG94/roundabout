@@ -43,7 +43,7 @@ barotropic substep's job, and including it here would double-count it.
 The five forms
 ==============
 
-``&ocean_pgf_nml form=`` selects the variant. The accepted values are
+``[ocean.pgf] form=`` selects the variant. The accepted values are
 ``mont`` (the **default**), ``fv_lite``, ``fv_wright``, ``gprime`` and
 ``fv_mom6``.
 
@@ -233,7 +233,7 @@ magnitude when ``mont`` became the default, for example
 :math:`\mathrm{En}\; 6.00\times10^{-4} \rightarrow 7.82\times10^{-7}\
 \mathrm{m^2\,s^{-2}}`. On an adversarial at-rest stratified seamount it
 agrees with ``fv_mom6`` to six digits. Eleven of the twenty-eight unpinned
-namelists were bit-identical under the change, and stratified z\*-sigma
+inputs were bit-identical under the change, and stratified z\*-sigma
 seamounts moved by less than :math:`5\times10^{-5}` relative.
 
 The application, finally, is a forward-Euler accumulation onto the face
@@ -303,14 +303,14 @@ after which the column pressure advances by
 This adds the compressibility contribution that ``fv_lite`` misses, and
 reduces to ``fv_lite`` for incompressible water. It needs the Wright EOS
 for a sensible Picard seed; combining ``fv_wright`` with
-``&ocean_eos_nml eos = "roquet_spv"`` is refused fail-loud at configure.
+``[ocean.eos] eos = "roquet_spv"`` is refused fail-loud at configure.
 
 
 ``gprime`` — two-layer reduced gravity
 ======================================
 
 No EOS, no pressure stack, no iteration. The two densities are fixed by two
-reduced gravities: ``&ocean_pgf_nml gprime_gfs`` (:math:`g_{FS}`, default
+reduced gravities: ``[ocean.pgf] gprime_gfs`` (:math:`g_{FS}`, default
 :math:`9.81\ \mathrm{m\,s^{-2}}`) and ``gprime_gint`` (:math:`g'`, default
 :math:`0.0098\ \mathrm{m\,s^{-2}}`).
 

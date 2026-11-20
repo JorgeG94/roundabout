@@ -58,7 +58,7 @@ contains
       real(wp), intent(in) :: g
          !! Substep gravity (m/s^2).
       real(wp), intent(in) :: bebt
-         !! `&ocean_bt_nml bebt`.
+         !! `[ocean.bt] bebt`.
       real(wp) :: inv2
       inv2 = 0.5_wp*(1.0_wp + 2.0_wp*bebt)* &
              (iarea*g*(((cE + cW) + cN) + cS) + &
@@ -194,7 +194,7 @@ contains
       !! Largest substep to use: `|dtbt| * dt_max` for `dtbt < 0`
       !! (`dtbt = 0` means `-0.98`), `dtbt` itself for `dtbt > 0`.
       real(wp), intent(in) :: dtbt
-         !! `&ocean_bt_nml dtbt`.
+         !! `[ocean.bt] dtbt`.
       real(wp), intent(in) :: dt_max
          !! Global minimum stable substep (s); `huge` if no wet cell.
       real(wp) :: step

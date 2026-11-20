@@ -337,7 +337,7 @@ What gets built
      - The shared core, built when tests link shared (the default) or
        ``RDB_BUILD_SHARED=ON``.
    * - ``build/rdb_nml_doc``, ``build/rdb_nml_json``
-     - Namelist-schema dumpers. ``rdb_nml_doc`` is what regenerates
+     - Input-schema dumpers. ``rdb_nml_doc`` is what regenerates
        ``docs/generated_nml_knobs.md``.
    * - ``build/modules/``
      - Fortran ``.mod`` files.
@@ -554,7 +554,7 @@ variable before the first CUDA call:
    export CUDA_VISIBLE_DEVICES=$OMPI_COMM_WORLD_LOCAL_RANK
 
 With that pinning, the solver's ``mod(node_rank, n_devices)`` clamp binds
-the single visible device and a plain ``mpirun -np N ./rdb run.nml``
+the single visible device and a plain ``mpirun -np N ./rdb run.toml``
 works. ``RDB_CUDA_AWARE_MPI`` only declares that the MPI library is
 CUDA-aware: a GPU build always passes device buffers to MPI, a multi-rank GPU
 run without the declaration is refused at startup, and nothing checks at run

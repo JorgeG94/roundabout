@@ -1,7 +1,7 @@
 !! Barotropic linear (Rayleigh) wave drag (Egbert & Ray 2001; Jayne & St
 !! Laurent 2001) — the bulk energy sink for the barotropic tide.
 !!
-!! `&ocean_bt_nml wave_drag` folds a static per-face piston-velocity map
+!! `[ocean.bt] wave_drag` folds a static per-face piston-velocity map
 !! `r_H(x,y)` [m/s] into `bt_rem_u/v` (`compute_bt_rem_wave_drag` in
 !! `rdb_barotropic_coupling`), composing multiplicatively with the existing
 !! `substep_drag` seam.  These tests drive the REAL

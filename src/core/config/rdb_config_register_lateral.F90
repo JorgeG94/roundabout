@@ -5,7 +5,7 @@ submodule(rdb_config) rdb_config_register_lateral
 contains
 
    module subroutine register_slopes(cfg, schema)
-      !! `&ocean_slopes` (Griffies 1998 isopycnal-slope diagnostics).
+      !! `[ocean.slopes]` (Griffies 1998 isopycnal-slope diagnostics).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -31,7 +31,7 @@ contains
    end subroutine register_slopes
 
    module subroutine register_gm(cfg, schema)
-      !! `&ocean_gm` (Gent-McWilliams thickness diffusion, capability [2]).
+      !! `[ocean.gm]` (Gent-McWilliams thickness diffusion, capability [2]).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -44,7 +44,7 @@ contains
 
       pl => cfg%ocean%gm%enable
       call g%add(nml_logical("enable", pl, &
-                             "Master switch (requires &ocean_slopes_nml enable; default off ⇒ no-op)"))
+                             "Master switch (requires [ocean.slopes] enable; default off ⇒ no-op)"))
       pr => cfg%ocean%gm%khth
       call g%add(nml_real("khth", pr, &
                           "Thickness diffusivity KhTh (constant-fill; production 1e2-1e3)", &
@@ -83,7 +83,7 @@ contains
    end subroutine register_gm
 
    module subroutine register_redi(cfg, schema)
-      !! `&ocean_redi` (continuous neutral / along-isopycnal tracer
+      !! `[ocean.redi]` (continuous neutral / along-isopycnal tracer
       !! diffusion, capability [3]).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -114,7 +114,7 @@ contains
    end subroutine register_redi
 
    module subroutine register_varmix(cfg, schema)
-      !! `&ocean_varmix` (spatially-varying GM/Redi coefficients, [4]).
+      !! `[ocean.varmix]` (spatially-varying GM/Redi coefficients, [4]).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -175,7 +175,7 @@ contains
    end subroutine register_varmix
 
    module subroutine register_meke(cfg, schema)
-      !! `&ocean_meke` (prognostic mesoscale eddy kinetic energy, [5]).
+      !! `[ocean.meke]` (prognostic mesoscale eddy kinetic energy, [5]).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -187,7 +187,7 @@ contains
 
       pl => cfg%ocean%meke%enable
       call g%add(nml_logical("enable", pl, &
-                             "Master switch (requires &ocean_gm_nml enable; default off ⇒ no-op)"))
+                             "Master switch (requires [ocean.gm] enable; default off ⇒ no-op)"))
       pr => cfg%ocean%meke%gmcoeff
       call g%add(nml_real("gmcoeff", pr, "PE->MEKE conversion efficiency (< 0 ⇒ off)", units="nondim"))
       pr => cfg%ocean%meke%frcoeff
@@ -252,7 +252,7 @@ contains
    end subroutine register_meke
 
    module subroutine register_porous(cfg, schema)
-      !! `&ocean_porous` (Adcroft 2013 porous barriers: subgrid
+      !! `[ocean.porous]` (Adcroft 2013 porous barriers: subgrid
       !! sill/strait narrowing of the C-grid transport face widths).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -290,7 +290,7 @@ contains
    end subroutine register_porous
 
    module subroutine register_foxkemper(cfg, schema)
-      !! `&ocean_foxkemper` (Fox-Kemper et al. 2008/2011 mixed-layer-eddy
+      !! `[ocean.foxkemper]` (Fox-Kemper et al. 2008/2011 mixed-layer-eddy
       !! restratification, capability B5).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -336,7 +336,7 @@ contains
    end subroutine register_foxkemper
 
    module subroutine register_ocean_coriolis(cfg, schema)
-      !! `&ocean_coriolis_nml`: Coriolis-advection scheme selector.
+      !! `[ocean.coriolis]`: Coriolis-advection scheme selector.
       !! `form` enum mirrors `parse_pv_variant` in rdb_coriolis_adv
       !! (canonical names; short aliases hk/energy are not advertised).
       type(config_t), target, intent(in) :: cfg
@@ -373,7 +373,7 @@ contains
    end subroutine register_ocean_coriolis
 
    module subroutine register_ocean_bt(cfg, schema)
-      !! `&ocean_bt_nml`: split-explicit barotropic substep controls.
+      !! `[ocean.bt]`: split-explicit barotropic substep controls.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -430,7 +430,7 @@ contains
                              "BT-correction fold stays UNIFORM (MOM6 accel_layer_u never "// &
                              "weights it; correction_visc_rem, which used to, is retired). "// &
                              "strong_drag/rescale_strong_drag stay separate keys (their "// &
-                             "own MOM6 params). Still requires ocean_vdiff_nml "// &
+                             "own MOM6 params). Still requires [ocean.vdiff] "// &
                              "implicit_drag or bbl_glue, else visc_rem is inert "// &
                              "(=1, warned)."))
       pl => cfg%ocean%bt%correction_visc_rem
@@ -517,7 +517,7 @@ contains
       pl => cfg%ocean%bt%correction_bc_pgf
       call g%add(nml_logical("correction_bc_pgf", pl, &
                              "Per-layer baroclinic-PGF retro-correction for the eta change "// &
-                             "(requires &ocean_pgf_nml form='fv_mom6')"))
+                             "(requires [ocean.pgf] form='fv_mom6')"))
       pl => cfg%ocean%bt%bc_pgf_forcing
       call g%add(nml_logical("bc_pgf_forcing", pl, &
                              "Force the BT substep with the depth mean of the full slow layer "// &
@@ -582,9 +582,9 @@ contains
    end subroutine register_ocean_bt
 
    module subroutine register_ocean_hdiff(cfg, schema)
-      !! `&ocean_hdiff_nml`: along-coordinate tracer Laplacian
+      !! `[ocean.hdiff]`: along-coordinate tracer Laplacian
       !! (`rdb_ocean_hdiff_tracer`).  Not the neutral/isopycnal path —
-      !! that is `&ocean_redi_nml`, already reachable.
+      !! that is `[ocean.redi]`, already reachable.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -602,7 +602,7 @@ contains
    end subroutine register_ocean_hdiff
 
    module subroutine register_ocean_hvisc(cfg, schema)
-      !! `&ocean_hvisc_nml`: lateral-viscosity closure + coefficients.
+      !! `[ocean.hvisc]`: lateral-viscosity closure + coefficients.
       !! `lateral_closure` enum mirrors `parse_lateral_closure` in
       !! rdb_ocean_lateral_mix.
       type(config_t), target, intent(in) :: cfg
@@ -703,7 +703,7 @@ contains
    end subroutine register_ocean_hvisc
 
    module subroutine register_ocean_isopycnal(cfg, schema)
-      !! `&ocean_isopycnal_nml`: grounding-stability controls for the
+      !! `[ocean.isopycnal]`: grounding-stability controls for the
       !! Lagrangian vertical coordinate.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema

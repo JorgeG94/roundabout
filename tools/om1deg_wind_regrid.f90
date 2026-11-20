@@ -28,7 +28,7 @@ program om1deg_wind_regrid
    !!    `padded` JRA files carry one record past the year end).
    !!
    !! Output: NetCDF classic (64-bit offset) in the layout
-   !! `&ocean_dataovr_nml` reads — `taux(xf=nx+1, y=ny, time)`,
+   !! `[ocean.dataovr]` reads — `taux(xf=nx+1, y=ny, time)`,
    !! `tauy(x=nx, yf=ny+1, time)`, Fortran order, float32, `time` in
    !! "days since <year>-01-01 00:00:00" at the bin centres.
    !!
@@ -453,7 +453,7 @@ contains
    end subroutine interp
 
    subroutine write_output(path)
-      !! The `&ocean_dataovr_nml` layout (see the program docstring).
+      !! The `[ocean.dataovr]` layout (see the program docstring).
       character(len=*), intent(in) :: path
       integer :: nc, d_x, d_y, d_xf, d_yf, d_t, v_t, v_tx, v_ty, b2
       character(len=64) :: tunits, cdtxt

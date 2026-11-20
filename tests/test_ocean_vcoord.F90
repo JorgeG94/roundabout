@@ -4,7 +4,7 @@
 !!   - `ocean_vcoord_t` init allocates `dsig(nz_ml)` to uniform fractions
 !!     that sum to 1.0; default `coord_type == VCOORD_EULERIAN_Z`.
 !!   - `destroy` clears `is_init` and releases the allocations.
-!!   - `parse_ocean_vcoord_type` round-trips known namelist strings and
+!!   - `parse_ocean_vcoord_type` round-trips known input strings and
 !!     falls back to `VCOORD_EULERIAN_Z` on unrecognised input.
 !!
 !! The per-step `target_h` / `z_ref` paths land in Phase 5g and will get
@@ -992,7 +992,7 @@ contains
    end subroutine test_zstar_full_conservation
 
    subroutine test_parse_lagrangian(error)
-      !! `VCOORD_LAGRANGIAN` is reached via two synonymous namelist
+      !! `VCOORD_LAGRANGIAN` is reached via two synonymous input
       !! strings — `"lagrangian"` (the mechanism: layers track flow)
       !! and `"isopycnal"` (the physics: interfaces follow density
       !! surfaces).  Both casings work via the existing case-folding
@@ -1079,7 +1079,7 @@ contains
       !! All four casing/spelling variants — `"z_fixed"`, `"Z_FIXED"`,
       !! `"z_levels"`, `"Z_LEVELS"`, `"gprime"`, `"GPRIME"` — must map
       !! to `VCOORD_Z_FIXED`.  Pins the user-facing tokens so any
-      !! future namespace cleanup can't silently break the namelist
+      !! future namespace cleanup can't silently break the input
       !! contract.
       type(error_type), allocatable, intent(out) :: error
       call check(error, parse_ocean_vcoord_type("z_fixed") == VCOORD_Z_FIXED, &

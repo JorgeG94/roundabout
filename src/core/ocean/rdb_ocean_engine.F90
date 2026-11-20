@@ -56,7 +56,7 @@ module rdb_ocean_engine
    !! below is `driver_run_ocean`'s former inline sea-ice per-step block
    !! (frazil/EVP/thermo-driver/transport), transcribed verbatim —
    !! same call order, same gates (`ice%enable`, `ice%dynamics`, the
-   !! thermo cadence via `is_thermo_step()`, `&ocean_ice_nml transport`),
+   !! thermo cadence via `is_thermo_step()`, `[ocean.ice] transport`),
    !! same "MANDATED ORDER" contract documented at its own call sites.
    !! A caller with sea ice enabled calls `engine_step`, then
    !! `engine_step_ice`, then `engine_step_finalize` — exactly
@@ -66,7 +66,7 @@ module rdb_ocean_engine
    !! advance and `ocean_surface_flux_assemble`: the assembler reads the
    !! salt/heat components the ice block writes. `engine_step_ice`
    !! itself is a no-op (returns immediately) when
-   !! `&ocean_ice_nml enable = .false.` — bit-identical to before this
+   !! `[ocean.ice] enable = false` — bit-identical to before this
    !! phase for every non-ice caller/config. A caller with sea ice
    !! enabled via `engine_setup` who never calls `engine_step_ice` is
    !! back to the P2.4 gap (configured, not advanced) — that is now a
@@ -213,7 +213,7 @@ module rdb_ocean_engine
 
    real(wp), parameter :: WETDRY_OPEN_EDGE_MIN_FACTOR = 10.0_wp
       !! Minimum resting depth of a wet column on an OPEN / TIDAL edge under
-      !! dynamic wet/dry, as a multiple of `&ocean_wetdry_nml dry_depth`
+      !! dynamic wet/dry, as a multiple of `[ocean.wetdry] dry_depth`
       !! (`check_wetdry_open_edge_depth`).  The Flather velocity scales with
       !! `sqrt(g/max(D, 1e-6))`, so a near-dry edge column runs away on any rank
       !! count; empirical: 0.35 m blew up, 0.6 m was stable (0.25 m tide,
@@ -233,10 +233,10 @@ module rdb_ocean_engine
       type(decomp_t) :: decomp
       type(ice_evp_params_t) :: evp_params
          !! Sea-ice EVP physical + numerical parameters, built once from
-         !! `&ocean_ice_nml` at setup.
+         !! `[ocean.ice]` at setup.
       type(ice_ic_params_t) :: ic_par
          !! Sea-ice initial-condition parameters, built once from
-         !! `&ocean_ice_ic_nml` at setup.
+         !! `[ocean.ice_ic]` at setup.
       real(wp) :: cfl_vtol = 0.0_wp
          !! Console-stats MaxCFL vanish tolerance; 0 when off. Consumed
          !! by the caller's own `ocean_console_stats_report`, not by
@@ -251,14 +251,14 @@ module rdb_ocean_engine
          !! `n_inner >= 1` (a caller wanting that guarantee, such as
          !! the C ABI, checks it after `engine_setup` returns).
       logical :: dtbt_dynamic = .false.
-         !! `&ocean_bt_nml dtbt` set with `dtbt_reset_period >= 0`: `n_inner`
+         !! `[ocean.bt] dtbt` set with `dtbt_reset_period >= 0`: `n_inner`
          !! is re-derived from the live thicknesses inside `engine_step`.
       real(wp) :: dtbt = 0.0_wp
-         !! Latched `&ocean_bt_nml dtbt` (only meaningful when `dtbt_dynamic`).
+         !! Latched `[ocean.bt] dtbt` (only meaningful when `dtbt_dynamic`).
       real(wp) :: dtbt_reset_period = -1.0_wp
-         !! Latched `&ocean_bt_nml dtbt_reset_period`.
+         !! Latched `[ocean.bt] dtbt_reset_period`.
       real(wp) :: dtbt_bebt = 0.0_wp
-         !! Latched `&ocean_bt_nml bebt` for the `dt_max` formula.
+         !! Latched `[ocean.bt] bebt` for the `dt_max` formula.
       real(wp) :: dtbt_next_t = -huge(1.0_wp)
          !! Simulation time at/after which `n_inner` is re-derived next
          !! (period > 0); unused for period 0.
@@ -268,7 +268,7 @@ module rdb_ocean_engine
       logical :: device_mapped = .false.
          !! True between `engine_enter_data` and `engine_exit_data`.
       logical :: ice_load_balance_ic = .false.
-         !! `&ocean_psurf_nml ice_load_balance_ic` as latched at setup (cold start only).
+         !! `[ocean.psurf] ice_load_balance_ic` as latched at setup (cold start only).
       logical :: warm_restart = .false.
          !! Latched by `engine_setup`: the prognostic state came from a
          !! checkpoint, ghosts included, so no setup pass may re-derive its
@@ -283,7 +283,7 @@ module rdb_ocean_engine
       ! geometry must land before ocean_state_enter_data, exactly like
       ! passive-tracer registration (registry_locked closes at enter_data).
       ! Unset (not `allocated`/`.false.`) ⇒ engine_setup falls through to
-      ! its ordinary namelist-driven path, byte-identical to before P2.5.
+      ! its ordinary input-driven path, byte-identical to before P2.5.
       real(wp), allocatable :: staged_bathymetry(:, :)
          !! Interior-sized (nx_phys, ny_phys) bathymetry, RAW in the
          !! caller's own sign convention (`staged_bathymetry_convention`).
@@ -325,7 +325,7 @@ module rdb_ocean_engine
       logical :: staged_periodic_y = .false.
          !! Oceananigans-style "the grid owns periodicity": applied via
          !! `ocean_bc_state_set_topology` right after `configure_ocean_bc`,
-         !! overriding whatever the namelist edge tags derived.
+         !! overriding whatever the input edge tags derived.
    end type ocean_engine_t
 
 contains
@@ -420,13 +420,13 @@ contains
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
-      ! Process grid left unset (the `&mpi_nml` default px = py = 1) on more
+      ! Process grid left unset (the `[mpi]` default px = py = 1) on more
       ! than one rank: choose it here, BEFORE the px*py check below (which
       ! used to reject it, leaving `decomp_init_from_config`'s own
       ! auto-factor unreachable on the ocean path).  A folded grid is split
       ! north-south by default (px = 1: the fold stays local, no fold
       ! exchange; plan `tripolar_fold_px_gt_1` decision 9 — an east-west
-      ! split is supported but explicit, `&mpi_nml px > 1`, until its cost
+      ! split is supported but explicit, `[mpi] px > 1`, until its cost
       ! is measured at scale); any other grid gets the perimeter-minimising
       ! factorisation.
       if (csize > 1 .and. cfg%px == 1 .and. cfg%py == 1) then
@@ -438,7 +438,7 @@ contains
          end if
          if (rank == 0) call logger%info("Process grid auto: px x py = "// &
                                          to_string(cfg%px)//" x "//to_string(cfg%py)// &
-                                         " (&mpi_nml px/py unset)")
+                                         " ([mpi] px/py unset)")
       end if
       if (cfg%px*cfg%py /= csize) then
          call fail("Process grid px*py = "//to_string(cfg%px*cfg%py)// &
@@ -507,7 +507,7 @@ contains
          !    (`res_lscale_in/out`; no wet/dry decomposition case).
          if (cfg%ocean%wetdry%enable .and. &
              ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
-            call fail("&ocean_wetdry_nml enable = .true. with north = 'tripolar_fold' is "// &
+            call fail("[ocean.wetdry] enable = true with north = 'tripolar_fold' is "// &
                       "unproven on more than one rank ("//to_string(csize)//" ranks "// &
                       "requested): the wet/dry masks and limiter fluxes are not folded.  "// &
                       "Run on 1 rank.", &
@@ -531,7 +531,7 @@ contains
                   edge_name = cfg%ocean%bc%north
                end select
                if (wetdry_edge_is_unproven(edge_name)) then
-                  call fail("&ocean_wetdry_nml enable = .true. with the &ocean_bc_nml edge '"// &
+                  call fail("[ocean.wetdry] enable = true with the [ocean.bc] edge '"// &
                             trim(edge_name)//"' is unproven on more than one rank ("// &
                             to_string(csize)//" ranks requested): only wall, periodic, open "// &
                             "(Flather) and tidal edges are decomposition-checked under dynamic "// &
@@ -545,9 +545,9 @@ contains
                    trim(cfg%ocean%bc%flather_form) /= "legacy" .or. &
                    cfg%ocean%bc%nudge_tau_in > 0.0_wp .or. cfg%ocean%bc%nudge_tau_out > 0.0_wp .or. &
                    cfg%ocean%bc%res_lscale_in > 0.0_wp .or. cfg%ocean%bc%res_lscale_out > 0.0_wp) then
-                  call fail("&ocean_wetdry_nml enable = .true. with an open / tidal edge is "// &
+                  call fail("[ocean.wetdry] enable = true with an open / tidal edge is "// &
                             "decomposition-checked only for the default boundary closure "// &
-                            "(&ocean_bc_nml radiation_scheme = 'anomaly', flather_form = 'legacy', "// &
+                            "([ocean.bc] radiation_scheme = 'anomaly', flather_form = 'legacy', "// &
                             "nudge_tau_in = nudge_tau_out = res_lscale_in = res_lscale_out = 0): "// &
                             "Orlanski radiation, full Flather, asymmetric nudging and tracer "// &
                             "reservoirs are unproven on more than one rank ("// &
@@ -564,7 +564,7 @@ contains
          ! fails together.
          if (cfg%ocean%cavity_dyn%enable) then
             if (trim(cfg%ocean%cavity_dyn%draft_config) == "file") then
-               call fail("&ocean_cavity_dyn_nml draft_config = 'file' is unproven on a "// &
+               call fail("[ocean.cavity_dyn] draft_config = 'file' is unproven on a "// &
                          "decomposed domain ("//to_string(csize)//" ranks requested): "// &
                          "the windowed draft reader has no multi-rank bit-identity "// &
                          "case.  Use an analytic draft or run on 1 rank.", &
@@ -572,7 +572,7 @@ contains
                return
             end if
             if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
-               call fail("&ocean_cavity_dyn_nml enable with &ocean_bc_nml north = "// &
+               call fail("[ocean.cavity_dyn] enable with [ocean.bc] north = "// &
                          "'tripolar_fold' is unproven on a decomposed domain ("// &
                          to_string(csize)//" ranks requested): the cavity face "// &
                          "twins are never folded and no case covers it.  Run on 1 rank.", &
@@ -580,7 +580,7 @@ contains
                return
             end if
             if (cfg%ocean%bulk_flux%enable) then
-               call fail("&ocean_cavity_dyn_nml enable with &ocean_bulk_flux_nml enable "// &
+               call fail("[ocean.cavity_dyn] enable with [ocean.bulk_flux] enable "// &
                          "is unproven on a decomposed domain ("//to_string(csize)// &
                          " ranks requested): the bulk stress carries no ice-cover "// &
                          "mask and has no cavity case.  Run on 1 rank.", &
@@ -592,7 +592,7 @@ contains
                          ocean_bc_type_from_string(cfg%ocean%bc%south), &
                          ocean_bc_type_from_string(cfg%ocean%bc%north)]
             if (any(cav_edges /= OBC_WALL .and. cav_edges /= OBC_PERIODIC)) then
-               call fail("&ocean_cavity_dyn_nml enable with an &ocean_bc_nml edge that "// &
+               call fail("[ocean.cavity_dyn] enable with an [ocean.bc] edge that "// &
                          "is not 'wall' or 'periodic' (open / tidal / clamped / chapman "// &
                          "/ sponge) is unproven on a decomposed domain ("// &
                          to_string(csize)//" ranks requested).  Run on 1 rank.", &
@@ -646,7 +646,7 @@ contains
       ! (`dtbt_reset_period < 0`) is allowed everywhere.
       if (bt_dtbt_is_set(cfg%ocean%bt) .and. cfg%ocean%bt%dtbt_reset_period >= 0.0_wp .and. &
           bt_halo_res > 0) then
-         call fail("&ocean_bt_nml dtbt_reset_period >= 0 is not supported with the "// &
+         call fail("[ocean.bt] dtbt_reset_period >= 0 is not supported with the "// &
                    "wide-halo barotropic march-in (bt_halo = "//to_string(bt_halo_res)// &
                    "): n_inner changes mid-run and does not resize the wide-halo BT "// &
                    "clone.  Use dtbt_reset_period < 0 (init-only), or bt_halo = 0.", &
@@ -658,7 +658,7 @@ contains
       ! here with a status instead of the enable step's `error stop`.
       if (bt_halo_res > 0 .and. &
           cfg%nghost + bt_halo_res - mod(bt_halo_res, 2) > min(cfg%nx/cfg%px, cfg%ny/cfg%py)) then
-         call fail("&ocean_bt_nml bt_halo = "//to_string(bt_halo_res)//" does not fit: "// &
+         call fail("[ocean.bt] bt_halo = "//to_string(bt_halo_res)//" does not fit: "// &
                    "nghost + bt_halo = "//to_string(cfg%nghost + bt_halo_res - mod(bt_halo_res, 2))// &
                    " exceeds the smallest tile ("//to_string(min(cfg%nx/cfg%px, cfg%ny/cfg%py))// &
                    " cells).  Reduce bt_halo (or leave it on auto) or use fewer ranks.", &
@@ -671,7 +671,7 @@ contains
                              trim(bt_excl_reason)//" active)")
          else
             call logger%info("BT march-in: bt_halo auto -> 0 (opt-in: set "// &
-                             "&ocean_bt_nml bt_halo = 8 explicitly; it is not "// &
+                             "[ocean.bt] bt_halo = 8 explicitly; it is not "// &
                              "bit-reproducible across decompositions)")
          end if
       end if
@@ -712,7 +712,7 @@ contains
       ! — before `configure_ocean_bc` below derives it.  A staged topology
       ! overrides the tags axis-by-axis exactly as
       ! `ocean_bc_state_set_topology` will (an axis it marks periodic is
-      ! periodic; one it does not keeps the namelist's edges).
+      ! periodic; one it does not keeps the input's edges).
       if (engine%has_staged_topology) then
          block
             logical :: per_x, per_y
@@ -775,14 +775,14 @@ contains
       ! test callers), and a reserved value must never run as `none`.
       select case (parse_surface_freshwater(cfg%ocean%forcing%freshwater))
       case (SURF_FW_INVALID)
-         call fail("&ocean_forcing_nml freshwater = '"//trim(adjustl(cfg%ocean%forcing%freshwater))// &
+         call fail("[ocean.forcing] freshwater = '"//trim(adjustl(cfg%ocean%forcing%freshwater))// &
                    "' is not implemented (shipped: none, virtual, mass)", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       case (SURF_FW_VIRTUAL, SURF_FW_MASS)
          if (.not. cfg%ocean%forcing%enable_components) then
-            call fail("&ocean_forcing_nml freshwater = '"//trim(adjustl(cfg%ocean%forcing%freshwater))// &
-                      "' requires enable_components = .true.", &
+            call fail("[ocean.forcing] freshwater = '"//trim(adjustl(cfg%ocean%forcing%freshwater))// &
+                      "' requires enable_components = true", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -797,7 +797,7 @@ contains
       call engine%state%surface_flux%set_interval_mean( &
          engine%grid, cfg%ocean%thermo%enable_thermodynamics .and. cfg%ocean%vmix%dt_therm_ratio > 1)
       ! Ice mass loading: allocates the carried `p_ice_load` BEFORE the restart read, so the
-      ! registry walk sees it (inert, nothing allocated, unless `&ocean_psurf_nml ice_load`).
+      ! registry walk sees it (inert, nothing allocated, unless `[ocean.psurf] ice_load`).
       call engine%state%surface_flux%set_ice_load(cfg%ocean%psurf%ice_load)
       call engine%state%surface_flux%set_atm_load(cfg%ocean%psurf%atm_load)
       engine%ice_load_balance_ic = cfg%ocean%psurf%ice_load_balance_ic
@@ -876,7 +876,7 @@ contains
       engine%diag_enabled = cfg%ocean%diag%enabled .and. .not. no_output
       ! The atm provider is configured later (it needs the metrics), but the
       ! diag registry gates the `atm_*` diagnostics on `atm%enable`: pre-set it
-      ! from the namelist so they register (`atm_state_configure` re-derives it).
+      ! from the input so they register (`atm_state_configure` re-derives it).
 #ifndef RDB_NO_NETCDF
       engine%state%atm%enable = cfg%ocean%atm_forcing%enable
 #endif
@@ -923,7 +923,7 @@ contains
       ! zero array it was allocated as and every EOS evaluation is
       ! bit-identical.
       !
-      ! P5.0 joins `&ocean_pgf_nml p_top_in_bc` — the load in the FV_MOM6
+      ! P5.0 joins `[ocean.pgf] p_top_in_bc` — the load in the FV_MOM6
       ! pressure-stack surface BC — to the SAME seed, so the unsplit
       ! driver (which has no per-step refresh) still gets the configure
       ! value rather than a zero array, and the split driver's step-1 PGF
@@ -1089,7 +1089,7 @@ contains
       ! Chlorophyll-dependent N-band shortwave (Manizza et al. 2005):
       ! registers the chl climatology + seeds the band state on
       ! `surface_flux`.  After `set_sw_penetration`, before enter_data.
-      ! No-op unless `&ocean_thermo_nml sw_scheme = "manizza05"`.
+      ! No-op unless `[ocean.thermo] sw_scheme = "manizza05"`.
       call sw_chl_configure(cfg%ocean%thermo, engine%state%data_input, engine%grid, &
                             engine%state%surface_flux, engine%state%sw_chl, ierr=ierr)
       if (setup_failed(ierr)) return
@@ -1098,19 +1098,19 @@ contains
       ! the nine-field reader + builds the regrid weights, before
       ! enter_data (registration allocates the reader's bracket buffers;
       ! weight-building allocates this slot's own arrays). No-op when
-      ! `&ocean_atm_forcing_nml enable = .false.` (the default). NetCDF-only.
+      ! `[ocean.atm_forcing] enable = false` (the default). NetCDF-only.
       call atm_state_configure(cfg, engine%state%data_input, engine%grid, engine%state%metrics, &
                                engine%state%atm, ierr=ierr)
       if (setup_failed(ierr)) return
 
       ! Ocean consumer of the atm provider above (OM3 C2c-3a): persistent
       ! stress scratch + open-water fraction. No-op when
-      ! `&ocean_bulk_flux_nml enable = .false.` (the default).
+      ! `[ocean.bulk_flux] enable = false` (the default).
       call bulk_forcing_configure(cfg, engine%grid, engine%state%surface_flux, &
                                   engine%state%bulk_forcing)
 #else
       if (cfg%ocean%dataovr%enable) then
-         call fail("engine_setup: &ocean_dataovr_nml enable = .true. but this build has no "// &
+         call fail("engine_setup: [ocean.dataovr] enable = true but this build has no "// &
                    "NetCDF support (RDB_ENABLE_NETCDF=OFF)", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1147,7 +1147,7 @@ contains
       call configure_ocean_pgf(cfg, engine%state, rank, ierr=ierr)
       if (setup_failed(ierr)) return
 
-      ! The single configured ρ₀ (`&ocean_ic_nml rho_0` -> `eos%rho0`) out to
+      ! The single configured ρ₀ (`[ocean.ic] rho_0` -> `eos%rho0`) out to
       ! the slots that keep their own copy: surface heat/salt flux, wind
       ! stress, KPP-vmix and the engine-held geothermal slot.  Runs after
       ! every slot-specific configure (nothing downstream re-derives a
@@ -1168,7 +1168,7 @@ contains
                                     engine%decomp%has_north)
       ! P2.5 geometry injection: Oceananigans-style "the grid owns
       ! periodicity" (rdb_ocean_stage_topology) — overrides whatever
-      ! configure_ocean_bc just derived from the namelist edge tags. Must
+      ! configure_ocean_bc just derived from the input edge tags. Must
       ! run BEFORE the periodic ghost wrap / ocean_halo_init /
       ! configure_ocean_land_mask below, all of which read periodic_x/y.
       if (engine%has_staged_topology) then
@@ -1437,14 +1437,14 @@ contains
          call ice_dyn_c_metrics_build(engine%grid, engine%state%metrics, engine%state%bc, &
                                       engine%state%ice, engine%state%ice_cgrid, ierr_dync)
          if (ierr_dync /= 0) then
-            call fail("&ocean_ice_dyn_nml dyn_scheme = 'cice_c': the C-grid ice metrics could not "// &
+            call fail("[ocean.ice_dyn] dyn_scheme = 'cice_c': the C-grid ice metrics could not "// &
                       "be built (nghost >= 3 is required)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
       end if
       if (engine%state%bulk_forcing%cice_wind .and. .not. (engine%state%ice%dync%is_init .and. &
                                                            engine%state%icec%is_init)) then
-         call fail("&ocean_ice_nml scheme = 'cice' with the prescribed atmosphere needs the C-grid ice "// &
+         call fail("[ocean.ice] scheme = 'cice' with the prescribed atmosphere needs the C-grid ice "// &
                    "dynamics and the CICE run slots (the unweighted wind stress is blended there)", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -1464,7 +1464,7 @@ contains
       ! Configure-time stability audit (viscous CFL / kappa_h diffusive
       ! number / Munk-layer resolution / ah_max-clamps-nu_h): MUST run
       ! after configure_ocean_metrics + configure_ocean_land_mask (needs
-      ! the real per-cell metric arrays, not nominal &grid_nml dx/dy) and
+      ! the real per-cell metric arrays, not nominal [grid] dx/dy) and
       ! before enter_data. See rdb_ocean_stability_audit.F90 for the
       ! motivating failure (a global tripolar aquaplanet NaN, diagnosed
       ! only after the fact — this audit is the fix).
@@ -1530,7 +1530,7 @@ contains
       ! device on the slot's `copyin` map).
       call configure_ocean_top_drag(cfg, engine%state, engine%grid, rank)
 
-      ! Partial-step z-level face closure (&vcoord_nml
+      ! Partial-step z-level face closure ([vcoord]
       ! zfixed_closed_faces).  LAST of the static-geometry builders and
       ! still BEFORE enter_data: it needs `vcoord%z_top` (configure_ocean
       ! _cavity), `bt_work%bt_H_ref` (configure_ocean_bt_split), the
@@ -1578,7 +1578,7 @@ contains
             call ice_cice_ic_apply(engine%state, engine%ic_par, engine%state%ice_cgrid%hm, &
                                    engine%state%metrics%geolatT, ierr_dync)
             if (ierr_dync /= 0) then
-               call fail("&ocean_ice_ic_nml: the CICE-port ice IC could not be seeded (code "// &
+               call fail("[ocean.ice_ic]: the CICE-port ice IC could not be seeded (code "// &
                          to_string(ierr_dync)//")", ierr, OCEAN_STATUS_ERR_SETUP)
                return
             end if
@@ -1689,7 +1689,7 @@ contains
    subroutine check_wetdry_open_edge_depth(cfg, engine, ierr)
       !! Configure-time refusal (any rank count): with dynamic wet/dry on, a
       !! wet column on an OPEN (Flather) or TIDAL edge whose resting depth is
-      !! below `WETDRY_OPEN_EDGE_MIN_FACTOR * &ocean_wetdry_nml dry_depth` is
+      !! below `WETDRY_OPEN_EDGE_MIN_FACTOR * [ocean.wetdry] dry_depth` is
       !! refused.  The Flather radiation velocity scales with
       !! `sqrt(g/max(D, 1e-6))`, so a near-dry edge column turns a small
       !! elevation mismatch into a runaway edge velocity; measured on the
@@ -1759,7 +1759,7 @@ contains
          end if
          call halo_allreduce_min(dmin_loc, dmin_glob)
          if (dmin_glob < thr) then
-            call fail("&ocean_wetdry_nml enable = .true. with the "//trim(nm)//" edge '"// &
+            call fail("[ocean.wetdry] enable = true with the "//trim(nm)//" edge '"// &
                       trim(edge_name)//"': a wet boundary column has a resting depth of "// &
                       to_string(dmin_glob)//" m, below the minimum "//to_string(thr)// &
                       " m ("//to_string(WETDRY_OPEN_EDGE_MIN_FACTOR)//" x dry_depth) for an "// &
@@ -1833,7 +1833,7 @@ contains
       if (.not. cfg%ocean%diag%enabled) return
 
 #ifdef RDB_NO_NETCDF
-      call fail("engine_configure_diag: &ocean_diag_nml enabled = .true. but this build "// &
+      call fail("engine_configure_diag: [ocean.diag] enabled = true but this build "// &
                 "has no NetCDF support (RDB_ENABLE_NETCDF=OFF)", ierr, OCEAN_STATUS_ERR_SETUP)
 #else
       block
@@ -1929,7 +1929,7 @@ contains
    end subroutine engine_configure_diag
 
    pure function diag_vgrid_from_name(name) result(vgrid)
-      !! Map the `&ocean_diag_nml vgrid` string to a `DIAG_VGRID_*` tag.
+      !! Map the `[ocean.diag] vgrid` string to a `DIAG_VGRID_*` tag.
       !! Unrecognised (schema-validated upstream) falls back to LAYER.
       !! Moved from `rdb_driver` (P2.4) so `engine_configure_diag` can
       !! use it without a driver dependency; re-exported by
@@ -2069,7 +2069,7 @@ contains
 
    subroutine engine_refresh_n_inner(engine, dt, t)
       !! Re-derive the barotropic substep count from the LIVE layer
-      !! thicknesses (`&ocean_bt_nml dtbt`, `dtbt_reset_period >= 0`): the
+      !! thicknesses (`[ocean.bt] dtbt`, `dtbt_reset_period >= 0`): the
       !! domain minimum of `rdb_barotropic_dtbt`'s `dt_max` over wet cells,
       !! reduced across ranks so every rank runs the same count.  Period 0
       !! recomputes every call; period `P > 0` when `t` reaches the next
@@ -2169,7 +2169,7 @@ contains
                                     engine%state%surface_flux, engine%state%bc, t, &
                                     wet_mask=engine%state%multilayer%wet_mask)
       ! JRA55-do-style prescribed atmospheric state (OM3 C2c-2a): a no-op
-      ! when `&ocean_atm_forcing_nml enable = .false.` (the default).
+      ! when `[ocean.atm_forcing] enable = false` (the default).
       ! Order vs `ocean_data_forcing_apply` above does not matter -- both
       ! read the SAME reader brackets `ocean_data_input_update_all` just
       ! refreshed, and neither writes a slot the other reads.
@@ -2184,8 +2184,8 @@ contains
                         engine%state%bc, t)
 
       ! Ocean bulk-flux consumer (OM3 C2c-3a): no-op unless
-      ! `&ocean_bulk_flux_nml enable = .true.` (which `validate_config`
-      ! requires to travel together with `&ocean_atm_forcing_nml enable`).
+      ! `[ocean.bulk_flux] enable = true` (which `validate_config`
+      ! requires to travel together with `[ocean.atm_forcing] enable`).
       call bulk_forcing_apply(engine%grid, engine%state%metrics, engine%state%bc, &
                               engine%state%atm, engine%state%multilayer, engine%state%ice, &
                               engine%state%bulk_forcing, engine%state%surface_stress, &
@@ -2226,7 +2226,7 @@ contains
       ! geometry, once per outer step, beside the porous refresh and
       ! before the dyn step -- so the whole step relaxes toward the
       ! geopotential profile that was asked for rather than toward the
-      ! t = 0 layer positions.  No-op unless `&ocean_sponge_nml
+      ! t = 0 layer positions.  No-op unless `[ocean.sponge]
       ! target_source = "linear_z"`, so every other configuration is
       ! bit-identical.
       call ocean_sponge_refresh_target(engine%grid, engine%state%sponge, &
@@ -2238,7 +2238,7 @@ contains
       ! the seam reads it (`p_surf = (seed | p_surf_atm) + p_ice_load`, full overwrite).  The
       ! bulk forcing wrote `p_surf_atm` on owned cells only, so under `atm_load` its seam ghosts
       ! (periodic wrap, MPI, the tripolar fold: a scalar) are made valid first.  No-op unless
-      ! `&ocean_psurf_nml ice_load` or `atm_load`.
+      ! `[ocean.psurf] ice_load` or `atm_load`.
       if (engine%state%surface_flux%atm_load) then
          call ocean_halo_exchange_centre_field(engine%state%surface_flux%p_surf_atm, engine%grid, &
                                                engine%state%bc)
@@ -2299,7 +2299,7 @@ contains
    end subroutine engine_step
 
    subroutine engine_ice_load_refresh(engine)
-      !! `&ocean_psurf_nml ice_load`: rebuild the carried ice load from the CICE-port ice and snow
+      !! `[ocean.psurf] ice_load`: rebuild the carried ice load from the CICE-port ice and snow
       !! volumes, `p_ice_load = g_bt*(rho_i*vice + rho_s*vsno)` (cell means; Campin et al. 2008;
       !! Adcroft et al. 2019), exchange its seam ghosts, and reassemble `p_surf`.
       !!
@@ -2339,7 +2339,7 @@ contains
       !! it unchanged -- it is the load of the last DELIVERY, up to a thermo interval behind the
       !! restored ice state, so it cannot be rebuilt from that state -- and only reassembles
       !! `p_surf`.  A cold start builds it from the initial ice and, with
-      !! `&ocean_psurf_nml ice_load_balance_ic` (default), lowers the initial sea surface by the
+      !! `[ocean.psurf] ice_load_balance_ic` (default), lowers the initial sea surface by the
       !! water that load displaces (`p_surf_balance_ic_impl`: proportional thinning of every layer
       !! of the column, ghosts too, from the seam-exchanged load) so the ocean starts in balance
       !! with the ice instead of launching a gravity-wave adjustment.  NEVER on a warm restart
@@ -2373,7 +2373,7 @@ contains
       !! internal call order is load-bearing (see the "MANDATED ORDER"
       !! comment below, itself carried over unchanged) and is NOT
       !! reordered here. Returns immediately, a no-op, when
-      !! `&ocean_ice_nml enable = .false.` — bit-identical to before
+      !! `[ocean.ice] enable = false` — bit-identical to before
       !! this phase.
       !!
       !! Call between `engine_step` and `engine_step_finalize` — the
@@ -2384,7 +2384,7 @@ contains
       !! because the thermo-forcing knobs this block reads every
       !! thermo-cadence step (`air_temp`/`restore_lambda`/`sw_down`/
       !! `snowfall`/`transport`/`adv_substeps`/`roll_factor`) are read
-      !! straight from `&ocean_ice_nml` in the driver too, not cached
+      !! straight from `[ocean.ice]` in the driver too, not cached
       !! at setup (unlike `evp_params`/`ic_par`, which the config
       !! builds once, up front).
       type(ocean_engine_t), intent(inout), target :: engine
@@ -2469,7 +2469,7 @@ contains
       ! the NEXT ocean momentum step feels it (one-step-lagged, same
       ! convention as the frazil/heat couplers).
       ! D9.2: the CICE C-grid EVP under the SIS2-derived state
-      ! (`&ocean_ice_dyn_nml dyn_scheme = "cice_c"`) replaces the SIS2 call
+      ! (`[ocean.ice_dyn] dyn_scheme = "cice_c"`) replaces the SIS2 call
       ! and its stress blend; the default "sis2_c" takes the branch below,
       ! untouched.  The transport that follows reads the same `u_ice/v_ice`.
       if (engine%state%ice%dynamics .and. engine%state%ice%dync%enable) then
@@ -2507,7 +2507,7 @@ contains
          if (ice_n_trunc > 0 .and. engine%decomp%rx == 0 .and. engine%decomp%ry == 0) then
             call logger%warning("ice_evp_step: ice velocity CFL-truncated at "// &
                                 to_string(ice_n_trunc)//" faces "// &
-                                "(&ocean_ice_nml cfl_trunc); the ice dynamics is "// &
+                                "([ocean.ice] cfl_trunc); the ice dynamics is "// &
                                 "unstable or the transport step is too long")
          end if
          ! X5 rides inside: the blended tau pair is seam-refreshed
@@ -2564,7 +2564,7 @@ contains
          ! Sea-ice PR 4b: category ice/snow transport + compress_ice,
          ! BEFORE the thermo forcing chain (SIS2 slow sequence:
          ! dynamics+transport, then slow thermo).  Cadence = the thermo step
-         ! (the ice slow step); gated on `&ocean_ice_nml transport` (default
+         ! (the ice slow step); gated on `[ocean.ice] transport` (default
          ! off => byte-identical).
          if (cfg%ocean%ice%transport) then
             call profiler_start("ice_transport")
@@ -2583,7 +2583,7 @@ contains
          end if
          call profiler_start("ice_thermo")
          ! OM3 C2c-3b: once the atmospheric-state provider is live
-         ! (`&ocean_atm_forcing_nml enable`), the ice seam comes from the
+         ! (`[ocean.atm_forcing] enable`), the ice seam comes from the
          ! prescribed atm fields through the LY09 over-ice bulk
          ! linearisation instead of the scalar restoring knobs -- a
          ! no-op swap bit-identically when atm forcing is off (the
@@ -2675,7 +2675,7 @@ contains
    subroutine engine_step_finalize(engine, dt, t, ierr)
       !! Second half of one outer step: derive `Q_heat`/`Q_salt` from
       !! the surface-flux component set (no-op unless
-      !! `&ocean_forcing_nml enable_components`) and, when diagnostics
+      !! `[ocean.forcing] enable_components`) and, when diagnostics
       !! are configured, run one `ocean_diag_t%step`. Call immediately
       !! after `engine_step` and, when sea ice is enabled,
       !! `engine_step_ice` too — see `engine_step`'s docstring for why
@@ -2696,7 +2696,7 @@ contains
       ! every covered column and fill the OWNED heat_cavity/salt_cavity
       ! components.  MUST precede the assembler, which folds them into
       ! Q_heat/Q_salt.  Same thermo cadence, and a no-op (immediate
-      ! return) when &ocean_cavity_melt_nml enable=.false.  Cavity x sea
+      ! return) when [ocean.cavity_melt] enable=false  Cavity x sea
       ! ice is refused at configure, so the ordering against
       ! engine_step_ice's fillers is not a live question.
       call ocean_cavity_flux_step(engine%grid, engine%state%cavity_flux, &
@@ -2711,15 +2711,15 @@ contains
 
       ! Phase 4b — the MELT-ONLY fallback for the boundary-layer `u_*`.
       !
-      ! When `&ocean_tdrag_nml` is on, the RK2 stage drivers publish
+      ! When `[ocean.tdrag]` is on, the RK2 stage drivers publish
       ! `ss%stress_shelf` from the top drag's own `stress_top`, in-stage
       ! and unlagged, and this branch stays out of the way.  When it is
       ! OFF but basal melt is on, nothing else would give KPP/EPBL an
       ! under-ice `u_*` at all — they would mix a covered column on the
       ! masked (exactly zero) wind stress.  The melt slot already solved
       ! for a friction velocity with the SAME `C_d` (the one-drag-
-      ! coefficient rule: `&ocean_cavity_melt_nml cdrag_top` must equal
-      ! `&ocean_tdrag_nml cd`), so re-deriving `|tau_top| = rho_0*u_*^2`
+      ! coefficient rule: `[ocean.cavity_melt] cdrag_top` must equal
+      ! `[ocean.tdrag] cd`), so re-deriving `|tau_top| = rho_0*u_*^2`
       ! from it is the consistent answer, not a second drag law.
       !
       ! HONEST LIMIT: `cav%ustar` is refreshed at the THERMO cadence, at

@@ -92,7 +92,7 @@ module rdb_ice_ledger_terms
    !! energy creation that check cannot see; `test_cice_closure` computes it independently (96 % of the `therm1` heat
    !! residual in a supercooled-ocean run, 1.8e12 J in 96 steps).
    !!
-   !! **Cost and cadence.**  Opt-in (`&ocean_ice_nml ledger`).  A probe is one state-fill launch plus 6 host-synchronised
+   !! **Cost and cadence.**  Opt-in (`[ocean.ice] ledger`).  A probe is one state-fill launch plus 6 host-synchronised
    !! LOCAL EFP reductions (three totals, `fresh`, `fsalt`, `fhocn`); the `therm1` probe adds a fill and four more
    !! (`fswthru`, `evap`, atmosphere), the `newice` probe one (`frazil_vol`); `begin` is 3 + 5 (the state, the three
    !! sources, the thin-snow reset and the heat bound, one more fill each for the products); the transport clip record
@@ -220,7 +220,7 @@ module rdb_ice_ledger_terms
 
    type :: ice_term_ledger_t
       !! The ledger slot (module docstring).  Initialised and mapped ONLY under the new
-      !! scheme with `&ocean_ice_nml ledger`.
+      !! scheme with `[ocean.ice] ledger`.
       logical :: on = .false.
          !! The sequencer probes this ledger.
       logical :: is_init = .false.

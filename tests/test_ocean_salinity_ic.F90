@@ -1,10 +1,10 @@
 !! Analytical tests for the linear-in-z SALINITY initial condition
-!! (`&tracer_nml S_init_surface` / `S_init_bottom`).
+!! (`[tracer] S_init_surface` / `S_init_bottom`).
 module test_ocean_salinity_ic
    !! `S_init_surface`/`S_init_bottom` were registered, type-validated
    !! and then read NOWHERE — the temperature siblings
    !! (`T_init_surface`/`T_init_bottom`) had a seed path and salinity did
-   !! not, so a namelist asking for a haline-stratified column silently
+   !! not, so an input asking for a haline-stratified column silently
    !! got a uniform one.  (Two shipped double-diffusion cases,
    !! `validation_examples/ocean/seamount/seamount_ddiff*.toml`, ask for
    !! exactly that.)  This suite pins the seed that closes the gap:
@@ -27,7 +27,7 @@ module test_ocean_salinity_ic
    !!     the same expression everywhere, exactly as the temperature
    !!     seed does, so a wall-adjacent EOS evaluation sees a real
    !!     density rather than the `rho_0` vanished-layer fallback.
-   !!   * **Pseudo-salt** — with `&ocean_tracers_nml enable_pseudo_salt`
+   !!   * **Pseudo-salt** — with `[ocean.tracers] enable_pseudo_salt`
    !!     the verification tracer is seeded from the FINAL salinity, so
    !!     its day-zero deviation is exactly zero on a stratified IC too.
    !!   * **Bit-identity** — both knobs at their `0.0` default keeps the

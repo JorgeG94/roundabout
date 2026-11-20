@@ -1,4 +1,4 @@
-!! Engine-driven (namelist) dynamic wet/dry case on ONE rank: an emergent
+!! Engine-driven (input) dynamic wet/dry case on ONE rank: an emergent
 !! Gaussian shoal whose wetting/drying front sweeps across the lines
 !! `i = nx/2 | nx/2+1` and `j = ny/2 | ny/2+1` -- the seams of the 2x1, 1x2 and
 !! 2x2 decompositions of `tests/mpi/test_ocean_decomp_bitid_mpi.F90`, whose

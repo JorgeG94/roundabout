@@ -1,4 +1,4 @@
-!! Gates for `&ocean_cavity_dyn_nml draft_config = "file"` — the static
+!! Gates for `[ocean.cavity_dyn] draft_config = "file"` — the static
 !! 2-D NetCDF ice draft, read through the PR-14 reader
 !! (`rdb_ocean_data_input::ocean_data_input_load_static_2d`).
 !!

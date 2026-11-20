@@ -31,7 +31,7 @@ validation_examples/
 | `ocean/geostrophic_adjustment/` | Coriolis coupling, IG-wave radiation at √(gH), 2π/f oscillation at the bump centre, energy conservation after the transient. | Rossby (1937); textbook problem with analytical scales. |
 | `ocean/eady/` | Linear baroclinic-instability growth rate of a thermal-wind-balanced front; saturation to a turbulent eddy field. | Eady (1949); analytical σ ≈ 0.31 · f / √Ri. |
 | `ocean/eddy_test/` | "Do we get eddies?" — stratified, wind-driven double-gyre on a β-plane. WBC instability + barotropic/baroclinic eddies. | Canonical MOM6 `ocean_only/double_gyre`. |
-| `ocean/double_gyre/` | Closer MOM6 reproduction with `driver_run_ocean` + diag manager. Two entries (`double_gyre.nml`, `double_gyre_mom6.nml`). | MOM6 reference run at `~/nci/projects/access-nri/cpu_MOM6/ocean_only/double_gyre`. |
+| `ocean/double_gyre/` | Closer MOM6 reproduction with `driver_run_ocean` + diag manager. Two entries (`double_gyre.nml`, `double_gyre_mom6.toml`). | MOM6 reference run at `~/nci/projects/access-nri/cpu_MOM6/ocean_only/double_gyre`. |
 | `ocean/ice_shelf_cavity/` | A stratified ice-shelf cavity at rest must STAY at rest. Three cases differing by one ingredient each isolate the load bookkeeping (flat lid ⇒ exactly zero), the datum (uniform density ⇒ 1.3e-20) and the sigma-coordinate pressure-gradient truncation under a tilted ice base (the measured Phase-6 baseline). | Losch (2008); ISOMIP+ geometry/EOS from Asay-Davis et al. (2016) *GMD* **9**, 2471–2497; the correction target is Yung, Hallberg, Adcroft & Morrison (2026) *JAMES* **18**, e2025MS005645. |
 
 ## Running anything here
@@ -39,7 +39,7 @@ validation_examples/
 From the repo root:
 
 ```bash
-./build/rdb validation_examples/ocean/<subdir>/<file>.nml
+./build/rdb validation_examples/ocean/<subdir>/<file>.toml
 ```
 
 Each subdir has its own README with expected wallclock, what to

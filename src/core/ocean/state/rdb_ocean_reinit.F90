@@ -55,7 +55,7 @@ contains
       type(ocean_state_t), intent(inout) :: state
       type(hgrid_t), intent(in) :: grid
       logical, intent(in) :: thermo_active
-         !! `&ocean_thermo_nml enable_thermodynamics`: gates the EOS exactly
+         !! `[ocean.thermo] enable_thermodynamics`: gates the EOS exactly
          !! as the step does, so a prescribed `layer_rho_init` survives.
       logical, intent(in) :: reseed_pseudo_salt
          !! `.false.` when the caller set pseudo-salt itself.

@@ -34,7 +34,7 @@ What it does
      1  REFUSED  -- expected (PHYSICAL / KNOWN_GAP) or FAIL;
      2  CRASH / NONFINITE -- non-zero exit, a nan-catch, the remap
         precondition guard, a non-finite console scalar; a crashing cell is
-        re-run with `&ocean_debug_nml chksum` over the last steps to name the
+        re-run with `[ocean.debug] chksum` over the last steps to name the
         phase that MINTED the first non-finite;
      3  BUDGET -- the model's own closed mass/salt/heat residuals.
    Checks 4-6 (MPI decomposition, restart, GPU cross-backend band) slot into
@@ -52,7 +52,7 @@ Usage
             --jobs 4 --out tmp_local_artifacts/compat/last.json
     # every vertical coordinate x split x edge variant x grid, base closures
     python3 tests/regression/compat_matrix.py domain --build-dir build_gfortran
-    # one cell by hand: emit its namelist + inputs and run rdb on it
+    # one cell by hand: emit its input + inputs and run rdb on it
     python3 tests/regression/compat_matrix.py emit --cell c017 --out DIR
     # who tests the test (no model; also in ctest)
     python3 tests/regression/compat_matrix.py self-test
@@ -214,7 +214,7 @@ FW_FILE = "compat_fw.nc"
 
 
 def write_domain_inputs(directory):
-    """Write the bathymetry and the z-level T/S the namelists point at."""
+    """Write the bathymetry and the z-level T/S the inputs point at."""
     for path, cliff in ((BATHY_FILE, False), (BATHY_CLIFF_FILE, True)):
         b = bathymetry(cliff)
         write_netcdf_classic(os.path.join(directory, path), [("y", NY), ("x", NX)],
@@ -253,7 +253,7 @@ def write_domain_inputs(directory):
 
 
 # ===========================================================================
-# 2. The base namelist and the axes
+# 2. The base input and the axes
 # ===========================================================================
 # Base: what every cell carries before the axis overlays.  The vertical-
 # coordinate safety configuration v0.1.0 recommends is ON everywhere (the
@@ -322,7 +322,7 @@ def _vc(vtype, **extra):
 
 # The axes.  ORDER IS PART OF THE SEED: append new axes at the end and new
 # values at the end of an axis, or every cell id moves.  Each value is
-# (name, overlay).  `compat_expect.FEATURES` reads the merged namelist, never
+# (name, overlay).  `compat_expect.FEATURES` reads the merged input, never
 # these names, so a row keeps matching when a value is renamed.
 AXES = [
     ("vcoord", [
@@ -821,7 +821,7 @@ def find_binary(build_dir=None, binary=None):
 
 
 def prepare_cell_dir(cell, cid, root, nml_patch=None, header_extra=""):
-    """Write the cell's namelist + inputs into root/cid; return the nml path."""
+    """Write the cell's input + inputs into root/cid; return the nml path."""
     d = os.path.join(root, cid)
     os.makedirs(d, exist_ok=True)
     write_domain_inputs(d)
@@ -2089,7 +2089,7 @@ def cmd_validate_smoke(args):
         sorted(set(os.listdir(d)) - before)), fails)
     _check("[stats]" not in out and "Total steps" not in out, "and takes no step", fails)
     print("    ({:.2f} s)".format(time.time() - t0))
-    # Positive control: the SAME namelist run for one step does write --
+    # Positive control: the SAME input run for one step does write --
     # so the no-file assertion above has teeth.
     d1 = os.path.dirname(prepare_cell_dir(cell, "control", root, nml_patch={
         "ocean_diag_nml": {"enabled": True, "filename": "smoke", "dt_out": DT},
@@ -2097,7 +2097,7 @@ def cmd_validate_smoke(args):
     rc, out, err, _ = _run(binary, ["cell.toml"], d1, 120)
     _check(rc == 0 and os.path.isdir(os.path.join(d1, "out")) and any(
         n.endswith(".nc") for n in os.listdir(os.path.join(d1, "out"))),
-        "control: the same namelist WITHOUT --validate-only writes out/*.nc (rc {})".format(rc),
+        "control: the same input WITHOUT --validate-only writes out/*.nc (rc {})".format(rc),
         fails)
     # validate_config refusal: a WENO PV scheme on the energy form.
     v = validate_cell(binary, dict(cell, coriolis="sadourny_energy", pv_adv="weno5"),
@@ -2172,7 +2172,7 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=SEED)
     p.add_argument("-v", "--verbose", action="store_true")
     p.set_defaults(fn=cmd_list)
-    p = sub.add_parser("emit", help="write one cell's namelist + inputs")
+    p = sub.add_parser("emit", help="write one cell's input + inputs")
     p.add_argument("--cell", default="base", help="'base' or cNNN of the unconstrained list")
     p.add_argument("--set", action="append", help="axis=value override (repeatable)")
     p.add_argument("--out", required=True)

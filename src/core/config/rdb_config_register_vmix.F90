@@ -5,7 +5,7 @@ submodule(rdb_config) rdb_config_register_vmix
 contains
 
    module subroutine register_kappa_shear(cfg, schema)
-      !! `&ocean_kappa_shear` (JHL08 shear-driven interior mixing).
+      !! `[ocean.kappa_shear]` (JHL08 shear-driven interior mixing).
       !! Exclusive `> 0` bounds (ri_crit, kappa_0, tol_err, prandtl_turb)
       !! are left to the configure-time strict checks.
       type(config_t), target, intent(in) :: cfg
@@ -87,7 +87,7 @@ contains
    end subroutine register_kappa_shear
 
    module subroutine register_tidal_mixing(cfg, schema)
-      !! `&ocean_tidal_mixing` (St-Laurent/Simmons internal-tide mixing).
+      !! `[ocean.tidal_mixing]` (St-Laurent/Simmons internal-tide mixing).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -191,7 +191,7 @@ contains
    end subroutine register_tidal_mixing
 
    module subroutine register_bbl_mixing(cfg, schema)
-      !! `&ocean_bbl_mixing` (law-of-the-wall BBL diapycnal mixing).
+      !! `[ocean.bbl_mixing]` (law-of-the-wall BBL diapycnal mixing).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -222,7 +222,7 @@ contains
    end subroutine register_bbl_mixing
 
    module subroutine register_conv(cfg, schema)
-      !! `&ocean_conv` (Brunt-Vaisala-triggered convective adjustment,
+      !! `[ocean.conv]` (Brunt-Vaisala-triggered convective adjustment,
       !! CVMix_conv-style).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -249,7 +249,7 @@ contains
    end subroutine register_conv
 
    module subroutine register_ddiff(cfg, schema)
-      !! `&ocean_ddiff` (double diffusion: salt fingering + diffusive
+      !! `[ocean.ddiff]` (double diffusion: salt fingering + diffusive
       !! convection, CVMix_ddiff-style).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -292,7 +292,7 @@ contains
    end subroutine register_ddiff
 
    module subroutine register_epbl(cfg, schema)
-      !! `&ocean_epbl` (Reichl & Hallberg 2018 energetics-based PBL).
+      !! `[ocean.epbl]` (Reichl & Hallberg 2018 energetics-based PBL).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -404,7 +404,7 @@ contains
    end subroutine register_epbl
 
    module subroutine register_wavespeed(cfg, schema)
-      !! `&ocean_wavespeed` (B1 first-baroclinic wave speed + Rd).
+      !! `[ocean.wavespeed]` (B1 first-baroclinic wave speed + Rd).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -423,7 +423,7 @@ contains
                           "N2-monotonising depth; NOT IMPLEMENTED (refused together with use_ebt); < 0 = off"))
       pl => cfg%ocean%wavespeed%use_ebt
       call g%add(nml_logical("use_ebt", pl, &
-   "Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (consumed by GM with ocean_gm_nml use_ebt_struct)"))
+     "Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (consumed by GM with [ocean.gm] use_ebt_struct)"))
       pi => cfg%ocean%wavespeed%n_wavespeed
       call g%add(nml_int("n_wavespeed", pi, "Recompute cadence (every N steps)", min=1))
 
@@ -431,7 +431,7 @@ contains
    end subroutine register_wavespeed
 
    module subroutine register_ocean_thermo(cfg, schema)
-      !! `&ocean_thermo_nml`: thermodynamics switch + scalar surface fluxes.
+      !! `[ocean.thermo]`: thermodynamics switch + scalar surface fluxes.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -508,7 +508,7 @@ contains
    end subroutine register_ocean_thermo
 
    module subroutine register_ocean_wetdry(cfg, schema)
-      !! `&ocean_wetdry_nml`: dynamic wetting/drying for the BT substep.
+      !! `[ocean.wetdry]`: dynamic wetting/drying for the BT substep.
       !! Design + validation numbers: docs/ocean_wetdry_plan.md.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -537,7 +537,7 @@ contains
    end subroutine register_ocean_wetdry
 
    module subroutine register_ocean_pgf(cfg, schema)
-      !! `&ocean_pgf_nml`: pressure-gradient-force kernel selector + knobs.
+      !! `[ocean.pgf]`: pressure-gradient-force kernel selector + knobs.
       !! `form` enum mirrors `parse_opgf_variant` in rdb_ocean_pressure_force.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -552,7 +552,7 @@ contains
       ps => cfg%ocean%pgf%form
       ! "montgomery" is a long-spelling alias for "mont": `parse_opgf_variant`
       ! accepts it, so the schema must too or the alias is unreachable through
-      ! the namelist (the enum gate rejects before the parser is ever called).
+      ! the input (the enum gate rejects before the parser is ever called).
       ! Both canonicalise to OPGF_VARIANT_MONT; the only literal comparison on
       ! this key anywhere is against "gprime", so the extra spelling is inert.
       call g%add(nml_enum("form", ps, "PGF kernel variant", &
@@ -583,7 +583,7 @@ contains
       call g%add(nml_logical("insitu_density", pl, &
                              "FV_MOM6 constant-by-layer density at its in-situ pressure "// &
                              "(MOM6 PCM parity); .false. = legacy potential density at "// &
-                             "&ocean_eos_nml p_ref. Inert for the linear EOS"))
+                             "[ocean.eos] p_ref. Inert for the linear EOS"))
       pl => cfg%ocean%pgf%p_top_in_bc
       call g%add(nml_logical("p_top_in_bc", pl, &
                              "FV_MOM6: add the top-of-column load ms%p_top to "// &
@@ -593,7 +593,7 @@ contains
    end subroutine register_ocean_pgf
 
    module subroutine register_ocean_eos(cfg, schema)
-      !! `&ocean_eos_nml`: equation-of-state variant selector, the
+      !! `[ocean.eos]`: equation-of-state variant selector, the
       !! freezing-point (liquidus) coefficient set, and the
       !! potential-density reference pressure.
       !! `eos` enum mirrors `parse_eos_variant` in rdb_eos;
@@ -651,7 +651,7 @@ contains
    end subroutine register_ocean_eos
 
    module subroutine register_ocean_bdrag(cfg, schema)
-      !! `&ocean_bdrag_nml`: bottom-drag selector + coefficients.
+      !! `[ocean.bdrag]`: bottom-drag selector + coefficients.
       !! `form` enum mirrors `parse_bdrag_variant` in rdb_ocean_bottom_drag.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -692,7 +692,7 @@ contains
    end subroutine register_ocean_bdrag
 
    module subroutine register_ocean_tdrag(cfg, schema)
-      !! `&ocean_tdrag_nml`: ice-shelf TOP-drag selector + coefficients.
+      !! `[ocean.tdrag]`: ice-shelf TOP-drag selector + coefficients.
       !! `form` enum mirrors `parse_tdrag_variant` in rdb_ocean_top_drag.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -702,18 +702,18 @@ contains
       logical, pointer :: pl
 
       g%name = "ocean_tdrag"
-      g%doc = "Ice-shelf top-drag selector + coefficients (mirror of &ocean_bdrag_nml)."
+      g%doc = "Ice-shelf top-drag selector + coefficients (mirror of [ocean.bdrag])."
       pl => cfg%ocean%tdrag%enable
       call g%add(nml_logical("enable", pl, &
                              "Enable the ice-shelf top drag (requires "// &
-                             "&ocean_cavity_dyn_nml enable)"))
+                             "[ocean.cavity_dyn] enable)"))
       ps => cfg%ocean%tdrag%form
       call g%add(nml_enum("form", ps, "Top-drag variant", &
                           allowed=[character(len=9) :: "quadratic", "linear"]))
       pr => cfg%ocean%tdrag%cd
       call g%add(nml_real("cd", pr, &
                           "Quadratic top-drag coefficient (0 disables); must equal "// &
-                          "&ocean_cavity_melt_nml cdrag_top when melt is on", &
+                          "[ocean.cavity_melt] cdrag_top when melt is on", &
                           min=0.0_wp))
       pr => cfg%ocean%tdrag%r
       call g%add(nml_real("r", pr, "Linear Rayleigh top-drag coefficient (0 disables)", &
@@ -738,7 +738,7 @@ contains
    end subroutine register_ocean_tdrag
 
    module subroutine register_ocean_vmix(cfg, schema)
-      !! `&ocean_vmix_nml`: vertical-mixing module switches + knobs.
+      !! `[ocean.vmix]`: vertical-mixing module switches + knobs.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -827,10 +827,10 @@ call g%add(nml_real("bkgnd_prandtl", pr, "Background Prandtl number: kv floor = 
                           units="degN", min=0.0_wp))
       ! PP81 interior closure + KPP BL-depth constants — route to the
       ! OCEAN vmix slot (see rdb_ocean_setup.F90:configure_ocean_lateral).
-      ! Do NOT confuse with the similarly-named &nonhydrostatic_nml
+      ! Do NOT confuse with the similarly-named [nonhydrostatic]
       ! kpp_ri_crit/kpp_cs_nonlocal/kpp_c_vt2, which drove the coastal KPP
       ! and are VESTIGIAL since that path was carved out — nothing reads
-      ! them.  These &ocean_vmix_nml keys are the live ones.
+      ! them.  These [ocean.vmix] keys are the live ones.
       pr => cfg%ocean%vmix%pp81_nu0
       call g%add(nml_real("pp81_nu0", pr, "PP81 Richardson-dependent viscosity scale", &
                           units="m^2/s", min=0.0_wp))
@@ -866,13 +866,13 @@ call g%add(nml_real("bkgnd_prandtl", pr, "Background Prandtl number: kv floor = 
       ps => cfg%ocean%vmix%buoyancy_coeffs
       call g%add(nml_enum("buoyancy_coeffs", ps, &
                           "Source of alpha/beta for KPP B_0 + double diffusion: "// &
-                          "constant (scalar &ocean_ic_nml pair) | eos (active EOS derivatives)", &
+                          "constant (scalar [ocean.ic] pair) | eos (active EOS derivatives)", &
                           allowed=[character(len=8) :: "constant", "eos"]))
       call schema%add_group(g)
    end subroutine register_ocean_vmix
 
    module subroutine register_ocean_vdiff(cfg, schema)
-      !! `&ocean_vdiff_nml`: backward-Euler vertical-friction folding knobs.
+      !! `[ocean.vdiff]`: backward-Euler vertical-friction folding knobs.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -892,7 +892,7 @@ call g%add(nml_real("bkgnd_prandtl", pr, "Background Prandtl number: kv floor = 
                              "depth-mean barotropic acceleration uniformly across every "// &
                              "layer, no visc_rem weight. Setting it .true. is a "// &
                              "fail-loud configure error (validate_config). The real MOM6 "// &
-                             "visc_rem*velocity mechanisms are ocean_bt_nml "// &
+                             "visc_rem*velocity mechanisms are [ocean.bt] "// &
                              "renorm_visc_rem and rescale_strong_drag."))
       pl => cfg%ocean%vdiff%implicit_drag
       call g%add(nml_logical("implicit_drag", pl, &
@@ -936,7 +936,7 @@ call g%add(nml_real("bkgnd_prandtl", pr, "Background Prandtl number: kv floor = 
    end subroutine register_ocean_vdiff
 
    module subroutine register_ocean_continuity(cfg, schema)
-      !! `&ocean_continuity_nml`: continuity-PPM positivity controls.
+      !! `[ocean.continuity]`: continuity-PPM positivity controls.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g

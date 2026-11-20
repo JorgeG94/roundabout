@@ -343,7 +343,7 @@ contains
          !! closure.  Ignored by PCM (no reconstruction to close).
       logical, intent(in), optional :: nonunif
          !! Non-uniform-grid reconstruction weights
-         !! (`&vcoord_nml remap_nonuniform_weights`).  Absent or `.false.`
+         !! (`[vcoord] remap_nonuniform_weights`).  Absent or `.false.`
          !! (the default) ⇒ PLM's slope and PPM's edge estimate use their
          !! equal-thickness specialisations, which are linear-exact only on
          !! a uniform SOURCE column.  `.true.` ⇒ the Colella & Woodward

@@ -3,7 +3,7 @@ module rdb_ocean_balance
    !! `ocean_balance_velocity` sets the layer velocities `u_face_x_layer`,
    !! `v_face_y_layer` in GEOSTROPHIC balance with the density field the state
    !! already carries.  The pressure gradient is not re-derived here: the
-   !! model's own kernel (`ocean_pressure_force_compute`, whichever `&ocean_pgf_nml
+   !! model's own kernel (`ocean_pressure_force_compute`, whichever `[ocean.pgf]
    !! form` is configured) is run on the current `h_layer` / `rho_layer`, so the
    !! balance is exact for the discrete operator the dynamics will integrate
    !! (a balanced start does not radiate the discretisation's own imbalance).

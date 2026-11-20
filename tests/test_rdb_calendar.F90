@@ -114,11 +114,11 @@ contains
       if (allocated(error)) return
 
       call parse_date("not-a-date", date, ok)
-      call check(error,.not. ok, "parse_date: malformed date must report ok=.false.")
+      call check(error,.not. ok, "parse_date: malformed date must report ok=false")
       if (allocated(error)) return
 
       call parse_date("", date, ok)
-      call check(error,.not. ok, "parse_date: empty string must report ok=.false.")
+      call check(error,.not. ok, "parse_date: empty string must report ok=false")
       if (allocated(error)) return
 
       ! Impossible days must be refused, not rolled into the next month.
@@ -175,11 +175,11 @@ contains
       if (allocated(error)) return
 
       call parse_time_units("furlongs since 1900-01-01", scale, epoch, ok)
-      call check(error,.not. ok, "parse_time_units: unrecognised unit must report ok=.false.")
+      call check(error,.not. ok, "parse_time_units: unrecognised unit must report ok=false")
       if (allocated(error)) return
 
       call parse_time_units("days 1958-01-01", scale, epoch, ok)
-      call check(error,.not. ok, "parse_time_units: missing 'since' must report ok=.false.")
+      call check(error,.not. ok, "parse_time_units: missing 'since' must report ok=false")
       if (allocated(error)) return
    end subroutine test_parse_time_units
 

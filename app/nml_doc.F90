@@ -1,4 +1,4 @@
-!! Roundabout namelist knob-reference generator.
+!! Roundabout input knob-reference generator.
 program nml_doc
    !! Host-only CLI tool: build a default `config_t`, register the full
    !! strict schema against it, and render every group + knob to Markdown
@@ -30,7 +30,7 @@ program nml_doc
       if (allocated(schema%groups(ig)%keys)) nknobs = nknobs + size(schema%groups(ig)%keys)
    end do
 
-   call logger%info("Wrote namelist knob reference to "//trim(out_path)// &
+   call logger%info("Wrote input knob reference to "//trim(out_path)// &
                     " ("//to_char(ngroups)//" groups, "//to_char(nknobs)//" knobs)")
 
 end program nml_doc

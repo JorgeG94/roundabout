@@ -178,9 +178,9 @@ module rdb_ocean_state
    real(wp), parameter :: ISOMIP_ZB_DEEP = -720.0_wp
       !! `z_b,deep`, maximum depth of the bedrock (m, ELEVATION so
       !! negative).  Table 1.  The dispatch does NOT hard-code this: the
-      !! clip comes from `&ocean_topo_nml max_depth`, so the protocol
+      !! clip comes from `[ocean.topo] max_depth`, so the protocol
       !! value is `max_depth = 720.0`.  Exported for the unit test and
-      !! for anyone writing an ISOMIP+ namelist.
+      !! for anyone writing an ISOMIP+ input.
 
    type :: ocean_state_t
       logical :: is_init = .false.
@@ -263,13 +263,13 @@ module rdb_ocean_state
          !! Bottom-drag kernel (linear Rayleigh or quadratic log-layer).
          !! Acts on the k=1 layer only.
       type(ocean_top_drag_t) :: tdrag
-         !! Ice-shelf TOP-drag kernel (`&ocean_tdrag_nml`, default off).
+         !! Ice-shelf TOP-drag kernel (`[ocean.tdrag]`, default off).
          !! The mirror of `bdrag` at `k = nz`, masked by ice cover on
          !! faces.  Off ⇒ placeholder arrays, no kernel.
       type(ocean_surface_stress_t) :: surface_stress
          !! Surface wind-stress kernel.  Acts on the k=nz layer only.
       type(ocean_cavity_flux_t) :: cavity_flux
-         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`, default
+         !! Ice-shelf basal-melt slot (`[ocean.cavity_melt]`, default
          !! off).  Holds the sampled far field, `u*`, the interface
          !! state, the melt mass flux and the per-column solver status;
          !! its driver fills `surface_flux%heat_cavity`/`salt_cavity`.
@@ -277,7 +277,7 @@ module rdb_ocean_state
       type(ocean_surface_flux_t) :: surface_flux
          !! Surface heat + salt flux slot.  2D `Q_heat(:,:)` / `Q_salt(:,:)`
          !! (W/m^2 and kg/m^2/s, positive downward / salinifying).  Seeded
-         !! at configure from `&ocean_thermo_nml q_heat / q_salt`;
+         !! at configure from `[ocean.thermo] q_heat / q_salt`;
          !! data-override / restoring may overwrite the fields after.
          !! Device-mapped via the orchestrator.
       type(ocean_vertical_advection_t) :: vert_advect
@@ -307,18 +307,18 @@ module rdb_ocean_state
       type(ocean_sea_ice_t) :: ice
          !! Gated sea-ice slot (SIS2 port, `PLAN_SEA_ICE.md`).  PR 0
          !! scaffold: knobs + lifecycle only, no arrays and no physics.
-         !! `&ocean_ice_nml enable` default off ⇒ never initialised /
+         !! `[ocean.ice] enable` default off ⇒ never initialised /
          !! mapped / stepped ⇒ byte-identical.
 
       type(ice_cice_run_t) :: icec
          !! Slots of the CICE-port ice step (flux, radiation, work, averager, imports,
          !! transport workspace, grid rotation, uniform atmosphere).  Initialised ONLY under
-         !! `&ocean_ice_nml scheme = "cice"`; under the default `"sis2"` nothing is allocated,
+         !! `[ocean.ice] scheme = "cice"`; under the default `"sis2"` nothing is allocated,
          !! mapped, registered or counted.
 
       type(ice_cgrid_metrics_t) :: ice_cgrid
          !! C-grid metric set of the CICE EVP dynamics under the SIS2-derived
-         !! ice state (`&ocean_ice_dyn_nml dyn_scheme = "cice_c"`, D9.2).  It
+         !! ice state (`[ocean.ice_dyn] dyn_scheme = "cice_c"`, D9.2).  It
          !! lives here, not in `ocean_sea_ice_t`, because its module reaches
          !! the ocean halo and so the configuration.  Built by the engine from
          !! the final metrics, mapped by `ocean_state_enter_data`; never
@@ -375,14 +375,14 @@ module rdb_ocean_state
          !! device-mapped arrays (the nine fields + regrid weights +
          !! window/scratch buffers), so it DOES carry terms in
          !! `ocean_state_enter_data`/`exit_data`/`bytes`/`destroy`
-         !! below. Default off (`&ocean_atm_forcing_nml enable =
+         !! below. Default off (`[ocean.atm_forcing] enable =
          !! .false.`) => every array stays unallocated => bit-identical.
          !! No consumer yet (the bulk-flux driver + ice seam are C2c-3).
       type(bulk_forcing_t) :: bulk_forcing
          !! Ocean consumer of `atm` (OM3 C2c-3a): persistent cell-centred
          !! stress scratch (`taux_c`/`tauy_c`) + the open-water fraction
          !! used to weight every component when sea ice is enabled.
-         !! Default off (`&ocean_bulk_flux_nml enable = .false.`) =>
+         !! Default off (`[ocean.bulk_flux] enable = false`) =>
          !! unallocated => bit-identical. No ice-seam consumer yet
          !! (`ice_atm_forcing_from_atm` is C2c-3b).
 #endif
@@ -402,7 +402,7 @@ module rdb_ocean_state
          !! registers the age tracer at index 3.  Per-step aging +
          !! surface reset is then called by the dyn step driver.
       logical :: enable_pseudo_salt = .false.
-         !! `&ocean_tracers_nml enable_pseudo_salt`.  Set by the driver
+         !! `[ocean.tracers] enable_pseudo_salt`.  Set by the driver
          !! from cfg BEFORE calling `init(grid)` — pseudo-salt is
          !! registered via `register_passive_tracer` right after
          !! `multilayer%init`, before `ocean_bc_state_init` sizes
@@ -866,7 +866,7 @@ contains
       ! in rdb_ocean_data_input's module docstring).
       call this%data_input%init(cfg%ocean%data)
 #endif
-      ! Linear-EOS reference state, all five members off `&ocean_ic_nml`.
+      ! Linear-EOS reference state, all five members off `[ocean.ic]`.
       ! This runs before `ocean_state_enter_data` AND before the
       ! `configure_ocean_*` pass that copies the whole flat-POD handle
       ! onto the closure slots that carry their own copy
@@ -985,7 +985,7 @@ contains
       !! `data_input` (PR-14) DOES have
       !! allocatables (`f0`/`f1` per registered field) and IS
       !! device-mapped, so it carries a real term below — zero registered
-      !! fields on every shipped namelist keeps that term at 0.
+      !! fields on every shipped input keeps that term at 0.
       class(ocean_state_t), intent(in) :: this
       integer(int64) :: nbytes
 
@@ -1344,7 +1344,7 @@ contains
 
    pure function pgf_nonoverlap_gate_on(cfg, variant) result(on)
       !! Single source of truth for "is the grounded-layer PGF gate armed?"
-      !! (`&ocean_isopycnal_nml pgf_skip_nonoverlap` →
+      !! (`[ocean.isopycnal] pgf_skip_nonoverlap` →
       !! `ocean_pressure_force_t%skip_nonoverlap`).
       !!
       !! Two call sites must agree BEFORE any array is allocated:
@@ -1640,7 +1640,7 @@ contains
       real(wp), intent(in)    :: max_depth
          !! Global basin depth the z interfaces are laid over (`ocean_max_depth`).
       real(wp), intent(in)    :: angstrom_h
-         !! Isopycnal minimum-thickness floor (`&ocean_isopycnal_nml angstrom_h`).
+         !! Isopycnal minimum-thickness floor (`[ocean.isopycnal] angstrom_h`).
       integer  :: i, j, k, nx, ny
       real(wp) :: inv_nz, h_floor, depth, z_bot, z_top, z_top_target
 
@@ -1727,7 +1727,7 @@ contains
    end function topo_length_to_grid_units
 
    pure function grid_config_is_geographic(grid_config) result(geographic)
-      !! `.true.` when `&ocean_grid_nml grid_config` carries positions in
+      !! `.true.` when `[ocean.grid] grid_config` carries positions in
       !! DEGREES (spherical, supergrid, tripolar); `.false.` for cartesian
       !! (metres). The input to `topo_length_to_grid_units`.
       character(len=*), intent(in) :: grid_config
@@ -1774,7 +1774,7 @@ contains
       !! `x` is the ABSOLUTE MISMIP+ along-flow coordinate in METRES
       !! (0 at the ice divide), NOT the model's domain-relative x — the
       !! ISOMIP+ ocean box starts at `x = 320 km` (their Table 3 `x0`),
-      !! which is what `&ocean_topo_nml x_origin` supplies.  Result is an
+      !! which is what `[ocean.topo] x_origin` supplies.  Result is an
       !! ELEVATION (m, positive up), so it is negative everywhere in the
       !! ISOMIP+ box.
       real(wp), intent(in) :: x

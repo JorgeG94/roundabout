@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two-tier STABILITY-CHECKED validation suite for the shipped ocean namelists.
+"""Two-tier STABILITY-CHECKED validation suite for the shipped ocean inputs.
 
 What this adds that the golden-drift suite cannot do
 ====================================================
@@ -30,7 +30,7 @@ time series -- no golden, nothing to enshrine:
                         not physics.
   * **the case's own stated expectation**, where its header makes a testable
     one. Several of those turn out to be FALSE; that is reported as a case
-    failure, never patched away by editing the namelist.
+    failure, never patched away by editing the input.
 
 The two tiers
 =============
@@ -80,7 +80,7 @@ import manifest  # noqa: E402
 import stability_manifest as _stab_manifest  # noqa: E402
 import toml_util  # noqa: E402
 
-# The scheme a BASE case runs, i.e. the `&ocean_bt_nml split_scheme` default in
+# The scheme a BASE case runs, i.e. the `[ocean.bt] split_scheme` default in
 # `rdb_config.F90`.  Printed in the run header so a result file can never be
 # read as "the bare name means whatever is default today": the axis suffix
 # names the OTHER scheme, and these two must be different.
@@ -146,7 +146,7 @@ _NTRUNC_RE = re.compile(r"CFL truncations:\s+\d+\s+this report\s+\((\d+)\s+total
 # number the rx0 ladder is built to dial:
 #   "sigma stiffness rx0 = 0.726 at ... exceeds 0.200"
 _RX0_RE = re.compile(r"rx0\s*=\s*(" + _NUM + r")")
-# The fail-loud ALE remap guard (`&vcoord_nml remap_check_preconditions`):
+# The fail-loud ALE remap guard (`[vcoord] remap_check_preconditions`):
 #   "ALE remap preconditions violated at outer step 1904: 3 column(s); worst
 #    relative column-total mismatch  4.42641E-16 (tolerance  1.00000E-09);
 #    most negative thickness -8.34282E+01"
@@ -381,7 +381,7 @@ def assert_ran(series, want_steps, res):
                        "at least one [stats] line",
                        "no [stats] output parsed -- the run produced nothing to "
                        "assert on",
-                       "Usually a namelist rejected at configure time; read the "
+                       "Usually an input rejected at configure time; read the "
                        "scratch run.log.")
     # The model prints its own authoritative "Total steps: N" at the end. Use
     # that, NOT the last [stats] line: [stats] fires on a cadence stride and so
@@ -758,7 +758,7 @@ def diag_print_quantum(value):
 def assert_remap_preconditions(series):
     """`remap:preconditions` -- the ALE remap's own fail-loud guard never fired.
 
-    The matrix runs with `&vcoord_nml remap_check_preconditions`, which
+    The matrix runs with `[vcoord] remap_check_preconditions`, which
     aborts the run the first time the overlap sweep is handed a column with a
     negative layer or a column total that differs from its target's.  Named
     as its own verdict so a report says WHY a run stopped, not only that it
@@ -1275,7 +1275,7 @@ def _assert_en_checkpoint_claim(series, claim):
 def assert_claims(series, phys, tier=1):
     """The case's OWN stated expectation, where its header makes a testable one.
 
-    Never weakened to pass and never satisfied by editing the namelist: when a
+    Never weakened to pass and never satisfied by editing the input: when a
     header and the code disagree, that IS the finding. A claim may name the
     tiers it is measurable at (`"tiers": [1]`): a "grows 1500x over 60 days"
     figure cannot be checked on a 40-hour twin, and reporting that as a
@@ -1300,7 +1300,7 @@ def assert_claims(series, phys, tier=1):
             drift = abs(mass[-1] - mass[0]) / abs(mass[0])
             out.append(Verdict(
                 "claim:" + claim["name"], drift <= claim["tol"],
-                "{} (the namelist header's own claim)".format(claim["text"]),
+                "{} (the input header's own claim)".format(claim["text"]),
                 "relative mass drift = {}".format(_fmt(drift)),
                 claim.get("meaning", ""), claim.get("ref", "")))
         elif kind == "field_ratio":
@@ -1407,7 +1407,7 @@ def patch_input(src_text, spec, scratch_dir):
     #     runaway, budget residuals) all read the [stats] line, which is free;
     #     the [diag] line only supplies field EXTREMA, for which a handful of
     #     samples is plenty.
-    #   * `&ocean_diag_nml enabled` gates the console line and the NetCDF write
+    #   * `[ocean.diag] enabled` gates the console line and the NetCDF write
     #     together -- there is no console-only mode -- and at tier 1 a frame of
     #     a 600x600x50 case is ~0.9 GB. Eighty frames of that filled the disk
     #     twice on the first sweeps. Four frames is bounded and sufficient.
@@ -1494,7 +1494,7 @@ def evaluate(case, tier, res, series):
     phys.update(spec.get("physics_override") or {})
 
     if res.get("fatal"):
-        return [Verdict("completed", False, "a runnable namelist",
+        return [Verdict("completed", False, "a runnable input",
                         res["fatal"])], []
 
     verdicts = [assert_ran(series, spec["n_steps"], res)]
@@ -1519,7 +1519,7 @@ def evaluate(case, tier, res, series):
 def _force_scheme(case, scheme):
     """Return a copy of `case` with `split_scheme` forced on both tiers.
 
-    A case that already pins a scheme -- in its namelist or through the
+    A case that already pins a scheme -- in its input or through the
     manifest scheme axis -- is returned UNTOUCHED: forcing those would
     silently retarget a case whose whole point is the scheme it names.
     """
@@ -1890,7 +1890,7 @@ def self_test():
     twins = [c for c in manifest.STABILITY_CASES if c.get("split_scheme")]
     n2 = sum(1 for c in manifest.STABILITY_CASES
              if not c["tier2"].get("skip"))
-    # 71 shipped namelists + the 2 Ocean0 E6 tier-1 variants (section Q,
+    # 71 shipped inputs + the 2 Ocean0 E6 tier-1 variants (section Q,
     # 73 non-matrix base cases) + the generated vertical-coordinate matrix: 115
     # INVISCID cells (every family x geometry, the refusals, the N^2 = 0
     # controls, the Wright leg) and 88 VISCOUS cells (the runnable ones;
@@ -1902,12 +1902,12 @@ def self_test():
     vcm = [c for c in base if c.get("matrix")]
     inv = [c for c in vcm if c["matrix"]["leg"] == "inviscid"]
     vis = [c for c in vcm if c["matrix"]["leg"] == "viscous"]
-    check("manifest covers 71 shipped namelists + 2 E6 variants + the "
+    check("manifest covers 71 shipped inputs + 2 E6 variants + the "
           "vcoord matrix ({} base cases, {} matrix cells = {} inviscid + {} viscous, {} at "
           "tier 2)".format(len(base), len(vcm), len(inv), len(vis), n2),
           len(base) - len(vcm) == 73 and len(inv) == 115 and len(vis) == 88)
     # The two legs must differ in the dissipation and in NOTHING else: a
-    # viscous namelist is its inviscid twin with the hvisc/bdrag groups
+    # viscous input is its inviscid twin with the hvisc/bdrag groups
     # changed. Checked on the emitted files, which are what actually runs.
     import vcoord_matrix as _vcm
 
@@ -2066,12 +2066,12 @@ def self_test():
           .format(_m.group(1) if _m else "?"),
           _m is not None and _m.group(1) == _DEFAULT_SPLIT_SCHEME
           and _DEFAULT_SPLIT_SCHEME != _stab_manifest.SCHEME_AXIS_SCHEME)
-    check("...and no twin is built from a namelist that pins the scheme",
+    check("...and no twin is built from an input that pins the scheme",
           not any(_stab_manifest._nml_pins_scheme(t["nml"])
                   for t in twins))
     # The remap precondition guard rides every run whose coordinate remaps,
     # and no run whose coordinate does not (there it would judge stale
-    # scratch).  Derived per tier from the namelist + overrides.
+    # scratch).  Derived per tier from the input + overrides.
     _knob = _stab_manifest.REMAP_CHECK_KNOB
     _bad = []
     for c in manifest.STABILITY_CASES:
@@ -2134,7 +2134,7 @@ def main(argv=None):
                    help="do not validate the tier-2 downscale rules first.")
     p.add_argument("--split-scheme", default=None,
                    choices=("ssp_rk2", "pred_corr"),
-                   help="force &ocean_bt_nml split_scheme on every case that "
+                   help="force [ocean.bt] split_scheme on every case that "
                         "does not already pin one, for an A/B sweep of the "
                         "outer time-splitting. NOT a substitute for the "
                         "permanent scheme axis in the manifest -- it is the "
@@ -2146,7 +2146,7 @@ def main(argv=None):
         print("stability.py self-test -- no model is run\n")
         return self_test()
 
-    print("split scheme  : base cases run the &ocean_bt_nml DEFAULT "
+    print("split scheme  : base cases run the [ocean.bt] DEFAULT "
           "(\"{}\"); `<case>__{}` twins force the other."
           .format(_DEFAULT_SPLIT_SCHEME, _stab_manifest.SCHEME_AXIS_SCHEME))
     backend = args.backend or ("cpu" if args.tier == 2 else "gpu")

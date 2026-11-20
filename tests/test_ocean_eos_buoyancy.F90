@@ -1,5 +1,5 @@
 !! Tests for the EOS-derived thermal-expansion / haline-contraction
-!! coefficients (E4) and for the `&ocean_vmix_nml buoyancy_coeffs` knob
+!! coefficients (E4) and for the `[ocean.vmix] buoyancy_coeffs` knob
 !! that routes them into the KPP surface buoyancy flux and the
 !! double-diffusion density ratio.
 module test_ocean_eos_buoyancy

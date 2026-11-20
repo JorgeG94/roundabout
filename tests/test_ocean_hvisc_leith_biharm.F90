@@ -13,7 +13,7 @@
 !!   5. Bit-identity: closure unset (LMIX_NONE) leaves the
 !!      horizontal-viscosity tendency on the scalar nu_h path,
 !!      bit-for-bit identical to omitting the lateral_mix argument.
-!!   6. FAIL-LOUD audit: every namelist tag that `parse_lateral_closure`
+!!   6. FAIL-LOUD audit: every input tag that `parse_lateral_closure`
 !!      accepts maps to an IMPLEMENTED dispatcher code, and a garbage
 !!      tag maps to LMIX_INVALID which `lateral_closure_is_implemented`
 !!      reports false for — this is exactly what `validate_config`
@@ -376,7 +376,7 @@ contains
    end subroutine test_bit_identity
 
    subroutine test_fail_loud(error)
-      !! Audit the closure dispatcher: every accepted namelist string
+      !! Audit the closure dispatcher: every accepted input string
       !! maps to an IMPLEMENTED code (no silent no-op), and a garbage
       !! string maps to LMIX_INVALID which is NOT implemented — this is
       !! exactly the predicate `validate_config` aborts on.

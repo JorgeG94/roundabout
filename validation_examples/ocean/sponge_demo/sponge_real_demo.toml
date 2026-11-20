@@ -3,16 +3,16 @@
 # 3-D reference field (not a scalar).  Demonstrates the "nudge toward a
 # parent climatology" acceptance criterion WITHOUT a new file reader:
 # `target_source="ic"` snapshots whatever the seeded initial condition is,
-# and `&ocean_zinit_nml` can already point that seed at a pre-regridded
+# and `[ocean.zinit]` can already point that seed at a pre-regridded
 # model-grid T/S climatology NetCDF (see the commented-out block below) —
 # the sponge then nudges the interior back toward it near the west edge.
 # This demo runs analytically-seeded (no external file) so it is
-# self-contained; swap the `&ocean_zinit_nml` block in to point at a real
+# self-contained; swap the `[ocean.zinit]` block in to point at a real
 # climatology.
 #
 # Geometry: same small/fast seamount as ideal_age_demo.toml (64x48x10 @
-# 2 km) so the run finishes in a few seconds. Uses `&ocean_bc_nml` (NOT
-# the coastal-path `&boundary_nml` — the ocean path reads its own group;
+# 2 km) so the run finishes in a few seconds. Uses `[ocean.bc]` (NOT
+# the coastal-path `[boundary]` — the ocean path reads its own group;
 # `west/east/south/north` are the correct ocean-path keys).
 #
 # Run:
@@ -62,10 +62,9 @@ T_init_bottom       = 4.0
 # real parent climatology instead of the analytical profile above — no
 # new reader needed, target_source="ic" below snapshots whatever seed_ts_
 # from_zfile leaves in the tracer registry.
-#&ocean_zinit_nml
-#   enable = .true.
-#   file   = "/path/to/parent_climatology_on_this_grid.nc"
-#/
+#[ocean.zinit]
+# enable = true
+# file = "/path/to/parent_climatology_on_this_grid.nc"
 
 [ocean.coriolis]
 form = "sadourny"
@@ -92,9 +91,9 @@ use_kpp     = true
 auto_n_inner  = true
 cfl_bt_safety = 0.65
 
-# Ocean-path boundary config (NOT &boundary_nml — that's the coastal-path
-# reader; the ocean path's own group is &ocean_bc_nml).  All four edges
-# sponge-tagged with the legacy width/strength — &ocean_sponge_nml below
+# Ocean-path boundary config (NOT [boundary] — that's the coastal-path
+# reader; the ocean path's own group is [ocean.bc]).  All four edges
+# sponge-tagged with the legacy width/strength — [ocean.sponge] below
 # either inherits these (per-edge overrides left at their -1 sentinel) or
 # narrows them per edge.
 [ocean.bc]
@@ -109,9 +108,9 @@ sponge_strength  = 5.0e-4
 # reproduces the legacy cosine ramp above, summed at the four corners)
 # relaxing momentum toward u_ref/v_ref and every tracer toward a 3-D
 # reference field, both snapshotted from the seeded IC (target_source=
-# "ic") — see the &ocean_zinit_nml block above for the climatology-nudge
-# variant.  enable=.false. (the default, omitted here since we want it
-# ON) would run the legacy &ocean_bc_nml band above unchanged.
+# "ic") — see the [ocean.zinit] block above for the climatology-nudge
+# variant.  enable=false (the default, omitted here since we want it
+# ON) would run the legacy [ocean.bc] band above unchanged.
 [ocean.sponge]
 enable         = true
 damp_source    = "band"

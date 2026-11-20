@@ -1,6 +1,6 @@
 # Southern Ocean 1/4 degree, wind-forced, 4-GPU MPI — eddy-resolving ACC
 
-`southern_ocean_025_wind.nml` scales `../southern_ocean_1deg/southern_ocean_1deg_wind.nml`
+`southern_ocean_025_wind.toml` scales `../southern_ocean_1deg/southern_ocean_1deg_wind.toml`
 from MOM6's **OM_1deg** to MOM6's **OM4_025** tripolar geometry — the same
 Antarctic-to-~30 S cut, the same north sponge, the same wind source and
 vertical-grid family — at 4x the horizontal resolution, run on **4 V100s**
@@ -40,10 +40,10 @@ cmake --build build_cc70_mpi -j 8
 mkdir -p /home/jorge/nci/cdx/data/runs/southern_025_run
 cd /home/jorge/nci/cdx/data/runs/southern_025_run
 ln -s /home/jorge/nci/cdx/data/OM4_025_southern INPUT
-cp /path/to/roundabout/validation_examples/ocean/southern_ocean_025/southern_ocean_025_wind.nml .
+cp /path/to/roundabout/validation_examples/ocean/southern_ocean_025/southern_ocean_025_wind.toml .
 cp /path/to/roundabout/validation_examples/ocean/southern_ocean_025/pin_gpu.sh .
 export OMP_NUM_THREADS=1
-mpirun -np 4 ./pin_gpu.sh /path/to/build_cc70_mpi/rdb southern_ocean_025_wind.nml > run.log
+mpirun -np 4 ./pin_gpu.sh /path/to/build_cc70_mpi/rdb southern_ocean_025_wind.toml > run.log
 ```
 
 ## 2. How the inputs were cut and built
@@ -129,7 +129,7 @@ merely close).
   rule for a model layer deeper than the source data) and, for the 5
   (plus every LAND) whole-column-fill cases, copies the nearest valid
   neighbour column. `rdb_ocean_z_init` overwrites every DRY column with
-  the namelist `land_fill_t`/`land_fill_s` regardless of file content, so
+  the input `land_fill_t`/`land_fill_s` regardless of file content, so
   only the wet-cell repair actually matters to the run.
 
 ```bash
@@ -165,18 +165,18 @@ Output sizes: `ocean_hgrid.nc` 100 MB, `ocean_topog.nc` 8.3 MB,
 
 Read directly off the local checkout — not from memory:
 
-| Knob | This namelist | OM4_025 `MOM_input` | Match |
+| Knob | This input | OM4_025 `MOM_input` | Match |
 |---|---|---|---|
 | Time step | `dt_fixed = 900.0` | `DT = 900.0` | exact |
 | EOS | `eos = "wright"` | `EQN_OF_STATE = "WRIGHT"` (overriding the MOM6 default `WRIGHT_FULL`) | exact |
 | Coriolis | `form = "sadourny"` (enstrophy PV-flux) | `CORIOLIS_SCHEME = "SADOURNY75_ENSTRO"` | exact (the 1-degree run used the energy form instead; this config matches OM4_025's own choice) |
 | PGF | `form = "fv_mom6"` | `PressureForce_AFV` + `MASS_WEIGHT_IN_PRESSURE_GRADIENT = True` | closest available form |
-| Biharmonic viscosity | `smag_ah = .true., smag_bi_const = 0.06` | `SMAGORINSKY_AH = True, SMAG_BI_CONST = 0.06` | exact |
+| Biharmonic viscosity | `smag_ah = true, smag_bi_const = 0.06` | `SMAGORINSKY_AH = True, SMAG_BI_CONST = 0.06` | exact |
 | Laplacian viscosity floor | `nu_h = 150.0` m²/s | `LAPLACIAN = True` (Smagorinsky-backed, no explicit floor given) | scaled from the 1-degree run's `nu_h = 2000` roughly as `dx^2`: `(27.5 km / 110 km)^2 * 2000 ≈ 125`; picked 150, inside the 125-250 band the brief asked for |
 | Bottom drag | `form = "quadratic", cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1` | `BOTTOMDRAGLAW` default `CDRAG = 3.0e-3` (not overridden), `HBBL = 10.0`, `DRAG_BG_VEL = 0.1` | exact |
 | Max velocity | `maxvel = 6.0` | `MAXVEL = 6.0` | exact |
 | Depth limits | 9.5 / 6500 / 0 m | `MINIMUM_DEPTH = 9.5`, `MAXIMUM_DEPTH = 6500.0`, `MASKING_DEPTH = 0.0` | exact |
-| GM / Redi | OFF (`&ocean_gm_nml enable = .false.`) | `THICKNESSDIFFUSE = True` (GM-lite thickness diffusion, `RESOLN_SCALED_KHTH`) | **deviation, per the task brief** ("keep it off"); OM4_025 itself runs thickness diffusion, roundabout's GM stays off here as it is in the 1-degree config |
+| GM / Redi | OFF (`[ocean.gm] enable = false`) | `THICKNESSDIFFUSE = True` (GM-lite thickness diffusion, `RESOLN_SCALED_KHTH`) | **deviation, per the task brief** ("keep it off"); OM4_025 itself runs thickness diffusion, roundabout's GM stays off here as it is in the 1-degree config |
 | Vertical grid | 50 `z_fixed` tanh-stretched levels (the 1-degree run's profile) | `NK = 75`, `ALE_COORDINATE_CONFIG = "HYBRID:hycom1_75_800m.nc,sigma2,..."` (75-layer HYCOM1 hybrid) | **deviation, per the task brief** ("the stretched z_fixed profile from the 1-degree runs is fine"); roundabout's `VCOORD_HYCOM` exists but was not asked for here |
 | Vertical mixing | KPP + PP81 (roundabout default-on) | (OM4_025 uses KPP too, via `MOM_CVMix`, not diffed knob-by-knob here) | same family, not knob-matched |
 
@@ -229,7 +229,7 @@ confirm the GPU-direct path was active: `[gpu-bind] halo path: GPU-direct
 ## 6. Decomposition
 
 Chosen from a 48-step, compute-only timing test (comment baked into
-`southern_ocean_025_wind.nml`'s `&mpi_nml`): **4x1 (east-west strips) 8.17 s
+`southern_ocean_025_wind.toml`'s `[mpi]`): **4x1 (east-west strips) 8.17 s
 / 1x4 (north-south strips) 9.21 s / 2x2 9.37 s** — 4x1 wins by ~11-13%.
 Confirmed by the production run's own startup line:
 
@@ -562,7 +562,7 @@ to this 1/4-degree 4-GPU configuration:
 
 ## 12. Commit
 
-The reproducible pieces — this namelist, `pin_gpu.sh`, the two `tools/`
+The reproducible pieces — this input, `pin_gpu.sh`, the two `tools/`
 generalisations (`om1deg_subset.f90`'s `copy_i4_1d` case,
 `om1deg_prepare_wind.py`'s `--hgrid` override), the two new `tools/`
 programs (`om_topo_limit.f90`, `om_zclim_to_zinit.f90`) and

@@ -419,7 +419,7 @@ contains
       ! Region mask — HOST-only (lazily allocated by `init_snapshot` /
       ! `evaluate`, never `!$acc enter data`'d).  Counted anyway now that
       ! `diag_mask_t` has a `bytes()`: the term is 0 on every shipped
-      ! namelist (`ocean_budgets_t` has no production consumer) and keeping
+      ! input (`ocean_budgets_t` has no production consumer) and keeping
       ! it makes the drift hook's "every countable component" rule hold.
       if (allocated(this%mask)) nbytes = nbytes + this%mask%bytes()
    end function ocean_budgets_bytes

@@ -41,7 +41,7 @@ module rdb_ocean_lateral_mix
 
    ! Lateral closure tags.
    integer, parameter :: LMIX_INVALID = -1
-      !! Sentinel for an unrecognised namelist string; aborts loudly at
+      !! Sentinel for an unrecognised input string; aborts loudly at
       !! configure rather than silently falling back to background-only.
    integer, parameter :: LMIX_NONE = 0
       !! No flow-aware closure — falls back to the scalar `nu_h` field.
@@ -1188,7 +1188,7 @@ contains
    end function has_biharmonic_backstop
 
    pure function parse_lateral_closure(name) result(code)
-      !! Translate a namelist string into an `LMIX_*` code.  Returns
+      !! Translate an input string into an `LMIX_*` code.  Returns
       !! `LMIX_INVALID` on an unrecognised value (fail loud at configure);
       !! only "none"/"off"/"" map to `LMIX_NONE`.
       character(len=*), intent(in) :: name

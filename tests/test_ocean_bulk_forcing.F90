@@ -1106,7 +1106,7 @@ contains
    end subroutine test_snow_latent_open_share
 
    subroutine test_snow_latent_no_double_count(error)
-      !! `&ocean_ice_nml snowfall /= 0` (`has_snowfall`): the ice model
+      !! `[ocean.ice] snowfall /= 0` (`has_snowfall`): the ice model
       !! already delivers the open-water snow share to the ocean through
       !! `heat_flux_diag` at the full melt-and-warm enthalpy, `L_f`
       !! included, so the bulk consumer must NOT charge it again.

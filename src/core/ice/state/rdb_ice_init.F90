@@ -2,7 +2,7 @@
 module rdb_ice_init
    !! Seeds `ocean_sea_ice_t`'s six category prognostics
    !! (`part_size`/`m_ice`/`m_snow`/`enth_ice`/`enth_snow`/`sal_ice`) from
-   !! `&ocean_ice_ic_nml`, so a run can *start* with a live ice pack
+   !! `[ocean.ice_ic]`, so a run can *start* with a live ice pack
    !! instead of growing one from frazil (`PLAN_PR24_ice_ic_path.md`).
    !!
    !! v1 ships two ANALYTIC seeding modes on top of the default no-op:
@@ -38,14 +38,14 @@ module rdb_ice_init
    !! ITD every thermo window. Consumers of the ITD MUST read
    !! `ice%mh_lim`, never `HLIM_DFLT_TABLE` (that table is private to
    !! `rdb_ice_state`) and never a re-derivation from `ncat` alone — PR-58
-   !! may override `mh_lim`'s VALUES via `&ocean_ice_nml hlim`, and this
+   !! may override `mh_lim`'s VALUES via `[ocean.ice] hlim`, and this
    !! module's IC must stay consistent with whatever `init` actually
    !! computed. `ice_adjust_categories` applied to an IC-seeded state is
    !! therefore a bit-exact no-op (test oracle, not a call site — see
    !! "What NOT to take" below).
    !!
    !! **Enthalpy, not temperature.** `enth_ice`/`enth_snow` are set from
-   !! the namelist ice temperature `t_ice` through the EXACT
+   !! the input ice temperature `t_ice` through the EXACT
    !! `ice_enth_from_ts` inversion (`rdb_ice_enthalpy`), never assigned
    !! directly — the thermodynamic prognostic is specific enthalpy
    !! (J/kg), never temperature. `sal_ice = s_ice`; snow is fresh
@@ -113,7 +113,7 @@ module rdb_ice_init
 
    type :: ice_ic_params_t
       !! Sea-ice IC scalar knob bundle (mirrors `ice_evp_params_t`).
-      !! Built ONCE from `&ocean_ice_ic_nml` via `ice_ic_params_from_config`;
+      !! Built ONCE from `[ocean.ice_ic]` via `ice_ic_params_from_config`;
       !! every field a plain scalar (no derived-type deref inside the
       !! host loop, same discipline as the EVP params — though this
       !! module never runs on-device at all).
@@ -173,10 +173,10 @@ contains
    pure function ice_ic_params_from_config(conc_config, conc, h_ice, h_snow, &
                                            t_ice, s_ice, arctic_edge, &
                                            antarctic_edge) result(par)
-      !! Small constructor — build once from `&ocean_ice_ic_nml`. Copies
+      !! Small constructor — build once from `[ocean.ice_ic]`. Copies
       !! `ice_evp_params_from_config`'s shape; the one difference is
       !! `conc_config`, a STRING here (parsed internally), because the
-      !! namelist knob is a `nml_enum` string, not an already-parsed
+      !! input knob is a `nml_enum` string, not an already-parsed
       !! integer.
       character(len=*), intent(in) :: conc_config
       real(wp), intent(in) :: conc, h_ice, h_snow, t_ice, s_ice
@@ -212,7 +212,7 @@ contains
       real(wp), intent(in) :: mh_lim(ncat + 1)
          !! Category lower mass limits (kg/m^2), `ice%mh_lim` — NEVER a
          !! re-derivation from `ncat` alone (PR-58 may override its
-         !! values via `&ocean_ice_nml hlim`).
+         !! values via `[ocean.ice] hlim`).
       integer :: c
 
       integer :: k

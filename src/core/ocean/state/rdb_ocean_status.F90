@@ -19,7 +19,7 @@ module rdb_ocean_status
    !! deliberate, not the "taxonomy drift" an early adversarial review
    !! (P0.1, F4) flagged: a mismatch between a FILE's declared dimensions
    !! and the model's config is a file-content problem, distinct from the
-   !! namelist-only checks (`rad_earth`, domain size, tripolar knobs) that
+   !! input-only checks (`rad_earth`, domain size, tripolar knobs) that
    !! `configure_ocean_metrics` itself resolves as `OCEAN_STATUS_ERR_SETUP`
    !! with no file involved at all.
    !!
@@ -56,7 +56,7 @@ module rdb_ocean_status
    integer, parameter :: OCEAN_STATUS_OK = 0
       !! No error.
    integer, parameter :: OCEAN_STATUS_ERR_CONFIG_PARSE = 1
-      !! `read_config`/`read_config_from_string`: strict namelist/schema
+      !! `read_config`/`read_config_from_toml_string`: strict TOML/schema
       !! parse failure (unknown group/key, type/range/enum violation).
    integer, parameter :: OCEAN_STATUS_ERR_CONFIG_VALIDATE = 2
       !! `validate_config`: a cross-knob semantic check failed.

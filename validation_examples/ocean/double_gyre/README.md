@@ -4,26 +4,26 @@ Wind-driven double-gyre on the ocean C-grid dyn-core: the canonical
 Munk/Stommel picture (Sverdrup interior, westward-intensified boundary
 current, two counter-rotating gyres separated by a jet).
 
-These namelists run through the production driver
+These inputs run through the production driver
 (`app/main.F90 → driver_run → driver_run_ocean`), the stress-tested
 path.  Run them with the main `rdb` binary:
 
 ```
-./build/rdb validation_examples/ocean/double_gyre/double_gyre_mom6.nml
+./build/rdb validation_examples/ocean/double_gyre/double_gyre_mom6.toml
 ```
 
 > For a **NetCDF-free** ocean throughput run (e.g. profiling, or building
 > on Intel / AMD with `-DRDB_ENABLE_NETCDF=OFF`), use the standalone
-> ocean benchmark `benchmarks/bench_ocean` — it reads the same namelists
+> ocean benchmark `benchmarks/bench_ocean` — it reads the same inputs
 > through the same setup path but skips the I/O.  See `benchmarks/`.
 
-## `double_gyre_mom6.nml`
+## `double_gyre_mom6.toml`
 
 Reproduces NOAA-GFDL/MOM6-examples/ocean_only/double_gyre as closely as
 the current Roundabout ocean stack allows: 44×40×2 spoon basin, gprime
 reduced-gravity PGF, Sadourny+HK Coriolis, linear bottom drag, z*-full
 vertical coord.  Stable to day 580 with the production envelope.  See
-the header comments in the namelist for the full knob-by-knob mapping to
+the header comments in the input for the full knob-by-knob mapping to
 MOM6 and the known caveats (gprime vs Wright EOS, BOUND_CORIOLIS, HBBL
 drag footprint, spherical→Cartesian projection).
 
@@ -31,10 +31,10 @@ Output: per-rank NetCDF (`out_double_gyre_mom6/double_gyre_rank_*.nc`)
 with SSH, T, S, u, v, KE per model day via the diag manager.
 `animate_double_gyre_3panel.py [NETCDF]` renders it.
 
-## `double_gyre_linear_nk10.nml`
+## `double_gyre_linear_nk10.toml`
 
 The same basin grown to **NK=10** using the linear density-range IC
-(`&ocean_ic_nml rho_lightest = 1035.0, rho_range = 2.0`) — the MOM6
+(`[ocean.ic] rho_lightest = 1035.0, rho_range = 2.0`) — the MOM6
 `COORD_CONFIG="linear"` + `DENSITY_RANGE` analogue.  Instead of a
 hand-listed `layer_rho_init`, the layer densities self-populate
 linearly, so you scale the column by editing `nz_layers` alone.  Because

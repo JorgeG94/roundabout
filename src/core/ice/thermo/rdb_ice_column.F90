@@ -107,7 +107,7 @@ module rdb_ice_column
       !! Consumed by the PR-27 Archimedes freeboard flood
       !! (`ice_column_step` passes `ICE_RHO_ICE/ICE_RHO_OCEAN` into
       !! `ice_snow_ice_flood`). Deliberately independent of
-      !! `&ocean_ice_nml rho_ocean` (the EVP ice-drag reference density,
+      !! `[ocean.ice] rho_ocean` (the EVP ice-drag reference density,
       !! `rdb_ice_evp`) — do not unify them, that would silently couple
       !! the flood threshold to an EVP tuning knob.
    real(wp), parameter :: ICE_H_LO_LIM = 0.0_wp
@@ -676,14 +676,14 @@ contains
       real(wp), intent(in) :: dtt
          !! Timestep (s).
       logical, intent(in) :: do_snow_ice
-         !! Archimedes freeboard flood gate (`&ocean_ice_nml snow_ice`,
+         !! Archimedes freeboard flood gate (`[ocean.ice] snow_ice`,
          !! PR 27) — `.false.` (the default) is a bit-identical no-op:
          !! `snow_to_ice` stays 0 and `ice_snow_ice_flood` is never
          !! called.
       real(wp), intent(in) :: snow
          !! New snow mass this window (kg/m²), `fprec*dtt` — PR 26 source
          !! term, `ice_snow_accumulate`'s `snow` argument. 0 (the
-         !! `&ocean_ice_nml snowfall=0` default) is a bit-identical no-op.
+         !! `[ocean.ice] snowfall=0` default) is a bit-identical no-op.
       real(wp), intent(out) :: tsurf
          !! Surface skin temperature (degC).
       real(wp), intent(out) :: h2o_ocn_to_ice
@@ -840,7 +840,7 @@ contains
       real(wp), intent(in) :: dtt
          !! Timestep (s).
       logical, intent(in) :: do_snow_ice
-         !! Archimedes freeboard flood gate (`&ocean_ice_nml snow_ice`,
+         !! Archimedes freeboard flood gate (`[ocean.ice] snow_ice`,
          !! PR 27), captured by value into the DC loop (same treatment
          !! as `dtt`). `.false.` (the default) is a bit-identical no-op.
       real(wp), intent(in) :: wet_mask(nx, ny)
@@ -865,7 +865,7 @@ contains
          !! Frozen-precipitation rate onto the ice top (kg/m²/s), >= 0 —
          !! PR 26 snowfall seam (`ice%atm_fprec`). Passed to
          !! `ice_column_step` as `fprec(i,j)*dtt`; 0 (the
-         !! `&ocean_ice_nml snowfall=0` default) is a bit-identical no-op.
+         !! `[ocean.ice] snowfall=0` default) is a bit-identical no-op.
       real(wp), intent(in) :: tfw(nx, ny)
          !! Seawater freezing temperature at the ice base (degC).
       real(wp), intent(in) :: fb(nx, ny)

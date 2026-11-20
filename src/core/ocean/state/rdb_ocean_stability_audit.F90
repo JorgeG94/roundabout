@@ -14,7 +14,7 @@ module rdb_ocean_stability_audit
    !! a small set of checks run once, AFTER the real per-cell metric
    !! arrays exist (`ocean_metrics_t`, filled by `configure_ocean_metrics`
    !! + land-masked by `configure_ocean_land_mask`) — never off the
-   !! nominal `&grid_nml dx`/`dy`, which are DEGREES on spherical/tripolar
+   !! nominal `[grid] dx`/`dy`, which are DEGREES on spherical/tripolar
    !! grids and are in any case the NOMINAL spacing, not the smallest
    !! actual cell (a spherical/tripolar grid's smallest cell can be an
    !! order of magnitude below nominal near a pole).
@@ -116,7 +116,7 @@ module rdb_ocean_stability_audit
       !! rather than the physics.
       !!
       !! **It fires on healthy shipped cases, by design.** Measured over
-      !! `validation_examples/ocean/`: 9 of 72 namelists trip it, on four
+      !! `validation_examples/ocean/`: 9 of 72 inputs trip it, on four
       !! distinct geometries. The `double_gyre` `"spoon"` continental
       !! slope reads `0.348` and `neverworld2`'s shelf reads `0.893`
       !! (`seamount_obc_baroclinic` sits just over at `0.235`), and all of
@@ -215,7 +215,7 @@ contains
       !! number checked against `VISCOUS_CFL_LIMIT`. `dx_min` MUST be the
       !! smallest actual cell edge in the domain (e.g.
       !! `metrics_dx_min`/`ocean_stability_min_cell`), never a nominal
-      !! `&grid_nml dx`/`dy` (degrees on non-Cartesian grids). `dx_min<=0`
+      !! `[grid] dx`/`dy` (degrees on non-Cartesian grids). `dx_min<=0`
       !! (degenerate/unset grid) returns 0 (no constraint expressible).
       real(wp), intent(in) :: nu_h, dt, dx_min
       real(wp) :: cfl
@@ -348,7 +348,7 @@ contains
       !! `coriolis_scheme='planetary'` on a non-Cartesian grid (`beta =
       !! 2*omega*cos(lat)/R`, maximal — hence `delta_M` MINIMAL, the
       !! worst case — at the most equatorward row) and a constant `beta`
-      !! (`&ocean_topo_nml coriolis_beta`) everywhere else. `ratio_min` is
+      !! (`[ocean.topo] coriolis_beta`) everywhere else. `ratio_min` is
       !! `huge(1.0_wp)` (no constraint) when `beta<=0` everywhere (an
       !! f-plane run has no Munk boundary layer to resolve).
       type(config_t), intent(in) :: cfg
@@ -576,7 +576,7 @@ contains
                dt_max = ocean_viscous_cfl_max_dt(nu_h, dx_min, VISCOUS_CFL_LIMIT)
                if (auto_protected) then
                   if (rank == 0) then
-                     call logger%warning("&ocean_hvisc_nml nu_h = "//to_string(nu_h)// &
+                     call logger%warning("[ocean.hvisc] nu_h = "//to_string(nu_h)// &
                                          " with dt = "//to_string(dt)//"s gives viscous CFL "// &
                                          to_string(cfl)//" at the smallest cell (dx = "// &
                                          to_string(dx_min/1000.0_wp)//" km, near i="//to_string(i_at)// &
@@ -586,12 +586,12 @@ contains
                                          "EFFECTIVE viscosity within bound. Informational only.")
                   end if
                else
-                  call fail("&ocean_hvisc_nml nu_h = "//to_string(nu_h)// &
+                  call fail("[ocean.hvisc] nu_h = "//to_string(nu_h)// &
                             " with dt = "//to_string(dt)//"s gives viscous CFL "// &
                             to_string(cfl)//" at the smallest cell (dx = "// &
                             to_string(dx_min/1000.0_wp)//" km, near i="//to_string(i_at)// &
                             " j="//to_string(j_at)//"); limit is "//to_string(VISCOUS_CFL_LIMIT)// &
-                            ". Set &ocean_hvisc_nml bound_kh = .true. for a per-cell clamp, "// &
+                            ". Set [ocean.hvisc] bound_kh = true for a per-cell clamp, "// &
                             "or reduce nu_h below "//to_string(nu_h_max)// &
                             ", or reduce dt below "//to_string(dt_max)//"s.", ierr, OCEAN_STATUS_ERR_SETUP)
                   return
@@ -609,7 +609,7 @@ contains
             dt_therm = dt*real(cfg%ocean%vmix%dt_therm_ratio, wp)
             dnum = ocean_diffusive_number(kappa_h, dt_therm, dx_min)
             if (dnum > DIFFUSIVE_NUMBER_LIMIT) then
-               call fail("&ocean_hdiff_nml kappa_h = "//to_string(kappa_h)// &
+               call fail("[ocean.hdiff] kappa_h = "//to_string(kappa_h)// &
                          " violates the explicit forward-Euler diffusive stability bound "// &
                          "kappa_h*dt_therm*(1/dx_min^2+1/dy_min^2) <= "// &
                          to_string(DIFFUSIVE_NUMBER_LIMIT)//" (computed "//to_string(dnum)// &
@@ -626,8 +626,8 @@ contains
             ! hard bound above (Griffies 1998 sec. on the explicit limit).
             if (.not. cfg%ocean%vmix%diabatic_first .and. cfg%ocean%vmix%dt_therm_ratio > 1 &
                 .and. dnum > 0.5_wp*DIFFUSIVE_NUMBER_LIMIT) then
-               call logger%warning("&ocean_hdiff_nml kappa_h = "//to_string(kappa_h)// &
-                                   " with diabatic_first=.false.: the interval-end hdiff takes one "// &
+               call logger%warning("[ocean.hdiff] kappa_h = "//to_string(kappa_h)// &
+                                   " with diabatic_first=false: the interval-end hdiff takes one "// &
                                    "step of dt_therm = "//to_string(dt_therm)//"s, diffusive number "// &
                                    to_string(dnum)//" is above half the stability limit "// &
                                    to_string(DIFFUSIVE_NUMBER_LIMIT))
@@ -650,7 +650,7 @@ contains
                                       to_string(dx_at)//"m, beta = "//to_string(beta_at)//" 1/(m*s) near j="// &
                                       to_string(j_munk)//"); need >= "//to_string(MUNK_MIN_CELLS)// &
                                       " cells or the wall carries grid-scale (2-delta) noise. Raise "// &
-                                      "&ocean_hvisc_nml nu_h to at least "//to_string(nu_h_req)// &
+                                      "[ocean.hvisc] nu_h to at least "//to_string(nu_h_req)// &
                                       " m2/s (and raise ah_max to match — see the next check).")
                end if
             end if
@@ -660,7 +660,7 @@ contains
       ! ---- Check 4: ah_max clamping nu_h inert (WARNING) ----
       if (nu_h > 0.0_wp .and. ah_max > 0.0_wp .and. ah_max < nu_h) then
          if (rank == 0) then
-            call logger%warning("&ocean_hvisc_nml ah_max = "//to_string(ah_max)// &
+            call logger%warning("[ocean.hvisc] ah_max = "//to_string(ah_max)// &
                                 " is BELOW nu_h = "//to_string(nu_h)//" — ah_max is a hard CAP on the "// &
                                 "per-face viscosity, so the configured nu_h is silently clamped down to "// &
                                 "ah_max and never actually applied. Set ah_max >= nu_h (e.g. ah_max = "// &
@@ -710,7 +710,7 @@ contains
                                       "nu_h = 10000 double-gyre and neverworld2 cases rely on. A "// &
                                       "quiescent, weakly-damped or long spin-up run is NOT: smooth "// &
                                       "the topography to rx0 <= "//to_string(SIGMA_STIFFNESS_LIMIT)// &
-                                      " (under an ice shelf, raising &ocean_cavity_dyn_nml "// &
+                                      " (under an ice shelf, raising [ocean.cavity_dyn] "// &
                                       "h_min_cavity removes the thinnest columns), or use a "// &
                                       "coordinate whose interfaces do not follow the topography. "// &
                                       "Viscosity and a smaller dt DELAY a runaway, they do not "// &

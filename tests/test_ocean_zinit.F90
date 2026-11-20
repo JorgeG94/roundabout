@@ -237,7 +237,7 @@ contains
 
       call check(error, all(msf%tracers(msf%idx_temperature)%c == ms0%tracers(ms0%idx_temperature)%c) .and. &
                  all(msf%tracers(msf%idx_salinity)%c == ms0%tracers(ms0%idx_salinity)%c), &
-                 "to_cons_abs=.false. must be bit-identical to the default reader")
+                 "to_cons_abs=false must be bit-identical to the default reader")
       if (allocated(error)) return
 
       ng = NGHOST
@@ -870,7 +870,7 @@ contains
 
    ! =================================================================
    ! Cross-module convention gate: the sponge's analytic `linear_z`
-   ! target and the `&ocean_zinit_nml source="linear"` IC must be the
+   ! target and the `[ocean.zinit] source="linear"` IC must be the
    ! SAME profile.
    !
    ! `rdb_ocean_sponge` is compiled unconditionally while

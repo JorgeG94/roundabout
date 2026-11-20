@@ -1015,7 +1015,7 @@ contains
          !$acc           iarea_bu, iarea_t, idx_cu, idy_cv)
          if (wd_on) then
             ! ---- Pass 1w (wet/dry): positive-definite upwind flux form ----
-            ! Replaces the centred Pass 1 below when `&ocean_wetdry_nml
+            ! Replaces the centred Pass 1 below when `[ocean.wetdry]
             ! enable` (docs/ocean_wetdry_plan.md §3).  Four sweeps on the
             ! same async queue:
             !   1w-a  provisional face fluxes — UPWIND total depth (mass is

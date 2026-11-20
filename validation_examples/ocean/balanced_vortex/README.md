@@ -1,7 +1,7 @@
 # Isolated balanced vortex on a beta-plane (eddy-tilt experiment)
 
 A single mesoscale warm- or cold-core eddy is started in geostrophic /
-thermal-wind balance (`&ocean_ic_nml ic_config = "balanced_vortex"`), then
+thermal-wind balance (`[ocean.ic] ic_config = "balanced_vortex"`), then
 left to drift on a mid-latitude beta-plane. Question: do the upper and lower
 parts of the vortex move at different speeds (a vertical TILT), and what does
 that do to the SURFACE vorticity? Hydrostatic is the right model here (aspect
@@ -30,10 +30,10 @@ rest -- the unbalanced start).
 
 | File | What |
 |---|---|
-| `vortex_beta.nml` | warm core (+2 K, anticyclone), beta = 2e-11, 40 days |
-| `vortex_beta_cyclone.nml` | cold core (-2 K, cyclone) twin |
-| `vortex_fplane.nml` | the warm vortex with beta = 0: must stay put (control) |
-| `vortex_beta.py` | Python-API port of all three (`warm`, `cyclone`, `fplane`); same config as the `.nml` files |
+| `vortex_beta.toml` | warm core (+2 K, anticyclone), beta = 2e-11, 40 days |
+| `vortex_beta_cyclone.toml` | cold core (-2 K, cyclone) twin |
+| `vortex_fplane.toml` | the warm vortex with beta = 0: must stay put (control) |
+| `vortex_beta.py` | Python-API port of all three (`warm`, `cyclone`, `fplane`); same config as the `.toml` files |
 
 All: 400 km x 400 km closed box at 5 km (80x80), H = 4000 m flat, **40 layers**
 (100 m; the Hv = 700 m core spans ~10 layers; sigma = z on a flat bed),
@@ -56,7 +56,7 @@ Two constraints that bit during development:
   to run on CPU for a few steps only; the 40-layer, 40-day runs are for the GPU.
 
 ```bash
-./build/rdb validation_examples/ocean/balanced_vortex/vortex_beta.nml
+./build/rdb validation_examples/ocean/balanced_vortex/vortex_beta.toml
 # or the same run from the Python API (cases: warm | cyclone | fplane)
 python3 validation_examples/ocean/balanced_vortex/vortex_beta.py
 python3.10 validation_examples/ocean/balanced_vortex/analyze_vortex_tilt.py \
@@ -87,7 +87,7 @@ density and SSH started from rest ends at 47 % of the balanced surface KE
 The IC is bit-identical across rank layouts (`balanced_vortex` and `balanced_vortex_t0` cases of
 `tests/mpi/test_ocean_decomp_bitid_mpi.F90`).
 
-**40-day runs of the shipped namelists** (40 layers, `dT_dz = 4e-3`, `dt = 600 s`),
+**40-day runs of the shipped inputs** (40 layers, `dT_dz = 4e-3`, `dt = 600 s`),
 produced at commit `293f87470` on the GPU (one V100, about 150 s per run):
 
 | Case | start (km) | day 40 (km) |

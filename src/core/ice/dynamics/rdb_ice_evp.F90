@@ -50,7 +50,7 @@ module rdb_ice_evp
    !!   D1  no sea-surface-tilt term (SIS2 `PFu`/`PFv`) — v1 assumes flat
    !!       eta for the ice; a future PR wires the ocean SSH.
    !!   D2  CLOSED by PR 36 — `PROJECT_ICE_CONCENTRATION` is ported as
-   !!       `&ocean_ice_nml project_ci` (SIS2 default `.true.`; Roundabout
+   !!       `[ocean.ice] project_ci` (SIS2 default `.true.`; Roundabout
    !!       default `.false.` ⇒ byte-identical, the house bit-identity
    !!       rule).  When on, `evp_project_ci_impl` projects `ci` (and hence
    !!       `pres_mice`) forward each subcycle from the CALL's initial
@@ -61,7 +61,7 @@ module rdb_ice_evp
    !!       `vel_underflow`/`str_underflow` (default 0), `weak_low_shear`
    !!       (default off), `DT_RHEOLOGY` (NSTEPS_DYN only), hi-freq/sigI/
    !!       sigII diagnostics, `drag_bg_vel2` (SIS2 hardwires 0).  CFL
-   !!       truncation's CFL half is CLOSED by PR 36 — `&ocean_ice_nml
+   !!       truncation's CFL half is CLOSED by PR 36 — `[ocean.ice]
    !!       cfl_trunc` (SIS2 `CFL_TRUNCATE`, default 0.5 there, `0.0` here
    !!       ⇒ byte-identical) clips the FINAL transport velocity to
    !!       `0.95*cfl_trunc*areaT(donor)/(dt_transport*dy_cu)`
@@ -140,7 +140,7 @@ module rdb_ice_evp
    !!       stress snapshot (`tau_a_x`/`tau_a_y`); no ice-specific bulk
    !!       drag law (that part is unchanged — a future ice-specific bulk
    !!       drag law is PR-55/RESUME #8's problem).  PR 62's
-   !!       `&ocean_ice_nml a_face_stress` (default OFF) weights BOTH this
+   !!       `[ocean.ice] a_face_stress` (default OFF) weights BOTH this
    !!       wind stress AND the ice-ocean drag in the momentum balance by
    !!       the face ice concentration `a_u = 0.5*(ci(i-1,j)+ci(i,j))`
    !!       (`evp_u_momentum_impl`/`evp_v_momentum_impl`), giving the
@@ -260,7 +260,7 @@ module rdb_ice_evp
       !! EVP physical + numerical parameters (SIS2 `SIS_C_dyn_CS` subset).
       !! Passed `intent(in)` into the core; every scalar is hoisted to a
       !! local before the substep loop (no derived-type deref inside a
-      !! `do concurrent`).  Defaults + meanings mirror the `&ocean_ice_nml`
+      !! `do concurrent`).  Defaults + meanings mirror the `[ocean.ice]`
       !! block in `rdb_config.F90` (the config is the authoritative knob
       !! set; keep the two in sync).
       real(wp) :: p0 = 2.75e4_wp
@@ -287,7 +287,7 @@ module rdb_ice_evp
       logical :: a_face_stress = .false.
          !! PR 62: weight the atmospheric stress AND the ice-ocean drag in
          !! the momentum balance by the face ice concentration `a_u`
-         !! (`&ocean_ice_nml a_face_stress`). Default off ⇒ byte-identical.
+         !! (`[ocean.ice] a_face_stress`). Default off ⇒ byte-identical.
       real(wp) :: cfl_trunc = 0.0_wp
          !! PR 36: SIS2 `CFL_TRUNCATE` (SIS2 default 0.5). Transport-CFL
          !! ceiling on the final ice velocity; `0` disables the clip.
@@ -317,13 +317,13 @@ contains
                                             del_sh_min_scale, tdamp, &
                                             evp_sub_steps, a_face_stress, &
                                             cfl_trunc, cfl_trunc_dyn_its, project_ci) result(par)
-      !! Small constructor — build once from `&ocean_ice_nml` config.
+      !! Small constructor — build once from `[ocean.ice]` config.
       !! 11 args (> the style guide's 6): pre-existing deviation, sanctioned
       !! by the derived-type-grouping escape hatch (`FORTRAN_STYLE.md`
       !! §Public procedure arguments) — the whole point of `ice_evp_params_t`
       !! is to be this constructor's one-shot host. Positional (not
       !! `optional`): a knob threaded to the config/schema but not to this
-      !! constructor reads from the namelist, validates, and does nothing —
+      !! constructor reads from the input, validates, and does nothing —
       !! the dead-knob class the audit indicts. The compiler catches the
       !! omission; `optional` would not.
       real(wp), intent(in) :: p0, c0, ec, cdw, rho_ocean, del_sh_min_scale, tdamp
@@ -362,7 +362,7 @@ contains
       !!
       !! DEVIATION from SPEC §4.1's literal signature: `par` is an
       !! explicit argument here (the spec's shim signature omits it, but
-      !! the shim has no other route to `&ocean_ice_nml` — the driver
+      !! the shim has no other route to `[ocean.ice]` — the driver
       !! builds `par` ONCE via `ice_evp_params_from_config` and passes it
       !! into every call, which is both cheaper and clearer than a hidden
       !! module-level singleton).

@@ -1,9 +1,9 @@
 !! The CICE6 C-grid EVP dynamics under the SIS2-derived ice state, through the
-!! PRODUCTION engine path (D9.2): the switch `&ocean_ice_dyn_nml dyn_scheme`,
+!! PRODUCTION engine path (D9.2): the switch `[ocean.ice_dyn] dyn_scheme`,
 !! the slot, its coupling to the ocean (tilt from the surface height, ocean
 !! surface current, stress hand-off), restart and the configure-time refusals.
 !!
-!! Every case builds an engine from a namelist (`engine_setup` ->
+!! Every case builds an engine from an input (`engine_setup` ->
 !! `engine_enter_data`) and steps it the driver's way (`engine_step` ->
 !! `engine_step_ice` -> `engine_step_finalize`); the analytic cases call
 !! `ice_dyn_c_step` on the engine's own state with the ocean held frozen, which
@@ -102,7 +102,7 @@ contains
    end subroutine collect_cice_dyn_c_engine_tests
 
    ! ------------------------------------------------------------------
-   ! namelists and engine plumbing
+   ! inputs and engine plumbing
    ! ------------------------------------------------------------------
 
    function case_nml(label) result(nml)
@@ -256,7 +256,7 @@ contains
    end function case_nml
 
    function set_nml(nml, group, key, val) result(r)
-      !! `key = val` in the TOML table of the namelist-group name `group` (`ocean_<x>_nml` -> `[ocean.<x>]`,
+      !! `key = val` in the TOML table of the input-group name `group` (`ocean_<x>_nml` -> `[ocean.<x>]`,
       !! `<x>_nml` -> `[<x>]`) of `nml`: replaced when present, added otherwise (a table that is absent is appended).
       character(len=*), intent(in) :: nml, group, key, val
       character(len=:), allocatable :: r, tab, hdr
@@ -481,7 +481,7 @@ contains
       call check(error, index(t, "PARSE-REFUSED") > 0 .or. index(t, "dyn_scheme") > 0, "an unknown scheme is refused")
       if (allocated(error)) return
       call refusal_text(replace(base, "dynamics = true", "dynamics = false"), t)
-      call check(error, index(t, "dynamics=.true.") > 0, "cice_c needs dynamics=.true.: "//t)
+      call check(error, index(t, "dynamics=true") > 0, "cice_c needs dynamics=true: "//t)
       if (allocated(error)) return
       call refusal_text(replace(base, "nghost = 3", "nghost = 2"), t)
       call check(error, index(t, "nghost >= 3") > 0, "cice_c needs nghost >= 3: "//t)

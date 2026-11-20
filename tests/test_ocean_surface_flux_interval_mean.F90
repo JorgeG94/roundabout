@@ -1,4 +1,4 @@
-!! Interval-mean surface fluxes at `&ocean_vmix_nml dt_therm_ratio = N > 1`.
+!! Interval-mean surface fluxes at `[ocean.vmix] dt_therm_ratio = N > 1`.
 !!
 !! The thermodynamic step spends its surface flux over `N*dt`, so the assembled `Q_heat` / `Q_salt` /
 !! `fw_net` must be built from the TIME MEAN of the atmospheric / data-forcing components received during
@@ -23,7 +23,7 @@
 !!      last assembly, every mean is over `N` samples (`N-1` in the first deferred interval), and
 !!      `Q_heat`, `fw_net`, `Q_salt`, `sw_net` are those means with the sums empty afterwards and
 !!      `sw_net` held in between.  Two further cases drive a REAL per-step filler (time-varying
-!!      `&ocean_dataovr_nml` heat and lprec ramps, nothing hand-set), so an accumulate placed before
+!!      `[ocean.dataovr]` heat and lprec ramps, nothing hand-set), so an accumulate placed before
 !!      the fillers (a one-step shift of a strictly increasing ramp) fails.
 !!   5. `ifm_restart_registered`: the sums, the count and `sw_net` are restart state; ratio-1 restart
 !!      files do not carry them.
@@ -779,7 +779,7 @@ contains
    end subroutine engine_case
 
    subroutine filler_case(error, ratio, deferred, label)
-      !! A REAL per-step filler (`&ocean_dataovr_nml` heat and lprec files, time-varying) writes the
+      !! A REAL per-step filler (`[ocean.dataovr]` heat and lprec files, time-varying) writes the
       !! components inside `engine_step`; nothing is hand-set.  Both ramps are strictly increasing, so a
       !! sample taken BEFORE the filler ran (the previous step's value) shifts every mean by a step and
       !! fails the tight tolerance.

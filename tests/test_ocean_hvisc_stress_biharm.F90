@@ -438,7 +438,7 @@ contains
 
       call check(error, max_diff > 1.0e-12_wp, &
                  "stress_tensor + smag_ah_active: face-biharmonic arm must produce a "// &
-                 "tendency different from smag_ah_active=.false.")
+                 "tendency different from smag_ah_active=false")
 
       call lmix_on%destroy()
       call hv_on%destroy()

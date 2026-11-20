@@ -55,13 +55,13 @@ module rdb_vcoord
    public :: parse_z_fixed_profile
    public :: z_fixed_nominal_dz
 
-   ! ---- `VCOORD_Z_FIXED` nominal-thickness profiles (`&vcoord_nml z_fixed_profile`) ----
+   ! ---- `VCOORD_Z_FIXED` nominal-thickness profiles (`[vcoord] z_fixed_profile`) ----
    integer, parameter, public :: ZFIXED_PROFILE_INVALID = -1
       !! Unrecognised `z_fixed_profile` string.
    integer, parameter, public :: ZFIXED_PROFILE_UNIFORM = 0
       !! `max_depth/nz` everywhere — the historical (and default) layering.
    integer, parameter, public :: ZFIXED_PROFILE_LIST = 1
-      !! Explicit nominal thicknesses, `&vcoord_nml z_fixed_dz`, surface first.
+      !! Explicit nominal thicknesses, `[vcoord] z_fixed_dz`, surface first.
    integer, parameter, public :: ZFIXED_PROFILE_TANH = 2
       !! Hyperbolic-tangent stretching from `z_fixed_dz_top` at the surface.
    integer, parameter, public :: ZFIXED_DZ_OK = 0
@@ -240,7 +240,7 @@ contains
       end select
 
       ! Defence in depth.  `validate_config` refuses this outright, so a
-      ! namelist-driven run never reaches here; this catches the FFI /
+      ! input-driven run never reaches here; this catches the FFI /
       ! two-phase `rdb_create` paths that build a vcoord without going
       ! through config validation.  Threshold is `nz + 1` — see
       ! `nz_stack_required`.
@@ -690,7 +690,7 @@ contains
       !!     filler layers stop being vanished and start participating in the
       !!     physics — see `vcoord_h_min_role`.  Callers that genuinely want a
       !!     LIVE minimum layer thickness want the D4 floor knob
-      !!     (`&ocean_isopycnal_nml angstrom_h`), not this one.
+      !!     (`[ocean.isopycnal] angstrom_h`), not this one.
       !!     `validate_config` only WARNS on this one today: the repo's own
       !!     Python worked example sits in the band, so refusing it would
       !!     stop a configuration that runs.  Promoting it to fail-loud is a
@@ -701,12 +701,12 @@ contains
       !! `h_min == H_VANISHED` is accepted: every downstream vanish gate is a
       !! strict `> H_VANISHED`, so a layer sitting exactly on the marker still
       !! reads as vanished.  It is the boundary, though — the shipped
-      !! namelists sit on it, so any gate that ever relaxes to `>=` changes
+      !! inputs sit on it, so any gate that ever relaxes to `>=` changes
       !! their answers.
       integer, intent(in) :: coord_type
          !! `VCOORD_*` code (from `parse_vcoord_type`).
       real(wp), intent(in) :: h_min
-         !! The configured `&vcoord_nml zstar_h_min` (m).
+         !! The configured `[vcoord] zstar_h_min` (m).
       ok = .true.
       if (h_min <= 0.0_wp) then
          ok = .false.
@@ -716,10 +716,10 @@ contains
       end if
    end function vcoord_h_min_is_coherent
 
-   ! ---- String-to-enum parsers for namelist config ----
+   ! ---- String-to-enum parsers for input config ----
 
    pure integer function parse_vcoord_type(str, default_code) result(coord_type)
-      !! Convert a namelist string to a `VCOORD_*` constant (shared by coastal
+      !! Convert an input string to a `VCOORD_*` constant (shared by coastal
       !! and ocean backends). Unrecognised ⇒ `default_code` if given, else
       !! `VCOORD_SIGMA`. Ocean callers pass `default_code = VCOORD_EULERIAN_Z`.
       character(len=*), intent(in) :: str
@@ -754,7 +754,7 @@ contains
    end function parse_vcoord_type
 
    pure integer function parse_stretching_mode(str) result(mode)
-      !! Convert a namelist string to a STRETCH_* constant.
+      !! Convert an input string to a STRETCH_* constant.
       character(len=*), intent(in) :: str
       select case (trim(adjustl(str)))
       case ("log")
@@ -767,7 +767,7 @@ contains
    end function parse_stretching_mode
 
    pure integer function parse_remap_method(str) result(method)
-      !! Convert a namelist string to a REMAP_* constant.
+      !! Convert an input string to a REMAP_* constant.
       character(len=*), intent(in) :: str
       select case (trim(adjustl(str)))
       case ("pcm")
@@ -786,7 +786,7 @@ contains
    end function parse_remap_method
 
    pure integer function parse_z_fixed_profile(str) result(code)
-      !! `&vcoord_nml z_fixed_profile` string -> `ZFIXED_PROFILE_*` code
+      !! `[vcoord] z_fixed_profile` string -> `ZFIXED_PROFILE_*` code
       !! (`ZFIXED_PROFILE_INVALID` for anything else — the caller fails loud).
       character(len=*), intent(in) :: str
       select case (trim(adjustl(str)))
@@ -833,9 +833,9 @@ contains
       integer, intent(in) :: nz
          !! Number of layers.
       real(wp), intent(in) :: h_ref
-         !! Reference column depth (m) — `&ocean_topo_nml max_depth`.
+         !! Reference column depth (m) — `[ocean.topo] max_depth`.
       real(wp), intent(in) :: dz_list(:)
-         !! `&vcoord_nml z_fixed_dz` (m), surface first; `<= 0` = unset.
+         !! `[vcoord] z_fixed_dz` (m), surface first; `<= 0` = unset.
       real(wp), intent(in) :: dz_top
          !! tanh: surface-layer thickness (m).
       real(wp), intent(in) :: center

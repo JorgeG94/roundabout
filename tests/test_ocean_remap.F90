@@ -770,7 +770,7 @@ contains
 
    subroutine test_precondition_scan(error)
       !! `ocean_remap_scan_preconditions` is the domain sweep the fail-loud
-      !! guard (`&vcoord_nml remap_check_preconditions`) runs at the thermo
+      !! guard (`[vcoord] remap_check_preconditions`) runs at the thermo
       !! cadence (audit findings V5, V6).  It must be silent on a healthy
       !! field, count exactly the offending columns, and report magnitudes
       !! large enough to identify the producer — a relative column-total

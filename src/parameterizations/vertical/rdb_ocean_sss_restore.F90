@@ -2,7 +2,7 @@
 !! per-cell clamp and a global net-zero adjustment.
 module rdb_ocean_sss_restore
    !! Surface salinity restoring toward a time-varying 2-D target field
-   !! (`surface_flux%sss_target`, blended from `&ocean_restore_nml sss_file`
+   !! (`surface_flux%sss_target`, blended from `[ocean.restore] sss_file`
    !! by `ocean_data_forcing_apply`), in the salt-flux form used by
    !! climatological ocean models (Griffies et al. 2009, "Coordinated
    !! Ocean-ice Reference Experiments (COREs)", Ocean Modelling 26, sec.

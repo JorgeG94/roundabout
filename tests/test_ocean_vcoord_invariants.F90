@@ -8,7 +8,7 @@
 !! place?"*.  This suite answers a different question — *"does the builder
 !! ever produce a column that is not a column?"* — by sweeping properties
 !! that must hold for EVERY family on EVERY column, including the ones no
-!! shipped namelist has ever handed it:
+!! shipped input has ever handed it:
 !!
 !!   * `H` from `2·H_VANISHED` (3e-4 m) to 5000 m, plus a land column;
 !!   * `η ∈ {0, ±1e-10, ±0.01·H, ±0.3·H}` — the `±1e-10` pair is the

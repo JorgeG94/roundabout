@@ -5,10 +5,10 @@ Two companion cases over the same 40×30 @ 10 km flat f-plane basin
 
 | File | Ice dynamics | Duration | Question |
 |---|---|---|---|
-| `polar_freezeup_thermo.nml` | off | 90 days | does frazil nucleate and does the column model grow plausible ice from a supercooled surface? |
-| `polar_freezeup_dynamics.nml` | C-grid EVP, wind-driven | 20 days | does the EVP solver respond to wind stress and transition from free drift to strength-limited drift as the ice thickens? |
+| `polar_freezeup_thermo.toml` | off | 90 days | does frazil nucleate and does the column model grow plausible ice from a supercooled surface? |
+| `polar_freezeup_dynamics.toml` | C-grid EVP, wind-driven | 20 days | does the EVP solver respond to wind stress and transition from free drift to strength-limited drift as the ice thickens? |
 
-Formulations exercised, by paper (see each namelist's header for the
+Formulations exercised, by paper (see each input's header for the
 per-knob rationale):
 
 - **Column thermodynamics** — Winton (2000) two-layer formulation
@@ -38,13 +38,13 @@ per-knob rationale):
 
 ```bash
 source nvhpc_env.sh   # or mac_env.sh for a CPU build
-build_cc70/rdb validation_examples/ocean/sea_ice/polar_freezeup_thermo.nml
-build_cc70/rdb validation_examples/ocean/sea_ice/polar_freezeup_dynamics.nml
+build_cc70/rdb validation_examples/ocean/sea_ice/polar_freezeup_thermo.toml
+build_cc70/rdb validation_examples/ocean/sea_ice/polar_freezeup_dynamics.toml
 ```
 
-## Namelist fix applied for the v0.1.0 release candidate
+## Input fix applied for the v0.1.0 release candidate
 
-**`polar_freezeup_dynamics.nml` shipped `t_end = 0.5` (half a day) while
+**`polar_freezeup_dynamics.toml` shipped `t_end = 0.5` (half a day) while
 its own header documented a 20-day run** ("Shorter run than the thermo
 case (20 days, not 90) ... By day 20 the thermo twin shows ~0.77 m mean
 thickness..."). At `t_end = 0.5` the run ends before ice even nucleates
@@ -55,7 +55,7 @@ measurements.
 
 ## Results (GPU build, nvfortran 26.5, cc70, V100, single rank, 2026-10-06)
 
-### Thermodynamics (`polar_freezeup_thermo.nml`, 90 days)
+### Thermodynamics (`polar_freezeup_thermo.toml`, 90 days)
 
 Frazil nucleates between t ≈ 1.6–1.9 days (`ice_conc` steps from 0 to full
 cover within one `dt_out` window of 0.25 day) — matches the header's
@@ -77,7 +77,7 @@ W/m/K`, `ρ_i = 905 kg/m³`, `L = 3.34e5 J/kg` (the model's own
 −1.836 − (−20) = 18.164 K`, elapsed time measured from the observed
 nucleation onset (t₀ = 1.75 days).
 
-² Finite-exchange ("Semtner-style") correction for the namelist's
+² Finite-exchange ("Semtner-style") correction for the input's
 *non-infinite* atmospheric coupling: `SF(T) = restore_lambda·(T_surf −
 T_air)` (`rdb_ice_atm_forcing`) puts an atmospheric resistance `1/λ` in
 series with the ice's own conductive resistance `h/k_i`, giving
@@ -89,7 +89,7 @@ pure Stefan as `λ → ∞` and is strictly slower for finite `λ` (script:
 good), but the simulated growth runs increasingly AHEAD of both analytic
 curves from day ~15 onward — ×1.8–2.0 by day 90, not the ×0.9–1.0 the
 finite-exchange correction predicts. This is explained by a **documented**
-model divergence, not a bug: `&ocean_thermo_nml q_heat` is "ice-blind" —
+model divergence, not a bug: `[ocean.thermo] q_heat` is "ice-blind" —
 `docs/CLOSURE_MATRIX.md` ("Sea ice" section): *"the ocean's own background
 shortwave is not lead-fraction weighted by ice cover (the configure-time
 q_heat/q_sw scalars stay ice-blind)."* The uniform `q_heat = −60 W/m²`
@@ -109,7 +109,7 @@ mixed layer — the expected sign and a smooth, monotonic signal throughout.
 relative (round-off) for all 12960 steps — fully closed budgets, as
 expected for the virtual-salt-flux (Boussinesq) ice-ocean coupling.
 
-### Dynamics (`polar_freezeup_dynamics.nml`, 20 days, `tau_x = 0.05` Pa eastward)
+### Dynamics (`polar_freezeup_dynamics.toml`, 20 days, `tau_x = 0.05` Pa eastward)
 
 Nansen free-drift speed for these parameters (`cdw = 3.24e-3`, `rho_ocean
 = 1030`): `|u| = sqrt(0.05/(1030*3.24e-3)) = 0.1224 m/s`.
@@ -139,7 +139,7 @@ two orders of magnitude:
 | 20 | 0.0013 | jammed |
 
 At day 20 the ice has piled up against the downwind (east) wall exactly
-as the namelist header predicts: the physical-domain west→east thickness
+as the input header predicts: the physical-domain west→east thickness
 profile (y-averaged, `diags = "ice_u ice_v ice_speed"` re-run with
 diagnostics enabled — see "Diagnostics bug" below) is a clean, monotonic
 ramp from **0.634 m at the west wall to 0.849 m at the east wall**
@@ -160,7 +160,7 @@ analytic references above):
 
 1. **The console `[stats] ... Ice : conc X thick Y (ocean-area mean)`
    line always prints exactly `0.0000`/`0.0000`**, in every run, at every
-   status interval — including at `step 0` of `sea_ice_pack.nml`
+   status interval — including at `step 0` of `sea_ice_pack.toml`
    (`../sea_ice_pack/`), immediately after the banner confirms a
    100%-covered, 2 m analytic IC was applied. The underlying ice state is
    NOT zero (confirmed by the independently-computed `[diag]`
@@ -179,7 +179,7 @@ analytic references above):
    diluted by ghost-cell padding.** Confirmed exactly on two independent
    grids: the reported mean equals the true physical mean multiplied by
    `(nx_phys·ny_phys)/(nx_total·ny_total)` — 0.802139 on this file's 40×30
-   / `nghost=2` grid (`44×34` total), 0.694444 on `sea_ice_pack.nml`'s
+   / `nghost=2` grid (`44×34` total), 0.694444 on `sea_ice_pack.toml`'s
    20×20 / `nghost=2` grid (`24×24` total) — matching the printed values
    to 6 significant figures throughout both runs. Root cause:
    `fill_ice_conc` / `fill_ice_thick`
@@ -210,8 +210,8 @@ analytic references above):
 
 ## CICE-port Stefan column
 
-`cice_stefan_column.nml` is the single-column integration test I1 of the CICE-port
+`cice_stefan_column.toml` is the single-column integration test I1 of the CICE-port
 (`scheme = "cice"`): a 20 m slab at its freezing point under a constant -30 C air
 for 60 days.  `tests/test_cice_stefan_column.F90` runs it through the engine and
 compares the ice thickness with an independent enthalpy-method solution of the
-Stefan (1891) problem; see the namelist header.
+Stefan (1891) problem; see the input header.

@@ -23,7 +23,7 @@ module rdb_ocean_epbl
    !! same paper's available-PE bookkeeping.  Knob table:
    !! `docs/generated_nml_knobs.md`.
    !!
-   !! **River mixing** (`&ocean_epbl_nml rivermix_depth` = D, MOM6 `DO_RIVERMIX` /
+   !! **River mixing** (`[ocean.epbl] rivermix_depth` = D, MOM6 `DO_RIVERMIX` /
    !! `RIVERMIX_DEPTH`; default 0 = off, bit-identical).  An EXTERNAL energy source standing
    !! in for unresolved estuarine mixing: `E_river = max(0, 0.5 D g beta_S S_sfc R dt)`
    !! (J/m^2, `epbl_rivermix_energy`), sized as the potential energy of mixing the fresh
@@ -128,7 +128,7 @@ module rdb_ocean_epbl
    real(wp), parameter :: H_NEGLECT = H_DIV_EPS
 
    ! ---- LF17 / COARE 3.5 empirical constants ----
-   ! Parts of the cited formulas, NOT namelist knobs.  Li & Fox-Kemper
+   ! Parts of the cited formulas, NOT input knobs.  Li & Fox-Kemper
    ! (2017) statistical wave state; Edson et al. (2013) COARE 3.5
    ! drag; Webb & Fox-Kemper (2015) / Breivik et al. (2016)
    ! surface-layer-averaged Stokes drift over a Phillips spectrum.
@@ -169,7 +169,7 @@ module rdb_ocean_epbl
 
       ! ---- Scheme selection + master switch ----
       logical :: enable = .false.
-         !! Master switch.  Default off — all existing namelists and
+         !! Master switch.  Default off — all existing inputs and
          !! tests stay bit-identical.  Requires `vmix%use_closure`;
          !! disables the KPP overlay (configure logs the override).
       integer :: mstar_scheme = EPBL_MSTAR_OM4
@@ -200,7 +200,7 @@ module rdb_ocean_epbl
          !! Fraction of convectively released PE that becomes
          !! entrainment-driving TKE (MOM6 NSTAR).
       real(wp) :: rivermix_depth = 0.0_wp
-         !! River-mixing depth D (m; `&ocean_epbl_nml rivermix_depth`, MOM6
+         !! River-mixing depth D (m; `[ocean.epbl] rivermix_depth`, MOM6
          !! `RIVERMIX_DEPTH` with `DO_RIVERMIX`).  `0` (default) = off, bit-identical.
          !! `> 0` adds `epbl_rivermix_energy` to the surface forcing energy
          !! `ctke_sfc` where runoff enters.
@@ -251,7 +251,7 @@ module rdb_ocean_epbl
       real(wp) :: prandtl = 1.0_wp
          !! Kv = prandtl * Kd into the momentum solve.
       logical :: in_eos = .false.
-         !! `&ocean_psurf_nml in_eos` (E3): start this scheme's column
+         !! `[ocean.psurf] in_eos` (E3): start this scheme's column
          !! pressure stack at `multilayer_state_t%p_top` (the ice-shelf
          !! load + surface pressure, Pa) instead of at 0 Pa.
          !!
@@ -378,7 +378,7 @@ module rdb_ocean_epbl
          !! device contract as `dcolht_s`.
       logical :: epbl_sw_ctke = .true.
          !! (PR-21) Charge the EPBL TKE ledger for penetrating shortwave
-         !! (`&ocean_thermo_nml epbl_sw_ctke`).  Default `.true.`; inert at
+         !! (`[ocean.thermo] epbl_sw_ctke`).  Default `.true.`; inert at
          !! `sw_pen_frac = 0` (⇒ `sf%has_sw = .false.`) ⇒ bit-identical.
    contains
       procedure, non_overridable :: init => ocean_epbl_init
@@ -1082,7 +1082,7 @@ contains
          !! the ledger and the tracer field account the same heat.
       logical, intent(in) :: p_top_in_eos
          !! (E3) Seed the column pressure stack at `ms%p_top(i,j)` rather
-         !! than at 0 Pa — `&ocean_psurf_nml in_eos`, by value.  `.false.`
+         !! than at 0 Pa — `[ocean.psurf] in_eos`, by value.  `.false.`
          !! ⇒ the pre-E3 arithmetic, character for character.
       logical, intent(in) :: river_active
          !! `rivermix_depth > 0`.
@@ -1160,7 +1160,7 @@ contains
          ! ---- Column prep: T0/S0 + PE/steric weights (downward) ----
          ! (E3) The top of this column.  0 Pa at a free surface; the
          ! ice-shelf load + surface pressure `ms%p_top(i,j)` under a lid,
-         ! when `&ocean_psurf_nml in_eos` is set.  Everything below
+         ! when `[ocean.psurf] in_eos` is set.  Everything below
          ! accumulates `g*rho_0*h` downward from here, so `p_mid` is a
          ! true per-layer hydrostatic pressure either way — which is the
          ! test the `p_top` seam contract applies to a joining builder.

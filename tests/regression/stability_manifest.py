@@ -1,4 +1,4 @@
-"""Two-tier STABILITY manifest -- every tracked ocean namelist, both tiers.
+"""Two-tier STABILITY manifest -- every tracked ocean input, both tiers.
 
 This is the source of truth for `stability.py` and is imported into
 `manifest.py` as `STABILITY_CASES`, alongside the older short-run `CASES`
@@ -6,16 +6,16 @@ list that `compare.py` / `coverage.py` still use.
 
 Why a second list rather than more keys on the first
 ====================================================
-`CASES` answers "did 10 steps of this namelist drift from its golden". This
-list answers a different question -- "does this namelist produce PHYSICS that
+`CASES` answers "did 10 steps of this input drift from its golden". This
+list answers a different question -- "does this input produce PHYSICS that
 holds up over a run long enough for its physics to exist" -- and it covers all
-68 tracked ocean namelists, not the 35 the golden suite curates. Keeping them
+68 tracked ocean inputs, not the 35 the golden suite curates. Keeping them
 separate means neither gate has to compromise for the other.
 
 Reading an entry
 ================
     name            unique id (also the scratch dir and report row)
-    nml             repo-relative path to the COMMITTED namelist -- never a
+    nml             repo-relative path to the COMMITTED input -- never a
                     generated or edited copy. A twin is built by OVERRIDING
                     keys at run time; the shipped file is never modified.
     setup           optional argv run in the scratch dir first (generated
@@ -24,9 +24,9 @@ Reading an entry
     tier1           full-scale spec: n_steps, timeout_s, samples, and
                     optional `overrides` (`t1_overrides`) -- the same run-time
                     key overrides a tier-2 twin uses, for a tier-1 leg that is
-                    a documented VARIANT of a committed namelist (melt off, a
+                    a documented VARIANT of a committed input (melt off, a
                     viscosity twin) rather than the file as shipped.
-    tier2           downscaled-twin spec: the same, plus `overrides` (namelist
+    tier2           downscaled-twin spec: the same, plus `overrides` (input
                     keys the twin changes) and `dimensionless` (the inputs
                     downscale.py checks). `skip` with a `reason` marks a case
                     that CANNOT be honestly downscaled to CI size.
@@ -62,8 +62,8 @@ The `physics` block
     budget_tol      {"Mass"|"Salt"|"Heat": relative tolerance} on the MODEL'S
                     OWN closed-budget residual. These are printed every step;
                     they sit at 1e-14/1e-15 in a healthy run.
-    claims          the namelist header's own testable statements. NEVER
-                    weakened to pass, NEVER satisfied by editing the namelist:
+    claims          the input header's own testable statements. NEVER
+                    weakened to pass, NEVER satisfied by editing the input:
                     when a header and the code disagree, that IS the finding.
                     Kinds: mass_rel, en_ratio, field_ratio (a [diag] field's
                     extrema amplification from `from_day` to the end), and
@@ -306,7 +306,7 @@ STABILITY_CASES = [
     # centres hundreds of metres apart in z, so the
     # `Delta p_centre + g*rho_layer*Delta z_centre` cancellation fails and
     # leaves g*(rho_layer - rho_ambient)*dz/dx of acceleration AT REST.
-    # `&ocean_isopycnal_nml pgf_skip_nonoverlap` (default ON, VCOORD_LAGRANGIAN
+    # `[ocean.isopycnal] pgf_skip_nonoverlap` (default ON, VCOORD_LAGRANGIAN
     # only) zeroes the face PGF where the layers do not overlap in z. The case
     # now holds En ~ 1e-26 -- machine zero -- for 30 simulated days, so it gets
     # the REST_1UM_S "must be bit-zero" bar rather than the 1 cm/s seamount
@@ -742,7 +742,7 @@ STABILITY_CASES = [
           # 2.14e-04 m/s: 22x under it in energy, 4.7x in velocity (gfortran
           # 15.1, 2026-09-25, trimmed IC, MOM6 split).
           #
-          # THE BALANCED IC. The namelist sets &ocean_cavity_dyn_nml
+          # THE BALANCED IC. The input sets [ocean.cavity_dyn]
           # trim_ic_for_p_surf (MOM6 TRIM_IC_FOR_P_SURF): the rho_ref*g*z_draft
           # load is lighter than the stratified water it displaces by
           # g*int(rho - rho_ref), a depth-uniform force up to 1.8e-5 m/s^2 that
@@ -756,7 +756,7 @@ STABILITY_CASES = [
           # rather than legislated away: restoring REST_100UM_S is the
           # Phase-6 acceptance criterion. Do NOT close the gap by widening
           # this bar, by shortening the run, or by putting viscosity back
-          # into the namelist.
+          # into the input.
           #
           # The tier-2 twin is the FULL grid at the FULL dt, shortened to 20
           # days (2880 steps, ~24 s). Not a downscale -- 48x6x15 is already
@@ -807,7 +807,7 @@ STABILITY_CASES = [
           note="THE Phase-5 physics gate and the Phase-6 baseline: a "
                "stratified cavity under a linearly sloping ice shelf with a "
                "calving front, initialised at rest with the isopycnals flat "
-               "in GEOPOTENTIAL z (&ocean_zinit_nml source='linear'; a "
+               "in GEOPOTENTIAL z ([ocean.zinit] source='linear'; a "
                "layer-index profile would tilt them with the sigma "
                "coordinate and give the run real APE to convert). The load "
                "partition -- datum bt_H_ref = b - z_draft, "
@@ -835,7 +835,7 @@ STABILITY_CASES = [
           note="THE PARTIAL-STEP GATE, and the cheapest honest statement of "
                "the z-level staircase defect: the ISOMIP+ bed and trough on "
                "vcoord_type='z_fixed' with NO ice shelf, NO cavity code and "
-               "NO melt, at rest, with &vcoord_nml zfixed_closed_faces on. "
+               "NO melt, at rest, with [vcoord] zfixed_closed_faces on. "
                "A face whose layer is an inert `zstar_h_min` filler on either "
                "side is a z-LEVEL WALL for that layer (Adcroft, Hill & "
                "Marshall 1997; Losch 2008 2.1) -- no normal velocity, no mass "
@@ -851,7 +851,7 @@ STABILITY_CASES = [
                "barotropic-consistency slice bought. Note the throwaway "
                "spike reported NaN by day 0.25 "
                "for its own cavity-off variant of ocean0_idealised_draft; "
-               "THIS namelist does not go non-finite in 2 days, so the bar "
+               "THIS input does not go non-finite in 2 days, so the bar "
                "here is the ENERGY, not survival. nu_h = 6 and kappa_h = 1 "
                "are the protocol values and are deliberately NOT zeroed: "
                "they are what exercises the free-slip closure in the "
@@ -921,7 +921,7 @@ STABILITY_CASES = [
                   "wet-wet faces over it. Cubed, a_peak = N^2 De^3/(6 dx Hbar) "
                   "= 1.48E-05 m/s^2 against the sloping lid's 3.73E-09, i.e. "
                   "U = a/|f| = 10.5 cm/s of spurious geostrophic flow on one "
-                  "row of cells. En e-folds on ~1 day, hits &ocean_pgf_nml "
+                  "row of cells. En e-folds on ~1 day, hits [ocean.pgf] "
                   "maxvel at step 907, drives bt_eta to -36.8 m in a <= 23 m "
                   "column at step 909, and mints a NEGATIVE h_layer "
                   "(-0.710 m) at step 910; the melt driver's non-finite guard "
@@ -940,7 +940,7 @@ STABILITY_CASES = [
                   "reach 30 days -- nu_h = 600 (100x Table 4) and dt = 75 s -- "
                   "do it by letting the mode SATURATE at En 1.4E-04 / 9.4E-04, "
                   "which is a quiet wrong answer rather than a fix. The "
-                  "namelist is therefore NOT tuned to pass this row. "
+                  "input is therefore NOT tuned to pass this row. "
                   "conserve:{Mass,Salt,Heat} are deliberately NOT excused: "
                   "they are what this case is carried for, they are evaluated "
                   "over the 3 days before the abort, and they still hold at "
@@ -1032,7 +1032,7 @@ STABILITY_CASES = [
           # pre-bebt tree. If it trips again, localise before re-marking.
           note="ISOMIP+ Ocean0 idealised, z_fixed + zfixed_closed_faces, melt "
                "and top drag OFF, 180 days: gate E6 of v0.1.0 (bounded and "
-               "explained). See the namelist header and "
+               "explained). See the input header and "
                "docs/CAPABILITIES_AND_LIMITATIONS.md.",
           tags=["isomip_plus", "cavity", "ice_shelf", "vcoord_z_fixed",
                 "closed_faces", "partial_steps", "sponge", "pgf_fv_mom6",
@@ -1122,7 +1122,7 @@ STABILITY_CASES = [
           tags=["eddying", "gyre", "large"]),
 
     # ===================== PGF-form coverage ===============================
-    # `mont` and `fv_wright` were selected by ZERO shipped namelists, which is
+    # `mont` and `fv_wright` were selected by ZERO shipped inputs, which is
     # exactly how each came to carry an undetected sloping-bathymetry defect
     # (`mont` NaNs on every sloping case; `fv_wright` NaNs at step ~24 on the
     # stratified zstar_sigma seamount). These two cases exercise them on a FLAT
@@ -1196,12 +1196,12 @@ STABILITY_CASES = [
 # ---------------------------------------------------------------------------
 # The OUTER SPLIT-SCHEME axis
 # ---------------------------------------------------------------------------
-# `&ocean_bt_nml split_scheme` selects the outer split-explicit integrator.
+# `[ocean.bt] split_scheme` selects the outer split-explicit integrator.
 # Every case above runs the DEFAULT, `"pred_corr"` -- the MOM6
 # predictor-corrector. `"ssp_rk2"`, the two-stage SSP average, is the
 # EXPERIMENTAL alternative: still shipped, still supported, and the only
 # scheme wired through `eulerian_z`, dynamic wet/dry and
-# `dt_tracer_advect_ratio > 1`, which is why six namelists pin it. It is
+# `dt_tracer_advect_ratio > 1`, which is why six inputs pin it. It is
 # labelled experimental for ONE measured reason -- it manufactures internal
 # gravity waves out of a stratified REST state, four decades above the
 # default (see `resting_stratified_channel`) -- and it must stay under test
@@ -1215,7 +1215,7 @@ STABILITY_CASES = [
 # THE AXIS INVERTED ON 2026-09-14, when `pred_corr` became the default. Before
 # that the base corpus ran `ssp_rk2` and the twins were `<case>__mom6_pc`;
 # now the base corpus runs `pred_corr` and the twins are `<case>__ssp_rk2`.
-# The case COUNT is unchanged -- the same namelists are excluded, for the
+# The case COUNT is unchanged -- the same inputs are excluded, for the
 # same reasons -- but every twin row is renamed, and the XFAIL that records
 # the resting-state defect moved with the scheme it belongs to.
 #
@@ -1230,32 +1230,32 @@ STABILITY_CASES = [
 # `SCHEME_AXIS_TIER1`.
 #
 # EXCLUDED, and why -- a case is skipped iff it cannot legally run both:
-#   * the six `dt_tracer_advect_ratio = 2` namelists pin `ssp_rk2` in the
+#   * the six `dt_tracer_advect_ratio = 2` inputs pin `ssp_rk2` in the
 #     file, because the pred_corr v1 envelope refuses that configuration
-#     fail-loud (the `nz = 1` namelist used to pin for the same reason and
+#     fail-loud (the `nz = 1` input used to pin for the same reason and
 #     no longer does -- the single-layer vertical-friction tridiagonal was
 #     repaired and the refusal lifted, 2026-09-14);
-#   * the four `*_pred_corr` namelists pin `pred_corr` -- they were written
+#   * the four `*_pred_corr` inputs pin `pred_corr` -- they were written
 #     when that scheme was the non-default one and their whole subject is
 #     it; they now pin the default explicitly, which keeps them out of the
 #     axis and keeps the twin count where it was;
 #   * the tier-1-only scaling benchmarks measure throughput at size; a second
 #     scheme does not change what they measure.
-# The skip is DERIVED from the namelist, not listed by hand, so a file that
+# The skip is DERIVED from the input, not listed by hand, so a file that
 # gains or loses a pin cannot silently fall out of the axis.
 
 # ---------------------------------------------------------------------------
 # The VERTICAL-COORDINATE REST MATRIX
 # ---------------------------------------------------------------------------
-# Every case above runs its namelist under whatever vertical coordinate that
-# namelist chose. None of them runs the SAME problem under every coordinate,
+# Every case above runs its input under whatever vertical coordinate that
+# input chose. None of them runs the SAME problem under every coordinate,
 # which is the question "which coordinate is trustworthy on which geometry?"
 # and the question that hid five separate defects on the cavity branch (see
 # `vcoord_matrix.__doc__`).
 #
-# `vcoord_matrix.build_matrix` emits one namelist per (geometry x family x
+# `vcoord_matrix.build_matrix` emits one input per (geometry x family x
 # stratification x EOS) cell into `tmp_local_artifacts/vcoord_matrix/` at
-# import time and returns the rows. The namelists are generated rather than
+# import time and returns the rows. The inputs are generated rather than
 # committed: dozens of near-identical files rot, and a reader cannot tell
 # which cell of the matrix a given file is. They are left on disk, so any
 # cell is reproducible by hand.
@@ -1344,7 +1344,7 @@ SCHEME_AXIS_KNOWN_FAILURE = {
             "identical file. The base case keeps GATING energy:rest for "
             "exactly that reason and is excused only on energy:rest-settles "
             "(tier 1). Do NOT close this by "
-            "raising en_rest_max or by adding viscosity to the namelist "
+            "raising en_rest_max or by adding viscosity to the input "
             "(nu_h = 6 and nu_4 = 1e7 each delay the growth ~10 days and "
             "change nothing about its rate). ssp_rk2 stays supported and "
             "stays on this axis.",
@@ -1470,13 +1470,13 @@ def _build_scheme_axis():
 # ---------------------------------------------------------------------------
 # Remap precondition guard -- ON in every case whose coordinate REMAPS
 # ---------------------------------------------------------------------------
-# `&vcoord_nml remap_check_preconditions` asserts, once per ALE remap, the two
+# `[vcoord] remap_check_preconditions` asserts, once per ALE remap, the two
 # things the overlap sweep has always ASSUMED: non-negative source and target
 # thicknesses, and matching column totals. Outside them the sweep silently
 # creates or deletes tracer mass -- no NaN, no bounds hit, no budget entry --
 # so a stability run is exactly where the check earns its cost (one device
 # reduction per thermo step). It is switched on here, by OVERRIDE, never by
-# editing the shipped namelists: it is a diagnostic, not physics, and default
+# editing the shipped inputs: it is a diagnostic, not physics, and default
 # off is what users get.
 #
 # Which families: `ocean_apply_ale_remap_step` returns before touching
@@ -1484,10 +1484,10 @@ def _build_scheme_axis():
 # vertical-advection cancellation, the latter's target IS the current h), so
 # the pair the check judges (`remap_h_old`, `target_h`) is never written
 # there and the check would assert on stale scratch. Every other family --
-# sigma (the namelist default), zsigma, zstar, zstar_sigma, zstar_full,
+# sigma (the input default), zsigma, zstar, zstar_sigma, zstar_full,
 # z_fixed, rho, hycom -- relayers every thermo step and gets the guard.
 #
-# DERIVED from the namelist (plus any tier override of `vcoord_type`), not
+# DERIVED from the input (plus any tier override of `vcoord_type`), not
 # listed by hand, so a file that changes coordinate falls in or out on its
 # own.
 #

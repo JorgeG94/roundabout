@@ -1,6 +1,6 @@
 module rdb_ice_dyn_c_state
    !! State slot of the C-grid EVP dynamics running under the SIS2-derived ice
-   !! state (`&ocean_ice_dyn_nml dyn_scheme = "cice_c"`, CICE6 port D9.2).
+   !! state (`[ocean.ice_dyn] dyn_scheme = "cice_c"`, CICE6 port D9.2).
    !!
    !! Under the default `dyn_scheme = "sis2_c"` this type is never initialised:
    !! nothing is allocated, mapped or registered for restart, so the default is

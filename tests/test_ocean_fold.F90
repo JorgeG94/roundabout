@@ -484,7 +484,7 @@ contains
          call fold_north_u_face(us, nxf, nyt, NI, NJ, NGHOST, negate=.false.)
          do i = 1, nxf
             call check(error, us(i, jlo) == 1.0_wp, &
-                       "u-face scalar (negate=.false.) halo must copy, not negate")
+                       "u-face scalar (negate=false) halo must copy, not negate")
             if (allocated(error)) exit checks
          end do
          deallocate (us)
@@ -523,7 +523,7 @@ contains
          allocate (us(nxf, nyt), source=1.0_wp)
          call fold_north_u_face(us, nxf, nyt, NI, NJ, NGHOST, negate=.true.)
          call check(error, us(1, jlo) == -1.0_wp, &
-                    "u-face negate=.true. must still sign-flip (default contract unchanged)")
+                    "u-face negate=true must still sign-flip (default contract unchanged)")
          deallocate (us)
       end block checks
    end subroutine test_face_scalar_modes

@@ -1,4 +1,4 @@
-!! What the named-term conservation ledger costs per ice step (`&ocean_ice_nml ledger`), measured on the production
+!! What the named-term conservation ledger costs per ice step (`[ocean.ice] ledger`), measured on the production
 !! engine path: the same closed basin (remap transport, EVP, ridging, thermodynamics every step) run with the ledger off
 !! and on, `ice` time per step reported (`engine_step_ice` only, device-synchronised).  The test asserts only what is
 !! machine independent: both runs finish, the ledger-on state is bitwise the ledger-off one (observer) in the category

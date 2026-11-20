@@ -1355,7 +1355,7 @@ call check(error, nmulti >= 3 .and. nridge >= 500 .and. nskip >= 20, "the sweep 
       call ice_step_ridge(nx, ny, NCAT, nilyr, 1, 2, nx - 1, 2, ny - 1, p, hin_loc, dt, 2, wet, Tf2, conv, shear, a, v, s, &
                           Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tc, qc, sc, qsc, fr, fs, fh, d1, d2, dv, op, &
                           niter, ierr, ok)
-      call check(error,.not. ok, "ndtd = 2 is refused (ok = .false.)")
+      call check(error,.not. ok, "ndtd = 2 is refused (ok = false)")
    contains
       subroutine scl(name, ref, got, scale_f, cls, ci, cj)
          !! Absolute difference over `scale_f`, with an explicit finiteness test before anything is accumulated.

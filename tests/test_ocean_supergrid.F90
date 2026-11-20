@@ -720,7 +720,7 @@ contains
       !!
       !! We chose the metrics-level path (configure the slot from the
       !! supergrid, then run the dyn-step kernels directly) over driving
-      !! the full namelist driver — the driver wiring is integration-
+      !! the full input driver — the driver wiring is integration-
       !! tested elsewhere; here the point is that the SUPERGRID-READ
       !! metrics produce a clean rest state through the real dyn core.
       type(error_type), allocatable, intent(out) :: error

@@ -1,6 +1,6 @@
 !! Analytical tests for the ALE remap's non-uniform-grid reconstruction weights.
 module test_remap_nonuniform
-   !! `&vcoord_nml remap_nonuniform_weights` replaces PLM's minmod
+   !! `[vcoord] remap_nonuniform_weights` replaces PLM's minmod
    !! half-difference and PPM's `(7/12, -1/12)` edge estimate — both of them
    !! EQUAL-THICKNESS specialisations of Colella & Woodward (1984) — with the
    !! thickness-weighted (1.6)-(1.8) forms.

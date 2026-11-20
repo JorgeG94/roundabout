@@ -1,5 +1,5 @@
 !! Analytical tests for the ice-shelf TOP drag (`rdb_ocean_top_drag`,
-!! `&ocean_tdrag_nml`) — the momentum sink at `k = nz` under an ice
+!! `[ocean.tdrag]`) — the momentum sink at `k = nz` under an ice
 !! shelf, the mirror of the bottom drag at `k = 1`.
 !!
 !! Nothing here asserts bit-equality between two DIFFERENT code paths;
@@ -36,7 +36,7 @@
 !!     open face on the same grid takes the full wind.
 !!   * `parse_and_gate` — `form` round-trips; a typo is `TDRAG_INVALID`.
 !!   * `validate_refusals` — the configure-time matrix, including the
-!!     ONE-`C_d` agreement rule against `&ocean_cavity_melt_nml
+!!     ONE-`C_d` agreement rule against `[ocean.cavity_melt]
 !!     cdrag_top`.
 module test_ocean_top_drag
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -712,7 +712,7 @@ contains
       !! A disabled slot launches no kernel, allocates only placeholders,
       !! and leaves the velocities BYTE-identical.  `enable = .false.` is
       !! the default, so this is the statement that keeps every shipped
-      !! namelist bit-identical.
+      !! input bit-identical.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -756,7 +756,7 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine test_fold_analytic(error)
-      !! `&ocean_vdiff_nml implicit_top_drag` puts the top-drag Rayleigh
+      !! `[ocean.vdiff] implicit_top_drag` puts the top-drag Rayleigh
       !! rate on the vertical-friction tridiagonal's SURFACE diagonal
       !! instead of applying it explicitly.  With the interior viscosity
       !! switched off (`K_v_momentum = 0`, no `kv_source`) the matrix is
@@ -1026,7 +1026,7 @@ contains
    end subroutine test_validate_refusals
 
    function melt_group(body) result(g)
-      !! `&ocean_cavity_melt_nml` in its minimal in-envelope form, plus
+      !! `[ocean.cavity_melt]` in its minimal in-envelope form, plus
       !! whatever the caller wants to override.
       character(len=*), intent(in) :: body
       character(len=:), allocatable :: g
@@ -1036,14 +1036,14 @@ contains
    end function melt_group
 
    function tdrag_nml(tdrag_body, with_geometry, extra) result(nml)
-      !! One complete test namelist.  Every group appears EXACTLY ONCE —
+      !! One complete test input.  Every group appears EXACTLY ONCE —
       !! the strict schema refuses a duplicate group, and a refusal test
       !! that tripped on that would be testing the parser.
       character(len=*), intent(in) :: tdrag_body
-         !! `&ocean_tdrag_nml` body without the group name or `/`; empty
+         !! `[ocean.tdrag]` body without the group name or `/`; empty
          !! ⇒ the group is omitted entirely.
       logical, intent(in) :: with_geometry
-         !! Append `&ocean_cavity_dyn_nml` (the top-drag prerequisite).
+         !! Append `[ocean.cavity_dyn]` (the top-drag prerequisite).
       character(len=*), intent(in) :: extra
          !! One extra complete group (with name and `/`), or empty.
       character(len=:), allocatable :: nml
@@ -1092,7 +1092,7 @@ contains
    end function tdrag_nml
 
    subroutine expect_refused(what, nml, error)
-      !! The namelist must PARSE and then be refused by `validate_config`.
+      !! The input must PARSE and then be refused by `validate_config`.
       character(len=*), intent(in) :: what, nml
       type(error_type), allocatable, intent(inout) :: error
       type(config_t) :: cfg
@@ -1109,7 +1109,7 @@ contains
    end subroutine expect_refused
 
    subroutine expect_parse_refused(what, nml, error)
-      !! The namelist must be refused by the strict SCHEMA, before
+      !! The input must be refused by the strict SCHEMA, before
       !! `validate_config` ever sees it.
       character(len=*), intent(in) :: what, nml
       type(error_type), allocatable, intent(inout) :: error

@@ -73,8 +73,8 @@ so it has zero density feedback by construction).
    tracer package needs its own `fill_<name>` + a `register_one_canonical(...)`
    call guarded on `idx_<name> > 0` (mirror `fill_age` / `idx_age`) to show up in
    NetCDF output. This is the one step the registry does not do for you.
-6. **Knob + test** — gate the package on a `&ocean_tracers_nml` knob defaulting
-   to `.false.` per [add_namelist_knob.md](add_namelist_knob.md), and add a
+6. **Knob + test** — gate the package on a `[ocean.tracers]` knob defaulting
+   to `.false.` per [add_input_knob.md](add_input_knob.md), and add a
    `tests/test_ocean_<name>.F90` row to `tests/CMakeLists.txt` with regime
    `ocean`.
 
@@ -103,7 +103,7 @@ hit `CUDA_ERROR_ILLEGAL_ADDRESS` on the first kernel.
 verification tracer seeded to salinity and given exactly salinity's surface salt
 flux + KPP/EPBL non-local mirror (the two operators the registry does NOT deliver
 automatically — everything else, it rides for free).
-`&ocean_tracers_nml enable_pseudo_salt` (default `.false.`) gates it end to end:
+`[ocean.tracers] enable_pseudo_salt` (default `.false.`) gates it end to end:
 `ocean_pseudo_salt_register` (setup, between `multilayer%init` and
 `ocean_bc_state_init`), `ocean_pseudo_salt_seed` (host, after every S write,
 before `enter_data`), and the two mirrored operators self-gate inside

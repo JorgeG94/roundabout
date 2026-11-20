@@ -2,7 +2,7 @@
 !! (SIS2 port, PR 26).
 module rdb_ice_snow
    !! Complements `rdb_ice_mass%ice_snow_accumulate` (the on-ice snow add):
-   !! the share of `&ocean_ice_nml snowfall` that lands where there is no
+   !! the share of `[ocean.ice] snowfall` that lands where there is no
    !! ice (open water at `ncat>1`, ice-free cells at `ncat==1`, and any
    !! category that fails the column's own entry gate,
    !! `m_ice(i,j,c) > ICE_RHO_ICE*H_VANISHED`) does not accumulate — it

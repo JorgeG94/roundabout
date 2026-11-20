@@ -43,7 +43,7 @@
 !!
 !! The iteration count is FIXED (no early-exit convergence test): a
 !! data-dependent iteration count is GPU-hostile (divergent warps) and
-!! the project convention is a namelist-exposed iteration count, not an
+!! the project convention is an input-exposed iteration count, not an
 !! adaptive tolerance.
 !!
 !! ## Sign conventions — READ BEFORE WIRING A CONSUMER
@@ -78,8 +78,8 @@
 !! `(nx+1,ny)`/`(nx,ny+1)`) the same way `ocean_surfstress_derived_impl`
 !! goes the OTHER direction (face -> centre) — a two-line face-average
 !! kernel, not written here because there is no live face-shaped
-!! consumer to test it against yet; (c) a real `&ocean_bulk_flux_nml`
-!! namelist group threaded through `rdb_config.F90`/`validate_config`
+!! consumer to test it against yet; (c) a real `[ocean.bulk_flux]`
+!! input group threaded through `rdb_config.F90`/`validate_config`
 !! (today `bulk_flux_config_t` below is a free-standing config type,
 !! default `enable = .false.`, NOT registered on `cfg%ocean` — adding
 !! that registration is a `rdb_config.F90`-sized seam in its own right,
@@ -111,7 +111,7 @@ module rdb_ocean_bulk_flux
    public :: bulk_flux_driver_2d
 
    ! ---- Large & Yeager (2004, 2009) / Large & Pond (1982) constants ----
-   ! Fixed physical constants of the algorithm (NOT namelist knobs).
+   ! Fixed physical constants of the algorithm (NOT input knobs).
    real(wp), parameter, public :: BULK_VON_KARMAN = 0.4_wp
       !! von Karman constant.
    real(wp), parameter, public :: BULK_GAS_CONST_AIR = 287.04_wp
@@ -237,7 +237,7 @@ contains
       !! Validates `bulk_flux_config_t%n_iter`: the Monin-Obukhov
       !! iteration count must be `>= 1` (`bulk_flux_column`'s
       !! unchecked precondition -- it runs the fixed-point loop at
-      !! least once).  No `&ocean_bulk_flux_nml` reader / `validate_
+      !! least once).  No `[ocean.bulk_flux]` reader / `validate_
       !! config` call site exists yet (see the module's "Seam for
       !! C2c" note); this is the check that wiring must call, fail
       !! loud on `.false.`, before ever passing `cfg%n_iter` into
@@ -351,7 +351,7 @@ contains
       !!
       !! `n_iter` must be `>= 1` (an unchecked precondition — this is a
       !! `pure` hot-loop kernel, not a validating entry point; the
-      !! namelist-facing caller validates `bulk_flux_config_t%n_iter`
+      !! input-facing caller validates `bulk_flux_config_t%n_iter`
       !! via `bulk_flux_config_n_iter_ok` before calling here).
       !$acc routine seq
       real(wp), intent(in) :: u_wind, v_wind
@@ -508,7 +508,7 @@ contains
       !! Thin `do concurrent` driver — one `bulk_flux_column` call per
       !! CELL-CENTRED grid point.  Explicit-shape dummies throughout
       !! (the project's `do concurrent` convention), no `associate` over
-      !! derived-type components, no namelist/engine coupling: a caller
+      !! derived-type components, no input/engine coupling: a caller
       !! supplies plain model-grid arrays and reads plain outputs.
       !!
       !! Outputs are ALREADY in `ocean_surface_flux_t`'s sign convention

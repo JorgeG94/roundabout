@@ -1,4 +1,4 @@
-# How to add a new namelist knob / config option
+# How to add a new input knob / config option
 
 A knob is the entry point for almost every capability (workflow step 1). Get the
 plumbing right once and the rest of the guides reuse it.
@@ -18,25 +18,24 @@ two public config types:
 - **`ocean_config_t`** — the nested ocean knobs, one sub-type per concern
   (`ocean_coriolis_config_t`, `ocean_hvisc_config_t`, `ocean_vmix_config_t`, …),
   composed onto `config_t` as `type(ocean_config_t) :: ocean`. Ocean knobs live
-  under per-concern namelist groups `&ocean_<group>_nml` with the `ocean_` prefix
-  dropped from each key (so `nu_h` lives under `&ocean_hvisc_nml`).
+  under per-concern input groups `[ocean.<group>]` with the `ocean_` prefix
+  dropped from each key (so `nu_h` lives under `[ocean.hvisc]`).
 
 Parsing goes through the **strict schema** (`rdb_nml_schema`, type
 `nml_schema_t`): one registration line per knob carries the name, a pointer into
 the config, optional bounds/enum set, units, and the doc string. That single
 list is what the parser, the parameter dumps and `render_markdown` all read
 from, and unknown keys / type / range / enum violations fail loud with
-did-you-mean suggestions. `&ocean_bc_nml` is the one remaining group on the old
-native `read(nml=)` reader (`read_ocean_bc_nml`), registered with
-`schema%add_external_group("ocean_bc")` so the strict parser tolerates it —
-migrating it is the known follow-up, see
-[migrate_namelist_to_schema.md](migrate_namelist_to_schema.md).
+did-you-mean suggestions. Every group is registered; a whole new group is
+covered in [register_schema_group.md](register_schema_group.md). The input
+file is TOML (`[ocean.<group>]` / `[<group>]` tables, see "Input file format"
+in `docs/REFERENCE.md`).
 
 ## The seam
 
 The default lives on the *type*; the schema registration captures
 `default = current target value` at registration time and writes the parsed
-value back through the pointer. So an absent namelist block is a no-op — that's
+value back through the pointer. So an absent input block is a no-op — that's
 what gives you bit-identity for free.
 
 ```
@@ -46,7 +45,7 @@ type field (default)  ->  registered in the group's register_* routine
    ->  consume in kernel (gated)
 ```
 
-## Recipe — a new `&ocean_hvisc_nml` key `foo`
+## Recipe — a new `[ocean.hvisc]` key `foo`
 
 1. **Field + default** on the right sub-type in `rdb_config.F90`
    (here inside `ocean_hvisc_config_t`): `real(wp) :: foo = 0.0_wp  !! <FORD doc>`.
@@ -115,8 +114,8 @@ Configure fails loud on anything else. Also append the module to
 It enforces:
 
 1. **Knob coverage** — every auto-discovered `logical :: vmix_use_* =` toggle,
-   plus a curated list (`ocean_hvisc_nml`, `ocean_bdrag_nml`,
-   `ocean_kappa_shear_nml`) and the sea-ice selectors (`ocean_ice_nml`,
+   plus a curated list (`[ocean.hvisc]`, `[ocean.bdrag]`,
+   `[ocean.kappa_shear]`) and the sea-ice selectors (`[ocean.ice]`,
    `nk_ice`, `adv_substeps`, `evp_sub_steps`, `del_sh_min_scale`, `tdamp`), must
    appear as a string in `docs/CLOSURE_MATRIX.md`. Curated names must still
    exist in the config (rename guard).
@@ -148,30 +147,26 @@ form, …).
 - **Enum registrations and `parse_*` routines must move together.** An allowed
   string with no `case` arm parses to the fallback and silently does the wrong
   thing; a `case` arm with no allowed string is rejected by the parser.
-- **`&ocean_bc_nml` is the odd one out** — it is still a native reader, so a new
-  key there means four edits (local declaration, the `namelist /ocean_bc_nml/`
-  statement, seed from `cfg%`, copy back), not one registration line.
 - **The closure-matrix hook can block a commit that compiles fine** — update
   `docs/CLOSURE_MATRIX.md` in the same change for a curated / vmix knob.
 - **There is no C/Python FFI in this build.** Knobs reach the solver only
-  through the namelist file — don't go looking for an API surface to wire them
+  through the input file — don't go looking for an API surface to wire them
   into.
-- **`tools/nml_split.py`** migrates a legacy flat `&ocean_setup_nml` into the
-  per-group `&ocean_<group>_nml` layout. You don't need it to *add* a knob; you'd
-  touch its remap dicts only if you *rename* one (and then also the migration-ledger
-  comment block in `rdb_config.F90`).
+- **Renaming or retiring a knob** is a fail-loud migration, not a silent one:
+  keep the old spelling registered as retired (see `test_ocean_knob_retirement`)
+  so a stale input names the new key instead of being ignored.
 
 ## Source pointers
 
 - `src/core/rdb_config.F90` — `config_t`, `ocean_config_t` + sub-types (with
-  their field-level defaults), `build_rdb_schema`, `read_ocean_bc_nml`, and
+  their field-level defaults), `build_rdb_schema`, and
   the `module subroutine` INTERFACES for `read_config`, `apply_time_unit_cascade`,
   `validate_config` and every `register_*` routine — implemented in the
   submodules below.
 - `src/core/config/rdb_config_register_{core,vmix,lateral,forcing}.F90` — the
   `register_*` implementations, split by concern.
 - `src/core/config/rdb_config_validate.F90` — `validate_config` + its helpers.
-- `src/core/config/rdb_config_read.F90` — `read_config`/`read_config_from_string`
+- `src/core/config/rdb_config_read.F90` — `read_config`/`read_config_from_toml_string`
   + `apply_time_unit_cascade`.
 - `src/core/rdb_nml_schema.F90` — `nml_schema_t`, the `nml_*` constructors,
   `render_markdown`.
@@ -181,4 +176,4 @@ form, …).
   submodules) — the `configure_ocean_*` propagation + cross-knob validation;
   `src/driver/rdb_driver.F90` — `configure_ocean_diag`.
 - `app/nml_doc.F90` (`rdb_nml_doc`) → `docs/generated_nml_knobs.md`.
-- `tools/check_closure_matrix.py`, `tools/nml_split.py`, `docs/CLOSURE_MATRIX.md`.
+- `tools/check_closure_matrix.py`, `docs/CLOSURE_MATRIX.md`.

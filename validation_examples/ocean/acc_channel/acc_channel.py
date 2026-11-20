@@ -140,7 +140,7 @@ def build_model(*, nx, ny, nz):
 
         closures=[
             EPBL(mstar_scheme="om4", mld_use_prev_guess=True),
-            # EPBL() above ALREADY sets [ocean.vmix] use_kpp = .false.
+            # EPBL() above ALREADY sets [ocean.vmix] use_kpp = false
             # itself (KPP defaults ON in the schema; EPBL/KPP are
             # mutually exclusive) -- no separate off-switch needed.
             KappaShear(),                  # ri_crit/prandtl at their own

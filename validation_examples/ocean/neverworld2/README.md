@@ -57,13 +57,13 @@ analog, not bit-for-bit.
 ```bash
 cd validation_examples/ocean/neverworld2
 # NVHPC + NetCDF toolchain loaded in this shell (module / spack / conda)
-CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb neverworld2.nml
+CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb neverworld2.toml
 ```
 
 1° resolution → 60 × 140 × 12 cells over H = 4000 m, `nghost = 3`
 (periodic-x needs ≥3 for the PPM + biharmonic seam stencil). The
 70 S/70 N extent stays well under the spherical |lat| ≤ 90 pole guard
-even with ghosts. The shipped nml runs 2 days as a stability check; set
+even with ghosts. The shipped input runs 2 days as a stability check; set
 `t_end` higher for a spin-up.
 
 Expected: no blowup; a coherent eastward jet through the southern

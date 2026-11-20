@@ -23,8 +23,8 @@ module rdb_ocean_pseudo_salt
    !! `validate_config`) because Roundabout has no mirror for them and an
    !! un-mirrored salinity source would make `D` measure that source
    !! instead of the passive-path error: SSS piston restoring
-   !! (`&ocean_restore_nml enable_restore_salt`) and sea-ice frazil /
-   !! basal salt exchange (`&ocean_ice_nml enable`).
+   !! (`[ocean.restore] enable_restore_salt`) and sea-ice frazil /
+   !! basal salt exchange (`[ocean.ice] enable`).
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, H_VANISHED
 #else

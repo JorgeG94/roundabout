@@ -1020,7 +1020,7 @@ contains
       if (allocated(error)) return
 
       call data_input_oor_from_iaf("bogus", oor, ok)
-      call check(error,.not. ok, "oor_from_iaf: unknown tag must report ok=.false.")
+      call check(error,.not. ok, "oor_from_iaf: unknown tag must report ok=false")
       if (allocated(error)) return
    end subroutine test_filelist_oor_mapping
 
@@ -1187,7 +1187,7 @@ contains
       call ocean_data_input_update_2d(reader_blend, id_blend, tq, NX, NY, dest)
       !$acc update self(dest)
       call check(error, abs(dest(1, 1) - 15.0_wp) < 1.0e-9_wp, &
-                 "filelist hold: the hold=.false. control reader should still blend linearly")
+                 "filelist hold: the hold=false control reader should still blend linearly")
       !$acc exit data delete(dest)
       call reader_blend%exit_data()
       !$acc exit data delete(reader_blend)

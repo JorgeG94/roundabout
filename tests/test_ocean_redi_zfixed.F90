@@ -1,5 +1,5 @@
 !! Redi continuous neutral diffusion on `z_fixed` with partial-step CLOSED
-!! faces (`&vcoord_nml zfixed_closed_faces`).  Every case runs the
+!! faces (`[vcoord] zfixed_closed_faces`).  Every case runs the
 !! production device kernels — `redi_calc_coeffs` + `redi_apply_flux` (for the
 !! multi-step case) — over a
 !! hand-specified staircase whose layer thicknesses AND closed-face masks come

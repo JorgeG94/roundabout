@@ -6,19 +6,19 @@ carries the known BT descriptor-memcpy perf regression).
 Env: `module load nvhpc/26.3 misc/nvhpc-build/25.5/netcdf-c/
 misc/nvhpc-build/25.5/netcdf-fortran/ hdf5`, `OMP_NUM_THREADS=1`.
 
-Four configs, identical apart from `&ocean_bt_nml bt_halo` (verified
-by diff): `seamount_bt{0,8}.nml` (512x256x30, 2 d, dt=300, diags off)
-and `dg50_bt{0,8}.nml` (300x300x50 double-gyre, 2 d, dt=1200, diags
+Four configs, identical apart from `[ocean.bt] bt_halo` (verified
+by diff): `seamount_bt{0,8}.toml` (512x256x30, 2 d, dt=300, diags off)
+and `dg50_bt{0,8}.toml` (300x300x50 double-gyre, 2 d, dt=1200, diags
 off).
 
 ## Command matrix (from the repo root; 3 runs per cell, take median)
 
 ```
 cd /home/jorge/nci/cdx/rdb_marchin_wt
-OMP_NUM_THREADS=1 mpirun -np 1 bench_scaling/gpu_pin.sh build_gpu_mpi/rdb bench_scaling/seamount_bt0.nml
-OMP_NUM_THREADS=1 mpirun -np 2 bench_scaling/gpu_pin.sh build_gpu_mpi/rdb bench_scaling/seamount_bt0.nml
-OMP_NUM_THREADS=1 mpirun -np 4 bench_scaling/gpu_pin.sh build_gpu_mpi/rdb bench_scaling/seamount_bt0.nml
-# ... same three for seamount_bt8.nml, dg50_bt0.nml, dg50_bt8.nml
+OMP_NUM_THREADS=1 mpirun -np 1 bench_scaling/gpu_pin.sh build_gpu_mpi/rdb bench_scaling/seamount_bt0.toml
+OMP_NUM_THREADS=1 mpirun -np 2 bench_scaling/gpu_pin.sh build_gpu_mpi/rdb bench_scaling/seamount_bt0.toml
+OMP_NUM_THREADS=1 mpirun -np 4 bench_scaling/gpu_pin.sh build_gpu_mpi/rdb bench_scaling/seamount_bt0.toml
+# ... same three for seamount_bt8.toml, dg50_bt0.toml, dg50_bt8.toml
 ```
 
 `gpu_pin.sh` sets `CUDA_VISIBLE_DEVICES` from

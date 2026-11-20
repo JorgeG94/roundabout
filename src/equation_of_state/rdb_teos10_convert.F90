@@ -1,5 +1,5 @@
 module rdb_teos10_convert
-   !! Pure TEOS-10 conversion primitives (no EOS state, no namelist knobs).
+   !! Pure TEOS-10 conversion primitives (no EOS state, no input knobs).
    !!
    !! Salinity-scale and temperature-scale converters between the
    !! "model" variables this tree has used historically (practical

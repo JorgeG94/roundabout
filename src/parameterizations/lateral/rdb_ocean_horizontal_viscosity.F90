@@ -1089,10 +1089,10 @@ contains
          !! zero stored at a land face never acts as a Dirichlet-0 wall.
          !! All-wet corner => factor 1 => bit-identical.
       real(wp), intent(in)    :: ns
-         !! 1 = no-slip (`&ocean_hvisc_nml no_slip`), 0 = free-slip.
+         !! 1 = no-slip (`[ocean.hvisc] no_slip`), 0 = free-slip.
       real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
          !! Per-layer 0/1 u-face open mask
-         !! (`&vcoord_nml zfixed_closed_faces`).  ABSENT (the default
+         !! (`[vcoord] zfixed_closed_faces`).  ABSENT (the default
          !! path) => the interior loops below are textually the ones this
          !! routine has always run => bit-identical.
          !!
@@ -1231,10 +1231,10 @@ contains
          !! zero stored at a land face never acts as a Dirichlet-0 wall.
          !! All-wet corner => factor 1 => bit-identical.
       real(wp), intent(in)    :: ns
-         !! 1 = no-slip (`&ocean_hvisc_nml no_slip`), 0 = free-slip.
+         !! 1 = no-slip (`[ocean.hvisc] no_slip`), 0 = free-slip.
       real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
          !! Per-layer 0/1 u-face open mask
-         !! (`&vcoord_nml zfixed_closed_faces`) — the FREE-SLIP closure
+         !! (`[vcoord] zfixed_closed_faces`) — the FREE-SLIP closure
          !! of a z-level partial step.  See `hvisc_compute_face_impl`'s
          !! `open_u` docstring for the full argument; ABSENT (the default
          !! path) ⇒ the loops below are textually unchanged ⇒
@@ -1360,7 +1360,7 @@ contains
       !! `ν₄ · dt · ((π/dx)² + (π/dy)²)² <= 2` (established project
       !! constant).  The constant scalar `nu_4` is clamped per face to
       !! this CFL ceiling (`hvisc_nu4_cfl_bound`, scaled by
-      !! `bound_coef`) in Pass 2, so an over-large namelist `nu_4`
+      !! `bound_coef`) in Pass 2, so an over-large input `nu_4`
       !! cannot violate the local bound; below the ceiling the multiply
       !! is by `nu_4` bit-for-bit.
       integer, intent(in)    :: nx, ny, nz
@@ -1382,7 +1382,7 @@ contains
       real(wp), intent(in)    :: dy_dxT(nx, ny), dx_dyBu(nx + 1, ny + 1), iareaCu(nx + 1, ny)
       real(wp), intent(in)    :: dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), iareaCv(nx, ny + 1)
       real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
-         !! Per-layer 0/1 u-face open mask (`&vcoord_nml
+         !! Per-layer 0/1 u-face open mask (`[vcoord]
          !! zfixed_closed_faces`).  ABSENT (the default path) => the loops
          !! below are textually the ones this routine has always run =>
          !! bit-identical.  PRESENT => see `hvisc_biharm_lap_closed`: in
@@ -1534,7 +1534,7 @@ contains
       real(wp), intent(in)    :: dy_dxT(nx, ny), dx_dyBu(nx + 1, ny + 1), iareaCu(nx + 1, ny)
       real(wp), intent(in)    :: dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), iareaCv(nx, ny + 1)
       real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
-         !! Per-layer 0/1 u-face open mask (`&vcoord_nml
+         !! Per-layer 0/1 u-face open mask (`[vcoord]
          !! zfixed_closed_faces`).  ABSENT (the default path) => the loops
          !! below are textually the ones this routine has always run =>
          !! bit-identical.  PRESENT => see `hvisc_biharm_lap_closed`: in
@@ -1646,7 +1646,7 @@ contains
                                            dy_dxT, dx_dyBu, iareaCu, dx_dyT, dy_dxBu, iareaCv, &
                                            nx, ny, nz, open_u, open_v)
       !! Pass 1 of BOTH velocity biharmonics (scalar `nu_4` and the
-      !! flow-aware `nu4_face_*`) under `&vcoord_nml zfixed_closed_faces`:
+      !! flow-aware `nu4_face_*`) under `[vcoord] zfixed_closed_faces`:
       !! the intermediate Laplacian `lap_u`/`lap_v` with a closed
       !! face-layer treated as a FREE-SLIP wall.
       !!

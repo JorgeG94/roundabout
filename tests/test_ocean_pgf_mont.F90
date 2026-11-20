@@ -1,5 +1,5 @@
 !! Analytical tests for the Montgomery-potential PGF
-!! (`&ocean_pgf_nml form = "mont"` → `OPGF_VARIANT_MONT`).
+!! (`[ocean.pgf] form = "mont"` → `OPGF_VARIANT_MONT`).
 !!
 !! The defect these pin
 !! --------------------

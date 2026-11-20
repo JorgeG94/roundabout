@@ -14,7 +14,7 @@
 !! (spatially-constant wind — the Tier-1 default).  Spatially-
 !! varying wind sets the arrays directly before `enter_data`.
 !!
-!! ## Ice-shelf cover (`&ocean_cavity_dyn_nml`)
+!! ## Ice-shelf cover (`[ocean.cavity_dyn]`)
 !!
 !! Under an ice shelf there is no atmosphere, so there is no wind.  The
 !! mask is applied ONCE to the `tau` PAIR
@@ -30,7 +30,7 @@
 !! makes all three correct by construction and adds no branch to any
 !! hot kernel.
 !!
-!! FACE RULE — it is `&ocean_tdrag_nml`'s, not a second one.  The
+!! FACE RULE — it is `[ocean.tdrag]`'s, not a second one.  The
 !! projection of the cell-centred `cover_frac` onto faces is stated once,
 !! in `rdb_ocean_top_drag`'s module docstring: a face is under ice if
 !! EITHER abutting cell is (`max(cover_L, cover_R)`), rim faces are left
@@ -133,7 +133,7 @@ module rdb_ocean_surface_stress
          !! distributed forms alike).
          !!
          !! ASSIGNED FROM CONFIG by `configure_ocean_reference_density`,
-         !! which copies the single rho0 of record (`&ocean_ic_nml rho_0`
+         !! which copies the single rho0 of record (`[ocean.ic] rho_0`
          !! -> `eos%rho0`).  The literal here is only the pre-configure
          !! type default.  Host scalar: passed by value into the
          !! `surfstress_*_impl` kernels, so no `!$acc update device`.
@@ -207,7 +207,7 @@ module rdb_ocean_surface_stress
          !! same stage that recomputes the top drag and strictly before
          !! `vmix_apply_in_stage` reads it (no lag), from
          !! `ocean_top_drag_t%stress_top`.  When the top drag is OFF but
-         !! `&ocean_cavity_melt_nml enable` is on, `engine_step_finalize`
+         !! `[ocean.cavity_melt] enable` is on, `engine_step_finalize`
          !! fills it instead from `rho_0*u_*^2` with the melt slot's own
          !! `u_*` — the SAME `C_d` under the one-drag-coefficient rule,
          !! but at the thermo cadence, so THAT path is lagged one outer
@@ -639,10 +639,10 @@ contains
       !! `stress_shelf = rho_0 * u_*^2`.
       !!
       !! The melt-only route into the `stress_shelf` seam.  When
-      !! `&ocean_tdrag_nml` is on, the RK2 stage drivers fill
+      !! `[ocean.tdrag]` is on, the RK2 stage drivers fill
       !! `stress_shelf` inline from `ocean_top_drag_t%stress_top` and
       !! this is never called; when the top drag is OFF but
-      !! `&ocean_cavity_melt_nml` is on, `engine_step_finalize` calls it
+      !! `[ocean.cavity_melt]` is on, `engine_step_finalize` calls it
       !! with the melt slot's own `u_*`, which was solved with the SAME
       !! `C_d` (the one-drag-coefficient rule refuses a disagreeing
       !! `cdrag_top` at configure).  So this is a change of variable, not

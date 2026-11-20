@@ -14,7 +14,7 @@
 !! the bottom never does: a per-FACE ICE-COVER mask, because the upper
 !! boundary is a free surface over open water and a no-slip-like wall
 !! under a shelf, in the same domain, at the same time.  So: its own slot,
-!! its own knob group (`&ocean_tdrag_nml`), and a deliberate, documented
+!! its own knob group (`[ocean.tdrag]`), and a deliberate, documented
 !! one-to-one correspondence with the bottom-drag algebra that the
 !! mirror-symmetry test (`test_ocean_top_drag`) pins numerically.
 !!
@@ -53,7 +53,7 @@
 !! `cover_frac` is binary in v1, so `max` IS the logical OR.)
 !!
 !! `cover_u`/`cover_v` are filled ONCE, at configure, because
-!! `cover_frac` is static geometry (`&ocean_cavity_dyn_nml`, filled in the
+!! `cover_frac` is static geometry (`[ocean.cavity_dyn]`, filled in the
 !! IC seed and never touched again).  The per-step kernel reads the face
 !! masks, never `metrics`.
 !!
@@ -69,15 +69,15 @@
 !!
 !! ## Implicit forms — there are two, and they are different things
 !!
-!!   * `&ocean_tdrag_nml implicit` — backward-Euler in the DRAGGED
+!!   * `[ocean.tdrag] implicit` — backward-Euler in the DRAGGED
 !!     velocity, formed inside this kernel: the tendency written is
 !!     `-lambda*u/(1 + dt*lambda)` so the ordinary `u += dt*du_drag`
 !!     apply reproduces `u^{n+1} = u/(1 + dt*lambda)` exactly.
 !!     Unconditionally stable for any `h`.  Mirrors
-!!     `&ocean_bdrag_nml implicit`.
-!!   * `&ocean_vdiff_nml implicit_top_drag` — folds the rate into the
+!!     `[ocean.bdrag] implicit`.
+!!   * `[ocean.vdiff] implicit_top_drag` — folds the rate into the
 !!     vertical-friction tridiagonal's `k = nz` DIAGONAL, where the wind
-!!     stress already owns the RHS.  Mirrors `&ocean_vdiff_nml
+!!     stress already owns the RHS.  Mirrors `[ocean.vdiff]
 !!     implicit_drag`.  That path sets `implicit_fold` here, which fills
 !!     `lambda_top_u/v` and makes the driver SKIP the explicit apply.
 !!
@@ -144,7 +144,7 @@ module rdb_ocean_top_drag
          !! True between `init` and `destroy`.  Always test this, never
          !! `allocated(...)`.
       logical :: enable = .false.
-         !! `&ocean_tdrag_nml enable`, latched before `init`.  Off ⇒
+         !! `[ocean.tdrag] enable`, latched before `init`.  Off ⇒
          !! placeholders, no kernel launch, byte-identical.
       integer :: variant = TDRAG_QUADRATIC
          !! Active drag variant (`TDRAG_*`).
@@ -180,7 +180,7 @@ module rdb_ocean_top_drag
          !! `u^{n+1} = u/(1 + dt*lambda)`.  Unconditionally stable for any
          !! layer thickness.  Default `.false.` = explicit forward Euler.
       logical :: implicit_fold = .false.
-         !! `&ocean_vdiff_nml implicit_top_drag`: fill `lambda_top_u/v`
+         !! `[ocean.vdiff] implicit_top_drag`: fill `lambda_top_u/v`
          !! so the vdiff solver can fold the drag into its `k = nz`
          !! diagonal, and let the driver SKIP the explicit apply.  Default
          !! `.false.` ⇒ the rate fields stay zero.
@@ -731,7 +731,7 @@ contains
    ! ======================================================================
 
    pure function parse_tdrag_variant(name) result(code)
-      !! Translate a namelist string into a `TDRAG_*` code.  An
+      !! Translate an input string into a `TDRAG_*` code.  An
       !! unrecognised string returns `TDRAG_INVALID` — a typo must abort
       !! rather than silently select one of two laws with different
       !! coefficient dimensions.  Accepts the same spellings as

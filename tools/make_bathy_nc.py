@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate an analytic bathymetry NetCDF for `&ocean_topo_nml topo_config="file"`.
+"""Generate an analytic bathymetry NetCDF for `[ocean.topo] topo_config="file"`.
 
 Why this exists.  The formula bathymetries the solver ships (`flat`,
 `spoon`, `seamount`, `island`, `double_drake`, `neverworld2`,

@@ -16,7 +16,7 @@ for months.
 ## Run
 
 ```bash
-./build/rdb validation_examples/ocean/seamount/seamount.nml
+./build/rdb validation_examples/ocean/seamount/seamount.toml
 ```
 
 100 × 100 km basin (50 × 50 cells @ 2 km), 15 σ-layers,
@@ -43,7 +43,7 @@ signatures:
 
 | File | What it changes |
 |---|---|
-| `seamount.nml` | Canonical setup (above). |
-| `seamount_auto.nml` | Same geometry, auto-derived `n_inner`. |
-| `seamount_flat.nml` | Flat-bottom control (sanity check that the dyn-core is quiet absent the seamount). |
-| `seamount_bench_full.nml` | Production-style: linear T(z), f≠0, KPP+PP81, ALE remap on zstar_sigma, Laplacian ν_h, sponges, diag manager. Bridge to Tasman 2 km without the GEBCO real-bathy confound. |
+| `seamount.toml` | Canonical setup (above). |
+| `seamount_auto.toml` | Same geometry, auto-derived `n_inner`. |
+| `seamount_flat.toml` | Flat-bottom control (sanity check that the dyn-core is quiet absent the seamount). |
+| `seamount_bench_full.toml` | Production-style: linear T(z), f≠0, KPP+PP81, ALE remap on zstar_sigma, Laplacian ν_h, sponges, diag manager. Bridge to Tasman 2 km without the GEBCO real-bathy confound. |

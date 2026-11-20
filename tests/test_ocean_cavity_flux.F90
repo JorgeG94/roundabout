@@ -1,5 +1,5 @@
 !! Analytical + contract tests for the ice-shelf basal-melt COUPLING
-!! (`&ocean_cavity_melt_nml`): the far-field sampler, the masked 2-D
+!! (`[ocean.cavity_melt]`): the far-field sampler, the masked 2-D
 !! driver, the two owned surface-flux components, the budget, the status
 !! accounting and the refusal matrix.
 module test_ocean_cavity_flux
@@ -1383,8 +1383,8 @@ contains
    subroutine test_validate_refusals(error)
       !! Every v1 restriction fails loud at configure, and the refusal
       !! comes from `validate_config` — NOT from the strict schema
-      !! tripping over a malformed test namelist.  Each case is asserted
-      !! to PARSE cleanly first, so a silently mis-built namelist cannot
+      !! tripping over a malformed test input.  Each case is asserted
+      !! to PARSE cleanly first, so a silently mis-built input cannot
       !! make a refusal test pass for the wrong reason.
       !!
       !! Four entries here used to be refusals and are now ACCEPTANCES:
@@ -1402,7 +1402,7 @@ contains
       !! without the cover, so it would silently restore the unmasked
       !! atmosphere under the shelf.  The interface pressure is NOT a
       !! gap: the cavity assembles `ms%p_top = p_ice_ref + sf%p_surf`, so
-      !! `&ocean_psurf_nml` is asserted ACCEPTED below.
+      !! `[ocean.psurf]` is asserted ACCEPTED below.
       type(error_type), allocatable, intent(out) :: error
 
       ! --- the prerequisites ---
@@ -1503,7 +1503,7 @@ contains
    end subroutine test_validate_refusals
 
    function melt_nml(melt_body, tfreeze, components, extra, with_geometry) result(nml)
-      !! Build one complete test namelist.  Every group appears EXACTLY
+      !! Build one complete test input.  Every group appears EXACTLY
       !! ONCE — the strict schema refuses a duplicate group, and a
       !! refusal test that trips on that would be testing the parser, not
       !! the rule it names.
@@ -1511,13 +1511,13 @@ contains
          !! The `[ocean.cavity_melt]` key lines (TOML) without the table header;
          !! empty ⇒ the group is omitted entirely.
       character(len=*), intent(in) :: tfreeze
-         !! `&ocean_eos_nml tfreeze_set` value.
+         !! `[ocean.eos] tfreeze_set` value.
       logical, intent(in) :: components
-         !! `&ocean_forcing_nml enable_components`.
+         !! `[ocean.forcing] enable_components`.
       character(len=*), intent(in) :: extra
          !! One extra complete TOML table (with its header), or empty.
       logical, intent(in) :: with_geometry
-         !! Append `&ocean_cavity_dyn_nml` (the melt group's prerequisite).
+         !! Append `[ocean.cavity_dyn]` (the melt group's prerequisite).
       character(len=:), allocatable :: nml, comp
 
       comp = "false"
@@ -1568,7 +1568,7 @@ contains
    end function melt_nml
 
    subroutine expect_refused(what, nml, error)
-      !! The namelist must PARSE and then be refused by `validate_config`.
+      !! The input must PARSE and then be refused by `validate_config`.
       character(len=*), intent(in) :: what, nml
       type(error_type), allocatable, intent(inout) :: error
       type(config_t) :: cfg

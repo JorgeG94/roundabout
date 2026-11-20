@@ -7,7 +7,7 @@ module rdb_ocean_bt_budget_probe
    !! / subtropical for double_gyre), and prints a tabular per-region
    !! snapshot. Diagnoses which slow-term over/under-energizes a gyre.
    !!
-   !! Gated by `bt_work%debug_bt_budget` (namelist `ocean_debug_bt_budget`).
+   !! Gated by `bt_work%debug_bt_budget` (input `ocean_debug_bt_budget`).
    !! Default off ⇒ existing runs unchanged. Best paired with serial
    !! multicore builds so prints land in causal order.
    use rdb_constants, only: wp

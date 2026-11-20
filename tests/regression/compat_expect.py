@@ -23,7 +23,7 @@ A KNOWN_GAP row is an XFAIL: when the gap is fixed the cell passes, the row
 turns XPASS, and an XPASS FAILS the suite until the row is deleted.  The list
 can only shrink.
 
-Rows match on FEATURES, which are read off the cell's merged namelist (with
+Rows match on FEATURES, which are read off the cell's merged input (with
 the model's own defaults), never off the axis value names -- so a row still
 matches when a value is renamed or a second axis value turns the same knob
 on.  A `refused` row must also name the refusal: its `message` regex has to
@@ -53,7 +53,7 @@ def _edges(nml):
     return [str(_g(nml, "ocean_bc_nml", e, "wall")) for e in ("west", "east", "south", "north")]
 
 
-# name -> (meaning, predicate over the merged namelist).  Model defaults are
+# name -> (meaning, predicate over the merged input).  Model defaults are
 # spelled out where the knob may be absent (e.g. KPP is ON unless disabled).
 FEATURES = {
     # vertical coordinate
@@ -152,7 +152,7 @@ FEATURES = {
     "spherical": ("spherical sector", lambda n: _g(n, "ocean_grid_nml", "grid_config", "cartesian") == "spherical"),
     "sw_pen": ("penetrating shortwave", lambda n: float(_g(n, "ocean_thermo_nml", "sw_pen_frac", 0.0)) > 0.0),
     "cooling": ("surface cooling", lambda n: float(_g(n, "ocean_thermo_nml", "q_heat", 0.0)) < 0.0),
-    "dataovr": ("file-backed surface forcing (&ocean_dataovr_nml)",
+    "dataovr": ("file-backed surface forcing ([ocean.dataovr])",
                 lambda n: bool(_g(n, "ocean_dataovr_nml", "enable", False))),
     "fw_mass": ("real fresh-water mass (freshwater = 'mass')",
                 lambda n: _g(n, "ocean_forcing_nml", "freshwater", "none") == "mass"),
@@ -242,17 +242,17 @@ ROWS = [
           "correction_bc_pgf's compute_pbce builds the per-layer pressure response from the "
           "FV_MOM6 interface-height stack (pgf%e_face), which no other PGF form fills; the "
           "surface-relative forms carry no free-surface term (fix/bc-pgf-needs-fv-mom6).",
-          r"correction_bc_pgf=\.true\. requires &ocean_pgf_nml form='fv_mom6'"),
+          r"correction_bc_pgf=true requires \[ocean\.pgf\] form='fv_mom6'"),
     _phys("zfixed_open_steps", ("open_steps",),
           "z_fixed WITHOUT closed faces over a stepped bed pairs a live layer with a bed "
           "filler at every step face, and the staircase pressure gradient drives flow from "
           "rest; refused at configure (fix/zfixed-require-closed-faces).",
-          r"zfixed_closed_faces = \.false\. is refused with vcoord_type='z_fixed' over a "
+          r"zfixed_closed_faces = false is refused with vcoord_type='z_fixed' over a "
           r"stepped bed"),
     _phys("henyey_needs_latitude", ("henyey", "cartesian"),
           "The Henyey background is a latitude factor; a Cartesian grid has no latitude "
           "(geolatT = 0 would make every column equatorial).",
-          r"bkgnd_henyey=\.true\. requires a non-cartesian"),
+          r"bkgnd_henyey=true requires a non-cartesian"),
 
     # ===================================================================
     # KNOWN_GAP -- refusals.
@@ -271,17 +271,17 @@ ROWS = [
          "Fox-Kemper MLE reads epbl%mld only; MOM6 takes the mixed-layer depth from any "
          "boundary-layer scheme (KPP included).",
          "NOT TRACKED (B5 reads epbl%mld)",
-         message=r"ocean_foxkemper_nml: enable=\.true\. requires ocean_epbl_nml enable=\.true\.",
+         message=r"\[ocean\.foxkemper\]: enable=true requires \[ocean\.epbl\] enable=true",
          unless=("epbl",)),
 ] + [
     _gap("closed_faces_stress_tensor", "refused", ("closed_faces", "stress_tensor"),
          "stress_tensor's tension/shear use 2-D wet masks (kh_aniso rides on it).",
          "item 10 (queued)",
-         message=r"zfixed_closed_faces does not yet compose with &ocean_hvisc_nml stress_tensor"),
+         message=r"zfixed_closed_faces does not yet compose with \[ocean\.hvisc\] stress_tensor"),
     _gap("closed_faces_bc_pgf", "refused", ("closed_faces", "bt_bc_pgf"),
          "compute_pbce / compute_gtot_faces / the bc-PGF block weight by the FULL column.",
          "item 9 (queued)",
-         message=r"zfixed_closed_faces does not yet compose with &ocean_bt_nml correction_bc_pgf"),
+         message=r"zfixed_closed_faces does not yet compose with \[ocean\.bt\] correction_bc_pgf"),
 
     # ----- under an ice-shelf cavity -------------------------------------------
     _gap("cavity_vcoord", "refused", ("cavity",),
@@ -289,7 +289,7 @@ ROWS = [
          "the ice base) only; the others are unvalidated or draft-following -- zstar too, "
          "since it became MOM6 z* (a geopotential z_fixed stack dilated per column).",
          "'Cavity-only refusals' (+ design/phase6_zlike_coordinates_under_ice.md)",
-         message=r"ocean_cavity_dyn_nml enable=\.true\. accepts vcoord_type='sigma' or 'z_fixed'",
+         message=r"\[ocean\.cavity_dyn\] enable=true accepts vcoord_type='sigma' or 'z_fixed'",
          unless=("vc_sigma", "vc_z_fixed")),
 ] + [
     _gap("cavity_zfixed_" + f, "refused", ("cavity", "vc_z_fixed", f),
@@ -298,14 +298,14 @@ ROWS = [
          "'Cavity-only refusals' ({})".format(note),
          message=r"{} is refused with vcoord_type='z_fixed' under a cavity".format(msg))
     for f, msg, note in (
-        ("kpp", r"use_kpp=\.true\.", "follow-up P6.4"),
-        ("epbl", r"&ocean_epbl_nml enable=\.true\.", "follow-up P6.4"),
-        ("kappa_shear", r"&ocean_kappa_shear_nml enable=\.true\.", "P6.3/P6.4"),
-        ("tidal_mixing", r"&ocean_tidal_mixing_nml enable=\.true\.", "P6.3/P6.4"),
-        ("ideal_age", r"enable_ideal_age=\.true\.", "follow-up P6.3"),
-        ("gm", r"&ocean_gm_nml enable=\.true\.", "coordinate study"),
-        ("slopes", r"&ocean_redi_nml / &ocean_slopes_nml enable=\.true\.", "coordinate study"),
-        ("pgf_recon", r"reconstruct_for_pressure=\.true\.", "partial top cell reads fillers"),
+        ("kpp", r"use_kpp=true", "follow-up P6.4"),
+        ("epbl", r"\[ocean\.epbl\] enable=true", "follow-up P6.4"),
+        ("kappa_shear", r"\[ocean\.kappa_shear\] enable=true", "P6.3/P6.4"),
+        ("tidal_mixing", r"\[ocean\.tidal_mixing\] enable=true", "P6.3/P6.4"),
+        ("ideal_age", r"enable_ideal_age=true", "follow-up P6.3"),
+        ("gm", r"\[ocean\.gm\] enable=true", "coordinate study"),
+        ("slopes", r"\[ocean\.redi\] / \[ocean\.slopes\] enable=true", "coordinate study"),
+        ("pgf_recon", r"reconstruct_for_pressure=true", "partial top cell reads fillers"),
     )
 ] + [
     _phys("fw_mass_eulerian_z", ("fw_mass", "vc_eulerian_z"),
@@ -328,12 +328,12 @@ ROWS = [
           "file-backed surface forcing rewrites tau / Q_heat per time bracket with no ice-cover "
           "mask, so it is refused alongside a cavity (the matrix's fw_mass value feeds P - E "
           "through it).",
-          r"mutually exclusive with &ocean_dataovr_nml enable=\.true\."),
+          r"mutually exclusive with \[ocean\.dataovr\] enable=true"),
     Row("cavity_needs_fv_mom6", "PHYSICAL", "refused", ("cavity", "pgf_mont"),
         "The ice load enters through the FV pressure-stack top boundary condition "
         "pa(nz+1); Montgomery hard-zeroes M(nz), so it has nowhere to put it.",
-        message=r"(p_top_in_bc=\.true\.|ocean_cavity_dyn_nml enable=\.true\.) requires "
-                r"(&ocean_pgf_nml )?form='fv_mom6'"),
+        message=r"(p_top_in_bc=true|\[ocean\.cavity_dyn\] enable=true) requires "
+                r"(\[ocean\.pgf\] )?form='fv_mom6'"),
 
     # ===================================================================
     # KNOWN_GAP -- runtime failures of accepted configurations.

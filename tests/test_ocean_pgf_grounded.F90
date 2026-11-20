@@ -1,5 +1,5 @@
 !! Analytical tests for the grounded-layer PGF gate
-!! (`&ocean_isopycnal_nml pgf_skip_nonoverlap` →
+!! (`[ocean.isopycnal] pgf_skip_nonoverlap` →
 !! `ocean_pressure_force_t%skip_nonoverlap`).
 !!
 !! The defect these pin
@@ -235,7 +235,7 @@ contains
          pgf_open%variant = variant
          pgf_gated%variant = variant
          pgf_gated%skip_nonoverlap = .true.
-         ! What `configure_ocean_pgf` sets from `&ocean_isopycnal_nml
+         ! What `configure_ocean_pgf` sets from `[ocean.isopycnal]
          ! angstrom_h`: the collapsed layers sit on this floor.
          pgf_gated%nonoverlap_vanish_tol = nonoverlap_vanish_tol_for(ANGSTROM_H)
 

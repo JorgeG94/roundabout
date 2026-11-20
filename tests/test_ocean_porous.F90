@@ -2164,7 +2164,7 @@ contains
       !! `configure_ocean_porous` performs the two sign flips the whole
       !! scheme depends on, and both can be inverted without any kernel
       !! test noticing:
-      !!   * `porous_mask_depth = -masking_depth` (a namelist DEPTH,
+      !!   * `porous_mask_depth = -masking_depth` (an input DEPTH,
       !!     positive down, becomes a kernel gate HEIGHT, positive up),
       !!   * `por_bed = -barotropic%b` (`b` is a reference column DEPTH,
       !!     positive down; the fit works in heights).

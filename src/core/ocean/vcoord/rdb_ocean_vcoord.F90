@@ -109,7 +109,7 @@ module rdb_ocean_vcoord
       !! made `hycom` terrain-following there (audit finding H1).
    integer, parameter :: HYCOM_FLOOR_UNIFORM = 1
       !! Floor at `Σ (z_fixed_h_ref/nz)·(H+η)/H` — uniform z* in metres
-      !! (`&vcoord_nml z_fixed_profile = "uniform"`, `max_depth/nz`).
+      !! (`[vcoord] z_fixed_profile = "uniform"`, `max_depth/nz`).
    integer, parameter :: HYCOM_FLOOR_PROFILE = 2
       !! Floor at `Σ z_fixed_dz(k)·(H+η)/H` — a stretched z* resolution in
       !! metres (`z_fixed_profile = "list" | "tanh"`).
@@ -135,7 +135,7 @@ module rdb_ocean_vcoord
       !! (below), the top's is a fraction of the spacing.  `0.1` is
       !! MITgcm's `hFacMin` default, which is the minimum partial-cell
       !! fraction Losch (2008, JGR 113 C08043, §2.1) used for exactly
-      !! this ice-shelf partial-top-cell problem.  Not a namelist knob:
+      !! this ice-shelf partial-top-cell problem.  Not an input knob:
       !! it is inert unless `z_top > 0`, and a cavity on a z-like
       !! coordinate is itself a new, fenced configuration.
 
@@ -194,7 +194,7 @@ module rdb_ocean_vcoord
       ! = 0` is the surface, `z_ref_global(nz_ml)` is the deepest
       ! reference interface.  Drives the z-level branch of `VCOORD_ZSIGMA`
       ! and the z*-lite branch of `VCOORD_ZSTAR_SIGMA`.  Default at init
-      ! is uniform 0..1 (normalised) — the namelist parser populates it
+      ! is uniform 0..1 (normalised) — the input parser populates it
       ! with absolute depths when those cases are activated.
       real(wp), allocatable :: z_ref_global(:)
          !! Global reference z-interfaces (m, positive-down), shape
@@ -292,7 +292,7 @@ module rdb_ocean_vcoord
 
       ! ---- Tuning knobs ----
       logical :: remap_stream = .true.
-         !! Tracer remap kernel: `.true.` (default, `&vcoord_nml remap_kernel =
+         !! Tracer remap kernel: `.true.` (default, `[vcoord] remap_kernel =
          !! "stream"`) dispatches the default-PPM tracer remap to the
          !! streaming kernel, `.false.` to the stack-based reference.
          !! Same semantics either way (concentration-form remap).
@@ -355,7 +355,7 @@ module rdb_ocean_vcoord
          !! profile's total depth, `z_fixed_zi(0)`, and the nominal
          !! interfaces come from `z_fixed_zi` instead of `h_ref/nz`.
       logical :: z_fixed_use_profile = .false.
-         !! `&vcoord_nml z_fixed_profile /= "uniform"`: the `VCOORD_Z_FIXED`
+         !! `[vcoord] z_fixed_profile /= "uniform"`: the `VCOORD_Z_FIXED`
          !! (and `VCOORD_ZSTAR`) nominal interfaces come from `z_fixed_zi` /
          !! `z_fixed_dz` (set by `ocean_vcoord_set_z_fixed_profile`) rather than from the uniform
          !! `z_fixed_h_ref/nz_ml`.  Scalar, rides `copyin(this)`.  Default
@@ -370,7 +370,7 @@ module rdb_ocean_vcoord
       real(wp), allocatable :: z_fixed_dz(:)
          !! `VCOORD_Z_FIXED` nominal layer thicknesses (m), shape `nz_ml`,
          !! bottom-up: `z_fixed_zi(k-1) - z_fixed_zi(k)`, stored separately
-         !! so the partial-top-cell threshold uses the exact namelist
+         !! so the partial-top-cell threshold uses the exact input
          !! value.  Read only when `z_fixed_use_profile`.
       real(wp) :: regrid_time_scale = 0.0_wp
          !! Grid time-filter timescale τ (s) for the ALE regrid.  After
@@ -440,7 +440,7 @@ module rdb_ocean_vcoord
          !! component is never touched (mode-split consistency).  Default
          !! `.false.` ⇒ velocities unchanged ⇒ bit-identical.
       logical :: zfixed_closed_faces = .false.
-         !! `&vcoord_nml zfixed_closed_faces` — partial-step z-level face
+         !! `[vcoord] zfixed_closed_faces` — partial-step z-level face
          !! closure.  Meaningful on the three GEOMETRIC families that
          !! vanish bed-side layers, `VCOORD_Z_FIXED`, `VCOORD_ZSTAR` (MOM6
          !! z*) and `VCOORD_ZSTAR_FULL`, where a layer whose reference range lies
@@ -500,7 +500,7 @@ contains
       end do
       ! Default reference z-interfaces: uniform 0..1 normalised.  The
       ! ZSIGMA / ZSTAR_SIGMA branches that consume this expect absolute
-      ! metre values from the namelist parser; the normalised default
+      ! metre values from the input parser; the normalised default
       ! is only useful for VCOORD_SIGMA (which ignores it)
       ! and for unit tests that pre-populate before running.
       allocate (this%z_ref_global(0:nz_local))
@@ -531,7 +531,7 @@ contains
       ! Isopycnal target densities — sized `0:nz_ml`, populated by the
       ! setup wiring only when `coord_type == VCOORD_RHO`.  Default is a
       ! benign monotone ramp (1020..1030 kg/m³) so the slot is always
-      ! valid; the setup path overwrites it from the namelist.
+      ! valid; the setup path overwrites it from the input.
       allocate (this%rho_target(0:nz_local))
       do k = 0, nz_local
          this%rho_target(k) = 1020.0_wp + 10.0_wp*real(k, wp)/real(nz_local, wp)
@@ -1325,7 +1325,7 @@ contains
       !! `VCOORD_ZSTAR` target grid — MOM6 z* (`REGRIDDING_COORDINATE_MODE
       !! = "Z*"`, `build_zstar_column`, MOM6 `src/ALE/coord_zlike.F90`
       !! lines 65-146): the FIXED nominal z profile of `z_fixed`
-      !! (`&vcoord_nml z_fixed_profile` uniform / list / tanh — the same
+      !! (`[vcoord] z_fixed_profile` uniform / list / tanh — the same
       !! `z_fixed_zi` table, not a parallel one) DILATED per column by the
       !! free-surface stretching, over a partial bed cell and inert bed
       !! fillers.
@@ -1535,7 +1535,7 @@ contains
    pure subroutine ocean_vcoord_closed_face_masks(open_u, open_v, target_h, &
                                                   nx, ny, nz, h_vanished)
       !! Partial-step z-level FACE CLOSURE mask for `VCOORD_Z_FIXED`
-      !! (`&vcoord_nml zfixed_closed_faces`; Adcroft, Hill & Marshall
+      !! (`[vcoord] zfixed_closed_faces`; Adcroft, Hill & Marshall
       !! 1997; Losch 2008 §2.1 for the ice-shelf cavity).
       !!
       !! Under `z_fixed` a layer whose nominal geopotential range lies
@@ -1906,7 +1906,7 @@ contains
       !! in different nominal `z_fixed` layers — a bed staircase step that
       !! crosses a nominal interface, so that an OPEN face pairs a live
       !! layer on one side with a bed FILLER on the other.  That is the
-      !! face `&vcoord_nml zfixed_closed_faces` closes; left open, the FV
+      !! face `[vcoord] zfixed_closed_faces` closes; left open, the FV
       !! pressure gradient across the step drives the flow from rest
       !! (`configure_ocean_closed_faces` refuses the configuration).
       !!
@@ -2076,7 +2076,7 @@ contains
       !!        METRES times `stretching = (H+η)/H`, and push each interface
       !!        DOWN to at least that depth (clamped to the column bottom).
       !!        The nominal thicknesses are the z* coordinate resolution —
-      !!        the same `&vcoord_nml z_fixed_profile` table `z_fixed` uses
+      !!        the same `[vcoord] z_fixed_profile` table `z_fixed` uses
       !!        (`z_fixed_dz` for "list"/"tanh", `max_depth/nz` for
       !!        "uniform"), as MOM6 HYCOM1 takes its `coordinateResolution`
       !!        from the ALE_COORDINATE_CONFIG that would define a z* grid.

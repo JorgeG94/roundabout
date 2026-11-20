@@ -121,12 +121,12 @@ contains
       ocean_state%continuity%conservative_floor = cfg%ocean%isopycnal%conservative_floor
       if (cfg%ocean%isopycnal%conservative_floor) then
          if (cfg%ocean%isopycnal%angstrom_h <= 0.0_wp) then
-            call fail("ocean_isopycnal_nml: conservative_floor=.true. requires "// &
+            call fail("[ocean.isopycnal]: conservative_floor=true requires "// &
                       "angstrom_h > 0 (nothing to floor to).", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (parse_ocean_vcoord_type(cfg%vcoord_type) /= VCOORD_LAGRANGIAN) then
-            call fail("ocean_isopycnal_nml: conservative_floor=.true. is only "// &
+            call fail("[ocean.isopycnal]: conservative_floor=true is only "// &
                       "valid with vcoord_type='lagrangian' (isopycnal path).", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -200,7 +200,7 @@ contains
             if ((cfg%ocean%bdrag%cd > 0.0_wp .or. cfg%ocean%bdrag%r > 0.0_wp) .and. &
                 (parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR .or. &
                  parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR_FULL)) then
-               call logger%warning("&ocean_bdrag_nml hbbl = 0 (bed-layer-only drag) under "// &
+               call logger%warning("[ocean.bdrag] hbbl = 0 (bed-layer-only drag) under "// &
                                    "vcoord_type = '"//trim(cfg%vcoord_type)//"': the drag "// &
                                    "acts on layer k = 1, an inert filler in every column "// &
                                    "shallower than the deepest nominal layer, so those "// &
@@ -217,7 +217,7 @@ contains
    end subroutine configure_ocean_drag
 
    module subroutine configure_ocean_hdiff(cfg, ocean_state, compute_rank)
-      !! Along-coordinate tracer Laplacian coefficient (`&ocean_hdiff_nml
+      !! Along-coordinate tracer Laplacian coefficient (`[ocean.hdiff]
       !! kappa_h`).  Scalar copy onto `ocean_state%hdiff_tracer`, mapped
       !! with its parent slot at `ocean_state_enter_data` — no explicit
       !! `!$acc update` needed as long as this runs before that (it does;
@@ -306,12 +306,12 @@ contains
       ocean_state%vmix%bkgnd_henyey_max_lat = cfg%ocean%vmix%bkgnd_henyey_max_lat
       ! Backstop for the two `validate_config` guards (Bryan-Lewis and Henyey
       ! mutually exclusive; non-cartesian grid_config required) — reached only
-      ! by a caller that bypassed validation, since the namelist path stops
+      ! by a caller that bypassed validation, since the input path stops
       ! there first.  Repeated here because a Henyey run with either
       ! precondition violated is silent (wrong background field), not noisy.
       if (bkgnd_henyey_conflicts_profile(cfg%ocean%vmix%bkgnd_henyey, &
                                          cfg%ocean%vmix%bkgnd_profile)) then
-         call fail("ocean_vmix_nml: bkgnd_henyey and bkgnd_profile are "// &
+         call fail("[ocean.vmix]: bkgnd_henyey and bkgnd_profile are "// &
                    "mutually exclusive background schemes — the Henyey factor "// &
                    "scales the SCALAR background, it does not compose with the "// &
                    "Bryan-Lewis depth profile", ierr, OCEAN_STATUS_ERR_SETUP)
@@ -319,7 +319,7 @@ contains
       end if
       if (cfg%ocean%vmix%bkgnd_henyey .and. &
           trim(cfg%ocean%grid%grid_config) == "cartesian") then
-         call fail("ocean_vmix_nml: bkgnd_henyey requires a non-cartesian "// &
+         call fail("[ocean.vmix]: bkgnd_henyey requires a non-cartesian "// &
                    "grid_config — geolatT is identically zero on cartesian, so "// &
                    "every column would take the equatorial L(0 deg)=0 and the "// &
                    "background would flatten to a uniform bkgnd_kd_min", ierr, OCEAN_STATUS_ERR_SETUP)
@@ -387,7 +387,7 @@ contains
       ! drag (PGF_BUG.md §9), with MOM6's per-face `set_viscous_BBL`
       ! (`vdiff_set_viscous_bbl`) built from the bottom-drag configuration:
       ! the drag law, `cd`/`r`, `bg_vel`, `bbl_thick_min`, and `HBBL` =
-      ! `&ocean_bdrag_nml hbbl`, falling back to `&ocean_vdiff_nml
+      ! `[ocean.bdrag] hbbl`, falling back to `[ocean.vdiff]
       ! hbbl_visc` for a drag configured bed-only (`hbbl = 0`) — MOM6 has
       ! ONE HBBL and no bed-only form.  No drag configured ⇒ the latch
       ! leaves the glue OFF.  `hvel_mom6` is validated at configure.
@@ -431,7 +431,7 @@ contains
                           "explicit bed-drag apply)")
       else if (compute_rank == 0 .and. cfg%ocean%vdiff%bbl_glue) then
          call logger%info("vdiff: bbl_glue requested but no bottom drag is configured "// &
-                          "(&ocean_bdrag_nml cd/r = 0, or linear with bg_vel = 0) — glue OFF")
+                          "([ocean.bdrag] cd/r = 0, or linear with bg_vel = 0) — glue OFF")
       end if
       if (compute_rank == 0) then
          if (cfg%ocean%vmix%harmonic_visc) then
@@ -440,7 +440,7 @@ contains
       end if
 
       ! Implicit stress/drag folding into the vdiff tridiagonal
-      ! (`&ocean_vdiff_nml`).  When on, the corresponding explicit
+      ! (`[ocean.vdiff]`).  When on, the corresponding explicit
       ! pre-solve apply is gated off in run_stage (see rdb_ocean_dyn), and
       ! the bottom-drag slot fills the bed-layer Rayleigh-rate field
       ! `lambda_bot_u/v` that the vdiff diagonal consumes.  Mutual
@@ -476,7 +476,7 @@ contains
       ! ALE remap (which fires at DT_THERM cadence) never lands inside an
       ! open accumulation window.  Fail loud, host-side.
       if (cfg%ocean%vmix%dt_tracer_advect_ratio < 1) then
-         call fail("ocean_vmix_nml: dt_tracer_advect_ratio must be >= 1 (got "// &
+         call fail("[ocean.vmix]: dt_tracer_advect_ratio must be >= 1 (got "// &
                    to_string(cfg%ocean%vmix%dt_tracer_advect_ratio)//")", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -484,7 +484,7 @@ contains
       ocean_state%dyn%dt_tracer_advect_ratio = cfg%ocean%vmix%dt_tracer_advect_ratio
       if (.not. ocean_dt_tracer_advect_ratios_ok(ocean_state%dyn%dt_therm_ratio, &
                                                  ocean_state%dyn%dt_tracer_advect_ratio)) then
-         call fail("ocean_vmix_nml: dt_therm_ratio ("// &
+         call fail("[ocean.vmix]: dt_therm_ratio ("// &
                    to_string(ocean_state%dyn%dt_therm_ratio)// &
                    ") must be an integer multiple of dt_tracer_advect_ratio ("// &
                    to_string(ocean_state%dyn%dt_tracer_advect_ratio)// &
@@ -526,7 +526,7 @@ contains
    end subroutine configure_ocean_vmix
 
    module subroutine configure_ocean_tracers(cfg, ocean_state, compute_rank)
-      !! `&ocean_tracers_nml` scalar knobs (PR-7): the ideal-age Dirichlet
+      !! `[ocean.tracers]` scalar knobs (PR-7): the ideal-age Dirichlet
       !! surface value and its vintage-mode exponential growth rate.
       !! `enable_ideal_age` itself is latched earlier by
       !! `ocean_state_copy_config` (before `init(grid)`, since it gates
@@ -551,7 +551,7 @@ contains
    end subroutine configure_ocean_tracers
 
    module subroutine configure_ocean_epbl(cfg, ocean_state, grid, compute_rank, ierr)
-      !! Copy the `&ocean_epbl_nml` knobs onto the EPBL slot — every
+      !! Copy the `[ocean.epbl]` knobs onto the EPBL slot — every
       !! field, end to end (don't repeat the KPP ri_crit/c_vt2
       !! dead-config gap).  Also fills `f_centre` from the same
       !! beta-plane parameters the Coriolis slot uses, copies the EOS
@@ -571,13 +571,13 @@ contains
          ! pattern): setting it up front left a half-configured slot
          ! flagged enabled on any of this routine's many failure returns.
          if (.not. ieee_is_finite(ecfg%rivermix_depth) .or. ecfg%rivermix_depth < 0.0_wp) then
-            call fail("ocean_epbl_nml: rivermix_depth must be finite and >= 0 (got "// &
+            call fail("[ocean.epbl]: rivermix_depth must be finite and >= 0 (got "// &
                       to_string(ecfg%rivermix_depth)//")", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. ecfg%enable) then
             if (ecfg%rivermix_depth > 0.0_wp) then
-               call fail("ocean_epbl_nml: rivermix_depth > 0 requires enable=.true. "// &
+               call fail("[ocean.epbl]: rivermix_depth > 0 requires enable=true "// &
                          "(river mixing is energy handed to EPBL; KPP has no such term)", &
                          ierr, OCEAN_STATUS_ERR_SETUP)
                return
@@ -589,19 +589,19 @@ contains
 
          epbl%mstar_scheme = parse_epbl_mstar_scheme(ecfg%mstar_scheme)
          if (epbl%mstar_scheme < 0) then
-            call fail("ocean_epbl_nml: unknown mstar_scheme '"// &
+            call fail("[ocean.epbl]: unknown mstar_scheme '"// &
                       trim(ecfg%mstar_scheme)//"' (constant/om4/rh18)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          epbl%vstar_scheme = parse_epbl_vstar_scheme(ecfg%vel_scale_scheme)
          if (epbl%vstar_scheme < 0) then
-            call fail("ocean_epbl_nml: unknown vel_scale_scheme '"// &
+            call fail("[ocean.epbl]: unknown vel_scale_scheme '"// &
                       trim(ecfg%vel_scale_scheme)//"' (cube_root/rh18)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          epbl%combine_mode = parse_epbl_combine(ecfg%combine)
          if (epbl%combine_mode < 0) then
-            call fail("ocean_epbl_nml: unknown combine '"// &
+            call fail("[ocean.epbl]: unknown combine '"// &
                       trim(ecfg%combine)//"' (add/max/max_shear)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -622,8 +622,8 @@ contains
             ! River mixing is driven by the runoff mass flux; with no runoff source it would
             ! be silently inert.  `ocean_data_forcing_configure` has already run.
             if (ocean_state%data_forcing%id_lrunoff <= 0 .and. ocean_state%data_forcing%id_frunoff <= 0) then
-               call fail("ocean_epbl_nml: rivermix_depth > 0 needs a runoff source "// &
-                         "(&ocean_dataovr_nml lrunoff and/or frunoff file); without one the "// &
+               call fail("[ocean.epbl]: rivermix_depth > 0 needs a runoff source "// &
+                         "([ocean.dataovr] lrunoff and/or frunoff file); without one the "// &
                          "term would be silently inert", ierr, OCEAN_STATUS_ERR_SETUP)
                return
             end if
@@ -648,7 +648,7 @@ contains
          epbl%prandtl = ecfg%prandtl
          epbl%tke_diags = ecfg%tke_diags
          ! (PR-21) Penetrating-SW TKE ledger switch lives on
-         ! &ocean_thermo_nml (shared with KPP), not &ocean_epbl_nml.
+         ! [ocean.thermo] (shared with KPP), not [ocean.epbl].
          epbl%epbl_sw_ctke = cfg%ocean%thermo%epbl_sw_ctke
 
          ! Langmuir (LF17 wind-only path).
@@ -656,7 +656,7 @@ contains
          if (ecfg%use_lt) then
             epbl%lt_scheme = parse_epbl_lt_scheme(ecfg%lt_scheme)
             if (epbl%lt_scheme < 0) then
-               call fail("ocean_epbl_nml: unknown lt_scheme '"// &
+               call fail("[ocean.epbl]: unknown lt_scheme '"// &
                          trim(ecfg%lt_scheme)//"' (rescale/additive)", ierr, OCEAN_STATUS_ERR_SETUP)
                return
             end if
@@ -684,7 +684,7 @@ contains
          epbl%rho0 = ocean_state%eos%rho0
 
          ! (E3) Top-of-column pressure in the IN-SITU EOS arguments AND
-         ! in the PE weight.  `&ocean_psurf_nml in_eos` is the single
+         ! in the PE weight.  `[ocean.psurf] in_eos` is the single
          ! gate for the whole `ms%p_top` seam; assigned HERE, at
          ! configure, so it is latched before `ocean_state_enter_data`
          ! and the kernel reads it by value (host scalar -- no
@@ -699,26 +699,26 @@ contains
 
          ! Validation.
          if (.not. cfg%ocean%vmix%use_closure) then
-            call fail("ocean_epbl_nml: enable=.true. requires "// &
-                      "ocean_vmix_nml use_closure=.true. (EPBL folds "// &
+            call fail("[ocean.epbl]: enable=true requires "// &
+                      "[ocean.vmix] use_closure=true (EPBL folds "// &
                       "into the interior closure's kv/kt)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call fail("ocean_epbl_nml: enable=.true. requires "// &
+            call fail("[ocean.epbl]: enable=true requires "// &
                       "active thermodynamics (EPBL reads T, S)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (epbl%mld_iteration .and. &
              (epbl%translay_scale < 0.0_wp .or. epbl%translay_scale >= 1.0_wp)) then
-            call fail("ocean_epbl_nml: translay_scale must be in "// &
+            call fail("[ocean.epbl]: translay_scale must be in "// &
                       "[0,1) when mld_iteration is on", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (epbl%combine_mode == EPBL_COMBINE_MAX_SHEAR .and. cfg%ocean%vmix%use_kpp) then
-            call fail("ocean_epbl_nml: combine='max_shear' is refused with use_kpp=.true. "// &
+            call fail("[ocean.epbl]: combine='max_shear' is refused with use_kpp=true "// &
                       "(the max-with-kappa-shear combine is defined against the "// &
-                      "ePBL-only surface scheme); set use_kpp=.false.", ierr, OCEAN_STATUS_ERR_SETUP)
+                      "ePBL-only surface scheme); set use_kpp=false", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          ! KPP mutual exclusion: EPBL replaces the overlay.  use_kpp
@@ -745,7 +745,7 @@ contains
    end subroutine configure_ocean_epbl
 
    module subroutine configure_ocean_foxkemper(cfg, ocean_state, compute_rank, ierr)
-      !! Copy the `&ocean_foxkemper_nml` knobs onto the MLE slot (B5).
+      !! Copy the `[ocean.foxkemper]` knobs onto the MLE slot (B5).
       !! Validates: B5 reads `epbl%mld`, so EPBL must be enabled; and the
       !! `resolution_taper` hook is a hard error until B2 lands.
       type(config_t), intent(in) :: cfg
@@ -777,19 +777,19 @@ contains
          ! B5 takes the mixed-layer depth from epbl%mld — EPBL is the
          ! enabler and must be on.
          if (.not. ocean_state%epbl%enable) then
-            call fail("ocean_foxkemper_nml: enable=.true. requires "// &
-                      "ocean_epbl_nml enable=.true. (B5 reads epbl%mld)", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.foxkemper]: enable=true requires "// &
+                      "[ocean.epbl] enable=true (B5 reads epbl%mld)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          ! resolution_taper is a B2 hook; the res_fn is not available yet.
          if (mle%resolution_taper) then
-            call fail("ocean_foxkemper_nml: resolution_taper=.true. "// &
+            call fail("[ocean.foxkemper]: resolution_taper=true "// &
                       "requires the B2 resolution function (not yet "// &
                       "available) — leave it .false. until B2 lands", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (mle%tail_dh /= 0.0_wp) then
-            call fail("ocean_foxkemper_nml: tail_dh /= 0 (mu cubic "// &
+            call fail("[ocean.foxkemper]: tail_dh /= 0 (mu cubic "// &
                       "tail) is deferred; use the exact mu (tail_dh=0)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -809,7 +809,7 @@ contains
    end subroutine configure_ocean_foxkemper
 
    module subroutine configure_ocean_kappa_shear(cfg, ocean_state, grid, compute_rank, ierr)
-      !! Copy the `&ocean_kappa_shear_nml` knobs onto the kappa-shear slot
+      !! Copy the `[ocean.kappa_shear]` knobs onto the kappa-shear slot
       !! — every field, end to end (don't repeat the KPP dead-config
       !! gap).  Fills `f_centre` from the same beta-plane parameters the
       !! Coriolis slot uses, copies the EOS hookup, and validates.  No
@@ -838,7 +838,7 @@ contains
          ! kernels gather into fixed-size NZ_STACK_MAX column arrays, so
          ! nz > NZ_STACK_MAX would silently overrun per-thread stack.
          if (ocean_state%multilayer%nz_ml > NZ_STACK_MAX) then
-            call fail("ocean_kappa_shear_nml: nz_layers exceeds "// &
+            call fail("[ocean.kappa_shear]: nz_layers exceeds "// &
                       "NZ_STACK_MAX (raise NZ_STACK_MAX in rdb_constants)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -888,7 +888,7 @@ contains
             ! owned-cell answer is exact; with nghost < 2 the depressed
             ! first-ring kt could leak into owned cells via smoothing.
             if (grid%nghost < 2) then
-               call fail("ocean_kappa_shear_nml: at_vertex requires "// &
+               call fail("[ocean.kappa_shear]: at_vertex requires "// &
                          "nghost >= 2 (corner solve covers interior "// &
                          "corners only; got nghost="//to_string(grid%nghost)//")", ierr, OCEAN_STATUS_ERR_SETUP)
                return
@@ -899,54 +899,54 @@ contains
 
          ! Validation.
          if (.not. cfg%ocean%vmix%use_closure) then
-            call fail("ocean_kappa_shear_nml: enable=.true. requires "// &
-                      "ocean_vmix_nml use_closure=.true. (kappa-shear "// &
+            call fail("[ocean.kappa_shear]: enable=true requires "// &
+                      "[ocean.vmix] use_closure=true (kappa-shear "// &
                       "folds into the interior closure's kv/kt)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call fail("ocean_kappa_shear_nml: enable=.true. requires "// &
+            call fail("[ocean.kappa_shear]: enable=true requires "// &
                       "active thermodynamics (kappa-shear reads T, S)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ks%ri_crit <= 0.0_wp) then
-            call fail("ocean_kappa_shear_nml: ri_crit must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.kappa_shear]: ri_crit must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ks%max_inner_it < 1) then
-            call fail("ocean_kappa_shear_nml: max_inner_it must be >= 1", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.kappa_shear]: max_inner_it must be >= 1", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ks%max_substep_it < 1) then
-            call fail("ocean_kappa_shear_nml: max_substep_it must be >= 1", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.kappa_shear]: max_substep_it must be >= 1", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ks%kappa_0 <= 0.0_wp) then
-            call fail("ocean_kappa_shear_nml: kappa_0 must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.kappa_shear]: kappa_0 must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ks%tol_err <= 0.0_wp) then
-            call fail("ocean_kappa_shear_nml: tol_err must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.kappa_shear]: tol_err must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ks%prandtl_turb <= 0.0_wp) then
-            call fail("ocean_kappa_shear_nml: prandtl_turb must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.kappa_shear]: prandtl_turb must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ks%vertex_geomean_kdmin < 0.0_wp) then
-            call fail("ocean_kappa_shear_nml: vertex_geomean_kdmin must be >= 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.kappa_shear]: vertex_geomean_kdmin must be >= 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (compute_rank == 0) then
             ! Advisory warnings (MOM6-parity semantics, not errors).
             if (kcfg%vertex_geomean_kdmin > 0.0_wp .and. &
                 .not. kcfg%vertex_geometric_mean) then
-               call logger%warning("ocean_kappa_shear_nml: vertex_geomean_kdmin "// &
+               call logger%warning("[ocean.kappa_shear]: vertex_geomean_kdmin "// &
                                    "is inert without vertex_geometric_mean")
             end if
             if (kcfg%at_vertex .and. kcfg%vertex_geometric_mean .and. &
                 kcfg%vertex_geomean_kdmin == 0.0_wp) then
-               call logger%warning("ocean_kappa_shear_nml: geometric mean with "// &
+               call logger%warning("[ocean.kappa_shear]: geometric mean with "// &
                                    "kdmin=0 hard-zeros Kd wherever ANY corner is 0 "// &
                                    "(every shear-zone edge); production configs "// &
                                    "use vertex_geomean_kdmin=1e-9")
@@ -965,7 +965,7 @@ contains
    end subroutine configure_ocean_kappa_shear
 
    module subroutine configure_ocean_tidal_mixing(cfg, ocean_state, grid, compute_rank, ierr)
-      !! Copy the `&ocean_tidal_mixing_nml` knobs onto the tidal-mixing
+      !! Copy the `[ocean.tidal_mixing]` knobs onto the tidal-mixing
       !! slot — every field, end to end (no dead-config gaps).  Seeds the
       !! prescribed bottom energy field `e_in` (v1 uniform path), copies
       !! the shared EOS hookup for the N^2 buoyancy derivatives, and
@@ -1029,28 +1029,28 @@ contains
 
          ! Validation.
          if (.not. cfg%ocean%vmix%use_closure) then
-            call fail("ocean_tidal_mixing_nml: enable=.true. requires "// &
-                      "ocean_vmix_nml use_closure=.true. (tidal mixing "// &
+            call fail("[ocean.tidal_mixing]: enable=true requires "// &
+                      "[ocean.vmix] use_closure=true (tidal mixing "// &
                       "folds into the interior closure's kv/kt)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call fail("ocean_tidal_mixing_nml: enable=.true. requires "// &
+            call fail("[ocean.tidal_mixing]: enable=true requires "// &
                       "active thermodynamics (tidal mixing reads T, S for N^2)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (tm%zeta <= 0.0_wp) then
-            call fail("ocean_tidal_mixing_nml: zeta must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.tidal_mixing]: zeta must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (tm%prandtl_tidal <= 0.0_wp) then
-            call fail("ocean_tidal_mixing_nml: prandtl_tidal must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.tidal_mixing]: prandtl_tidal must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
 
          if (tm%polzin .and. .not. tm%e_compute) then
-            call fail("ocean_tidal_mixing_nml: profile = 'polzin' requires "// &
-                      "e_compute=.true. (its decay scale needs the tidal "// &
+            call fail("[ocean.tidal_mixing]: profile = 'polzin' requires "// &
+                      "e_compute=true (its decay scale needs the tidal "// &
                       "speed and roughness variance; e_uniform carries "// &
                       "neither)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
@@ -1060,7 +1060,7 @@ contains
                               tm%polzin_decay_scale_factor < 0.0_wp .or. &
                               tm%polzin_scale_max_factor <= 0.0_wp .or. &
                               tm%polzin_min_decay_scale < 0.0_wp)) then
-            call fail("ocean_tidal_mixing_nml: polzin constants must be "// &
+            call fail("[ocean.tidal_mixing]: polzin constants must be "// &
                       ">= 0 and polzin_scale_max_factor > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1072,8 +1072,8 @@ contains
          tm%use_fields = (trim(tcfg%tideamp_source) == "file") .or. &
                          (trim(tcfg%h2_source) == "file")
          if (tm%use_fields .and. .not. tm%e_compute) then
-            call fail("ocean_tidal_mixing_nml: tideamp_source/h2_source = 'file' "// &
-                      "requires e_compute=.true. (the fields feed the "// &
+            call fail("[ocean.tidal_mixing]: tideamp_source/h2_source = 'file' "// &
+                      "requires e_compute=true (the fields feed the "// &
                       "state-dependent energy input only)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1082,7 +1082,7 @@ contains
                                  "tideamp_source", local_ierr)
             if (local_ierr /= OCEAN_STATUS_OK) then
                if (present(ierr)) ierr = local_ierr
-               if (.not. present(ierr)) error stop "ocean_tidal_mixing_nml: tideamp load failed"
+               if (.not. present(ierr)) error stop "[ocean.tidal_mixing]: tideamp load failed"
                return
             end if
          end if
@@ -1090,7 +1090,7 @@ contains
             call load_tide_field(tcfg%h2_file, tcfg%h2_var, tm%h2, "h2_source", local_ierr)
             if (local_ierr /= OCEAN_STATUS_OK) then
                if (present(ierr)) ierr = local_ierr
-               if (.not. present(ierr)) error stop "ocean_tidal_mixing_nml: h2 load failed"
+               if (.not. present(ierr)) error stop "[ocean.tidal_mixing]: h2 load failed"
                return
             end if
          end if
@@ -1124,7 +1124,7 @@ contains
 
          lierr = OCEAN_STATUS_OK
          if (len_trim(fname) == 0) then
-            call fail("ocean_tidal_mixing_nml: "//what//" = 'file' needs the "// &
+            call fail("[ocean.tidal_mixing]: "//what//" = 'file' needs the "// &
                       "matching *_file path", lierr, OCEAN_STATUS_ERR_SETUP)
             lierr = OCEAN_STATUS_ERR_SETUP
             return
@@ -1132,13 +1132,13 @@ contains
 #ifndef RDB_NO_NETCDF
          call load_static_2d_field(trim(fname), trim(vname), arr, grid, ierr=lierr)
          if (lierr /= OCEAN_STATUS_OK) then
-            call fail("ocean_tidal_mixing_nml: could not read '"//trim(vname)// &
+            call fail("[ocean.tidal_mixing]: could not read '"//trim(vname)// &
                       "' from '"//trim(fname)//"' (missing file/variable or "// &
                       "grid mismatch)", lierr, OCEAN_STATUS_ERR_IO)
             lierr = OCEAN_STATUS_ERR_IO
          end if
 #else
-         call fail("ocean_tidal_mixing_nml: "//what//" = 'file' needs "// &
+         call fail("[ocean.tidal_mixing]: "//what//" = 'file' needs "// &
                    "RDB_ENABLE_NETCDF=ON", lierr, OCEAN_STATUS_ERR_IO)
          lierr = OCEAN_STATUS_ERR_IO
 #endif
@@ -1146,7 +1146,7 @@ contains
    end subroutine configure_ocean_tidal_mixing
 
    module subroutine configure_ocean_bbl_mixing(cfg, ocean_state, compute_rank, ierr)
-      !! Copy the `&ocean_bbl_mixing_nml` knobs onto `vdiff%bbl_mix`, allocate
+      !! Copy the `[ocean.bbl_mixing]` knobs onto `vdiff%bbl_mix`, allocate
       !! its fields and validate.  Fails loud when enabled without the
       !! per-face viscous BBL (no face friction velocity exists), with a
       !! zero drag coefficient, without thermodynamics or the interior
@@ -1165,37 +1165,37 @@ contains
             return
          end if
          if (.not. (vd%bbl_glue .and. vd%bbl_per_face)) then
-            call fail("ocean_bbl_mixing_nml: enable=.true. requires the per-face "// &
-                      "viscous BBL (ocean_vdiff_nml bbl_glue=.true. and a bottom "// &
+            call fail("[ocean.bbl_mixing]: enable=true requires the per-face "// &
+                      "viscous BBL ([ocean.vdiff] bbl_glue=true and a bottom "// &
                       "drag with hbbl > 0): the closure reads the face u*", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. (vd%bbl_cd > 0.0_wp)) then
-            call fail("ocean_bbl_mixing_nml: enable=.true. requires a bottom drag "// &
+            call fail("[ocean.bbl_mixing]: enable=true requires a bottom drag "// &
                       "coefficient c_d > 0 (u* = kv_bbl/(sqrt(c_d) bbl_thick))", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. cfg%ocean%vmix%use_closure) then
-            call fail("ocean_bbl_mixing_nml: enable=.true. requires "// &
-                      "ocean_vmix_nml use_closure=.true. (folds into kt)", &
+            call fail("[ocean.bbl_mixing]: enable=true requires "// &
+                      "[ocean.vmix] use_closure=true (folds into kt)", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call fail("ocean_bbl_mixing_nml: enable=.true. requires active "// &
+            call fail("[ocean.bbl_mixing]: enable=true requires active "// &
                       "thermodynamics (N^2 from T, S)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (bcfg%effic < 0.0_wp .or. bcfg%max_decay <= 0.0_wp .or. &
              bcfg%von_karman <= 0.0_wp .or. bcfg%kd_max <= 0.0_wp) then
-            call fail("ocean_bbl_mixing_nml: need effic >= 0, max_decay > 0, "// &
+            call fail("[ocean.bbl_mixing]: need effic >= 0, max_decay > 0, "// &
                       "von_karman > 0, kd_max > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (size(ocean_state%multilayer%h_layer, 3) > NZ_STACK_MAX) then
-            call fail("ocean_bbl_mixing_nml: nz exceeds NZ_STACK_MAX (column stack)", &
+            call fail("[ocean.bbl_mixing]: nz exceeds NZ_STACK_MAX (column stack)", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1221,7 +1221,7 @@ contains
    end subroutine configure_ocean_bbl_mixing
 
    module subroutine configure_ocean_conv(cfg, ocean_state, compute_rank, ierr)
-      !! Copy the `&ocean_conv_nml` knobs onto `ocean_state%vmix` -- every
+      !! Copy the `[ocean.conv]` knobs onto `ocean_state%vmix` -- every
       !! field, no dead-config gaps.  Convective adjustment adds no new
       !! slot / allocatable (it lives on the already-unconditionally-
       !! allocated `vmix`), so unlike `configure_ocean_tidal_mixing` there
@@ -1253,23 +1253,23 @@ contains
 
          ! Validation.
          if (.not. cfg%ocean%vmix%use_closure) then
-            call fail("ocean_conv_nml: enable=.true. requires "// &
-                      "ocean_vmix_nml use_closure=.true. (convection "// &
+            call fail("[ocean.conv]: enable=true requires "// &
+                      "[ocean.vmix] use_closure=true (convection "// &
                       "folds into the interior closure's kv/kt)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call fail("ocean_conv_nml: enable=.true. requires "// &
+            call fail("[ocean.conv]: enable=true requires "// &
                       "active thermodynamics (convection reads rho_layer, "// &
                       "which is only refreshed by the EOS)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ccfg%kd_conv < 0.0_wp) then
-            call fail("ocean_conv_nml: kd_conv must be >= 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.conv]: kd_conv must be >= 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (ccfg%prandtl_conv <= 0.0_wp) then
-            call fail("ocean_conv_nml: prandtl_conv must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.conv]: prandtl_conv must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
 
@@ -1284,7 +1284,7 @@ contains
    end subroutine configure_ocean_conv
 
    module subroutine configure_ocean_ddiff(cfg, ocean_state, compute_rank, ierr)
-      !! Copy the `&ocean_ddiff_nml` knobs onto `ocean_state%vmix` -- every
+      !! Copy the `[ocean.ddiff]` knobs onto `ocean_state%vmix` -- every
       !! field, no dead-config gaps.  Like convection, double diffusion adds
       !! no new slot (it rides the unconditionally-allocated `vmix` and the
       !! already-mirrored `vmix%eos`); `vmix%ddiff_enable` IS the latch.
@@ -1321,24 +1321,24 @@ contains
 
          ! Validation.
          if (.not. cfg%ocean%vmix%use_closure) then
-            call fail("ocean_ddiff_nml: enable=.true. requires "// &
-                      "ocean_vmix_nml use_closure=.true. (double diffusion "// &
+            call fail("[ocean.ddiff]: enable=true requires "// &
+                      "[ocean.vmix] use_closure=true (double diffusion "// &
                       "folds into the interior closure's heat/salt split)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (.not. cfg%ocean%thermo%enable_thermodynamics) then
-            call fail("ocean_ddiff_nml: enable=.true. requires "// &
+            call fail("[ocean.ddiff]: enable=true requires "// &
                       "active thermodynamics (double diffusion reads T/S "// &
                       "and the EOS alpha/beta)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (dcfg%strat_param_max <= 1.0_wp) then
-            call fail("ocean_ddiff_nml: strat_param_max must be > 1 "// &
+            call fail("[ocean.ddiff]: strat_param_max must be > 1 "// &
                       "(the fingering form divides by strat_param_max - 1)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (dcfg%kappa_ddiff_s < 0.0_wp .or. dcfg%mol_diff < 0.0_wp) then
-            call fail("ocean_ddiff_nml: kappa_ddiff_s and mol_diff must be >= 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            call fail("[ocean.ddiff]: kappa_ddiff_s and mol_diff must be >= 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
 

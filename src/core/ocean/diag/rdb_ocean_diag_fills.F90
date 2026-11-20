@@ -8,9 +8,9 @@ module rdb_ocean_diag_fills
    !! default variable is `(nx, ny, nz)`.
    !! Defaults: SSH (m), temperature (°C), salinity (PSU), u/v_centre (m/s),
    !! ke (m²/s²); conditionally ice_conc (1) / ice_thick (m) when
-   !! `&ocean_ice_nml enable`; conditionally the ten `atm_*` prescribed-
+   !! `[ocean.ice] enable`; conditionally the ten `atm_*` prescribed-
    !! forcing passthroughs (tas/huss/uas/vas/psl/rlds/rsds/prra/prsn/cosz)
-   !! when `&ocean_atm_forcing_nml enable`.
+   !! when `[ocean.atm_forcing] enable`.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, H_VANISHED, &
                             REMAP_PCM, REMAP_PLM, REMAP_PPM, REMAP_PPM_H4
@@ -76,7 +76,7 @@ module rdb_ocean_diag_fills
 
    integer, save :: diag_remap_method = REMAP_PPM
       !! Reconstruction for the conservative diagnostic vertical remap
-      !! (`remap_column`).  Set from `&ocean_diag_nml diag_remap_scheme` via
+      !! (`remap_column`).  Set from `[ocean.diag] diag_remap_scheme` via
       !! `set_diag_remap_method`; passed by value into the device `_impl`.
       !! PPM default; all schemes conservative (donor-cell overlap integral).
 
@@ -84,7 +84,7 @@ module rdb_ocean_diag_fills
       !! When `.true.`, the conservative remap fills target cells that
       !! overlap no water (below-bottom / pinched-out in a shallow column)
       !! with `DIAG_MISSING_VALUE` instead of 0.  Set from
-      !! `&ocean_diag_nml mask_vanished_layers` at configure
+      !! `[ocean.diag] mask_vanished_layers` at configure
       !! (`set_diag_mask_vanished`); read host-side and passed BY VALUE into
       !! the device `_impl`.  Default `.false.` => below-bottom cells read 0
       !! (bit-identical to the legacy remap).
@@ -94,7 +94,7 @@ module rdb_ocean_diag_fills
       !! thread-per-target-cell kernel (`remap_layer_to_vcoord_flat_impl`).
       !! `.false.` forces the per-column `remap_column` kernel for every
       !! scheme — the reference the flat kernel is gated against
-      !! (`set_diag_remap_flat`; test hook, no namelist knob).
+      !! (`set_diag_remap_flat`; test hook, no input knob).
 
    ! Device-resident scratch of the flat diagnostic remap: lazily sized by
    ! `diag_remap_workspace_ensure`, released by `diag_remap_workspace_cleanup`
@@ -146,7 +146,7 @@ module rdb_ocean_diag_fills
 contains
 
    pure function parse_diag_remap_scheme(name) result(method)
-      !! Map a `&ocean_diag_nml diag_remap_scheme` string to the `REMAP_*`
+      !! Map a `[ocean.diag] diag_remap_scheme` string to the `REMAP_*`
       !! enum; returns -1 for an unrecognised name (caller fails loud).
       character(len=*), intent(in) :: name
       integer :: method
@@ -276,7 +276,7 @@ contains
 
    subroutine fill_age(state_handle, buf)
       !! Layer ideal age = tracers(idx_age)%c / h_layer (s).  Read-out only;
-      !! registered when `&ocean_tracers_nml enable_ideal_age` (idx_age > 0).
+      !! registered when `[ocean.tracers] enable_ideal_age` (idx_age > 0).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       integer :: it
@@ -294,7 +294,7 @@ contains
 
    subroutine fill_pseudo_salt(state_handle, buf)
       !! Layer pseudo-salt = tracers(idx_pseudo_salt)%c / h_layer (psu).
-      !! Read-out only; registered when `&ocean_tracers_nml
+      !! Read-out only; registered when `[ocean.tracers]
       !! enable_pseudo_salt` (idx_pseudo_salt > 0).  Mirrors `fill_age`.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
@@ -348,7 +348,7 @@ contains
       !! and the fill is IEEE NaN, matching the Python concentration
       !! accessor's own convention (D3.2) so an in-memory read
       !! (`model.diagnostic(...)`) and the NetCDF stream agree. This is
-      !! independent of `&ocean_diag_nml mask_vanished_layers`: that knob
+      !! independent of `[ocean.diag] mask_vanished_layers`: that knob
       !! only gates the conservative REMAP path's below-target-cell fill
       !! (`remap_column` via `register_one_canonical`'s `has_missing`);
       !! at the default LAYER vgrid there is no remap, so this fill is
@@ -385,7 +385,7 @@ contains
    subroutine fill_ice_conc(state_handle, buf)
       !! Total sea-ice concentration (0..1) at T-centres — the scheme-neutral
       !! aggregate `ice%aice` (see fill_ice_conc_thick_impl).  Registered by
-      !! `register_default_diags` only when `&ocean_ice_nml enable`.
+      !! `register_default_diags` only when `[ocean.ice] enable`.
       !! Public only for the unit-test suite.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
@@ -406,7 +406,7 @@ contains
       !! Grid-mean sea-ice thickness (m) at T-centres: mice/ICE_RHO_ICE
       !! (MOM6 effective-thickness convention) — the scheme-neutral
       !! aggregate `ice%vice` (see fill_ice_conc_thick_impl).  Registered by `register_default_diags`
-      !! only when `&ocean_ice_nml enable`.  Public only for the unit-test
+      !! only when `[ocean.ice] enable`.  Public only for the unit-test
       !! suite.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
@@ -584,7 +584,7 @@ contains
 
    subroutine fill_ice_dvidtd(state_handle, buf)
       !! CICE `dvidtd`: dynamic ice-volume tendency (cm/day), `(vice_end - vice_after_thermo)/dt`.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -595,7 +595,7 @@ contains
 
    subroutine fill_ice_daidtt(state_handle, buf)
       !! CICE `daidtt`: thermodynamic ice-area tendency (%/day).  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -606,7 +606,7 @@ contains
 
    subroutine fill_ice_daidtd(state_handle, buf)
       !! CICE `daidtd`: dynamic ice-area tendency (%/day).  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -617,7 +617,7 @@ contains
 
    subroutine fill_ice_fswabs(state_handle, buf)
       !! CICE `fswabs_ai`: shortwave absorbed by snow, ice and the part passed to the ocean (W m-2, + down), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -628,7 +628,7 @@ contains
 
    subroutine fill_ice_fswthru(state_handle, buf)
       !! CICE `fswthru_ai`: shortwave through the ice into the ocean (W m-2, + down), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -639,7 +639,7 @@ contains
 
    subroutine fill_ice_albsni(state_handle, buf)
       !! CICE `albsni`: broadband snow/ice albedo (%), ice-area weighted.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -650,7 +650,7 @@ contains
 
    subroutine fill_ice_flwup(state_handle, buf)
       !! CICE `flwup_ai`: outgoing longwave (W m-2, NEGATIVE: + is downward), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -661,7 +661,7 @@ contains
 
    subroutine fill_ice_fsens(state_handle, buf)
       !! CICE `fsens_ai`: sensible heat flux, + downward (W m-2), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -672,7 +672,7 @@ contains
 
    subroutine fill_ice_flat(state_handle, buf)
       !! CICE `flat_ai`: latent heat flux, + downward (W m-2), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -683,7 +683,7 @@ contains
 
    subroutine fill_ice_fhocn(state_handle, buf)
       !! CICE `fhocn_ai`: heat flux ice to ocean, + into the ocean (W m-2), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -696,7 +696,7 @@ contains
       !! CICE `fresh_ai`: fresh-water flux ice to ocean, + into the ocean (cm/day water equivalent), per cell area.
       !! It includes the rain that falls through the ice, which the hand-off removes from the ocean's input under the
       !! prescribed atmosphere with `freshwater = "none"`.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -707,7 +707,7 @@ contains
 
    subroutine fill_ice_fsalt(state_handle, buf)
       !! CICE `fsalt_ai`: salt flux ice to ocean, + into the ocean (kg m-2 s-1), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -718,7 +718,7 @@ contains
 
    subroutine fill_ice_evap(state_handle, buf)
       !! CICE `evap_ai`: evaporative water flux, + condensation (cm/day water equivalent), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -729,7 +729,7 @@ contains
 
    subroutine fill_ice_evapi(state_handle, buf)
       !! CICE `evapi_ai`: evaporation (+ condensation) of the ICE part of `evap_ai` (cm/day water equivalent), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -740,7 +740,7 @@ contains
 
    subroutine fill_ice_evaps(state_handle, buf)
       !! CICE `evaps_ai`: evaporation (+ condensation) of the SNOW part of `evap_ai` (cm/day water equivalent), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -751,7 +751,7 @@ contains
 
    subroutine fill_ice_melts(state_handle, buf)
       !! CICE `melts`: top snow melt, snow thickness (cm/day), per cell area.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -762,7 +762,7 @@ contains
 
    subroutine fill_ice_fswdn(state_handle, buf)
       !! CICE `fswdn_ai`: incoming shortwave on the ice, `sw_down*aice_init` (W m-2, + down); the denominator of the shortwave-weighted albedo.  Registered only under
-      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      !! `[ocean.ice] scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -803,7 +803,7 @@ contains
    subroutine fill_atm_tas(state_handle, buf)
       !! Prescribed 2 m air temperature (K), straight passthrough of
       !! `atm_state_t%tas`. Registered by `register_default_diags` only
-      !! when `&ocean_atm_forcing_nml enable`. Public only for the
+      !! when `[ocean.atm_forcing] enable`. Public only for the
       !! unit-test suite.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
@@ -1005,7 +1005,7 @@ contains
       !! Step-mean cosine of the solar zenith angle, straight
       !! passthrough of `atm_state_t%cosz` -- stays 0 under
       !! `sw_interp="linear"` (never computed there). Gated as
-      !! `fill_atm_tas` (`&ocean_atm_forcing_nml enable`, not
+      !! `fill_atm_tas` (`[ocean.atm_forcing] enable`, not
       !! `sw_interp`-specific -- a "linear" run simply reports 0).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
@@ -1029,7 +1029,7 @@ contains
    subroutine fill_fw_net(state_handle, buf)
       !! Net open-ocean fresh-water mass flux the real-mass step spends (`sf%fw_net`, kg m-2 s-1,
       !! positive INTO the ocean; the assembled snapshot, MOM6 `PRCmE`).  Registered only under
-      !! `&ocean_forcing_nml freshwater = "mass"`.
+      !! `[ocean.forcing] freshwater = "mass"`.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -2167,14 +2167,14 @@ contains
    subroutine register_default_diags(state, dt_out, specs, default_coord)
       !! Register the canonical ocean diagnostic variable set.  Called once
       !! from setup (driver init or test) after `state%diag%init`.  When
-      !! `specs` (parsed `&ocean_diag_nml diags`) is present, each canonical
+      !! `specs` (parsed `[ocean.diag] diags`) is present, each canonical
       !! diagnostic consults it: a `:off` entry skips registration entirely,
       !! and `:cadence` / `:op` / `:coord` attributes override the defaults.
-      !! `default_coord` (the global `&ocean_diag_nml vgrid`, default LAYER)
+      !! `default_coord` (the global `[ocean.diag] vgrid`, default LAYER)
       !! sets the output vgrid for layered diagnostics absent a per-diag
       !! `:coord`.  Absent `specs` + LAYER default => the canonical defaults,
       !! bit-identical to the legacy behaviour.  The canonical set also
-      !! gains `ice_conc` / `ice_thick` when `&ocean_ice_nml enable`.
+      !! gains `ice_conc` / `ice_thick` when `[ocean.ice] enable`.
       type(ocean_state_t), intent(inout), target :: state
       real(wp), intent(in), optional :: dt_out
       type(diag_spec_t), intent(in), optional :: specs(:)
@@ -2547,7 +2547,7 @@ contains
    end function canonical_diag_catalog_name
 
    pure function canonical_diag_gate_hint(name) result(hint)
-      !! The namelist gate whose closure suppresses canonical diagnostic
+      !! The input gate whose closure suppresses canonical diagnostic
       !! `name`, for the "you asked for this and did not get it" warning.
       !! `""` for the four unconditional diagnostics (SSH/u/v/KE) — a hint
       !! of `""` means "this one should have registered; that is a bug,
@@ -2565,29 +2565,29 @@ contains
 
       select case (trim(name))
       case ("temperature", "salinity")
-         hint = "&ocean_thermo_nml enable_thermodynamics"
+         hint = "[ocean.thermo] enable_thermodynamics"
       case ("age")
-         hint = "&ocean_tracers_nml enable_ideal_age"
+         hint = "[ocean.tracers] enable_ideal_age"
       case ("MLD_EPBL", "Kd_EPBL")
-         hint = "&ocean_epbl_nml enable"
+         hint = "[ocean.epbl] enable"
       case ("Kd_KSHEAR")
-         hint = "&ocean_kappa_shear_nml enable"
+         hint = "[ocean.kappa_shear] enable"
       case ("Kd_TIDAL")
-         hint = "&ocean_tidal_mixing_nml enable"
+         hint = "[ocean.tidal_mixing] enable"
       case ("Kd_BBL")
-         hint = "&ocean_bbl_mixing_nml enable"
+         hint = "[ocean.bbl_mixing] enable"
       case ("ice_conc", "ice_thick", "aice", "hi", "hs", "Tsfc")
-         hint = "&ocean_ice_nml enable"
+         hint = "[ocean.ice] enable"
       case ("congel", "frazil", "snoice", "meltt", "meltb", "meltl", "dvidtt")
-         hint = "&ocean_ice_nml enable (+ thermodynamics, or scheme = 'cice')"
+         hint = "[ocean.ice] enable (+ thermodynamics, or scheme = 'cice')"
       case ("dvidtd", "daidtt", "daidtd", "albsni", "fswabs_ai", "fswthru_ai", "flwup_ai", "fsens_ai", &
             "flat_ai", "fhocn_ai", "fresh_ai", "fsalt_ai", "evap_ai", "evapi_ai", "evaps_ai", "melts", "fswdn_ai")
-         hint = "&ocean_ice_nml scheme = 'cice'"
+         hint = "[ocean.ice] scheme = 'cice'"
       case ("atm_tas", "atm_huss", "atm_uas", "atm_vas", "atm_psl", &
             "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz")
-         hint = "&ocean_atm_forcing_nml enable"
+         hint = "[ocean.atm_forcing] enable"
       case ("net_fw", "evap", "lprec", "fprec", "fw_passdown")
-         hint = "&ocean_forcing_nml freshwater = 'mass'"
+         hint = "[ocean.forcing] freshwater = 'mass'"
       case default
          hint = ""
       end select

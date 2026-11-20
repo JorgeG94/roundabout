@@ -1,4 +1,4 @@
-!! The partial-step face closure (`&vcoord_nml zfixed_closed_faces`) on
+!! The partial-step face closure (`[vcoord] zfixed_closed_faces`) on
 !! `vcoord_type = "zstar"` — MOM6 z* (`ocean_vcoord_zstar_target`).
 !!
 !! z* lays the `z_fixed` nominal profile (here a `list` profile: two 20 m
@@ -402,7 +402,7 @@ contains
             if (allocated(error)) exit leg_on
             ! The stratification, PER COORDINATE LAYER (5, 7, ..., 15 degC
             ! bed to surface), with every filler holding its DONOR's value.
-            ! Written here rather than taken from `&tracer_nml`: a per-index
+            ! Written here rather than taken from `[tracer]`: a per-index
             ! IC gives the shelf's fillers 5-11 degC of FOREIGN
             ! concentration, which an open-face reader would integrate
             ! (a real density step at an OPEN face).  This state has no

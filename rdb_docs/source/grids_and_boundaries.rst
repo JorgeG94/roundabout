@@ -11,7 +11,7 @@ Grids and boundaries
 Horizontal grids
 ================
 
-``&ocean_grid_nml grid_config`` selects the horizontal grid. Accepted
+``[ocean.grid] grid_config`` selects the horizontal grid. Accepted
 values are ``cartesian`` (the default), ``spherical``, ``supergrid`` and
 ``tripolar``.
 
@@ -25,8 +25,8 @@ dynamical core.
 -------------
 
 A uniform :math:`\Delta x, \Delta y` plane. Set ``dx`` and ``dy`` directly
-in ``&grid_nml``, and choose the Coriolis treatment with ``&physics_nml
-coriolis_f`` plus ``&ocean_topo_nml coriolis_beta`` for a
+in ``[grid]``, and choose the Coriolis treatment with ``[physics]
+coriolis_f`` plus ``[ocean.topo] coriolis_beta`` for a
 :math:`\beta`-plane.
 
 This is the default and the bit-identity reference: every regression
@@ -42,7 +42,7 @@ baseline in the repository is a Cartesian run unless it says otherwise.
 ``spherical``
 -------------
 
-A longitude-latitude sector. ``&ocean_grid_nml`` takes ``lon_west``,
+A longitude-latitude sector. ``[ocean.grid]`` takes ``lon_west``,
 ``lat_south``, ``rad_earth`` (default :math:`6.378\times10^{6}\
 \mathrm{m}`), and either explicit spacings or the domain extent as
 ``len_lon`` / ``len_lat`` with ``axis_units = "degrees"``. The Coriolis
@@ -52,7 +52,7 @@ parameter comes from the cell latitude; ``coriolis_scheme`` selects
 .. warning::
 
    **Formula-bathymetry length scales are in grid units.** The
-   ``&ocean_topo_nml`` seamount and spoon generators work in grid
+   ``[ocean.topo]`` seamount and spoon generators work in grid
    coordinates — metres on a Cartesian grid, **degrees** on a spherical or
    curvilinear one. The metres-valued ``slope_scale`` knob is converted at
    the dispatch, but if a raw metres length scale ever reaches a degrees
@@ -75,7 +75,7 @@ an ordinary longitude-latitude mesh; above it, the singular North Pole is
 replaced by two poles placed over land, so the Arctic is covered without a
 converging-meridian singularity in the ocean.
 
-The seam is closed by a **north fold**. Set ``&ocean_bc_nml north =
+The seam is closed by a **north fold**. Set ``[ocean.bc] north =
 "tripolar_fold"``; it requires periodic west and east edges, and it is
 single-rank. The fold exchange reverses the :math:`i` index across the
 seam, flips the sign of vector normals, and projects the duplicated
@@ -94,7 +94,7 @@ remain consistent.
 Bathymetry
 ==========
 
-``&ocean_topo_nml topo_config`` selects the bottom. Accepted values are
+``[ocean.topo] topo_config`` selects the bottom. Accepted values are
 ``flat`` (the default), ``spoon``, ``seamount``, ``neverworld2``,
 ``island``, ``double_drake`` and ``file``.
 
@@ -123,7 +123,7 @@ and ``test_ocean_land_mask`` asserts precisely that. Skipping the
 computation of masked cells entirely is an MPI-level optimisation, not
 part of the masking itself.
 
-**Dynamic wetting and drying** (``&ocean_wetdry_nml enable``, default off)
+**Dynamic wetting and drying** (``[ocean.wetdry] enable``, default off)
 handles a moving shoreline — an intertidal flat, a flooding estuary. Cells
 dry below ``dry_depth`` (default 0.05 m) and re-wet above ``rewet_depth``
 (default 0.10 m); the hysteresis between the two thresholds prevents a cell
@@ -132,14 +132,14 @@ from exporting more water than it contains.
 
 Wet/dry is limited to the sigma coordinate, runs on several ranks (bit-identical to one on wall, periodic, Flather-open and tidal edges; not with the tripolar fold, a clamped/chapman/sponge/nested/inflow/discharge edge, or Orlanski radiation, full Flather, nudging or tracer reservoirs on an open edge), and
 falls outside the ``pred_corr`` outer-scheme envelope — a configuration
-enabling it must also set ``&ocean_bt_nml split_scheme = "ssp_rk2"``,
+enabling it must also set ``[ocean.bt] split_scheme = "ssp_rk2"``,
 which ``validate_config`` will tell you.
 
 
 Porous barriers
 ===============
 
-``&ocean_porous_nml enable``, default off. An Adcroft (2013)
+``[ocean.porous] enable``, default off. An Adcroft (2013)
 subgrid-blocking treatment for sills and straits: a channel narrower than a
 grid cell is invisible to the model, so a per-layer **open-area fraction**
 is used to narrow the effective face widths instead.
@@ -171,7 +171,7 @@ barotropic clone or dynamic wet/dry.
 Boundary conditions
 ===================
 
-``&ocean_bc_nml`` tags each edge independently with the keys ``west``,
+``[ocean.bc]`` tags each edge independently with the keys ``west``,
 ``east``, ``south`` and ``north``. Every edge defaults to ``wall``.
 
 .. list-table::
@@ -246,7 +246,7 @@ in wall ghost cells. Without it, a flat all-wet channel with a wall edge
 can carry garbage in the wall-normal component.
 
 A fuller sponge implementation is available separately as
-``&ocean_sponge_nml enable``, with per-edge width and strength overrides,
+``[ocean.sponge] enable``, with per-edge width and strength overrides,
 relaxing momentum and every registered tracer toward reference fields.
 
 .. note::

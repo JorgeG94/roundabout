@@ -2,7 +2,7 @@
 module test_ocean_knob_retirement
    !! Roundabout's config schema is strict — `rdb_config.F90` `error stop`s on
    !! any unknown key.  PR-8 deleted five registered `&ocean_*` keys that
-   !! validated and then did nothing.  `&ocean_bt_nml correction_visc_rem`
+   !! validated and then did nothing.  `[ocean.bt] correction_visc_rem`
    !! was a deliberate exception at the time (kept, per its own
    !! coordination note in the plan) — it is since RETIRED too (D1
    !! follow-up, 2026-10: MOM6 never weights the BT-correction fold), but
@@ -89,7 +89,7 @@ contains
    end subroutine assert_retired
 
    subroutine test_redi_ref_pres(error)
-      !! `&ocean_redi_nml ref_pres` — accepted-then-unread (§2.5 item 2):
+      !! `[ocean.redi] ref_pres` — accepted-then-unread (§2.5 item 2):
       !! copied into `ocean_redi_t%ref_pres` but never referenced in
       !! either `redi_calc_coeffs_x`/`_y` body.  Deleted whole (field,
       !! knob, copy site, kernel dummy).
@@ -99,7 +99,7 @@ contains
    end subroutine test_redi_ref_pres
 
    subroutine test_tides_use_equilibrium(error)
-      !! `&ocean_tides_nml use_equilibrium` — accepted, copied to the
+      !! `[ocean.tides] use_equilibrium` — accepted, copied to the
       !! slot, never read; `enable=.true.` always applies the full body
       !! tide regardless.
       type(error_type), allocatable, intent(out) :: error
@@ -108,7 +108,7 @@ contains
    end subroutine test_tides_use_equilibrium
 
    subroutine test_tides_use_eq_phase(error)
-      !! `&ocean_tides_nml use_eq_phase` — accepted, never even copied to
+      !! `[ocean.tides] use_eq_phase` — accepted, never even copied to
       !! a slot; `rdb_ocean_tides.F90` unconditionally bakes V_c into
       !! phase0 regardless of the setting.
       type(error_type), allocatable, intent(out) :: error
@@ -117,7 +117,7 @@ contains
    end subroutine test_tides_use_eq_phase
 
    subroutine test_foxkemper_apply_cfl_limit(error)
-      !! `&ocean_foxkemper_nml apply_cfl_limit` — accepted then hard
+      !! `[ocean.foxkemper] apply_cfl_limit` — accepted then hard
       !! `error stop`s at configure for asking for a thing the code
       !! already always does (the availability cap in
       !! `mle_compute_transports` is unconditional in production).

@@ -5,7 +5,7 @@ submodule(rdb_config) rdb_config_register_forcing
 contains
 
    module subroutine register_ocean_tides(cfg, schema)
-      !! `&ocean_tides` (C1 equilibrium astronomical body-force tide).
+      !! `[ocean.tides]` (C1 equilibrium astronomical body-force tide).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -42,7 +42,7 @@ contains
    end subroutine register_ocean_tides
 
    module subroutine register_ocean_psurf(cfg, schema)
-      !! `&ocean_psurf` (PR-17 atmospheric surface-pressure loading /
+      !! `[ocean.psurf]` (PR-17 atmospheric surface-pressure loading /
       !! inverse barometer).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -56,25 +56,25 @@ contains
       pl => cfg%ocean%psurf%enable
       call g%add(nml_logical("enable", pl, &
                              "Master switch (split-solver only; requires "// &
-                             "&ocean_forcing_nml enable_components=.true.)"))
+                             "[ocean.forcing] enable_components=true)"))
       pl => cfg%ocean%psurf%in_eos
       call g%add(nml_logical("in_eos", pl, &
                              "Also feed the surface load to the equation of "// &
                              "state as the top-of-column pressure p_top "// &
-                             "(requires enable=.true.; refused with the "// &
+                             "(requires enable=true; refused with the "// &
                              "unported pressure builders)"))
       pl => cfg%ocean%psurf%ice_load
       call g%add(nml_logical("ice_load", pl, &
                              "Sea-ice + snow mass loading: p_surf = p_surf_const + "// &
                              "g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; "// &
                              "REQUIRED by freshwater='mass' with sea ice, refused "// &
-                             "without it; requires enable=.true.)"))
+                             "without it; requires enable=true)"))
       pl => cfg%ocean%psurf%atm_load
       call g%add(nml_logical("atm_load", pl, &
                              "Add the bulk forcing's sea-level pressure (p_surf_atm = psl) "// &
                              "to p_surf: the atmosphere's inverse barometer, seam ghosts "// &
-                             "exchanged every step (requires enable=.true. and "// &
-                             "&ocean_bulk_flux_nml enable). Off: p_surf stays the "// &
+                             "exchanged every step (requires enable=true and "// &
+                             "[ocean.bulk_flux] enable). Off: p_surf stays the "// &
                              "p_surf_const seed"))
       pl => cfg%ocean%psurf%ice_load_balance_ic
       call g%add(nml_logical("ice_load_balance_ic", pl, &
@@ -90,7 +90,7 @@ contains
    end subroutine register_ocean_psurf
 
    module subroutine register_ocean_cavity_dyn(cfg, schema)
-      !! `&ocean_cavity_dyn` (P5.1 static ice-shelf cavity geometry: the
+      !! `[ocean.cavity_dyn]` (P5.1 static ice-shelf cavity geometry: the
       !! prescribed draft + the barotropic datum that absorbs it).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -180,7 +180,7 @@ contains
    end subroutine register_ocean_cavity_dyn
 
    module subroutine register_ocean_cavity_melt(cfg, schema)
-      !! `&ocean_cavity_melt` (P2b ice-shelf basal-melt thermodynamics:
+      !! `[ocean.cavity_melt]` (P2b ice-shelf basal-melt thermodynamics:
       !! the three-equation interface, its exchange law and the
       !! far-field sampling depth).  The `exchange_law` and
       !! `ice_conduction` enums MIRROR `parse_cavity_exchange_law` /
@@ -201,7 +201,7 @@ contains
 
       pl => cfg%ocean%cavity_melt%enable
       call g%add(nml_logical("enable", pl, &
-                             "Master switch (requires &ocean_cavity_dyn_nml, "// &
+                             "Master switch (requires [ocean.cavity_dyn], "// &
                              "tfreeze_set='isomip' and the surface-flux "// &
                              "component set)"))
       ps => cfg%ocean%cavity_melt%exchange_law
@@ -270,9 +270,9 @@ contains
    end subroutine register_ocean_cavity_melt
 
    module subroutine register_ocean_forcing(cfg, schema)
-      !! `&ocean_forcing_nml`: surface-flux component-set gate (PR-12).
+      !! `[ocean.forcing]`: surface-flux component-set gate (PR-12).
       !! One knob, deliberately — components are filled by fillers, not
-      !! by scalar namelist knobs (that would be a knob-per-component,
+      !! by scalar input knobs (that would be a knob-per-component,
       !! all dead in v1).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -308,7 +308,7 @@ contains
    end subroutine register_ocean_forcing
 
    module subroutine register_ocean_ice(cfg, schema)
-      !! `&ocean_ice_nml`: sea-ice model switch + category/layer counts
+      !! `[ocean.ice]`: sea-ice model switch + category/layer counts
       !! (SIS2 port scaffold) + the PR-3c v1 restoring atmospheric-forcing
       !! scalars.  Default off ⇒ byte-identical.
       type(config_t), target, intent(in) :: cfg
@@ -407,12 +407,12 @@ contains
       pr => cfg%ocean%ice%p0
       call g%add(nml_real("p0", pr, &
                           "Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by "// &
-                          "dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of &ocean_ice_ridge_nml)", &
+                          "dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of [ocean.ice_ridge])", &
                           units="Pa", min=0.0_wp))
       pr => cfg%ocean%ice%c0
       call g%add(nml_real("c0", pr, &
                           "Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by "// &
-                          "dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of &ocean_ice_ridge_nml)", &
+                          "dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of [ocean.ice_ridge])", &
                           min=0.0_wp))
       pr => cfg%ocean%ice%ec
       call g%add(nml_real("ec", pr, &
@@ -477,14 +477,14 @@ contains
       pr => cfg%ocean%ice%dt_ice
       call g%add(nml_real("dt_ice", pr, &
                           "scheme='cice': ice time step; <= 0 is the outer ocean step, "// &
-                          "a positive value must equal &time_nml dt_fixed (refused otherwise)", &
+                          "a positive value must equal [time] dt_fixed (refused otherwise)", &
                           units="s", dead_on_ocean_path=ICE_DEAD))
       call schema%add_group(g)
    end subroutine register_ocean_ice
 
    module subroutine register_ocean_ice_cice(cfg, schema)
-      !! `&ocean_ice_thermo_nml`, `&ocean_ice_sw_nml`, `&ocean_ice_ridge_nml` and
-      !! `&ocean_ice_atm_nml` and `&ocean_ice_dyn_nml` (EVP + transport keys): the CICE-port
+      !! `[ocean.ice_thermo]`, `[ocean.ice_sw]`, `[ocean.ice_ridge]` and
+      !! `[ocean.ice_atm]` and `[ocean.ice_dyn]` (EVP + transport keys): the CICE-port
       !! thermodynamics / ITD / albedo knobs.  Defaults are the upstream CICE
       !! code defaults.  Spellings of options the port does not carry are
       !! accepted by the parser and refused by `validate_config` (so the
@@ -667,13 +667,13 @@ contains
                            dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_ridge%pstar
       call gr%add(nml_real("Pstar", pr, "Hibler (1979) strength constant, "// &
-                           "kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml "// &
-                           "dyn_scheme=cice_c (the sis2_c core reads p0 of &ocean_ice_nml)", &
+                           "kstrength=0; must be > 0.  Read by [ocean.ice_dyn] "// &
+                           "dyn_scheme=cice_c (the sis2_c core reads p0 of [ocean.ice])", &
                            units="N/m"))
       pr => cfg%ocean%ice_ridge%cstar
       call gr%add(nml_real("Cstar", pr, "Hibler (1979) concentration constant, "// &
-                           "kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml "// &
-                           "dyn_scheme=cice_c (the sis2_c core reads c0 of &ocean_ice_nml)"))
+                           "kstrength=0; must be > 0.  Read by [ocean.ice_dyn] "// &
+                           "dyn_scheme=cice_c (the sis2_c core reads c0 of [ocean.ice])"))
       call schema%add_group(gr)
 
       ga%name = "ocean_ice_atm"
@@ -713,7 +713,7 @@ contains
                               dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_atm%uni_tas
       call ga%add(nml_real("uni_tas", pr, "Uniform-atmosphere air temperature, used when "// &
-                           "&ocean_atm_forcing_nml enable is off", units="K", min=1.0_wp, &
+                           "[ocean.atm_forcing] enable is off", units="K", min=1.0_wp, &
                            dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_atm%uni_uas
       call ga%add(nml_real("uni_uas", pr, "Uniform-atmosphere eastward wind (earth-relative)", &
@@ -743,7 +743,7 @@ contains
       call gd%add(nml_enum("dyn_scheme", ps, "Ice dynamics core: sis2_c = the SIS2 C-grid EVP "// &
                            "(default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. "// &
                            "2024) coupled to the ocean through the sea-surface tilt and the "// &
-                           "ocean surface current; needs &ocean_ice_nml enable and dynamics, "// &
+                           "ocean surface current; needs [ocean.ice] enable and dynamics, "// &
                            "nghost >= 3; runs on any rank count, a tripolar north fold included (px > 1 too)", &
                            allowed=[character(len=8) :: "sis2_c", "cice_c"]))
       pi => cfg%ocean%ice_dyn%ndte
@@ -823,7 +823,7 @@ contains
    end subroutine register_ocean_ice_cice
 
    module subroutine register_ocean_ice_ic(cfg, schema)
-      !! `&ocean_ice_ic_nml`: sea-ice ANALYTIC initial-condition path (PR
+      !! `[ocean.ice_ic]`: sea-ice ANALYTIC initial-condition path (PR
       !! 24). Default `conc_config="zero"` ⇒ byte-identical. `"file"` is
       !! deliberately NOT in the `allowed=` list — file-backed ICs are
       !! PR-14 (v1.1), out of scope here.
@@ -871,7 +871,7 @@ contains
    end subroutine register_ocean_ice_ic
 
    module subroutine register_ocean_restore(cfg, schema)
-      !! `&ocean_restore_nml`: surface buoyancy restoring (MOM6
+      !! `[ocean.restore]`: surface buoyancy restoring (MOM6
       !! `RESTOREBUOY`).  Piston-velocity relaxation of top-layer T / S
       !! toward scalar targets.  Default OFF ⇒ bit-identical.
       type(config_t), target, intent(in) :: cfg
@@ -941,7 +941,7 @@ contains
    end subroutine register_ocean_restore
 
    module subroutine register_ocean_geothermal(cfg, schema)
-      !! `&ocean_geothermal_nml`: geothermal bottom-heat-flux switch +
+      !! `[ocean.geothermal]`: geothermal bottom-heat-flux switch +
       !! scalar flux.  Bed-side analogue of the surface heat flux.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -962,8 +962,8 @@ contains
    end subroutine register_ocean_geothermal
 
    module subroutine register_ocean_sponge(cfg, schema)
-      !! `&ocean_sponge_nml`: the map-driven sponge (PR-23). Default
-      !! `enable = .false.` ⇒ the legacy `&ocean_bc_nml` band kernels run
+      !! `[ocean.sponge]`: the map-driven sponge (PR-23). Default
+      !! `enable = false` ⇒ the legacy `[ocean.bc]` band kernels run
       !! unchanged ⇒ bit-identical. No `damp_max` / `idamp_file` / `*_var`
       !! keys in v1 — those validate and do nothing until PR-23b adds their
       !! consumer (CLAUDE.md trap class "dead knobs").
@@ -1020,7 +1020,7 @@ contains
       pi => cfg%ocean%sponge%west_width
       call g%add(nml_int("west_width", pi, &
                          "Per-edge band-width override, cells (<0 => inherit "// &
-                         "&ocean_bc_nml sponge_width)"))
+                         "[ocean.bc] sponge_width)"))
       pi => cfg%ocean%sponge%east_width
       call g%add(nml_int("east_width", pi, "as west_width"))
       pi => cfg%ocean%sponge%south_width
@@ -1030,7 +1030,7 @@ contains
       pr => cfg%ocean%sponge%west_strength
       call g%add(nml_real("west_strength", pr, &
                           "Per-edge peak relaxation-rate override (<0 => inherit "// &
-                          "&ocean_bc_nml sponge_strength)", units="1/s"))
+                          "[ocean.bc] sponge_strength)", units="1/s"))
       pr => cfg%ocean%sponge%east_strength
       call g%add(nml_real("east_strength", pr, "as west_strength", units="1/s"))
       pr => cfg%ocean%sponge%south_strength
@@ -1041,7 +1041,7 @@ contains
    end subroutine register_ocean_sponge
 
    module subroutine register_ocean_tracers(cfg, schema)
-      !! `&ocean_tracers_nml`: prognostic-tracer registry switches.
+      !! `[ocean.tracers]`: prognostic-tracer registry switches.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -1069,7 +1069,7 @@ contains
    end subroutine register_ocean_tracers
 
    module subroutine register_ocean_bc(cfg, schema)
-      !! `&ocean_bc_nml`: open-boundary condition config (P4.5 migration
+      !! `[ocean.bc]`: open-boundary condition config (P4.5 migration
       !! off the hand-rolled `read_ocean_bc_nml`).  All defaults reproduce
       !! a closed-wall run (bit-identical to nmls that omit this block).
       !! The `west`/`east`/`south`/`north` edge-type enum lists every arm
@@ -1266,7 +1266,7 @@ contains
       call g%add(nml_logical("obc_tidal_nodal", pl, &
                              "Apply the 18.6-yr nodal factor + equilibrium/nodal phase to "// &
                              "the open-boundary tidal elevation forcing (shares the "// &
-                             "&ocean_tides_nml astro generator); when true *_tidal_phase "// &
+                             "[ocean.tides] astro generator); when true *_tidal_phase "// &
                              "becomes a Greenwich phase lag"))
       pl => cfg%ocean%bc%mask_wall_velocity
       call g%add(nml_logical("mask_wall_velocity", pl, &
@@ -1280,7 +1280,7 @@ contains
    end subroutine register_ocean_bc
 
    module subroutine register_ocean_atm_forcing(cfg, schema)
-      !! `&ocean_atm_forcing_nml` (PR-C2c): JRA55-do-style prescribed
+      !! `[ocean.atm_forcing]` (PR-C2c): JRA55-do-style prescribed
       !! atmospheric state.  See `ocean_atm_forcing_config_t` for the
       !! per-knob docs.
       type(config_t), target, intent(in) :: cfg
@@ -1304,7 +1304,7 @@ contains
       ps => cfg%ocean%atm_forcing%filelist_tas
       call g%add(nml_string("filelist_tas", ps, &
                             "tools/jra_filelist.py-style file list for tas "// &
-                            "(air temperature); blank = fail loud when enable=.true."))
+                            "(air temperature); blank = fail loud when enable=true"))
       ps => cfg%ocean%atm_forcing%filelist_huss
       call g%add(nml_string("filelist_huss", ps, "File list for huss (specific humidity)"))
       ps => cfg%ocean%atm_forcing%filelist_uas
@@ -1391,9 +1391,9 @@ contains
    end subroutine register_ocean_atm_forcing
 
    module subroutine register_ocean_bulk_flux(cfg, schema)
-      !! `&ocean_bulk_flux_nml`: Monin-Obukhov bulk-flux kernel knobs
+      !! `[ocean.bulk_flux]`: Monin-Obukhov bulk-flux kernel knobs
       !! (`bulk_flux_config_t`, `rdb_ocean_bulk_flux`).  `enable` is
-      !! REQUIRED whenever `&ocean_atm_forcing_nml enable` is on --
+      !! REQUIRED whenever `[ocean.atm_forcing] enable` is on --
       !! `validate_config` refuses atm forcing without it.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
@@ -1407,7 +1407,7 @@ contains
 
       pl => cfg%ocean%bulk_flux%enable
       call g%add(nml_logical("enable", pl, &
-                             "Master switch (required when &ocean_atm_forcing_nml "// &
+                             "Master switch (required when [ocean.atm_forcing] "// &
                              "enable is on)"))
       pi => cfg%ocean%bulk_flux%n_iter
       call g%add(nml_int("n_iter", pi, "Monin-Obukhov iteration count", min=1))

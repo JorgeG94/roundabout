@@ -879,7 +879,7 @@ contains
       !! x-walled + y-periodic channel, 20x4: west 10 cells iced, east 10
       !! ice-free. Ice-free cells relax str_d to (near) 0 emergently.
       !! Knob-off (legacy, `a_face_stress=.false.`) path. See
-      !! `test_a_face_no_ghost_drift` for the `&ocean_ice_nml
+      !! `test_a_face_no_ghost_drift` for the `[ocean.ice]
       !! a_face_stress=.true.` behaviour at the same ice edge.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NXP = 20, NYP = 4
@@ -1003,7 +1003,7 @@ contains
                                      abs(ui(NGHOST + NXP, j) - u_free))
          end do
          call check(error, worst_far_east_err <= 1.0e-3_wp, &
-                    "ice_margin (a_face_stress=.false., legacy): ice-free face "// &
+                    "ice_margin (a_face_stress=false, legacy): ice-free face "// &
                     "not at the massless-slab ghost drift")
          if (allocated(error)) exit checks
 
@@ -1817,11 +1817,11 @@ contains
          !$acc update self(ice_off%u_ice, ice_off%v_ice)
          if (.not. allocated(error)) then
             call check(error, all(ice_off%u_ice == u_ice0), &
-                       "disabled_bitident: u_ice mutated by a dynamics=.false. call")
+                       "disabled_bitident: u_ice mutated by a dynamics=false call")
          end if
          if (.not. allocated(error)) then
             call check(error, all(ice_off%v_ice == v_ice0), &
-                       "disabled_bitident: v_ice mutated by a dynamics=.false. call")
+                       "disabled_bitident: v_ice mutated by a dynamics=false call")
          end if
       end block
 
@@ -2139,7 +2139,7 @@ contains
             end do
          end do
          call check(error, worst_residual <= tol, &
-                    "a_face_momentum_closes: budget does not close with a_face_stress=.true.")
+                    "a_face_momentum_closes: budget does not close with a_face_stress=true")
          if (allocated(error)) exit checks
 
          ! ---- OFF arm (control) ----

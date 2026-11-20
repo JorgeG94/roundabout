@@ -7,19 +7,19 @@
 !!     wt_k = open_k·vr_k / ⟨vr⟩_h,     ⟨vr⟩_h = Σ h_o·vr / Σ h_o,
 !!
 !! `vr = visc_rem` when the kernel's `use_visc_rem` dummy is `.true.`, else 1,
-!! and `open ≡ 1` unless `&vcoord_nml zfixed_closed_faces`.  Without visc_rem
+!! and `open ≡ 1` unless `[vcoord] zfixed_closed_faces`.  Without visc_rem
 !! that is the uniform fold, MOM6's `accel_layer_u(I,j,k) = u_accel_bt(I,j)`.
-!! `&ocean_bt_nml correction_visc_rem` — the namelist path that used to drive
+!! `[ocean.bt] correction_visc_rem` — the input path that used to drive
 !! `use_visc_rem` — is RETIRED (D1 follow-up, 2026-10): MOM6 never weights
 !! this fold, and roundabout's weighted version is what NaNs the 1-degree
 !! Southern Ocean z* open-step case under `bbl_glue`.  `visc_rem_chain` uses
 !! the UNIFORM branch below. The tests here call `apply_bt_correction`
 !! directly with a raw `use_visc_rem` argument, so the weighted-fold KERNEL
-!! path stays covered even though no live namelist reaches it any more.
+!! path stays covered even though no live input reaches it any more.
 !!
 !! ### Why this file exists
 !!
-!! The retired `&ocean_bt_nml correction_h_weighted` used `wt = h/⟨h⟩_h`.
+!! The retired `[ocean.bt] correction_h_weighted` used `wt = h/⟨h⟩_h`.
 !! Both weights preserve the depth mean, so a depth-mean test cannot tell
 !! them apart.  ENERGY can: for any depth-mean-preserving weight the
 !! column KE change is
@@ -448,17 +448,17 @@ contains
       !! `correction_h_weighted = .true.` is REFUSED at configure, and the
       !! specific reason — energy non-conservation, no MOM6 counterpart,
       !! `visc_rem_chain` as the replacement — is on the error ring, not
-      !! only the generic rollup.  The same namelist without the key
+      !! only the generic rollup.  The same input without the key
       !! configures (so the refusal is the knob, not the fixture).
       type(error_type), allocatable, intent(out) :: error
       character(len=ERROR_RING_MSG_LEN) :: msg
       logical :: found
       integer :: n
-      call expect_status(error, base_nml(""), .true., "the fixture namelist")
+      call expect_status(error, base_nml(""), .true., "the fixture input")
       if (allocated(error)) return
       call error_ring_clear()
       call expect_status(error, base_nml("correction_h_weighted = true"), .false., &
-                         "correction_h_weighted = .true.")
+                         "correction_h_weighted = true")
       if (allocated(error)) return
       found = .false.
       do n = 0, error_ring_count() - 1
@@ -505,7 +505,7 @@ contains
       !! `visc_rem_chain .OR. <the direct knob>` — never a superset, never
       !! a subset — and `ocean_bt_visc_rem_producer_on` is the OR of the
       !! three real consumers plus the (retired, direct-cfg-only) raw
-      !! `correction_visc_rem` field.  Truth-table, no namelist I/O.
+      !! `correction_visc_rem` field.  Truth-table, no input I/O.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
@@ -567,7 +567,7 @@ contains
    end subroutine test_chain_switch
 
    subroutine test_correction_visc_rem_retired(error)
-      !! `&ocean_bt_nml correction_visc_rem = .true.` is REFUSED at
+      !! `[ocean.bt] correction_visc_rem = true` is REFUSED at
       !! configure, naming MOM6's uniform `accel_layer_u`, the NaN
       !! isolation and `visc_rem_chain` as the replacement on the error
       !! ring, not only the generic rollup.
@@ -577,7 +577,7 @@ contains
       integer :: n
       call error_ring_clear()
       call expect_status(error, base_nml("correction_visc_rem = true"), .false., &
-                         "correction_visc_rem = .true.")
+                         "correction_visc_rem = true")
       if (allocated(error)) return
       found = .false.
       do n = 0, error_ring_count() - 1
@@ -616,12 +616,12 @@ contains
    end subroutine test_chain_strong_drag
 
    subroutine test_accel_visc_rem_retired(error)
-      !! PR-3: `&ocean_vdiff_nml accel_visc_rem = .true.` is REFUSED at
+      !! PR-3: `[ocean.vdiff] accel_visc_rem = true` is REFUSED at
       !! configure (no MOM6 state-update equivalent — see its docstring
       !! in `rdb_config.F90`), naming the real MOM6 mechanisms on the
       !! error ring.  The underlying kernels + their own direct unit
       !! tests (`tests/test_ocean_accel_visc_rem.F90`) are untouched —
-      !! only the configure-time path from a namelist is refused here.
+      !! only the configure-time path from an input is refused here.
       type(error_type), allocatable, intent(out) :: error
       character(len=:), allocatable :: nml
       character(len=ERROR_RING_MSG_LEN) :: msg
@@ -651,7 +651,7 @@ contains
             "output_to_file = false"//new_line("a")
 
       call error_ring_clear()
-      call expect_status(error, nml, .false., "accel_visc_rem = .true.")
+      call expect_status(error, nml, .false., "accel_visc_rem = true")
       if (allocated(error)) return
       found = .false.
       do n = 0, error_ring_count() - 1
@@ -669,8 +669,8 @@ contains
    end subroutine test_accel_visc_rem_retired
 
    pure function base_nml(bt_body) result(nml)
-      !! A minimal in-envelope `z_fixed` namelist; `bt_body` is the extra
-      !! `&ocean_bt_nml` entries under test.
+      !! A minimal in-envelope `z_fixed` input; `bt_body` is the extra
+      !! `[ocean.bt]` entries under test.
       character(len=*), intent(in) :: bt_body
       character(len=:), allocatable :: nml, bt_l
       bt_l = "auto_n_inner = false"//new_line("a")//"n_inner = 8"
@@ -708,7 +708,7 @@ contains
       type(config_t) :: cfg
       integer :: ierr
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "namelist must PARSE: "//what)
+      call check(error, ierr == OCEAN_STATUS_OK, "input must PARSE: "//what)
       if (allocated(error)) return
       ierr = -999
       call validate_config(cfg, ierr=ierr)

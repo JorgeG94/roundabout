@@ -1,5 +1,5 @@
 module test_ocean_epbl_max_shear
-   !! `&ocean_epbl_nml combine = "max_shear"`: kappa-shear and ePBL combine by
+   !! `[ocean.epbl] combine = "max_shear"`: kappa-shear and ePBL combine by
    !! max with the background added outside,
    !!   kt = bg + max(kd_shear, kd_epbl),
    !!   kv = kv_bg + max(prandtl_turb*kd_shear, prandtl_epbl*kd_epbl),

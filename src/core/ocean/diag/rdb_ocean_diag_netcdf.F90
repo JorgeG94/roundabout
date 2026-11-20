@@ -35,7 +35,7 @@ module rdb_ocean_diag_netcdf
 contains
 
    function diag_xtype_from_name(name) result(xtype)
-      !! Map the `&ocean_diag_nml output_precision` string onto a NetCDF
+      !! Map the `[ocean.diag] output_precision` string onto a NetCDF
       !! element type for the diagnostic DATA variables.
       !!
       !!   * `"double"` (default, or anything empty) => `NC_WP` — the
@@ -43,7 +43,7 @@ contains
       !!     before this knob existed.
       !!   * `"single"` => `NC_R4` — halves the bytes written per frame.
       !!
-      !! The value is validated by the namelist schema, so an unknown
+      !! The value is validated by the input schema, so an unknown
       !! string should never reach here; it is warned about and falls back
       !! to `NC_WP` (never silently downgrades precision).
       !!
@@ -59,7 +59,7 @@ contains
       case ("single")
          xtype = NC_R4
       case default
-         call logger%warning("&ocean_diag_nml output_precision = '"//trim(name)// &
+         call logger%warning("[ocean.diag] output_precision = '"//trim(name)// &
                              "' not recognised; writing double precision")
          xtype = NC_WP
       end select

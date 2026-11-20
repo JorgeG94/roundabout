@@ -133,11 +133,11 @@ contains
          if (allocated(error)) exit checks
 
          ! The shipped envelope must actually be buildable with the
-         ! compiled default: nz = 90 is the largest shipped namelist
+         ! compiled default: nz = 90 is the largest shipped input
          ! (acc_channel_kitchensink_xl) and nz = 100 the largest test.
          ! If either of these ever fails, the default was lowered too far.
          call check(error, nz_stack_is_sufficient(90), &
-                    "largest shipped namelist (nz=90) must fit the compiled NZ_STACK_MAX")
+                    "largest shipped input (nz=90) must fit the compiled NZ_STACK_MAX")
          if (allocated(error)) exit checks
 
          call check(error, nz_stack_is_sufficient(100), &
@@ -229,7 +229,7 @@ contains
    end subroutine test_angstrom_window_gate
 
    function validate_angstrom(ratio, cons) result(ierr)
-      !! `validate_config` status of a minimal Lagrangian ocean namelist with
+      !! `validate_config` status of a minimal Lagrangian ocean input with
       !! an Angstrom floor, the given window ratio and `conservative_floor`.
       integer, intent(in) :: ratio
       character(len=*), intent(in) :: cons
@@ -251,7 +251,7 @@ contains
    end function validate_angstrom
 
    function validate_resfn_power(p) result(ierr)
-      !! `validate_config` status of a minimal ocean namelist with the given
+      !! `validate_config` status of a minimal ocean input with the given
       !! VarMix resolution-function power.
       integer, intent(in) :: p
       integer :: ierr
@@ -268,7 +268,7 @@ contains
    end function validate_resfn_power
 
    function validate_glue(bdrag) result(ierr)
-      !! `validate_config` status of a minimal ocean namelist with
+      !! `validate_config` status of a minimal ocean input with
       !! `implicit_drag` + `hvel_mom6` + `bbl_glue` and the given bottom drag.
       character(len=*), intent(in) :: bdrag
       integer :: ierr
@@ -285,7 +285,7 @@ contains
    end function validate_glue
 
    function validate_pv(nghost, scheme) result(ierr)
-      !! `validate_config` status of a minimal ocean namelist on the Sadourny
+      !! `validate_config` status of a minimal ocean input on the Sadourny
       !! enstrophy path with the given PV scheme and halo.
       integer, intent(in) :: nghost
       character(len=*), intent(in) :: scheme
@@ -686,7 +686,7 @@ contains
    end subroutine test_ice_hlim_spec_validity
 
    subroutine test_read_ocean_subnmls(error)
-      !! Round-trip the 11 ocean sub-namelists through read_config and
+      !! Round-trip the 11 ocean sub-inputs through read_config and
       !! assert each `cfg%ocean%group%field` parsed.  Locks in the
       !! PR-B2 split + prefix-drop.  In particular the three distinct
       !! `form` keys (coriolis / pgf / bdrag) verify the per-sub-nml
@@ -991,7 +991,7 @@ contains
 
    subroutine test_inhalo_march_refusals(error)
       !! `[ocean.bt] inhalo_march` (EXPERIMENTAL) is accepted on a clean
-      !! nghost = 3 ocean namelist and refused, one fence at a time, with
+      !! nghost = 3 ocean input and refused, one fence at a time, with
       !! `bt_halo > 0`, wet/dry, `use_cont_type`, `upstream_h_face`, tides,
       !! psurf, a chapman edge, and a stride above `nghost - 1`.
       type(error_type), allocatable, intent(out) :: error
@@ -1062,7 +1062,7 @@ contains
    end function fw_mass_ierr
 
    subroutine test_freshwater_mass_envelope(error)
-      !! `&ocean_forcing_nml freshwater = 'mass'`: what `validate_config` accepts and the holes it
+      !! `[ocean.forcing] freshwater = 'mass'`: what `validate_config` accepts and the holes it
       !! refuses by name.  Every refused case differs from the accepted baseline by ONE knob, and is
       !! refused by `validate_config` itself (a parse failure would not count).
       type(error_type), allocatable, intent(out) :: error
@@ -1091,7 +1091,7 @@ contains
                  "refused: windowed tracer advection without the deferred order")
       if (allocated(error)) return
       call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_therm_ratio = 2"//NL//"dt_tracer_advect_ratio = 2", FW, &
-                                     .true., "") == REFUSED, "refused: windowed advection with diabatic_first = .true.")
+                                     .true., "") == REFUSED, "refused: windowed advection with diabatic_first = true")
       if (allocated(error)) return
       call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = true", FW, .true., &
                                      "[ocean.wetdry]"//NL//"enable = true"//NL) == REFUSED, "refused: dynamic wet/dry")
@@ -1245,7 +1245,7 @@ contains
                                         cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
-                 "roquet_rho + fv_mom6 with insitu_density=.false. must validate")
+                 "roquet_rho + fv_mom6 with insitu_density=false must validate")
       if (allocated(error)) return
 
       call read_config_from_toml_string(HEAD//"[ocean.eos]"//NL//"eos = 'roquet_spv'"//NL// &
@@ -1255,7 +1255,7 @@ contains
    end subroutine test_roquet_rho_insitu_pgf_accepted
 
    subroutine test_atm_forcing_prereq_codes(error)
-      !! C2c-1: every `&ocean_atm_forcing_nml enable` prerequisite, one at a
+      !! C2c-1: every `[ocean.atm_forcing] enable` prerequisite, one at a
       !! time, through the pure `atm_forcing_prereq_code` (independent of the
       !! NetCDF build and of the not-yet-wired refusal, so this runs on every
       !! toolchain). The spherical baseline passes; each single mutation is
@@ -1320,10 +1320,10 @@ contains
       !! C2c-3a: both the atm-state provider (`atm_state_update`) and the
       !! ocean bulk-flux consumer (`bulk_forcing_apply`) are wired into the
       !! engine, so the atm_forcing baseline -- every `atm_forcing_prereq_code`
-      !! prerequisite met, which already requires `&ocean_bulk_flux_nml
+      !! prerequisite met, which already requires `[ocean.bulk_flux]
       !! enable` -- is now ACCEPTED on a NetCDF build (on a no-NetCDF build
       !! the explicit `RDB_ENABLE_NETCDF=ON` requirement still refuses it).
-      !! `&ocean_bulk_flux_nml enable` on its OWN (no atm provider) is still
+      !! `[ocean.bulk_flux] enable` on its OWN (no atm provider) is still
       !! refused -- it has no atmospheric state to act on standalone -- with
       !! its own honest message, not the old generic "not yet wired" one.
       type(error_type), allocatable, intent(out) :: error
@@ -1337,10 +1337,10 @@ contains
       call validate_config(cfg, ierr=ierr)
 #ifdef RDB_NO_NETCDF
       call check(error, ierr /= OCEAN_STATUS_OK, &
-                 "atm_forcing enable=.true. must still be refused on a no-NetCDF build")
+                 "atm_forcing enable=true must still be refused on a no-NetCDF build")
 #else
       call check(error, ierr == OCEAN_STATUS_OK, &
-                 "atm_forcing enable=.true. with every prerequisite met must now validate (C2c-3a)")
+                 "atm_forcing enable=true with every prerequisite met must now validate (C2c-3a)")
 #endif
       if (allocated(error)) return
 
@@ -1352,7 +1352,7 @@ contains
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
-                 "bulk_flux enable=.true. on its own (no atm provider) must still be refused")
+                 "bulk_flux enable=true on its own (no atm provider) must still be refused")
    end subroutine test_atm_forcing_wired_accepted
 
    subroutine test_missing_file(error)

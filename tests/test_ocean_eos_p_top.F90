@@ -5,11 +5,11 @@
 !! **0 Pa at the free surface**.  Under an Antarctic ice shelf that is wrong
 !! by the whole ice load (1e6-2e7 Pa), which with a nonlinear EOS is a
 !! systematic several-kg/m^3 density error.  `multilayer_state_t%p_top` (Pa,
-!! filled from the assembled `sf%p_surf` when `&ocean_psurf_nml in_eos`) is
+!! filled from the assembled `sf%p_surf` when `[ocean.psurf] in_eos`) is
 !! the offset the ported IN-SITU builder now starts from.
 !!
 !! The load must reach IN-SITU pressures ONLY.  `ms%rho_layer` is a
-!! POTENTIAL density at the horizontally uniform `&ocean_eos_nml p_ref`, and
+!! POTENTIAL density at the horizontally uniform `[ocean.eos] p_ref`, and
 !! its consumers difference it ALONG a layer (the Montgomery PGF, the
 !! FV-lite / FV-MOM6-PCM integrands) and VERTICALLY (the vmix N^2 builders).
 !! A per-column reference pressure would give two columns of IDENTICAL water
@@ -34,7 +34,7 @@
 !!     horizontally VARYING `p_top` over a column of uniform (T, S, h) must
 !!     leave `ms%rho_layer` exactly uniform.  Any future edit that routes
 !!     the load into the potential-density reference fails here.
-!!   * `p_ref_uniform_shifts_wright` — the now-live `&ocean_eos_nml p_ref`:
+!!   * `p_ref_uniform_shifts_wright` — the now-live `[ocean.eos] p_ref`:
 !!     `p_ref = 1e7` moves the Wright `rho_layer` to the scalar EOS value at
 !!     1e7 (several kg/m^3 away from the surface answer), and `p_ref = 0` is
 !!     BYTE-identical to the scalar EOS at 0.
@@ -386,7 +386,7 @@ contains
    end subroutine test_rho_layer_independent
 
    ! ------------------------------------------------------------------
-   ! Case 4 — the now-live &ocean_eos_nml p_ref
+   ! Case 4 — the now-live [ocean.eos] p_ref
    ! ------------------------------------------------------------------
 
    subroutine test_p_ref_shift(error)
@@ -478,10 +478,10 @@ contains
          if (allocated(error)) exit checks
 
          call check(error, maxval(abs(ptop_off)) == 0.0_wp, &
-                    "in_eos=.false. must leave ms%p_top at exactly zero")
+                    "in_eos=false must leave ms%p_top at exactly zero")
          if (allocated(error)) exit checks
          call check(error, minval(ptop_on) == P_TOP .and. maxval(ptop_on) == P_TOP, &
-                    "in_eos=.true. must fill ms%p_top from sf%p_surf")
+                    "in_eos=true must fill ms%p_top from sf%p_surf")
          if (allocated(error)) exit checks
 
          call check(error, all(rho_on == rho_off), &

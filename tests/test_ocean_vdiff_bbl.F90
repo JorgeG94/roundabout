@@ -1,4 +1,4 @@
-!! Coverage for the `&ocean_vdiff_nml hvel_mom6` + `bbl_glue`
+!! Coverage for the `[ocean.vdiff] hvel_mom6` + `bbl_glue`
 !! momentum-vdiff path (the MOM6 HARMONIC_VISC face-thickness build and
 !! the rest-state BBL-glue viscous absorber, `diffuse_velocity_columns_impl`).
 !!

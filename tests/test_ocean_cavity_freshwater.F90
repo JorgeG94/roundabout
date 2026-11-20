@@ -3,7 +3,7 @@
 module test_ocean_cavity_freshwater
    !! ### What this suite gates
    !!
-   !! `&ocean_cavity_melt_nml freshwater = "mass"` stops emulating the
+   !! `[ocean.cavity_melt] freshwater = "mass"` stops emulating the
    !! meltwater and adds it: `dh = m*dt/rho_0` on the top layer, `d(hS) =
    !! dh*s_ice`, `d(hT) = dh*T_b`, with the virtual salt flux removed
    !! again from the tracer so the dilution is not counted twice.  The
@@ -1168,7 +1168,7 @@ contains
    end subroutine seed
 
    ! ======================================================================
-   ! Namelists for the 3-D gates
+   ! Inputs for the 3-D gates
    ! ======================================================================
 
    function melt_nml(freshwater, compensation, extra) result(nml)
@@ -1179,12 +1179,12 @@ contains
       !! the latter.  No wind, no restoring, walls all round: the only
       !! things that may move a total are the ones the budget names.
       character(len=*), intent(in) :: freshwater
-         !! `&ocean_cavity_melt_nml freshwater`; empty ⇒ the key is
+         !! `[ocean.cavity_melt] freshwater`; empty ⇒ the key is
          !! omitted entirely (the default path).
       character(len=*), intent(in) :: compensation
          !! `volume_compensation`; empty ⇒ omitted.
       character(len=*), intent(in) :: extra
-         !! Extra namelist groups appended verbatim (the refusal cases).
+         !! Extra input groups appended verbatim (the refusal cases).
       character(len=:), allocatable :: nml
       character(len=32) :: bed_s, dx_s, nx_s, ny_s
       character(len=:), allocatable :: melt_keys
@@ -1644,7 +1644,7 @@ contains
    subroutine test_refusals(error)
       !! Every envelope hole is refused BY NAME at configure, and each
       !! case is asserted to PARSE first — otherwise the test would pass
-      !! on a malformed namelist rather than on the rule it names.
+      !! on a malformed input rather than on the rule it names.
       type(error_type), allocatable, intent(out) :: error
       call expect_refused(error, melt_nml("mass", "", &
                                           "[ocean.wetdry]"//new_line("a")// &
@@ -1668,7 +1668,7 @@ contains
       type(config_t) :: cfg
       integer :: ierr
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
-      call check(error, ierr == 0, label//": the namelist PARSES")
+      call check(error, ierr == 0, label//": the input PARSES")
       if (allocated(error)) return
       call validate_config(cfg, ierr)
       call check(error, ierr /= 0, label//": and validate_config refuses it")

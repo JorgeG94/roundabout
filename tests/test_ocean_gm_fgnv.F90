@@ -1,5 +1,5 @@
 !! Analytical + device tests for the FGNV (Ferrari, Griffies, Nurser & Vallis
-!! 2010, Ocean Modelling 32, 143-156) GM streamfunction, `&ocean_gm_nml
+!! 2010, Ocean Modelling 32, 143-156) GM streamfunction, `[ocean.gm]
 !! use_fgnv` (`rdb_ocean_gm :: gm_fgnv_solve_column` + the face-column
 !! kernels).
 !!

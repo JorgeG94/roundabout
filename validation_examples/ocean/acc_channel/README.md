@@ -26,16 +26,16 @@ end-to-end "everything on" integration case for the C-grid dyn-core.
 
 | Feature | Knob | Verified |
 |---|---|---|
-| Spherical curvilinear metrics | `&ocean_grid_nml grid_config="spherical"` | quiescent gate passes (1e-11 m/s) |
+| Spherical curvilinear metrics | `[ocean.grid] grid_config="spherical"` | quiescent gate passes (1e-11 m/s) |
 | Planetary Coriolis | `coriolis_scheme="planetary"` | zonal jet develops |
-| Periodic-x OBC (re-entrant) | `&ocean_bc_nml west/east="periodic"` | seam invisible (ghost == wrap exactly) |
+| Periodic-x OBC (re-entrant) | `[ocean.bc] west/east="periodic"` | seam invisible (ghost == wrap exactly) |
 | Walls north/south | (default) | channel confined |
-| EPBL surface boundary layer | `&ocean_epbl_nml enable=.true.` | MLD_EPBL 110-200 m, evolving |
-| kappa-shear interior mixing | `&ocean_kappa_shear_nml enable=.true.` | Kd_KSHEAR up to 1.7e-2 m^2/s |
-| Smagorinsky KH + AH | `&ocean_hvisc_nml lateral_closure="smagorinsky", smag_ah=.true.` | stable |
-| z* vertical coord + ALE remap | `&vcoord_nml vcoord_type="zstar"` | mass conserved 1e-16 |
-| Distributed linear bottom drag | `&ocean_bdrag_nml form="linear", hbbl=10` | stable |
-| Diag manager | `&ocean_diag_nml` | SSH/T/S/u/v/KE + MLD_EPBL + Kd_EPBL + Kd_KSHEAR |
+| EPBL surface boundary layer | `[ocean.epbl] enable=true` | MLD_EPBL 110-200 m, evolving |
+| kappa-shear interior mixing | `[ocean.kappa_shear] enable=true` | Kd_KSHEAR up to 1.7e-2 m^2/s |
+| Smagorinsky KH + AH | `[ocean.hvisc] lateral_closure="smagorinsky", smag_ah=true` | stable |
+| z* vertical coord + ALE remap | `[vcoord] vcoord_type="zstar"` | mass conserved 1e-16 |
+| Distributed linear bottom drag | `[ocean.bdrag] form="linear", hbbl=10` | stable |
+| Diag manager | `[ocean.diag]` | SSH/T/S/u/v/KE + MLD_EPBL + Kd_EPBL + Kd_KSHEAR |
 
 ## How to run
 
@@ -55,10 +55,10 @@ cd validation_examples/ocean/acc_channel
 # (NVHPC + NetCDF toolchain loaded in this shell — and only that one)
 
 # 1. Quiescent tier-1.5 trap FIRST (5 days, must stay at rest):
-CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb acc_channel_quiescent.nml
+CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb acc_channel_quiescent.toml
 
 # 2. The forced showcase (30 days, ~17 s on a V100):
-CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb acc_channel.nml
+CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb acc_channel.toml
 
 # 3. The 3-panel movie (SSH+flow, MLD_EPBL, Kd_KSHEAR):
 python3 animate_acc_channel.py
@@ -66,7 +66,7 @@ python3 animate_acc_channel.py
 
 ### One-knob Langmuir variant
 
-Set `use_lt = .true.` in `&ocean_epbl_nml` to engage the LF17 wind-only
+Set `use_lt = true` in `[ocean.epbl]` to engage the LF17 wind-only
 Langmuir-turbulence enhancement (COARE 3.5 + Phillips-spectrum Stokes,
 Reichl & Li 2019 mstar boost) — no wave model needed. It deepens the
 EPBL MLD modestly under the steady wind. Nothing else changes.
@@ -104,12 +104,12 @@ EPBL MLD modestly under the steady wind. Nothing else changes.
 CFL stayed bounded < 0.012 throughout; `auto_n_inner` settled at
 n_inner = 10 (c_ext ~ 171 m/s at H = 3000 m). The production envelope
 (nu_h = 10000, Smag KH+AH, distributed linear drag, dt_fixed = 1200 s)
-was used **as-is** from `double_gyre_mom6.nml` — **no envelope changes
+was used **as-is** from `double_gyre_mom6.toml` — **no envelope changes
 were needed** for stability.
 
 ## Quiescent gate (the tier-1.5 trap)
 
-`acc_channel_quiescent.nml` is the same grid / seamount bathymetry /
+`acc_channel_quiescent.toml` is the same grid / seamount bathymetry /
 periodic-x BCs / closures with **zero wind, zero heat flux, and uniform
 T,S** (no available potential energy). It stays at rest:
 **max|u|,|v| = 1.0e-11 / 5.5e-12 m/s, En = 6e-25 J, MaxCFL = 0** over
@@ -118,7 +118,7 @@ Coriolis, periodic-x seam, and seamount bathymetry are mutually
 consistent.
 
 > **Finding — stratified resting state drifts over the ridge.** A
-> *stratified* resting state (the `acc_channel.nml` T(z) IC with the
+> *stratified* resting state (the `acc_channel.toml` T(z) IC with the
 > forcing turned off) does **not** stay at rest: it drifts to ~0.16 m/s
 > centred on the ridge crest, decaying smoothly to ~2e-4 at the
 > periodic seam and the walls. This is **not** a spherical-metric or
@@ -133,7 +133,7 @@ consistent.
 >   T,S, no APE" for the zero-motion expectation.
 >
 > **Caveat added with the Montgomery PGF fix — this finding does not
-> reproduce from this namelist's IC.** `T_init_surface`/`T_init_bottom`
+> reproduce from this input's IC.** `T_init_surface`/`T_init_bottom`
 > are applied **per layer index**, not per depth
 > (`t_layer(k) = T_init_bottom + dT_dlayer*(k-1)`,
 > `rdb_ocean_state.F90`), so every layer is isothermal along itself and
@@ -146,7 +146,7 @@ consistent.
 > evidence about any PGF form. Re-derive it from a depth-based T(z) IC
 > before citing it again.
 
-> The quiescent namelist therefore uses uniform T,S (the honest trap).
+> The quiescent input therefore uses uniform T,S (the honest trap).
 > The drift is a closure accuracy limitation of terrain-following
 > coordinates over steep topography, tracked elsewhere in the ocean
 > backlog — not something to tune away here.
@@ -174,7 +174,7 @@ consistent.
 
 ## Eddy-resolving stress test
 
-`acc_channel_eddy.nml`: the same channel at 0.1 deg / 50 layers
+`acc_channel_eddy.toml`: the same channel at 0.1 deg / 50 layers
 (240 x 140 x 50 = 1.7M cells, ~13x the showcase) — the single-GPU
 compute stress test. For the full-fat 10M-cell version scale nx/ny x2
 AND dx/dy /2 together (0.05 deg; scaling only nx/ny grows the domain
@@ -185,7 +185,7 @@ misbehaves.
 
 ## "Kitchen sink" — exercise every new closure (profiling)
 
-`acc_channel_kitchensink.nml`: the same channel on a deliberately
+`acc_channel_kitchensink.toml`: the same channel on a deliberately
 moderate grid (240 x 140 x 50 = ~1.7M cells) that turns on **every**
 ocean-physics path added in the MOM6-parity push in ONE run — EPBL +
 kappa-shear + **Fox-Kemper MLE** + **geothermal** + **PPM_H4 remap** +
@@ -199,10 +199,10 @@ mass/salt conserved to round-off, `ocean_ale_remap` (~14%) and
 
 ## WENO windowed-drain tracer advection
 
-`acc_channel_weno5.nml`: the same channel physics, but the horizontal
+`acc_channel_weno5.toml`: the same channel physics, but the horizontal
 tracer advection is decoupled from the per-step dynamics and run once per
 window with a **WENO5-Z** face reconstruction. The key knobs
-(`&ocean_vmix_nml`):
+(`[ocean.vmix]`):
 
 ```
 tracer_recon           = 'weno5'   ! WENO5-Z swept-average drain
@@ -219,20 +219,20 @@ of `dt_tracer_advect_ratio` (fail-loud at configure), which is why this
 variant also bumps `dt_therm_ratio` to 2. The base grid already carries
 `nghost = 3` (periodic-x), which satisfies the weno5 halo requirement;
 **weno7 needs `nghost >= 4`, weno9 `nghost >= 5`** — both fail-loud. This
-is the SEPARATE ocean knob in `&ocean_vmix_nml`, independent of the coastal
-`&tracer_nml tracer_recon`.
+is the SEPARATE ocean knob in `[ocean.vmix]`, independent of the coastal
+`[tracer] tracer_recon`.
 
 ```bash
 cd validation_examples/ocean/acc_channel
 # (NVHPC + NetCDF toolchain loaded in this shell)
-CUDA_VISIBLE_DEVICES=<gpu> ../../../build_gpu/rdb acc_channel_weno5.nml
+CUDA_VISIBLE_DEVICES=<gpu> ../../../build_gpu/rdb acc_channel_weno5.toml
 ```
 
 **Reduced grid (load-bearing).** This variant runs at **120 x 70 x 20**,
 not the canonical 480 x 280 x 75. The full-res showcase maps ~14 GB of
 ocean state and grows the lazy kernel workspaces past 32 GB, so it **OOMs
 on a single 32 GB V100 at the first kernel launch** — this is a pre-existing
-case-sizing property, **not a WENO effect**: the stock PPM `acc_channel.nml`
+case-sizing property, **not a WENO effect**: the stock PPM `acc_channel.toml`
 OOMs identically at that resolution on a V100. 120 x 70 x 20 fits (~0.8 GB
 mapped state, ~23 GB peak with workspaces) and turns over a 1-day run in
 ~3 s. Scale nx/ny/nz back up on an A100/H100 for the full-res showcase.

@@ -1,4 +1,4 @@
-!! Surface fresh-water forcing, `&ocean_forcing_nml freshwater = "virtual"`: the net open-ocean
+!! Surface fresh-water forcing, `[ocean.forcing] freshwater = "virtual"`: the net open-ocean
 !! fresh-water mass flux `F = lprec + fprec + evap + lrunoff + frunoff` becomes the virtual salt
 !! flux `salt_fw = -S_surf*F` (`ocean_surface_flux_fw_virtual_step`), summed by the assembler.
 !!
@@ -591,7 +591,7 @@ contains
       if (allocated(error)) return
       call check(error, valid_ierr("[ocean.forcing]"//new_line("a")// &
                                    "enable_components = true"//new_line("a")) == OCEAN_STATUS_OK, &
-                 "baseline namelist validates (knob absent)")
+                 "baseline input validates (knob absent)")
       if (allocated(error)) return
       call check(error, valid_ierr("[ocean.forcing]"//new_line("a")// &
                                    "enable_components = true"//new_line("a")// &

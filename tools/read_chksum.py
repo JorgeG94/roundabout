@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Parse and diff the CHKSUM / HOTFACE forensic rows emitted by the ocean
-`&ocean_debug_nml chksum` probe (`src/core/ocean/diag/rdb_ocean_chksum.F90`).
+`[ocean.debug] chksum` probe (`src/core/ocean/diag/rdb_ocean_chksum.F90`).
 
 The probe writes fixed-format greppable rows straight to stdout (bypassing the
 logger by design) at every split-RK2 tendency seam:

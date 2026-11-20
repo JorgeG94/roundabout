@@ -112,7 +112,7 @@ def build_model():
         # [ocean.eos] (default "linear" already matches) or
         # [ocean.ic] alpha_T/beta_S/T_ref/S_ref/rho_0 (all stay at
         # the Fortran's own defaults) -- and ocean_ic.alpha_T is unused
-        # anyway once enable_thermodynamics=.false. below skips the EOS
+        # anyway once enable_thermodynamics=false below skips the EOS
         # call entirely.
         # An earlier draft of this script called
         # LinearEquationOfState(thermal_expansion=0.0, ...) here, which

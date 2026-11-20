@@ -1,5 +1,5 @@
 !! Static Laplacian floors AT the T and corner points (stress-tensor path,
-!! `&ocean_hvisc_nml kh_bg_at_points`).
+!! `[ocean.hvisc] kh_bg_at_points`).
 !!
 !! (a) Point values: on a stretched (dx /= dy) lon-lat sector the built
 !!     `kh_bg_t`/`kh_bg_q` equal `max(nu_h, c_K*Delta, K_s*|sin phi|^p)`

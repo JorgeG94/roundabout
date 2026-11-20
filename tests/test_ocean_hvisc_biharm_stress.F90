@@ -1,4 +1,4 @@
-!! Biharmonic inside the stress tensor (`&ocean_hvisc_nml biharm_stress`).
+!! Biharmonic inside the stress tensor (`[ocean.hvisc] biharm_stress`).
 !!
 !! (a) Dispersion: u = sin(kx) on a uniform grid, uniform h, gives
 !!     du = -(Kh*lam + Ah*lam^2)*u*h/(h+H_VANISHED), lam = (2-2cos(k dx))/dx^2,

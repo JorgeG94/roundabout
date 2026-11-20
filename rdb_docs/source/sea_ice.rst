@@ -21,8 +21,8 @@ elastic-viscous-plastic rheology — is tested against analytical cases.
 What is missing is mostly on the mass budget: there is no ridging, no melt
 ponds and no lateral melt (see `Limitations`_).
 
-Everything on this page is **off by default**. A namelist without
-``&ocean_ice_nml enable = .true.`` never initialises, maps or steps the
+Everything on this page is **off by default**. An input without
+``[ocean.ice] enable = true`` never initialises, maps or steps the
 ice, and gives byte-identical results.
 
 .. warning::
@@ -57,44 +57,41 @@ Turning it on
 
 The smallest useful configuration is thermodynamics only. The block below
 is the sea-ice part of
-``validation_examples/ocean/sea_ice/polar_freezeup_thermo.nml``, a 40 × 30
+``validation_examples/ocean/sea_ice/polar_freezeup_thermo.toml``, a 40 × 30
 cell, 10 km, 50 m deep f-plane basin at about 80°N that starts ice-free
 just above the freezing point and is cooled at the surface:
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &ocean_thermo_nml
-      enable_thermodynamics = .true.   ! the ice thermo chain needs this
-      q_heat = -60.0                    ! W/m^2, cools the surface to T_f
-   /
+   [ocean.thermo]
+      enable_thermodynamics = true  # the ice thermo chain needs this
+      q_heat = -60.0  # W/m^2, cools the surface to T_f
 
-   &ocean_vmix_nml
-      dt_therm_ratio = 1                ! ice thermodynamic cadence
-   /
+   [ocean.vmix]
+      dt_therm_ratio = 1  # ice thermodynamic cadence
 
-   &ocean_ice_nml
-      enable         = .true.
-      ncat           = 5
-      nk_ice         = 2
-      air_temp       = -20.0            ! degC, slab atmosphere
-      restore_lambda = 20.0             ! W/m^2/K
-      sw_down        = 0.0              ! polar night
-      transport      = .false.
-      dynamics       = .false.
-   /
+   [ocean.ice]
+      enable = true
+      ncat = 5
+      nk_ice = 2
+      air_temp = -20.0  # degC, slab atmosphere
+      restore_lambda = 20.0  # W/m^2/K
+      sw_down = 0.0  # polar night
+      transport = false
+      dynamics = false
 
 Ice nucleates as frazil once the surface supercools, and the column model
 then grows it over the 90-day run. To add motion, the companion file
-``polar_freezeup_dynamics.nml`` applies a steady 0.05 Pa eastward wind
-(``&physics_nml wind_stress_x``) and adds, in the same group:
+``polar_freezeup_dynamics.toml`` applies a steady 0.05 Pa eastward wind
+(``[physics] wind_stress_x``) and adds, in the same group:
 
 .. code-block:: fortran
 
-      transport      = .true.
-      dynamics       = .true.
+      transport      = true
+      dynamics       = true
       evp_sub_steps  = 432
       cfl_trunc      = 0.5     ! SIS2's own default; Roundabout's is 0
-      project_ci     = .true.  ! SIS2's own default; Roundabout's is .false.
+      project_ci     = true  ! SIS2's own default; Roundabout's is .false.
 
 To start from an existing pack instead of growing one, see
 `Initial conditions`_ and ``validation_examples/ocean/sea_ice_pack/``.
@@ -116,16 +113,16 @@ final state for that step. Two parts run on **every** outer step:
 
 1. **Frazil banking.** Any supercooling in the ocean surface is clamped
    back to the freezing point and the heat deficit is banked for the ice.
-2. **EVP dynamics** (when ``dynamics = .true.``), followed immediately by
+2. **EVP dynamics** (when ``dynamics = true``), followed immediately by
    the ice-to-ocean **stress blend** that the next ocean momentum step
    feels.
 
 The rest runs only on **thermodynamic steps**, the cadence set by
-``&ocean_vmix_nml dt_therm_ratio`` (every outer step at the default 1), and
-only when ``&ocean_thermo_nml enable_thermodynamics`` is on. The order is
+``[ocean.vmix] dt_therm_ratio`` (every outer step at the default 1), and
+only when ``[ocean.thermo] enable_thermodynamics`` is on. The order is
 fixed and load-bearing:
 
-3. Category **transport** (when ``transport = .true.``).
+3. Category **transport** (when ``transport = true``).
 4. The **atmospheric forcing** seam is filled: from the scalar restoring
    knobs, or from a prescribed atmosphere (see `Atmospheric forcing`_).
 5. The ocean-to-ice **basal heat flux**.
@@ -142,7 +139,7 @@ ocean momentum step. The coupling is therefore **lagged by one step** (the
 model's convention for frazil and MEKE as well). A fresh run's first step
 drives the ocean with the pure wind stress.
 
-With ``enable_thermodynamics = .false.`` only steps 1 and 2 run: frazil is
+With ``enable_thermodynamics = false`` only steps 1 and 2 run: frazil is
 banked but never spent.
 
 
@@ -164,7 +161,7 @@ heat spent is banked for the ice,
 The bank is spent as latent heat of new ice on the next thermodynamic step,
 in the thinnest category (annexing open water if needed), so energy is
 banked, never discarded; the ocean heat budget includes it. :math:`T_f` is
-the equation of state's freezing point (``&ocean_eos_nml tfreeze_set`` /
+the equation of state's freezing point (``[ocean.eos] tfreeze_set`` /
 ``tfreeze_form``) at zero pressure.
 
 The "surface layer" is the **first live layer** from the top, not literally
@@ -230,7 +227,7 @@ constant width, for example ``hlim = 1.0e-10, 0.2, 0.5, 1.0, 2.0``.
 Transport
 ---------
 
-With ``transport = .true.`` the ice and snow are advected between columns
+With ``transport = true`` the ice and snow are advected between columns
 on each thermodynamic step, in ``adv_substeps`` sub-iterations. The scheme
 is SIS2's default velocity-driven category transport: a PPM reconstruction
 of the category-summed mass gives one face flux, which is split between
@@ -241,14 +238,14 @@ compaction, not ridging. ``roll_factor`` sets SIS2's thin-ice rolling
 floor (0 disables it).
 
 The velocity the transport uses comes from the EVP dynamics when
-``dynamics = .true.``. Without dynamics it is **sampled from the ocean's
+``dynamics = true``. Without dynamics it is **sampled from the ocean's
 top-layer face velocities**, so the ice drifts with the surface current.
 A conservation or positivity failure in the transport stops the run.
 
 EVP dynamics
 ------------
 
-``dynamics = .true.`` turns on the C-grid **elastic-viscous-plastic (EVP)**
+``dynamics = true`` turns on the C-grid **elastic-viscous-plastic (EVP)**
 rheology of Hunke and Dukowicz (1997), ported from SIS2, with the Hibler
 (1979) ice strength and elliptical yield curve. It runs on every outer step,
 independently of the thermodynamic cadence, in ``evp_sub_steps``
@@ -293,7 +290,7 @@ default) the column feels only shortwave and the basal flux. It cannot
 produce a seasonal cycle.
 
 **A prescribed atmosphere** replaces it whenever
-``&ocean_atm_forcing_nml enable`` is on (with ``&ocean_bulk_flux_nml
+``[ocean.atm_forcing] enable`` is on (with ``[ocean.bulk_flux]
 enable``; non-cartesian grid, single rank for now). The balance is
 linearised at 0 °C with the Large and Yeager (2004, 2009) constant over-ice
 transfer coefficients (:math:`C_D = C_H = C_E = 1.63\times10^{-3}`, no
@@ -339,11 +336,11 @@ friction velocity from the result:
 
 Without ``dynamics`` the ocean sees the unmodified wind stress.
 
-The constant ``&ocean_thermo_nml`` surface fluxes stay in
+The constant ``[ocean.thermo]`` surface fluxes stay in
 :math:`Q_{\mathrm{heat}}`/:math:`Q_{\mathrm{salt}}`; the ice terms are added
-to them, not weighted by ice cover. With ``&ocean_forcing_nml
+to them, not weighted by ice cover. With ``[ocean.forcing]
 enable_components`` the same numbers arrive through the component set.
-Under ``&ocean_eos_nml ts_convention = "cons_abs"`` the ice keeps potential
+Under ``[ocean.eos] ts_convention = "cons_abs"`` the ice keeps potential
 temperature and practical salinity and the conversion happens once at the
 coupler. ``bound_salinity`` floors the top-layer salinity at
 ``min_salinity`` after the exchange; it is **non-conserving** (the salt it
@@ -353,16 +350,15 @@ creates is not in the budget).
 Initial conditions
 ==================
 
-By default the run starts ice-free. ``&ocean_ice_ic_nml`` seeds an analytic
+By default the run starts ice-free. ``[ocean.ice_ic]`` seeds an analytic
 pack before the first step:
 
-.. code-block:: fortran
+.. code-block:: toml
 
-   &ocean_ice_ic_nml
-      conc_config = "uniform"   ! "zero" (default), "uniform" or "latitudes"
-      h_ice       = 2.0         ! m, required > 0
-      conc        = 1.0         ! "uniform" only
-   /
+   [ocean.ice_ic]
+      conc_config = "uniform"  # "zero" (default), "uniform" or "latitudes"
+      h_ice = 2.0  # m, required > 0
+      conc = 1.0  # "uniform" only
 
 ``"latitudes"`` covers everything poleward of ``arctic_edge`` and
 ``antarctic_edge`` (both default ±91°, i.e. no ice) and needs a
@@ -374,10 +370,10 @@ reader. On a warm restart the ice IC is skipped (the restart replaces it),
 with a warning.
 
 
-Namelist reference
+Input reference
 ==================
 
-``&ocean_ice_nml``:
+``[ocean.ice]``:
 
 =============================  ===========  ========================================
 Knob                           Default      Meaning
@@ -414,7 +410,7 @@ Knob                           Default      Meaning
 ``project_ci``                 ``.false.``  Project concentration within the subcycles.
 =============================  ===========  ========================================
 
-``&ocean_ice_ic_nml``: ``conc_config`` (``"zero"``), ``conc`` (0.0),
+``[ocean.ice_ic]``: ``conc_config`` (``"zero"``), ``conc`` (0.0),
 ``h_ice`` (0.0 m), ``h_snow`` (0.0 m), ``t_ice`` (−4.0 °C), ``s_ice``
 (4.0 psu), ``arctic_edge`` (91.0), ``antarctic_edge`` (−91.0).
 
@@ -428,8 +424,8 @@ Like the rest of the model, the sea ice fails loud at configure rather than
 silently ignoring a knob. In particular:
 
 * ``transport`` needs ``enable``, ``ncat > 1`` and
-  ``&ocean_thermo_nml enable_thermodynamics``.
-* ``dynamics`` needs ``enable`` and every ``&ocean_bc_nml`` edge to be
+  ``[ocean.thermo] enable_thermodynamics``.
+* ``dynamics`` needs ``enable`` and every ``[ocean.bc]`` edge to be
   ``"wall"`` or ``"periodic"`` (the north edge may also be
   ``"tripolar_fold"``, which needs ``nghost >= 2``). Open, tidal, sponge,
   clamped and Chapman edges are refused. ``p0``, ``c0``, ``cdw``,
@@ -441,11 +437,11 @@ silently ignoring a knob. In particular:
   ``enable_thermodynamics``; ``frazil_column`` and ``hlim`` need
   ``enable``.
 * Sea ice is mutually exclusive with the ice-shelf cavity
-  (``&ocean_cavity_dyn_nml``, ``&ocean_cavity_melt_nml``), with
-  ``&ocean_psurf_nml in_eos``, and with the pseudo-salt tracer
-  (``&ocean_tracers_nml enable_pseudo_salt``).
+  (``[ocean.cavity_dyn]``, ``[ocean.cavity_melt]``), with
+  ``[ocean.psurf] in_eos``, and with the pseudo-salt tracer
+  (``[ocean.tracers] enable_pseudo_salt``).
 
-``./rdb --validate-only case.nml`` lists every refusal without running.
+``./rdb --validate-only case.toml`` lists every refusal without running.
 
 
 Parallel runs and restarts
@@ -468,11 +464,11 @@ must resume on the same decomposition.
 Diagnostics
 ===========
 
-With ``&ocean_ice_nml enable`` the default output gains a set of
+With ``[ocean.ice] enable`` the default output gains a set of
 two-dimensional sea-ice fields named after CICE's history fields, so
 notebooks written for ACCESS-OM3 output read the same names. They are
 time means over the output interval. Add or remove fields with
-``&ocean_diag_nml diags`` (``name`` to add, ``name:off`` to drop); the full
+``[ocean.diag] diags`` (``name`` to add, ``name:off`` to drop); the full
 catalogue and the selection syntax are on :doc:`diagnostics`.
 
 =============  ======  ============  ========================================
@@ -498,8 +494,8 @@ Name           Units   Registered    Meaning
 ``vvel``       m/s     opt-in        Alias of ``ice_v``.
 =============  ======  ============  ========================================
 
-"ice" means registered by default whenever ``&ocean_ice_nml enable`` is
-on; "ice + thermo" also needs ``&ocean_thermo_nml enable_thermodynamics``;
+"ice" means registered by default whenever ``[ocean.ice] enable`` is
+on; "ice + thermo" also needs ``[ocean.thermo] enable_thermodynamics``;
 "opt-in" fields appear only when named in ``diags``. All are 2-D. The
 rates are the masses formed or lost over each thermodynamic window divided
 by the window length and the ice density, then averaged over the output
@@ -523,7 +519,7 @@ Limitations
 ===========
 
 * **No ridging**: ``compress_ice`` thickens ice within its own category
-  (SIS2 with ``DO_RIDGING = .false.``), so the thickness distribution and
+  (SIS2 with ``DO_RIDGING = false``), so the thickness distribution and
   the EVP strength are biased under convergence.
 * **No melt ponds** (summer melt biased low), **no lateral melt or
   floe-size effects** (marginal-ice-zone retreat biased).

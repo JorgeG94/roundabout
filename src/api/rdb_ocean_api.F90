@@ -416,7 +416,7 @@ contains
          end do
       end if
       if (.not. ts_written) return
-      call fail(where//": balance with enable_thermodynamics = .false. uses the "// &
+      call fail(where//": balance with enable_thermodynamics = false uses the "// &
                 "prescribed layer densities; staged/set T/S do not change rho -- "// &
                 "enable thermodynamics, or set layer densities instead", &
                 ierr_local, OCEAN_STATUS_ERR_IC_SEED)

@@ -1,5 +1,5 @@
 !! Fox-Kemper mixed-layer-eddy restratification on `z_fixed` with
-!! partial-step CLOSED faces (`&vcoord_nml zfixed_closed_faces`).  Every
+!! partial-step CLOSED faces (`[vcoord] zfixed_closed_faces`).  Every
 !! case runs the production device kernels — `mle_compute_transports`
 !! (+ `continuity_tracer_step_split(mle=mle)`
 !! for the multi-step case) — over a hand-specified staircase whose layer

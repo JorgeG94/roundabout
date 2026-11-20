@@ -75,17 +75,17 @@ where the `select case (coord_type)` lives:
 5. **Remap early-return** — if FOO is a no-op coordinate (like
    `VCOORD_LAGRANGIAN` / `VCOORD_EULERIAN_Z`), add it to the early-return guards
    in `src/ALE/rdb_ocean_remap.F90` (there is one per remap entry point).
-6. **Config + namelist** — `vcoord_type` already exists in `&vcoord_nml`; add
+6. **Config + input** — `vcoord_type` already exists in `[vcoord]`; add
    the new string to its enum registration (`register_vcoord` in
    `src/core/config/rdb_config_register_core.F90`) and any new knob fields per
-   [add_namelist_knob.md](add_namelist_knob.md).
+   [add_input_knob.md](add_input_knob.md).
 7. **Driver wiring** — `src/driver/rdb_driver.F90` already routes
    `ocean_state%vcoord%coord_type = parse_ocean_vcoord_type(cfg%vcoord_type)`;
    copy any new knob from `cfg%` onto `ocean_state%vcoord%…` in the same block.
    It runs **before** the IC seed, because the seed calls
    `vcoord%build_zref_full(b)` — keep that order if FOO needs a per-column
    build at setup.
-8. **Initial thickness** — `&vcoord_nml thickness_config` seeds `h_layer` at
+8. **Initial thickness** — `[vcoord] thickness_config` seeds `h_layer` at
    setup independently of the coordinate. If FOO needs a matching seed profile,
    add it there too, or a run starts far from its own target and spends the
    first steps remapping.
@@ -194,7 +194,7 @@ as the assertions the rigid-top slice must flip.
   survive the remap drain (`h_old > H_VANISHED`, strict), so that path floors
   at **`max(zstar_h_min, 2·H_VANISHED)`** instead. Never hoist one into the
   other — and never reach for `H_VANISHED` as a positivity floor (D4 forbids
-  it); the live-minimum-thickness knob is `&ocean_isopycnal_nml angstrom_h`.
+  it); the live-minimum-thickness knob is `[ocean.isopycnal] angstrom_h`.
 - **`associate` every component used in an offloaded loop.** ifx's
   `do concurrent` → OpenMP-target lowering ICEs on a derived-type allocatable
   component referenced directly inside the loop body; the whole generator is
@@ -230,8 +230,8 @@ envelope statement: nothing in the tree says what it does to a fluid that
 should not move, on a slope, on a seamount, on a stiff bathymetric step, or
 under an ice lid. That is precisely the gap that let `ZSIGMA` collapse its
 whole column into the bed layer, `ZSTAR_SIGMA` be silently identical to
-`SIGMA` in 21 shipped namelists, and `ZSTAR_FULL` resolve the wrong half of
-the column under a lid — three defects, all invisible per-namelist and all
+`SIGMA` in 21 shipped inputs, and `ZSTAR_FULL` resolve the wrong half of
+the column under a lid — three defects, all invisible per-input and all
 obvious in a family x geometry table.
 
 So, in the same PR:
@@ -240,7 +240,7 @@ So, in the same PR:
    [`tests/regression/vcoord_matrix.py`](../../tests/regression/vcoord_matrix.py):
    its `vcoord_type` string, its status (`"run"`, or `"refused"` if
    `validate_config` rejects it by design), the `split_scheme` it must pin if
-   any, any extra `&vcoord_nml` lines it needs to be non-degenerate, and a
+   any, any extra `[vcoord]` lines it needs to be non-degenerate, and a
    one-paragraph note saying **what the row measures**. A family whose default
    knobs make it numerically identical to `SIGMA` must carry knobs that make
    it not — otherwise the row proves nothing (this is why `zstar_full` in the

@@ -15,7 +15,7 @@
 !! `form='fv_mom6'` is lifted (`rdb_config_validate`,
 !! `rdb_ocean_setup_lateral`) -- the combination now validates and runs this
 !! branch by default. The full-kernel, device-executing coverage of that
-!! namelist-driven path lives in `tests/test_ocean_pgf_insitu.F90`
+!! input-driven path lives in `tests/test_ocean_pgf_insitu.F90`
 !! (`thermobaric_face_matches_insitu_oracle_roquet_rho` /
 !! `rest_partial_steps_zero_pgf_roquet_rho`); the kernels below, including
 !! the reconstruct-for-pressure twins, are tested directly against

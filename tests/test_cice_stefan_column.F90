@@ -1,4 +1,4 @@
-!! I1, the Stefan column: one wet column of the CICE-port sea ice (`&ocean_ice_nml scheme = "cice"`) over a 20 m
+!! I1, the Stefan column: one wet column of the CICE-port sea ice (`[ocean.ice] scheme = "cice"`) over a 20 m
 !! ocean slab at its freezing point, under a constant -30 C atmosphere, 60 days at dt = 900 s, run through the
 !! production engine path (`engine_step` -> `engine_step_ice` -> `engine_step_finalize`).
 !!
@@ -58,7 +58,7 @@ module test_cice_stefan_column
 
    public :: collect_cice_stefan_column_tests
 
-   ! ---- the experiment (the example namelist `cice_stefan_column.toml` carries the same numbers) ----
+   ! ---- the experiment (the example input `cice_stefan_column.toml` carries the same numbers) ----
    real(wp), parameter :: DT = 900.0_wp
    integer, parameter :: NDAYS = 60
    integer, parameter :: NSTEPS = NDAYS*96

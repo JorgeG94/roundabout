@@ -19,7 +19,7 @@
 ! Two regimes, matching `diffuse_velocity_columns_impl`'s own `hvel(k)`
 ! construction for the ONE case every consumer must agree on bit for bit:
 !
-!   zlevel_faces (`&vcoord_nml zfixed_closed_faces`) — the face column is
+!   zlevel_faces (`[vcoord] zfixed_closed_faces`) — the face column is
 !     the OVERLAP of its two abutting cell columns, so a layer vanished on
 !     EITHER side decouples the whole face (MIN of the two thicknesses);
 !     `diffuse_velocity_columns_impl` applies this unconditionally,

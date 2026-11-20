@@ -11,7 +11,7 @@ seeds the instability; the fastest-growing channel mode emerges from the
 noise and grows exponentially at the analytical rate.
 
 **Periodic channel.** The domain is a true reentrant channel — periodic in
-x via `&ocean_bc_nml west/east="periodic"` (`nghost = 3` required), walls
+x via `[ocean.bc] west/east="periodic"` (`nghost = 3` required), walls
 north/south. The zonal wavenumber is quantised by the 250 km box
 (λ = 250 / kx km) and the gravest cross-channel structure is
 sin(πy/L_y), so the mode that grows is kx = 2 (125 km), whose channel
@@ -23,24 +23,24 @@ at 157 km, which the box cannot hold).
 demonstrated the instability it exists to test. It now ships the front
 the analytical scales describe (`-2e-5`), `nu_h = 20`, and a 60-day
 window. The full evidence (a nu_h × dT_dy sweep, the modal spectra, and
-why 60 days) is in the `eady.nml` header.
+why 60 days) is in the `eady.toml` header.
 
 ## Run
 
 ```bash
-./build/rdb validation_examples/ocean/eady/eady.nml
+./build/rdb validation_examples/ocean/eady/eady.toml
 ```
 
 50 × 50 × 10 cells on a 250 × 250 km flat-bottom periodic-x channel,
 60 days @ dt = 600 s. Single V100 wallclock ~2 min.
 
-Reference run (2026-09-13, this nml, V100): the kx = 2 mode grows at
+Reference run (2026-09-13, this input, V100): the kx = 2 mode grows at
 σ = 1.93e-6 1/s (console `max|v|` fit over days 30–60; 1.99e-6 on the
 NetCDF modal amplitude over days 15–25) against 1.98e-6 from theory;
 `max|v|` 1.3e-4 → 0.2 m/s (~1500×); grid-scale (< 4Δx) content of v
 < 0.1 % throughout; MaxCFL 0.017 → 0.041, no velocity clamping; Mass,
 Salt, Heat budgets closed to ~1e-14 relative. The two WENO variants
-(`eady_weno5.nml`, `eady_weno7.nml`: same basin + the windowed
+(`eady_weno5.toml`, `eady_weno7.toml`: same basin + the windowed
 tracer-advect drain) measure 1.93e-6 and 1.91e-6; the gfortran CPU build
 (different `random_number` realisation of the seed) 1.87e-6, ×1060.
 All under the default `mont` PGF; `form = "fv_lite"` reproduces every
@@ -102,7 +102,7 @@ construction.
 
 ## Tuning
 
-Knobs in the namelist:
+Knobs in the input:
 
 | Knob | Effect |
 |---|---|

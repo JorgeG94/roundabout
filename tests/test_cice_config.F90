@@ -85,11 +85,11 @@ contains
 
       ierr = -999
       call read_config_from_toml_string(BASE_NML//extra, cfg, ierr=ierr)
-      call check(error, ierr, OCEAN_STATUS_OK, "namelist text must parse: "//extra)
+      call check(error, ierr, OCEAN_STATUS_OK, "input text must parse: "//extra)
    end subroutine parse
 
    function parse_fails(extra) result(failed)
-      !! The namelist text is rejected by the parser.
+      !! The input text is rejected by the parser.
       character(len=*), intent(in) :: extra
       logical :: failed
       type(config_t) :: cfg
@@ -206,7 +206,7 @@ contains
 
    subroutine test_default_validates(error)
       !! The default scheme and the new knobs at their defaults leave
-      !! `validate_config` accepting a minimal ocean namelist.
+      !! `validate_config` accepting a minimal ocean input.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
@@ -215,7 +215,7 @@ contains
       if (allocated(error)) return
       ierr = -999
       call validate_config(cfg, ierr=ierr)
-      call check(error, ierr, OCEAN_STATUS_OK, "default sis2 namelist validates")
+      call check(error, ierr, OCEAN_STATUS_OK, "default sis2 input validates")
    end subroutine test_default_validates
 
    subroutine test_scheme_cice(error)
@@ -237,7 +237,7 @@ contains
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
-                 "validate_config refuses a scheme='cice' namelist outside the envelope")
+                 "validate_config refuses a scheme='cice' input outside the envelope")
       if (allocated(error)) return
       call check(error, parse_fails("[ocean.ice]"//new_line('a')// &
                                     'scheme = "bogus"'//new_line('a')), &
@@ -399,7 +399,7 @@ contains
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 10, "envelope x5 + nilyr + nslyr + ktherm + kitd + ahmax")
       if (allocated(error)) return
-      call check(error, has_msg(cfg, "needs enable=.true."), "envelope reason")
+      call check(error, has_msg(cfg, "needs enable=true"), "envelope reason")
       if (allocated(error)) return
       call check(error, has_msg(cfg, "nilyr >= 2"), "nilyr reason")
       if (allocated(error)) return
@@ -666,10 +666,10 @@ contains
                           'atmbndy = "mixed"'//new_line('a'), "atmbndy /= 'similarity'", error)
       if (allocated(error)) return
       call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
-                          "formdrag = true"//new_line('a'), "formdrag=.true.", error)
+                          "formdrag = true"//new_line('a'), "formdrag=true", error)
       if (allocated(error)) return
       call expect_refusal("[ocean.ice_atm]"//new_line('a')// &
-                          "calc_strair = false"//new_line('a'), "calc_strair=.false.", error)
+                          "calc_strair = false"//new_line('a'), "calc_strair=false", error)
       if (allocated(error)) return
       call expect_refusal("[ocean.ice_thermo]"//new_line('a')// &
                           "floeshape = 0.0"//new_line('a'), "floeshape must be > 0", error)
@@ -762,9 +762,9 @@ contains
       if (allocated(error)) return
       call check(error, has_msg(cfg, "atmbndy /= 'similarity'"), "atmbndy reason")
       if (allocated(error)) return
-      call check(error, has_msg(cfg, "formdrag=.true."), "formdrag reason")
+      call check(error, has_msg(cfg, "formdrag=true"), "formdrag reason")
       if (allocated(error)) return
-      call check(error, has_msg(cfg, "calc_strair=.false."), "calc_strair reason")
+      call check(error, has_msg(cfg, "calc_strair=false"), "calc_strair reason")
       if (allocated(error)) return
       call check(error, has_msg(cfg, "floediam must be > 0"), "floediam reason")
       if (allocated(error)) return
@@ -1096,7 +1096,7 @@ contains
    end subroutine test_transport_round_trip
 
    subroutine test_dyn_defaults(error)
-      !! `&ocean_ice_dyn_nml` defaults are the upstream CICE code defaults
+      !! `[ocean.ice_dyn]` defaults are the upstream CICE code defaults
       !! (written out from its parameter table).
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
@@ -1253,8 +1253,8 @@ contains
    end subroutine test_dyn_all_reasons
 
    subroutine test_step_defaults(error)
-      !! The step-envelope knobs default to the supported values, and a plain `scheme='cice'` namelist trips none of
-      !! them (only the three envelope reasons a bare namelist lacks).
+      !! The step-envelope knobs default to the supported values, and a plain `scheme='cice'` input trips none of
+      !! them (only the three envelope reasons a bare input lacks).
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
@@ -1354,7 +1354,7 @@ contains
       cfg%ocean%ice%ledger = .true.
       call check(error, count_msgs(cfg), 8, "envelope x5 + nghost + ndtd + dt_ice (the ledger on several ranks is not a refusal)")
       if (allocated(error)) return
-      call check(error, has_msg(cfg, "needs enable=.true."), "envelope reason")
+      call check(error, has_msg(cfg, "needs enable=true"), "envelope reason")
       if (allocated(error)) return
       call check(error, has_msg(cfg, "nghost >= 3") .and. has_msg(cfg, "ndtd /= 1") .and. has_msg(cfg, "dt_ice must equal") &
                  .and. .not. has_msg(cfg, "single-rank"), "every envelope reason")
@@ -1362,7 +1362,7 @@ contains
 
    subroutine test_unrepresentable(error)
       !! The options the port excludes entirely (melt ponds, floe-size distribution, wave fracture, biogeochemistry,
-      !! aerosols, snow physics, EAP/VP rheology) have NO knob: the namelist parser rejects each one, so they cannot be
+      !! aerosols, snow physics, EAP/VP rheology) have NO knob: the input parser rejects each one, so they cannot be
       !! requested; those that do have a knob (mushy, delta-Eddington, `calc_Tsfc`, ...) are refused by the earlier tests.
       type(error_type), allocatable, intent(out) :: error
 
@@ -1382,7 +1382,7 @@ contains
                                     "kdyn = 2"//new_line('a')), "VP/EAP rheology has no knob")
       if (allocated(error)) return
       call check(error, parse_fails("[ponds]"//new_line('a')// &
-                                    "tr_pond_topo = true"//new_line('a')), "no ponds namelist")
+                                    "tr_pond_topo = true"//new_line('a')), "no ponds input")
    end subroutine test_unrepresentable
 
    subroutine test_dyn_round_trip(error)

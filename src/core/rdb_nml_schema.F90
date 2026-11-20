@@ -30,6 +30,9 @@ module rdb_nml_schema
    integer, parameter :: MAX_SUGGEST_LEN = 64
       !! Cap on names fed to the Levenshtein suggester.
 
+   character(len=*), parameter :: OCEAN_PREFIX = "ocean_"
+   character(len=*), parameter :: OCEAN_TABLE = "ocean"
+
    public :: nml_key_t
    public :: nml_real_key_t, nml_int_key_t, nml_logical_key_t
    public :: nml_string_key_t, nml_enum_key_t, nml_real_array_key_t
@@ -40,9 +43,10 @@ module rdb_nml_schema
    ! document through the key validators and the error list.
    public :: add_err, suggest, group_key_list, make_prefix
    public :: reset_state, post_parse_validate
+   public :: group_to_table
 
    type, abstract :: nml_key_t
-      !! Abstract base for a single namelist key descriptor.
+      !! Abstract base for a single input key descriptor.
       character(len=:), allocatable :: name
          !! Key name (matched case-insensitively).
       character(len=:), allocatable :: doc
@@ -56,7 +60,7 @@ module rdb_nml_schema
       character(len=:), allocatable :: dead_reason
          !! Unallocated/empty = live. Non-empty = this knob is registered
          !! (accepted, type/range-validated) but does NOT reach any
-         !! ocean-path behaviour -- e.g. `&vcoord_nml zstar_stretching`
+         !! ocean-path behaviour -- e.g. `[vcoord] zstar_stretching`
          !! is captured on `cfg` but never copied onto `ocean_state%vcoord`
          !! (rdb_ocean_vcoord.F90:179,182). Carried into the JSON emitter
          !! (`render_json`) so a generated caller-side layer can warn on
@@ -80,7 +84,7 @@ module rdb_nml_schema
       end subroutine parse_tokens_iface
 
       function value_string_iface(this) result(str)
-         !! Current target value, formatted for namelist output.
+         !! Current target value, formatted for input output.
          import :: nml_key_t
          implicit none
          class(nml_key_t), intent(in) :: this
@@ -88,7 +92,7 @@ module rdb_nml_schema
       end function value_string_iface
 
       function default_string_iface(this) result(str)
-         !! Captured default value, formatted for namelist output.
+         !! Captured default value, formatted for input output.
          import :: nml_key_t
          implicit none
          class(nml_key_t), intent(in) :: this
@@ -174,7 +178,7 @@ module rdb_nml_schema
       character(len=:), allocatable :: allowed(:)
       character(len=:), allocatable :: retired(:)
          !! Spellings that USED to be legal and no longer are (renamed or
-         !! withdrawn).  A namelist still carrying one must not fall
+         !! withdrawn).  An input still carrying one must not fall
          !! through to the bare "not in allowed set {…}" message — that
          !! tells the reader the value is wrong but not what replaced it.
          !! Matching one of these fails loud with `retired_hint` instead.
@@ -198,7 +202,7 @@ module rdb_nml_schema
    end type nml_real_array_key_t
 
    type :: nml_group_t
-      !! A namelist group: a name, doc, growable key list, parse-state,
+      !! An input group: a name, doc, growable key list, parse-state,
       !! and an optional cross-key validation callback.
       character(len=:), allocatable :: name
          !! Group name (matched case-insensitively).
@@ -339,7 +343,7 @@ contains
       !!
       !! `retired` lists spellings that were legal in an earlier release.
       !! They are NOT accepted — they fail loud, quoting `retired_hint`,
-      !! so a stale namelist is told what the value is called now instead
+      !! so a stale input is told what the value is called now instead
       !! of being handed the generic allowed-set message.
       character(len=*), intent(in) :: name, doc
       character(len=:), pointer, intent(in) :: tgt
@@ -406,8 +410,27 @@ contains
    ! Formatting helpers.
    ! ------------------------------------------------------------------
 
+   pure function group_to_table(group) result(table)
+      !! Table path of a registered group name (the bare name, as stored in
+      !! the schema: `ocean_hvisc`, `grid`).  `ocean_<x>` -> `ocean.<x>`;
+      !! anything else is its own top-level table.  The one place the
+      !! mapping is spelled out for the writers and the TOML reader.
+      character(len=*), intent(in) :: group
+      character(len=:), allocatable :: table
+      integer :: n
+
+      n = len(OCEAN_PREFIX)
+      if (len_trim(group) > n) then
+         if (group(1:n) == OCEAN_PREFIX) then
+            table = OCEAN_TABLE//"."//trim(group(n + 1:))
+            return
+         end if
+      end if
+      table = trim(group)
+   end function group_to_table
+
    pure function fmt_real(v) result(str)
-      !! Format a real in a stable, namelist-valid exponential form.
+      !! Format a real in a stable exponential form (a valid TOML float).
       real(rk), intent(in) :: v
       character(len=:), allocatable :: str
       character(len=32) :: buf
@@ -425,13 +448,13 @@ contains
    end function fmt_int
 
    pure function fmt_logical(v) result(str)
-      !! Format a logical as namelist `.true.`/`.false.`.
+      !! Format a logical as TOML `true`/`false`.
       logical, intent(in) :: v
       character(len=:), allocatable :: str
       if (v) then
-         str = ".true."
+         str = "true"
       else
-         str = ".false."
+         str = "false"
       end if
    end function fmt_logical
 
@@ -740,6 +763,7 @@ contains
          if (i > 1) str = str//", "
          str = str//fmt_real(this%tgt(i))
       end do
+      str = "["//str//"]"
    end function real_array_value_string
 
    function real_array_default_string(this) result(str)
@@ -751,6 +775,7 @@ contains
          if (i > 1) str = str//", "
          str = str//fmt_real(this%default(i))
       end do
+      str = "["//str//"]"
    end function real_array_default_string
 
    function real_array_is_default(this) result(yes)
@@ -924,7 +949,7 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine write_key_line(unit, box, short_only, wrote_any)
-      !! Write one aligned `key = value  ! [units] doc` line.  When
+      !! Write one `key = value  # [units] doc` line.  When
       !! `short_only`, skip default-valued keys (and leave wrote_any).
       integer, intent(in) :: unit
       type(nml_key_box_t), intent(in) :: box
@@ -937,20 +962,20 @@ contains
       if (short_only .and. is_def) return
       wrote_any = .true.
 
-      lhs = "  "//box%key%name//" = "//box%key%value_string()
+      lhs = box%key%name//" = "//box%key%value_string()
       ustr = ""
       if (len_trim(box%key%units) > 0) ustr = "["//trim(box%key%units)//"] "
       if (is_def) then
-         comment = "  ! "//ustr//trim(box%key%doc)//" (default)"
+         comment = "  # "//ustr//trim(box%key%doc)//" (default)"
       else
-         comment = "  ! "//ustr//trim(box%key%doc)// &
+         comment = "  # "//ustr//trim(box%key%doc)// &
                    " *** non-default (default: "//box%key%default_string()//")"
       end if
       write (unit, "(A)") lhs//comment
    end subroutine write_key_line
 
    subroutine schema_write_doc_all(this, path)
-      !! Write every group and key as valid namelist with aligned docs.
+      !! Write every group and key as a TOML document with the docs as comments.
       class(nml_schema_t), intent(in) :: this
       character(len=*), intent(in) :: path
       integer :: u, ig, ik
@@ -958,14 +983,14 @@ contains
 
       open (newunit=u, file=path, status="replace", action="write")
       do ig = 1, size(this%groups)
-         write (u, "(A)") "&"//this%groups(ig)%name//"_nml"
+         if (ig > 1) write (u, "(A)") ""
+         write (u, "(A)") "["//group_to_table(this%groups(ig)%name)//"]"
          if (allocated(this%groups(ig)%keys)) then
             do ik = 1, size(this%groups(ig)%keys)
                dummy = .false.
                call write_key_line(u, this%groups(ig)%keys(ik), .false., dummy)
             end do
          end if
-         write (u, "(A)") "/"
       end do
       close (u)
    end subroutine schema_write_doc_all
@@ -988,17 +1013,17 @@ contains
             end do
          end if
          if (.not. wrote_any) cycle
-         write (u, "(A)") "&"//this%groups(ig)%name//"_nml"
+         write (u, "(A)") "["//group_to_table(this%groups(ig)%name)//"]"
          do ik = 1, size(this%groups(ig)%keys)
             call write_key_line(u, this%groups(ig)%keys(ik), .true., wrote_any)
          end do
-         write (u, "(A)") "/"
+         write (u, "(A)") ""
       end do
       close (u)
    end subroutine schema_write_doc_short
 
    subroutine schema_write_resolved(this, path)
-      !! Write every key as `group.key = value` with reals at full precision
+      !! Write every key as `table.key = value` with reals at full precision
       !! (`ES30.17E3`: 18 significant digits, an exact binary64 round trip),
       !! where the doc dumps round them to 11.  A function of the resolved
       !! configuration only -- it is the equality oracle between input
@@ -1011,7 +1036,7 @@ contains
       do ig = 1, size(this%groups)
          if (.not. allocated(this%groups(ig)%keys)) cycle
          do ik = 1, size(this%groups(ig)%keys)
-            write (u, "(A)") this%groups(ig)%name//"."// &
+            write (u, "(A)") group_to_table(this%groups(ig)%name)//"."// &
                this%groups(ig)%keys(ik)%key%name//" = "// &
                exact_value_string(this%groups(ig)%keys(ik)%key)
          end do
@@ -1037,6 +1062,7 @@ contains
             if (i > 1) str = str//", "
             str = str//trim(adjustl(buf))
          end do
+         str = "["//str//"]"
       class default
          str = key%value_string()
       end select
@@ -1056,7 +1082,7 @@ contains
          ! the last group gets re-trimmed by the end-of-file pre-commit hook
          ! on every regeneration (a recurring commit-abort nuisance).
          if (ig > 1) write (u, "(A)") ""
-         write (u, "(A)") "### &"//this%groups(ig)%name//"_nml"
+         write (u, "(A)") "### ["//group_to_table(this%groups(ig)%name)//"]"
          write (u, "(A)") ""
          if (allocated(this%groups(ig)%doc)) then
             if (len_trim(this%groups(ig)%doc) > 0) then
@@ -1237,8 +1263,8 @@ contains
       !! per key.  This is the ONLY thing `tools/gen_python_config.py`
       !! reads -- it parses no Fortran source, mirroring the precedent
       !! `schema_render_markdown` already set for `docs/generated_nml_knobs.md`.
-      !! `&ocean_bc_nml` is NOT here -- it is registered via
-      !! `add_external_group` (see `rdb_config.F90`), so it carries no keys
+      !! `[ocean.bc]` is NOT here -- it is registered via
+      !! an external group (see `rdb_config.F90`), so it carries no keys
       !! on this schema; python/rdb/_config_bc.py is a hand-written
       !! stub with its own drift test (see docs D5.7).
       class(nml_schema_t), intent(in) :: this
@@ -1367,7 +1393,7 @@ contains
             call error_ring_push(trim(err_buf(i)))
             call global_logger%error(trim(err_buf(i)))
          end do
-         error stop "rdb_nml_schema: namelist validation failed"
+         error stop "rdb_nml_schema: input validation failed"
       end if
    end subroutine post_parse_validate
 

@@ -1,7 +1,7 @@
 !! Ghost-band sentinel-NaN fill for exchange-coverage regression testing.
 !!
 !! Provides `ocean_poison_ghost_bands`, called at the TOP of each outer step
-!! when `dyn%poison_ghosts = .true.` (driven by `&ocean_mpi_nml poison_ghosts`).
+!! when `dyn%poison_ghosts = true` (driven by `[ocean.mpi] poison_ghosts`).
 !! The knob is default `.false.` — the branch is never taken in production,
 !! so the cost is one logical test per outer step.
 !!

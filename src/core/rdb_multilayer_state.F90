@@ -54,7 +54,7 @@ module rdb_multilayer_state
          !! console mass `Error` closes to round-off even with open BCs.
       logical :: mass_out_efp_on = .false.
          !! Also accumulate `mass_out` as an order-invariant extended-fixed-
-         !! point sum (`mass_out_efp`), set from `&ocean_diag_nml
+         !! point sum (`mass_out_efp`), set from `[ocean.diag]
          !! reproducing_sums`: the FP running sum's last digits depend on the
          !! decomposition (it is a telescoping sum of large cancelling terms),
          !! the EFP one does not, so the console `out` column is the same on
@@ -84,7 +84,7 @@ module rdb_multilayer_state
          !! while the total legitimately grows.
          !!
          !! Fed today by the ice-shelf real-freshwater path
-         !! (`&ocean_cavity_melt_nml freshwater="mass"`) and by its
+         !! (`[ocean.cavity_melt] freshwater="mass"`) and by its
          !! `volume_compensation` sink (which enters NEGATIVE).  Zero on
          !! every other path ⇒ the printed budget is unchanged.
          !!
@@ -104,7 +104,7 @@ module rdb_multilayer_state
 
       integer(int64) :: mass_src_efp(EFP_DIGITS) = 0_int64
          !! This rank's tracked mass SOURCE of the surface fresh-water mass step
-         !! (`&ocean_forcing_nml freshwater="mass"`, `ocean_surface_fw_mass_step`) as
+         !! (`[ocean.forcing] freshwater="mass"`, `ocean_surface_fw_mass_step`) as
          !! EFP bins (kg, `rdb_efp` layout), accumulated per call over this tile's
          !! OWNED cells with the call's stage weight, exactly like `mass_out_efp`:
          !! no per-step collective, order-invariant, so the console's
@@ -180,7 +180,7 @@ module rdb_multilayer_state
       ! standing on the free surface that an IN-SITU pressure argument is
       ! measured DOWN from: a hydrostatic builder that used to start its
       ! column at 0 Pa starts it at `p_top(i,j)` instead.  Zero on every
-      ! shipped configuration — filled only when `&ocean_psurf_nml
+      ! shipped configuration — filled only when `[ocean.psurf]
       ! in_eos = .true.`, from the assembled total
       ! `ocean_surface_flux_t%p_surf` (atmospheric load today, ice-shelf
       ! / sea-ice mass load later), refreshed once per outer step.
@@ -199,7 +199,7 @@ module rdb_multilayer_state
       !     already carries the depth-uniform load gradient.
       !   * NOT the PGF top boundary condition by default: it reaches the
       !     FV_MOM6 `pa(nz+1) = rho_ref*g*eta_geo + p_top` only through
-      !     `&ocean_pgf_nml p_top_in_bc` (default off).  FV_WRIGHT's and
+      !     `[ocean.pgf] p_top_in_bc` (default off).  FV_WRIGHT's and
       !     FV_LITE's `p_edge(nz+1)` are still 0.
       !
       ! THE P_TOP SEAM CONTRACT (three distinct pressures; conflating any
@@ -220,7 +220,7 @@ module rdb_multilayer_state
       !     `test_ocean_eos_p_top :: p_top_sign_and_monotone`).
       !   * A stack with two consumers moves BOTH or neither (EPBL's `p_mid`
       !     is both an EOS argument and a PE weight).
-      !   * `&ocean_psurf_nml in_eos` (EOS arguments) and `&ocean_pgf_nml
+      !   * `[ocean.psurf] in_eos` (EOS arguments) and `[ocean.pgf]
       !     p_top_in_bc` (PGF boundary condition) are independent knobs on
       !     this one field; the per-step refresh fires on their disjunction.
       !     A varying cavity draft REQUIRES `p_top_in_bc` (fail-loud).
@@ -347,7 +347,7 @@ module rdb_multilayer_state
          !! grows the column), per column, ghosts included: the mass step's own scratch (the
          !! tracked-source reduction reads it) and diagnostic.  Lives here, not on the
          !! surface-flux slot, because the dynamics hand that slot down read-only.  Not restart
-         !! state; written only under `&ocean_forcing_nml freshwater="mass"`.
+         !! state; written only under `[ocean.forcing] freshwater="mass"`.
       real(wp), allocatable :: fw_passdown(:, :)
          !! Number of layers BELOW the first live one that supplied part of the last
          !! evaporative withdrawal (0 where none did); diagnostic, same lifetime as `fw_dh`.
@@ -422,7 +422,7 @@ module rdb_multilayer_state
          !! Content `h*c` (K·m) change per cell per layer per step attributed to
          !! the map-driven sponge's tracer relaxation
          !! (`rdb_ocean_sponge::relax_tracer_budget_impl`).  Zero unless
-         !! `&ocean_sponge_nml enable=.true., relax_tracers=.true.`.
+         !! `[ocean.sponge] enable=true, relax_tracers=true`.
          !! Sign convention: positive = source into the ocean (relaxing
          !! toward a warmer reference).  Not drained by the sponge.
       real(wp), allocatable :: salt_budget_sponge(:, :, :)

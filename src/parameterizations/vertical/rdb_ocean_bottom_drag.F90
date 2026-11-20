@@ -103,7 +103,7 @@ module rdb_ocean_bottom_drag
          !! writes from `cfg%ocean%bdrag%bed_factor` at init.  See
          !! `compute_distributed_drag` for the kernel-side application.
       logical :: zlevel_faces = .false.
-         !! `&vcoord_nml zfixed_closed_faces` — mirrors
+         !! `[vcoord] zfixed_closed_faces` — mirrors
          !! `ocean_vdiff_t%zlevel_faces`, which `diffuse_velocity_columns_impl`
          !! uses to place its own bed-BC row.  Fed into the shared
          !! `rdb_blf_is_live` `kb_live` search (#178) so both modules walk a
@@ -140,7 +140,7 @@ module rdb_ocean_bottom_drag
          !! When `.true.`, also fill the bed-layer (`k = k_bot`) Rayleigh RATE
          !! fields `lambda_bot_u/v` (1/s) in `compute_tendencies` so the
          !! vdiff solver can fold the drag into its tridiagonal diagonal
-         !! (`&ocean_vdiff_nml implicit_drag`).  The explicit `du_drag`
+         !! (`[ocean.vdiff] implicit_drag`).  The explicit `du_drag`
          !! tendency is then NOT applied by the driver (gated off) to avoid
          !! double-counting.  Default `.false.` ⇒ the rate fields stay zero
          !! and the explicit path is unchanged (bit-identical).  Driver sets
@@ -531,7 +531,7 @@ contains
       real(wp), intent(in) :: dt_imp
          !! Implicit timestep: dt for backward-Euler drag, 0 for explicit.
       logical, intent(in) :: zlevel_faces
-         !! `&vcoord_nml zfixed_closed_faces` — fed into the shared
+         !! `[vcoord] zfixed_closed_faces` — fed into the shared
          !! `rdb_blf_is_live` `kb_live` search (#178).
       real(wp), intent(in)    :: u_face(nx_u, ny_u, nz), v_face(nx_v, ny_v, nz)
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
@@ -932,7 +932,7 @@ contains
    end subroutine ocean_channel_drag_apply_tendencies
 
    pure function parse_bdrag_variant(name) result(code)
-      !! Translate a namelist string into a `BDRAG_*` code.  An
+      !! Translate an input string into a `BDRAG_*` code.  An
       !! unrecognised string returns `BDRAG_INVALID` (PR-6 fail-loud —
       !! a typo must not silently select the quadratic default over the
       !! linear form or vice versa; the two obey different physics).

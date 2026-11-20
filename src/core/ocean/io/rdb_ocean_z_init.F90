@@ -1,15 +1,15 @@
 !! Z-level T/S initial-condition overlay (capability A2).
 module rdb_ocean_z_init
    !! Puts a GEOPOTENTIAL T(z)/S(z) profile onto the seeded layer
-   !! centres (`&ocean_zinit_nml`) and writes the multilayer tracer slots
-   !! as `c = value`.  Two sources, `&ocean_zinit_nml source`:
+   !! centres (`[ocean.zinit]`) and writes the multilayer tracer slots
+   !! as `c = value`.  Two sources, `[ocean.zinit] source`:
    !!
    !!   * `"file"` (default) — reads pre-regridded T + S from a
    !!     model-grid NetCDF and interpolates linearly in depth.
    !!     File is PRE-REGRIDDED to `nx_phys x ny_phys` — no in-core
    !!     horizontal interpolation.  Vertical interp is
    !!     point-linear-in-depth, constant extrapolation beyond the source
-   !!     range.  Dry columns (`wet_mask <= 0`) get the namelist
+   !!     range.  Dry columns (`wet_mask <= 0`) get the input
    !!     `land_fill_t/_s` constants.  Interior cells only — ghosts keep
    !!     whatever the analytical IC seeded, because the file carries no
    !!     data for them.
@@ -21,7 +21,7 @@ module rdb_ocean_z_init
    !!     is defined everywhere — same reasoning as the formula
    !!     bathymetry setters, and it keeps a wall-adjacent EOS
    !!     evaluation off the `rho_0` fallback).  This is the profile an
-   !!     idealised ice-shelf cavity needs: `&tracer_nml T_init_surface`
+   !!     idealised ice-shelf cavity needs: `[tracer] T_init_surface`
    !!     / `T_init_bottom` are linear in LAYER INDEX, which under a
    !!     terrain-following coordinate with a SLOPING lid tilts the
    !!     isopycnals with the coordinate and is therefore NOT a state of
@@ -73,7 +73,7 @@ contains
    subroutine seed_ts_from_zfile(ms, grid, cfg, ierr, z_draft, to_cons_abs)
       !! Read T/S from the configured z-level NetCDF and overwrite the
       !! tracer slots with the depth-interpolated profiles.  Wet columns
-      !! interpolate; dry columns get the namelist land-fill constants.
+      !! interpolate; dry columns get the input land-fill constants.
       !! Must be called AFTER bathymetry, the uniform `h_layer` seed, and
       !! `wet_mask` are in place.  Takes the multilayer slot directly (not
       !! the full ocean state) to avoid a circular dependency.
@@ -129,7 +129,7 @@ contains
       call nc_open_read(trim(cfg%file), ncid, ierr=local_ierr)
       if (.not. zinit_io_ok(local_ierr, ierr)) return
 
-      ! Locate the three variables: namelist override then name-fallbacks.
+      ! Locate the three variables: input override then name-fallbacks.
       ! ierr threaded down ONLY when THIS routine's own ierr is present:
       ! otherwise find_var/read_dims must keep reaching their own
       ! `error stop` (specific text) rather than the generic wrapper
@@ -220,7 +220,7 @@ contains
             call build_z_ctr(ms%h_layer(ng + i, ng + j, :), nz_ml, z_top, z_ctr)
 
             if (ms%wet_mask(ng + i, ng + j) <= 0.0_wp) then
-               ! Dry column — fill with the namelist land-fill constants.
+               ! Dry column — fill with the input land-fill constants.
                t_col = cfg%land_fill_t
                s_col = cfg%land_fill_s
             else
@@ -324,7 +324,7 @@ contains
       !! `v = v_ref - dv_dz*z_depth`.
       !!
       !! `z` is positive UP with the origin at the `z = 0` datum, which
-      !! is the convention `&ocean_ic_nml eady_dT_dz` already uses.  A
+      !! is the convention `[ocean.ic] eady_dT_dz` already uses.  A
       !! STABLE thermal column therefore has `dv_dz > 0` for temperature
       !! (warm on top) and `dv_dz < 0` for salinity (salty at the bed).
       real(wp), intent(in) :: v_ref, dv_dz, z_depth
@@ -451,7 +451,7 @@ contains
    end subroutine interp_column_linear_z
 
    subroutine find_var(ncid, override, fallbacks, label, varid, ierr)
-      !! Resolve a variable id: try the namelist `override` name first
+      !! Resolve a variable id: try the input `override` name first
       !! (when non-blank), then the documented `fallbacks` in order.
       !! Error-stops with a descriptive message when none is found.
       integer, intent(in) :: ncid

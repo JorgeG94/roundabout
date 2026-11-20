@@ -9,7 +9,7 @@ module rdb_ice_state
    !! `part_size`, `m_ice`, `m_snow`, `enth_ice`, `enth_snow`, `sal_ice`
    !! — driven only by the new `rdb_ice_column` test suite (nothing in
    !! the driver calls the column kernels yet).  A run with
-   !! `&ocean_ice_nml enable = .false.` (the default) never calls into
+   !! `[ocean.ice] enable = false` (the default) never calls into
    !! this module beyond the parent gates, so existing configurations
    !! stay byte-identical.
    !!
@@ -46,7 +46,7 @@ module rdb_ice_state
    !! `uh_ice`/`vh_ice`/`uh_snow`/`vh_snow`, `htot_work`/`hl_x_work`/
    !! `hr_x_work`/`hl_y_work`/`hr_y_work`/`uhtot_work`/`vhtot_work`)
    !! allocated ONLY when
-   !! `&ocean_ice_nml transport = .true.` (the `this%transport` flag,
+   !! `[ocean.ice] transport = true` (the `this%transport` flag,
    !! set from config before `init`, mirrors `enable`/`ncat`). Later
    !! rungs: PR 5 C-grid EVP dynamics (replaces the u_ice/v_ice filler).
    !!
@@ -107,7 +107,7 @@ module rdb_ice_state
    !! unreleased, so this break is accepted (not carried forward).
    !!
    !! PR 26 lands the snowfall source term: `has_snowfall` (host-side
-   !! dispatch gate, latched from `&ocean_ice_nml snowfall /= 0` before
+   !! dispatch gate, latched from `[ocean.ice] snowfall /= 0` before
    !! `init`, mirrors `transport`/`dynamics`), the fourth atmospheric-seam
    !! field `atm_fprec` (kg/m^2/s, filled by `rdb_ice_atm_forcing`
    !! alongside `atm_sw_dn`, consumed by `rdb_ice_column`'s
@@ -123,7 +123,7 @@ module rdb_ice_state
    !! as a `net_massin` source (see `rdb_ice_snow`'s module docstring).
    !!
    !! PR 27 lands the Archimedes freeboard snow-ice flood: `snow_ice`
-   !! (host-side gate, latched from `&ocean_ice_nml snow_ice` BEFORE
+   !! (host-side gate, latched from `[ocean.ice] snow_ice` BEFORE
    !! `init`, same convention as `has_snowfall`/`transport`/`dynamics`)
    !! and `snow_to_ice` (per-category kg/m² output, SIS2 `SN2IC`,
    !! allocated UNCONDITIONALLY whenever the ice slot is live, same
@@ -201,24 +201,24 @@ module rdb_ice_state
    type :: ocean_sea_ice_t
       !! Sea-ice state slot.  All fields default to the inert
       !! (`enable=.false.`) configuration so an ocean run that never sets
-      !! `&ocean_ice_nml` is byte-identical to a build without this slot.
+      !! `[ocean.ice]` is byte-identical to a build without this slot.
       logical :: is_init = .false.
          !! True between `init` and `destroy`; gate on this (never on
          !! `allocated`, which misses the GPU mapping).
       logical :: enable = .false.
-         !! Master switch (`&ocean_ice_nml enable`).  Off (default) ⇒ the
+         !! Master switch (`[ocean.ice] enable`).  Off (default) ⇒ the
          !! parent state never inits / maps / steps this slot ⇒ no-op.
       integer :: ncat = 5
-         !! Number of ice thickness categories (`&ocean_ice_nml ncat`).
+         !! Number of ice thickness categories (`[ocean.ice] ncat`).
          !! Category 0 is open water; SIS2 default 5.  Sizes the
          !! per-category arrays when PR 3+ adds them.
       integer :: nk_ice = 2
-         !! Vertical ice layers per category (`&ocean_ice_nml nk_ice`).
+         !! Vertical ice layers per category (`[ocean.ice] nk_ice`).
          !! 2 = Winton two-layer (v1).  Bottom-up once arrays land
          !! (k=1 ice bottom — SIS2's top-down index is flipped at this
          !! state layer, per the plan).
       logical :: transport = .false.
-         !! Horizontal category transport switch (`&ocean_ice_nml
+         !! Horizontal category transport switch (`[ocean.ice]
          !! transport`), set from config BEFORE `init` (same convention as
          !! `enable`/`ncat`).  Gates allocation of the transport-only
          !! workspace below (memory: the per-category face fluxes are
@@ -227,11 +227,11 @@ module rdb_ice_state
          !! PR 5's EVP dynamics will need them regardless of whether
          !! category transport is on.
       logical :: melt_potential_enable = .false.
-         !! Latched before `init` from `&ocean_ice_nml hfreeze > 0`: allocate,
+         !! Latched before `init` from `[ocean.ice] hfreeze > 0`: allocate,
          !! map and count `melt_potential` / `frzmlt` only then (knob off =>
          !! the slot is byte-for-byte what it was).
       logical :: dynamics = .false.
-         !! EVP rheology master switch (`&ocean_ice_nml dynamics`), set
+         !! EVP rheology master switch (`[ocean.ice] dynamics`), set
          !! from config BEFORE `init` (same convention as `enable`/
          !! `transport`). Gates the driver's `ice_evp_step` call and the
          !! transport sampler skip; does NOT gate any allocation here —
@@ -264,13 +264,13 @@ module rdb_ice_state
          !! CICE-port state (`scheme = "cice"`, D1.4).  Never initialised under the
          !! default `scheme = "sis2"`: nothing allocated, mapped or registered.
       type(ice_dyn_c_t) :: dync
-         !! C-grid EVP state under `&ocean_ice_dyn_nml dyn_scheme = "cice_c"`
+         !! C-grid EVP state under `[ocean.ice_dyn] dyn_scheme = "cice_c"`
          !! (D9.2).  Never initialised under the default `"sis2_c"`: nothing
          !! allocated, mapped, counted or registered for restart.  When it is
          !! live the SIS2 EVP workspace `evp_ws` below is not allocated.
       logical :: snow_ice = .false.
          !! Archimedes freeboard snow-ice flood master switch
-         !! (`&ocean_ice_nml snow_ice`, PR 27), latched from config
+         !! (`[ocean.ice] snow_ice`, PR 27), latched from config
          !! BEFORE `init` (same convention as `transport`/`dynamics`).
          !! Read by `ice_thermo_driver_step` and passed to
          !! `ice_thermo_columns` as `do_snow_ice`; does NOT gate
@@ -432,12 +432,12 @@ module rdb_ice_state
          !! Raw upper-ocean melt potential `rho*Cp*sum dh (T - T_f(S,0))`
          !! over `min(hfreeze, h_bl)` [J/m2] (`rdb_ice_melt_potential`).
          !! Derived each call, not restart state; zero unless
-         !! `&ocean_ice_nml hfreeze > 0`.
+         !! `[ocean.ice] hfreeze > 0`.
       real(wp), allocatable :: frzmlt(:, :)
          !! Signed ocean-to-ice heat potential [W/m2]: `+bank/dt` where the
          !! frazil bank is positive, else `-max(melt_potential,0)/dt`.
          !! Derived each call, not restart state; zero unless
-         !! `&ocean_ice_nml hfreeze > 0`.
+         !! `[ocean.ice] hfreeze > 0`.
       real(wp), allocatable :: heat_budget_frazil(:, :, :)
          !! Content `h*c` (K·m) change per cell per outer step attributed to the
          !! frazil clamp — the `budgets` HEAT contributor mirroring the
@@ -518,7 +518,7 @@ module rdb_ice_state
       real(wp), allocatable :: atm_fprec(:, :)
          !! PR 26: frozen-precipitation rate onto the ice top (kg/m^2/s),
          !! >= 0 — the seam `ice_atm_forcing_restoring` fills from
-         !! `&ocean_ice_nml snowfall` exactly like `atm_sw_dn` <- `sw_down`.
+         !! `[ocean.ice] snowfall` exactly like `atm_sw_dn` <- `sw_down`.
          !! Same SCRATCH contract (refilled every thermo step, NOT restart-
          !! carried). PR 55 fills this from data instead of a uniform
          !! scalar; the shape/units/lifecycle are fixed by this PR (see
@@ -593,7 +593,7 @@ module rdb_ice_state
          !! `ice_thermo_driver_reduce{,_multicat}_impl` (area-weighted at
          !! ncat>1, lumped at ncat==1 — the same convention as
          !! `heat_flux_diag`), consumed by `ice_ocean_sw_flux`
-         !! (`rdb_ice_ocean_coupler`): with `&ocean_forcing_nml
+         !! (`rdb_ice_ocean_coupler`): with `[ocean.forcing]
          !! enable_components` on it fills the `q_sw` surface-flux
          !! component (assembler sums it into `Q_heat`); off, it is added
          !! directly into `Q_heat`.  PERSISTENT + restart-carried (mirrors
@@ -666,7 +666,7 @@ module rdb_ice_state
          !! never against `h_lim` directly. Same non-restart-carried
          !! lifecycle as `h_lim`.
       real(wp), allocatable :: hlim_cfg(:)
-         !! PR-58: HOST-ONLY config latch: the user's `&ocean_ice_nml
+         !! PR-58: HOST-ONLY config latch: the user's `[ocean.ice]
          !! hlim` list, trimmed to its supplied length, set by
          !! `ocean_state_init_from_config` BEFORE `init`. Unallocated =>
          !! the SIS2 default table. NOT device-mapped (no kernel reads
@@ -1224,7 +1224,7 @@ contains
 
    pure function evp_workspace_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the EVP scratch (0 when
-      !! unallocated, i.e. whenever `&ocean_ice_nml dynamics` is off).
+      !! unallocated, i.e. whenever `[ocean.ice] dynamics` is off).
       !!
       !! Every array here is device-mapped by `evp_workspace_enter_data_impl`
       !! and was the single omission in `ocean_sea_ice_bytes` (~154 MB at
@@ -1417,10 +1417,10 @@ contains
       !!        rule: a wordless no-op is worse than an error). This
       !!        routine itself has no opinion — the size floor is
       !!        enforced by the caller, not here.
-      !!   D2 — SIS2's namelist CALLER truncates to `CatIce` entries
+      !!   D2 — SIS2's input CALLER truncates to `CatIce` entries
       !!        (`ice_model.F90:2110`), so its top edge can never be
-      !!        stated via the namelist. This routine (and Roundabout's
-      !!        `&ocean_ice_nml hlim`) accept the procedure's own native
+      !!        stated via the input. This routine (and Roundabout's
+      !!        `[ocean.ice] hlim`) accept the procedure's own native
       !!        range, `2..ncat+1`.
       integer, intent(in) :: ncat
          !! Number of ice thickness categories (declared first —

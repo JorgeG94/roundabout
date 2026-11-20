@@ -1,5 +1,5 @@
 module test_ocean_vmix_no_pp81
-   !! `&ocean_vmix_nml interior_closure = "none"` (no PP81 interior, the
+   !! `[ocean.vmix] interior_closure = "none"` (no PP81 interior, the
    !! ACCESS-OM3 stance) and `bkgnd_prandtl` (momentum background tied to
    !! the tracer background in use).
    !!

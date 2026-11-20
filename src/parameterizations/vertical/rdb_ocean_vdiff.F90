@@ -68,7 +68,7 @@ module rdb_ocean_vdiff
    public :: BBL_FORM_LINEAR, BBL_FORM_QUADRATIC
 
    integer, parameter :: BBL_FORM_LINEAR = 1
-      !! `&ocean_bdrag_nml form = "linear"` under the MOM6 BBL: MOM6
+      !! `[ocean.bdrag] form = "linear"` under the MOM6 BBL: MOM6
       !! `LINEAR_DRAG`, `u* = sqrt(cd)·DRAG_BG_VEL` (see `bbl_cd`).
    integer, parameter :: BBL_FORM_QUADRATIC = 2
       !! `form = "quadratic"`: `u* = sqrt(cd)·u_bbl`, `u_bbl` the HBBL-mean
@@ -86,7 +86,7 @@ module rdb_ocean_vdiff
       logical :: implicit_stress = .false.
          !! Fold the surface wind stress into the backward-Euler vertical-
          !! friction tridiagonal as a Neumann top-BC right-hand-side term
-         !! (`&ocean_vdiff_nml implicit_stress`).  Roundabout is bottom-up, so
+         !! (`[ocean.vdiff] implicit_stress`).  Roundabout is bottom-up, so
          !! the SURFACE is `k = nz`: the kinematic stress `τ/ρ₀` adds to the
          !! `rhs(:, :, nz)` row only (the diagonal is unchanged), filtered
          !! through the implicit operator together with the interior shear.
@@ -97,7 +97,7 @@ module rdb_ocean_vdiff
       logical :: implicit_drag = .false.
          !! Fold the quadratic / linear bottom drag into the backward-Euler
          !! vertical-friction tridiagonal as a stress bottom-BC diagonal
-         !! coupling (`&ocean_vdiff_nml implicit_drag`).  Roundabout bed is
+         !! coupling (`[ocean.vdiff] implicit_drag`).  Roundabout bed is
          !! `k = 1`: the drag rate `λ_bot` adds to the `b_diag(:, :, 1)`
          !! diagonal only (a positive add ⇒ unconditionally stable on thin
          !! bottom layers where the explicit `u·(1 − dt·c_d|U|/h)` reverses
@@ -105,12 +105,12 @@ module rdb_ocean_vdiff
          !! (`c_d·|U_bbl|/h_1` quadratic, `r` linear, `|U|` frozen at uⁿ)
          !! the bottom-drag slot already forms; the row is already
          !! normalized by `h_1` so the diagonal increment is `dt·λ_bot`
-         !! directly.  Mutually exclusive with `&ocean_bdrag_nml implicit`
+         !! directly.  Mutually exclusive with `[ocean.bdrag] implicit`
          !! (configure fails loud); the explicit drag apply is gated off
          !! when on.  Default `.false.` ⇒ bit-identical.
       logical :: implicit_top_drag = .false.
          !! Fold the ICE-SHELF TOP drag into the `k = nz` DIAGONAL
-         !! (`&ocean_vdiff_nml implicit_top_drag`) instead of the explicit
+         !! (`[ocean.vdiff] implicit_top_drag`) instead of the explicit
          !! pre-solve add, and MASK the wind-stress RHS off on the faces
          !! the ice covers.  The mirror of `implicit_drag` at the other
          !! end of the column: a drag is a diagonal term and the wind is
@@ -120,8 +120,8 @@ module rdb_ocean_vdiff
          !! `λ_top` is the SAME Rayleigh rate (`C_d·|U|/h_nz` quadratic,
          !! `r` linear, `|U|` frozen at uⁿ) the top-drag slot forms, and
          !! it arrives already cover- and wet-masked.  Requires
-         !! `&ocean_tdrag_nml enable`; mutually exclusive with
-         !! `&ocean_tdrag_nml implicit` and with `htbl > 0`; all fail loud
+         !! `[ocean.tdrag] enable`; mutually exclusive with
+         !! `[ocean.tdrag] implicit` and with `htbl > 0`; all fail loud
          !! at configure.  The explicit top-drag apply is gated off when
          !! on.  Default `.false.` ⇒ bit-identical.
       logical :: hvel_mom6 = .false.
@@ -145,7 +145,7 @@ module rdb_ocean_vdiff
          !! Under the per-face glue the blend is normalised by each face's
          !! `bbl_thick` instead (MOM6 `I_Hbbl = 1/bbl_thick`), and this is
          !! only the HBBL fallback for a drag configured with
-         !! `&ocean_bdrag_nml hbbl = 0` (MOM6 has ONE `HBBL`).
+         !! `[ocean.bdrag] hbbl = 0` (MOM6 has ONE `HBBL`).
       logical :: use_harmonic = .false.
          !! MOM6 HARMONIC_VISC analogue.  When `.true.` the implicit
          !! vdiff solver uses the harmonic mean of adjacent layer
@@ -159,7 +159,7 @@ module rdb_ocean_vdiff
          !! preserves the arithmetic-mean behaviour bit-identically.
       logical :: bbl_glue = .false.
          !! MOM6 `bottomdraglaw` parity for the interface coupling
-         !! (`&ocean_vdiff_nml bbl_glue`, PGF_BUG.md §9).  MOM6 holds a
+         !! (`[ocean.vdiff] bbl_glue`, PGF_BUG.md §9).  MOM6 holds a
          !! layered basin at rest NOT by computing a clean PGF — its PFu
          !! over grounded/sliver layers is identical to ours — but by
          !! absorbing it viscously every step (`du_dt_visc = −PFu` to
@@ -219,23 +219,23 @@ module rdb_ocean_vdiff
          !! per face once per outer step by `vdiff_set_viscous_bbl` into
          !! `kv_bbl_u/v` and `bbl_thick_u/v`, which the glue then reads.
          !! Set at configure when `bbl_glue` is on AND a bottom drag is
-         !! configured with `&ocean_bdrag_nml hbbl > 0` (MOM6 requires
+         !! configured with `[ocean.bdrag] hbbl > 0` (MOM6 requires
          !! HBBL).  `.false.` ⇒ the glue uses the historical constants
          !! `bbl_piston·hbbl_visc` / `hbbl_visc`, refilled each call (the
          !! hand-built test path).
       integer :: bbl_form = BBL_FORM_QUADRATIC
          !! Drag law of the BBL (`BBL_FORM_*`).
       real(wp) :: bbl_cd = 0.0_wp
-         !! MOM6 `CDRAG`.  Quadratic: `&ocean_bdrag_nml cd`.  Linear: the
+         !! MOM6 `CDRAG`.  Quadratic: `[ocean.bdrag] cd`.  Linear: the
          !! equivalent `r·hbbl/bg_vel`, so that `CDRAG·DRAG_BG_VEL = r·hbbl`
          !! — the stress of the HBBL-distributed linear drag, `r·hbbl·u`.
       real(wp) :: bbl_hbbl = 0.0_wp
-         !! MOM6 `HBBL` (`&ocean_bdrag_nml hbbl`): the thickness over which
+         !! MOM6 `HBBL` (`[ocean.bdrag] hbbl`): the thickness over which
          !! the near-bottom velocity is averaged for the drag law.
       real(wp) :: bbl_bg_vel = 0.0_wp
-         !! MOM6 `DRAG_BG_VEL` (`&ocean_bdrag_nml bg_vel`).
+         !! MOM6 `DRAG_BG_VEL` (`[ocean.bdrag] bg_vel`).
       real(wp) :: bbl_thick_min = 0.0_wp
-         !! MOM6 `BBL_THICK_MIN` (`&ocean_bdrag_nml bbl_thick_min`; MOM6
+         !! MOM6 `BBL_THICK_MIN` (`[ocean.bdrag] bbl_thick_min`; MOM6
          !! default 0).
       logical :: bbl_rino_cap = .false.
          !! MOM6 `RiNo_mix` (= kappa-shear on): the BBL is capped at
@@ -247,7 +247,7 @@ module rdb_ocean_vdiff
          !! within the boundary layer,
          !! `Kv_tot = Kv_tot + (kv_bbl − KV)·botfn` (`find_coupling_coef`) —
          !! the shear / boundary-layer contributions are kept.  Set from
-         !! `&ocean_vmix_nml kv_bg`.
+         !! `[ocean.vmix] kv_bg`.
       real(wp), allocatable :: kv_bbl_u(:, :)
          !! BBL viscosity `kv_bbl` (m²/s) at u-faces, `(nx+1, ny)`.
       real(wp), allocatable :: kv_bbl_v(:, :)
@@ -264,13 +264,13 @@ module rdb_ocean_vdiff
       real(wp), allocatable :: bbl_conc_s(:, :, :)
          !! Cell salinity concentration, as `bbl_conc_t`.
       type(ocean_bbl_mixing_t) :: bbl_mix
-         !! Law-of-the-wall BBL diapycnal mixing (`&ocean_bbl_mixing_nml`).
+         !! Law-of-the-wall BBL diapycnal mixing (`[ocean.bbl_mixing]`).
          !! Lives here because it consumes the per-face BBL (`kv_bbl_*`,
          !! `bbl_thick_*`, `bbl_cd`) this slot owns and rides every call
          !! path that already carries `vd`.  Allocated by its configure
          !! only when enabled (before `enter_data`).
       logical :: zlevel_faces = .false.
-         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !! `[vcoord] zfixed_closed_faces` — z-level partial steps.
          !! Latched by `configure_ocean_closed_faces`, forwarded as a
          !! plain scalar to `diffuse_velocity_columns_impl`, where it
          !! switches the face column to `min(h_L, h_R)` and CUTS the
@@ -570,7 +570,7 @@ contains
          !! fold, `dt*(tau/rho0)/h_nz`.  READ ONLY when that fold is active
          !! (`do_stress` below); every other path never reaches it.  There
          !! is deliberately NO defaulted value: the one rho0 of record is
-         !! `&ocean_ic_nml rho_0` -> `eos%rho0`, which the production call
+         !! `[ocean.ic] rho_0` -> `eos%rho0`, which the production call
          !! site hands over as `surface_stress%rho0`
          !! (`configure_ocean_reference_density`).  Omitting it WITH the
          !! fold active is a wiring bug and fails loud — it used to fall
@@ -629,7 +629,7 @@ contains
       else if (do_stress) then
          error stop "vdiff_apply_momentum: implicit_stress is on and tau_u/tau_v "// &
             "were supplied, but rho0 was not — pass the configured reference "// &
-            "density (surface_stress%rho0, from &ocean_ic_nml rho_0)"
+            "density (surface_stress%rho0, from [ocean.ic] rho_0)"
       end if
       do_corner = present(kv_corner_source)
       corner_prandtl_l = 1.0_wp
@@ -1568,7 +1568,7 @@ contains
          !! also starts accumulating here.  With `k_bot_face ≡ 1` every
          !! expression below is the one it replaced, bit for bit.
       logical, intent(in) :: zlevel_faces
-         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !! `[vcoord] zfixed_closed_faces` — z-level partial steps.
          !!
          !! Changes TWO things about the face column, and only when on
          !! (`.false.` ⇒ every expression below is textually and

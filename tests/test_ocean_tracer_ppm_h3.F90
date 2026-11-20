@@ -1,5 +1,5 @@
 !! Unit tests for the `ppm_h3` horizontal tracer-advection scheme
-!! (`&ocean_vmix_nml tracer_advection_scheme = "ppm_h3"`): Huynh (1997)
+!! (`[ocean.vmix] tracer_advection_scheme = "ppm_h3"`): Huynh (1997)
 !! 3rd-order edges, Colella & Woodward (1984, J. Comput. Phys. 54) limiter,
 !! swept-volume flux.  All tests drive `tracer_advect_zonal_one_impl`, the
 !! production kernel, on explicit arrays (device-mapped on GPU builds):

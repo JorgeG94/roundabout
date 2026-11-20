@@ -3,7 +3,7 @@
 !! form (White & Adcroft 2008): `c_old` -> PPM on `c` -> overlap integral ->
 !! bounded `c_new` -> `c = c_new`, with no pool merge and no defect fold.
 !!
-!! The stream is the DEFAULT kernel (`&vcoord_nml remap_kernel = "stream"`).
+!! The stream is the DEFAULT kernel (`[vcoord] remap_kernel = "stream"`).
 !! On a field of adversarial columns (uniform, 1e3-stretched, bed / top /
 !! isolated / consecutive filler runs, source filler under a live target and
 !! vice versa, sawtooth / step / spike / constant profiles, dead columns,

@@ -1,10 +1,10 @@
 !! Vertical-coordinate hygiene: knob plumbing + the fail-loud envelope.
 !!
 !! Three things this suite pins, each of which was found by reading the
-!! `&vcoord_nml` group end-to-end rather than by a failing run:
+!! `[vcoord]` group end-to-end rather than by a failing run:
 !!
 !!   1. **`zstar_h_surf_target` / `zstar_h_min` actually reach the slot on
-!!      the PRODUCTION namelist path.**  Both are copied in `engine_setup`
+!!      the PRODUCTION input path.**  Both are copied in `engine_setup`
 !!      (`rdb_ocean_engine`), BEFORE the IC seed — which is load-bearing,
 !!      because the seed's tail calls `vcoord%build_zref_full(b)` and that
 !!      reads `zstar_h_surf_target`.  `configure_ocean_lateral` runs later
@@ -45,7 +45,7 @@ module test_ocean_vcoord_hygiene
    public :: collect_ocean_vcoord_hygiene_tests
 
    real(wp), parameter :: H_SURF_PROBE = 137.0_wp
-      !! Deliberately unlike BOTH the `&vcoord_nml` default (0.0) and the
+      !! Deliberately unlike BOTH the `[vcoord]` default (0.0) and the
       !! slot default (5.0), so the assertion cannot pass by accident.
    real(wp), parameter :: H_MIN_PROBE = 1.25e-4_wp
       !! Likewise unlike the shared 1.0e-4 default — and still at or below
@@ -72,8 +72,8 @@ contains
    end subroutine collect_ocean_vcoord_hygiene_tests
 
    function nml_with_vcoord(vcoord_body) result(nml)
-      !! A minimal, in-envelope single-rank ocean namelist whose
-      !! `&vcoord_nml` body the caller supplies.  Flat 1000 m bed, 4
+      !! A minimal, in-envelope single-rank ocean input whose
+      !! `[vcoord]` body the caller supplies.  Flat 1000 m bed, 4
       !! layers, split solver.  Not `pure`: builds a deferred-length
       !! result from concatenation, which is fine, but it is a test
       !! fixture and kept plain for readability.
@@ -116,7 +116,7 @@ contains
       integer :: ierr
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) then
-         call check(error, .false., what//": the namelist itself must parse")
+         call check(error, .false., what//": the input itself must parse")
          return
       end if
       call validate_config(cfg, ierr)
@@ -150,10 +150,10 @@ contains
                                "zstar_h_surf_target = 137.0"//new_line("a")// &
                                "zstar_h_min = 1.25e-4"//new_line("a"))
          call read_config_from_toml_string(nml, cfg, ierr=ierr)
-         call check(error, ierr == OCEAN_STATUS_OK, "the probe namelist must parse")
+         call check(error, ierr == OCEAN_STATUS_OK, "the probe input must parse")
          if (allocated(error)) exit checks
          call validate_config(cfg, ierr)
-         call check(error, ierr == OCEAN_STATUS_OK, "the probe namelist must validate")
+         call check(error, ierr == OCEAN_STATUS_OK, "the probe input must validate")
          if (allocated(error)) exit checks
          call engine_setup(engine, cfg, ierr)
          call check(error, ierr == OCEAN_STATUS_OK, "engine_setup must succeed")
@@ -164,15 +164,15 @@ contains
          if (allocated(error)) exit checks
          call check(error, abs(engine%state%vcoord%zstar_h_surf_target - H_SURF_PROBE) &
                     < 1.0e-12_wp, &
-                    "&vcoord_nml zstar_h_surf_target must reach vcoord%zstar_h_surf_target")
+                    "[vcoord] zstar_h_surf_target must reach vcoord%zstar_h_surf_target")
          if (allocated(error)) exit checks
          call check(error, abs(engine%state%vcoord%zstar_h_min - H_MIN_PROBE) < 1.0e-12_wp, &
-                    "&vcoord_nml zstar_h_min must reach vcoord%zstar_h_min")
+                    "[vcoord] zstar_h_min must reach vcoord%zstar_h_min")
          if (allocated(error)) exit checks
          ! The ordering half: the reference table must already carry the
-         ! namelist value, i.e. the copy preceded the seed.
+         ! input value, i.e. the copy preceded the seed.
          call check(error, abs(engine%state%vcoord%z_ref(3, 3, 1) - H_SURF_PROBE) < 1.0e-9_wp, &
-                    "build_zref_full must see the namelist zstar_h_surf_target "// &
+                    "build_zref_full must see the input zstar_h_surf_target "// &
                     "(the copy has to precede the IC seed)")
       end block checks
       call engine_teardown(engine)
@@ -187,12 +187,12 @@ contains
                          "vcoord_type = 'zsigma'")
       if (allocated(error)) return
       ! `parse_vcoord_type` also accepts the aliases `z-sigma` / `z_sigma`,
-      ! but `&vcoord_nml`'s schema enum lists only the `zsigma` spelling,
-      ! so the alias never reaches `validate_config` on the namelist path
+      ! but `[vcoord]`'s schema enum lists only the `zsigma` spelling,
+      ! so the alias never reaches `validate_config` on the input path
       ! — the reader rejects it first.  Nothing to assert here beyond the
       ! canonical spelling; if the enum ever grows the aliases, add them.
       ! ZSTAR_SIGMA consumes the same table FRACTIONALLY and is unaffected
-      ! by its units, so it must stay accepted — 21 shipped namelists use it.
+      ! by its units, so it must stay accepted — 21 shipped inputs use it.
       call expect_config(error, nml_with_vcoord('vcoord_type = "zstar_sigma"'//new_line("a")), .true., &
                          "vcoord_type = 'zstar_sigma' (fractional, unaffected)")
    end subroutine test_zsigma_refused
@@ -244,7 +244,7 @@ contains
    end subroutine test_h_min_refused
 
    subroutine test_h_min_on_marker(error)
-      !! The boundary that five shipped namelists sit on: `zstar_h_min`
+      !! The boundary that five shipped inputs sit on: `zstar_h_min`
       !! EXACTLY `H_VANISHED`.  Legal — every downstream vanish test is a
       !! strict `> H_VANISHED`, so a layer on the marker reads as
       !! vanished — and the promotion above must not have moved the
@@ -258,14 +258,14 @@ contains
    end subroutine test_h_min_on_marker
 
    function nml_cavity(vcoord_type, draft_body, vmix_body, extra, pgf_extra) result(nml)
-      !! A minimal in-envelope single-rank CAVITY namelist.  Flat 1000 m
+      !! A minimal in-envelope single-rank CAVITY input.  Flat 1000 m
       !! bed, 4 layers (so `h_nominal = max_depth/nz = 250 m` and the
       !! `h_min_cavity >= 2*h_nominal` rule wants 500 m), FV_MOM6 with the
-      !! top BC injected.  `vmix_body` is the `&ocean_vmix_nml` body (KPP
+      !! top BC injected.  `vmix_body` is the `[ocean.vmix]` body (KPP
       !! must be off inside the `z_fixed` x cavity envelope, so it is a
       !! parameter rather than a fixed line) and `extra` appends further
       !! groups verbatim.  `pgf_extra`, when present, is appended to the
-      !! `&ocean_pgf_nml` body (a second `&ocean_pgf_nml` group in `extra`
+      !! `[ocean.pgf]` body (a second `[ocean.pgf]` group in `extra`
       !! would be a duplicate group, not an override).
       character(len=*), intent(in) :: vcoord_type, draft_body, vmix_body, extra
       character(len=*), intent(in), optional :: pgf_extra
@@ -311,7 +311,7 @@ contains
    subroutine test_draft_uniform(error)
       !! The ONE varying-draft predicate, exercised directly.  It carries
       !! two rules that must not drift apart, because two different rules
-      !! turn on it: the `&ocean_pgf_nml p_top_in_bc` REFUSAL (a load with
+      !! turn on it: the `[ocean.pgf] p_top_in_bc` REFUSAL (a load with
       !! a gradient must have a consumer) and the `z_fixed` x cavity
       !! staircase WARNING (only a uniform draft is validated on a
       !! quasi-geopotential coordinate).
@@ -439,7 +439,7 @@ contains
    end subroutine test_cavity_z_fixed
 
    subroutine test_cavity_z_fixed_pgf_reconstruct(error)
-      !! `&ocean_pgf_nml reconstruct_for_pressure` is REFUSED under
+      !! `[ocean.pgf] reconstruct_for_pressure` is REFUSED under
       !! `z_fixed` x cavity, and only there.
       !!
       !! Measured on ISOMIP+ Ocean0 idealised (z_fixed + closed faces,
@@ -556,7 +556,7 @@ contains
 
    subroutine parse_nu_h(cfg, vcoord_type, cavity, nu_h, ierr)
       !! Parse the cavity fixture (or its cavity-OFF twin) with
-      !! `&ocean_hvisc_nml nu_h` set.  Not `pure`: the parser logs.
+      !! `[ocean.hvisc] nu_h` set.  Not `pure`: the parser logs.
       type(config_t), intent(out) :: cfg
       character(len=*), intent(in) :: vcoord_type, nu_h
       logical, intent(in) :: cavity

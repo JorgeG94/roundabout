@@ -37,7 +37,7 @@ module rdb_ocean_ke_probe
    !! whenever the step-window gate is open) and printed once by rank 0,
    !! so the digits are identical on any rank count.
    !!
-   !! Gated by `&ocean_debug_nml ke_attr` with an optional
+   !! Gated by `[ocean.debug] ke_attr` with an optional
    !! `[ke_attr_start_step, ke_attr_end_step]` outer-step window.
    !! Default off ⇒ bit-identical (untaken branches only); model state is
    !! never written.  `ke_probe_coradv_split` (KE_ATTR_PV rows) has NO
@@ -70,7 +70,7 @@ module rdb_ocean_ke_probe
       !! Config + running state for the KE attribution meter.  Lives on
       !! `ocean_dyn_t`; host-only (never device-mapped).
       logical :: enable = .false.
-         !! Master gate — `&ocean_debug_nml ke_attr`.
+         !! Master gate — `[ocean.debug] ke_attr`.
       integer :: start_step = 0
          !! First outer step to sample (0 = from the start).
       integer :: end_step = 0

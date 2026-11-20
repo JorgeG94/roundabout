@@ -3,7 +3,7 @@ module rdb_ice_dims
    !! Fixed upper bounds used to size stack-local column work arrays inside
    !! `!$acc routine seq` procedures, where an automatic or allocatable array
    !! would stall the device.  The RUNTIME extents `ncat`, `nilyr`, `nslyr`
-   !! (namelist, validated against these bounds) are always `<=` the bounds.
+   !! (input, validated against these bounds) are always `<=` the bounds.
    !!
    !! **Layer order.**  The sea-ice column indexes its layers TOP-DOWN: `k = 1`
    !! is the layer under the surface and `k = nilyr` is the layer at the ice

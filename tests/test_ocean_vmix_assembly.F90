@@ -370,7 +370,7 @@ contains
    end subroutine setup_ocean_state
 
    subroutine test_pp81_knobs_reach_slot(error)
-      !! PR-9 §9.9.  All eight `&ocean_vmix_nml` pp81_*/kpp_* keys reach
+      !! PR-9 §9.9.  All eight `[ocean.vmix]` pp81_*/kpp_* keys reach
       !! `ocean_state%vmix` via the PRODUCTION `configure_ocean_lateral`
       !! entry point — not by poking the slot directly (the exact gap the
       !! audit found: `grep -rn "%vmix%rho0\|vmix%pp81\|vmix%ri_crit..."
@@ -505,7 +505,7 @@ contains
       !! the knob is not merely stored — PP81's Ri response tracks it.
       !! (The existing `test_ocean_pp81.F90` suite sets vmix%pp81_* slot
       !! fields directly; that is exactly why nobody noticed the
-      !! `&ocean_vmix_nml` keys did not exist — see PR-9 §2E.)
+      !! `[ocean.vmix]` keys did not exist — see PR-9 §2E.)
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid1, grid2
       type(ocean_state_t) :: state1, state2

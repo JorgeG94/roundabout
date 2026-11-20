@@ -1,4 +1,4 @@
-!! The CICE-port sea ice (`&ocean_ice_nml scheme = "cice"`) through the PRODUCTION engine path (D11.4):
+!! The CICE-port sea ice (`[ocean.ice] scheme = "cice"`) through the PRODUCTION engine path (D11.4):
 !! `engine_setup` -> `engine_enter_data` -> `engine_step` -> `engine_step_ice` -> `engine_step_finalize`.
 !!
 !! Cases:
@@ -102,12 +102,12 @@ contains
    end subroutine collect_cice_engine_tests
 
    ! ------------------------------------------------------------------
-   ! namelists and engine plumbing
+   ! inputs and engine plumbing
    ! ------------------------------------------------------------------
 
    function case_nml(geom, extra) result(nml)
       !! `geom`: `column` (doubly periodic 8x8, uniform, no wind), `basin` (closed 24x16, wind),
-      !! `channel` (periodic x, walls y, a seamount, wind).  `extra`: more namelist text appended
+      !! `channel` (periodic x, walls y, a seamount, wind).  `extra`: more input text appended
       !! (later groups of the same name override nothing: use `set_nml` to change a key).
       character(len=*), intent(in) :: geom
       character(len=*), intent(in), optional :: extra
@@ -550,7 +550,7 @@ contains
       end do
       key = [character(len=80) :: "transport_buffer_mib", "ndtd /= 1", "nghost >= 3", "tripolar north fold", &
              "wetdry", "cavity_dyn", "'wall' or 'periodic'", "enable_thermodynamics", "enable_components", &
-             "hfreeze > 0", "(accepted)", "needs dynamics=.true.", "needs transport=.true.", &
+             "hfreeze > 0", "(accepted)", "needs dynamics=true", "needs transport=true", &
              "is ambiguous", "tau_x/tau_y files"]
       do k = 1, 15
          select case (k)
@@ -597,7 +597,7 @@ contains
          end select
          call read_config_from_toml_string(nml, cfg, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) then
-            call check(error, .false., "refusal case "//trim(what(k))//": the namelist did not parse")
+            call check(error, .false., "refusal case "//trim(what(k))//": the input did not parse")
             return
          end if
          call ice_config_check(cfg, msgs, n)
@@ -1115,7 +1115,7 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
    end subroutine test_freezeup
 
    subroutine test_island(error)
-      !! A land mask with an island inside the basin: the cold start from `&ocean_ice_ic_nml` seeds wet cells only,
+      !! A land mask with an island inside the basin: the cold start from `[ocean.ice_ic]` seeds wet cells only,
       !! ice never appears on land, and the water and salt ledgers close around it.
       type(error_type), allocatable, intent(out) :: error
       type(ocean_engine_t), target :: engine
@@ -1324,7 +1324,7 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
    end subroutine test_sis2_conversion
 
    subroutine test_sis2_wrong_ncat(error)
-      !! A SIS2 file written with another category count than the namelist is refused, not converted.
+      !! A SIS2 file written with another category count than the input is refused, not converted.
       type(error_type), allocatable, intent(out) :: error
       type(ocean_engine_t), target :: e
       type(config_t) :: cfg

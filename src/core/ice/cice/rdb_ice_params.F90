@@ -167,7 +167,7 @@ module rdb_ice_params
 
    type :: ice_sw_params_t
       !! Shortwave parameters of the CCSM3 scheme (Briegleb et al. 2004;
-      !! upstream code defaults).  Owns the `&ocean_ice_sw_nml` knobs; the
+      !! upstream code defaults).  Owns the `[ocean.ice_sw]` knobs; the
       !! scheme and albedo-type selectors are not carried (only `ccsm3` is
       !! ported and `ice_config_check` refuses the rest).  Do not create a
       !! second type.
@@ -219,7 +219,7 @@ module rdb_ice_params
       !! Bouillon et al. 2013; Konig Beatty and Holland 2010; Lemieux et al.
       !! 2024).  Scalars only, no default initialisers.  Upstream code
       !! defaults.  The ice-ocean turning angle (`cosw`, `sinw`) is not a
-      !! namelist knob (upstream fixes it at zero); it is carried here so
+      !! input knob (upstream fixes it at zero); it is carried here so
       !! the drag law is exercised with a rotation by the tests.
       integer :: ndte                 !! elastic subcycles per dynamics step
       real(wp) :: elasticDamp         !! damping parameter E of the classic EVP (arlx = 2 E ndte)
@@ -243,7 +243,7 @@ module rdb_ice_params
    end type ice_dyn_params_t
 
    integer, parameter :: ICE_ADVECT_UPWIND = 1
-      !! `&ocean_ice_dyn_nml advection = "upwind"` (first-order upwind, Dukowicz and Baumgardner 2000 context).
+      !! `[ocean.ice_dyn] advection = "upwind"` (first-order upwind, Dukowicz and Baumgardner 2000 context).
    integer, parameter :: ICE_ADVECT_REMAP = 2
       !! `advection = "remap"`: incremental remapping (Lipscomb and Hunke 2004), `rdb_ice_remap_flux`; needs three ghost cells.
 
@@ -351,7 +351,7 @@ contains
       !! Parameter bundle with upstream code defaults for the given structure,
       !! EXCEPT `tfrz_option`: upstream's default is `mushy` (needs the mushy
       !! thermodynamics, not ported); `linear_salt` is the plan's choice for
-      !! OM3 (interim).  OM3 values otherwise live in an OM3 example namelist.
+      !! OM3 (interim).  OM3 values otherwise live in an OM3 example input.
       !! `p%bad` is set when `constants_set` is unknown or a layer/category
       !! count is outside `1..ICE_*_MAX`; the caller must test it.
       integer, intent(in) :: constants_set, ncat, nilyr, nslyr

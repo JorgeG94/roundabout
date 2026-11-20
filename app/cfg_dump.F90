@@ -1,14 +1,14 @@
 !! Resolved-configuration dump: the equivalence oracle between input formats.
 program cfg_dump
-   !! `rdb_cfg_dump <input> <out>`: read `<input>` (namelist, or TOML for a
+   !! `rdb_cfg_dump <input> <out>`: read `<input>` (input, or TOML for a
    !! `.toml` name) through `read_config`, then write the resolved
    !! configuration -- every group and key, post-cascade -- to `<out>`
    !! (`write_doc_all`) and, at full real precision, to `<out>.exact`
    !! (`write_resolved`; the doc form rounds reals to 11 digits).
    !!
    !! Both files are a function of the resolved configuration only: no path,
-   !! timestamp or input-format text reaches them, so an `.nml` and the
-   !! `.toml` that spells the same configuration give byte-identical output.
+   !! timestamp or input-format text reaches them, so two `.toml` files that
+   !! spell the same configuration give byte-identical output.
    !! Exit 0 on success, 1 when the input is missing or refused.
    use rdb_config, only: config_t, read_config
    use rdb_nml_schema, only: nml_schema_t

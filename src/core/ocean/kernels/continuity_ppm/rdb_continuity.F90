@@ -221,7 +221,7 @@ module rdb_continuity
          !! validated on the single-step form, so it keeps it
          !! (bit-identical there).
       logical :: renorm_consistent_flux = .true.
-         !! `&ocean_continuity_nml renorm_consistent_flux`.  When `.true.`
+         !! `[ocean.continuity] renorm_consistent_flux`.  When `.true.`
          !! the `uhbt`/`vhbt` renormalisation evaluates a layer whose upwind
          !! donor FLIPS under the correction as `(u0 + du)·h_face(new
          !! donor)`, i.e. as the flux of its corrected velocity, and
@@ -349,14 +349,14 @@ module rdb_continuity
          !! picked by upwind (bit-identical default); `.true.` = `ppm_h3`,
          !! Huynh (1997) 3rd-order edges + Colella & Woodward (1984) limiter
          !! + swept-volume (CFL-corrected) flux.  Set at configure from
-         !! `&ocean_vmix_nml tracer_advection_scheme`.  Host control scalar,
+         !! `[ocean.vmix] tracer_advection_scheme`.  Host control scalar,
          !! passed as a dummy; never dereferenced in a device loop.
       integer :: tracer_recon = TRACER_RECON_PPM
          !! Face-reconstruction scheme for the WINDOWED tracer-advection
          !! drain (Q6; `dt_tracer_advect_ratio > 1` path only).  0 = CW-PPM
          !! (default, bit-identical), 1/2/3 = WENO5/7/9-Z swept-average
          !! (rung-adaptive, degrades near land/walls).  Set at configure
-         !! from `&ocean_vmix_nml tracer_recon`.  Host-side control knob:
+         !! from `[ocean.vmix] tracer_recon`.  Host-side control knob:
          !! the drain reads it to pick a face kernel — never dereferenced
          !! inside a device loop, so it rides the struct copyin.
          !! The every-step (ratio = 1) advect path is unaffected (stays
@@ -1500,7 +1500,7 @@ contains
          !! fields off the allocation list entirely for a default run.
 
       logical, intent(in) :: use_open
-         !! z-level closed faces active (`&vcoord_nml zfixed_closed_faces`).
+         !! z-level closed faces active (`[vcoord] zfixed_closed_faces`).
          !! `.false.` => `open_f` is never indexed and the arithmetic below
          !! stays byte-identical to the un-masked form.
       real(wp), intent(in) :: open_f(grid%nx_total + 1, grid%ny_total, ms%nz_ml)

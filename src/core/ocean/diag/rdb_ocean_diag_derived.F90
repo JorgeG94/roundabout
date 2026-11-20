@@ -1,6 +1,6 @@
 !! Library of derived ocean diagnostics — static catalog binding a
 !! diagnostic name to a fill procedure + CF-1.8 metadata, picked by
-!! name from the namelist.  Every fill is a pure function of the
+!! name from the input.  Every fill is a pure function of the
 !! current `ocean_state_t`; outputs at cell centres (vgrid LAYER,
 !! z-level remap via `remap_layer_to_z`).  Includes the opt-in sea-ice
 !! drift diagnostics (`ice_speed`/`ice_u`/`ice_v`) — the canonical
@@ -55,10 +55,10 @@ module rdb_ocean_diag_derived
    integer, parameter, public :: DERIVED_REQ_NONE = 0
       !! No prerequisite — the entry reads state that always exists.
    integer, parameter, public :: DERIVED_REQ_CAVITY_DYN = 1
-      !! Needs `&ocean_cavity_dyn_nml enable` (the draft geometry).
+      !! Needs `[ocean.cavity_dyn] enable` (the draft geometry).
    integer, parameter, public :: DERIVED_REQ_CAVITY_MELT = 2
-      !! Needs `&ocean_cavity_melt_nml enable` (the melt slot), which in
-      !! turn requires `&ocean_cavity_dyn_nml`.
+      !! Needs `[ocean.cavity_melt] enable` (the melt slot), which in
+      !! turn requires `[ocean.cavity_dyn]`.
 
    type :: derived_entry_t
       !! One entry in the static catalog.  Buffer layout is implicit
@@ -212,8 +212,8 @@ contains
                     fill=fill_salinity_sp, is_layered=.true.)
       ! CMOR name: so.
       ! ---- Ice-shelf cavity (P2c).  Eleven melt-interface fields, all
-      ! gated on `&ocean_cavity_melt_nml enable`, plus two GEOMETRY
-      ! fields that need only `&ocean_cavity_dyn_nml`.  Every one is
+      ! gated on `[ocean.cavity_melt] enable`, plus two GEOMETRY
+      ! fields that need only `[ocean.cavity_dyn]`.  Every one is
       ! NaN outside the cover, so a domain mean over the output is a
       ! mean over the CAVITY — see `cavity_mask_impl`.
       CATALOG(11) = derived_entry_t( &
@@ -425,12 +425,12 @@ contains
       select case (entry%requires)
       case (DERIVED_REQ_CAVITY_DYN)
          if (.not. state%metrics%use_cavity) then
-            call derived_requires_fail(trim(entry%name), "&ocean_cavity_dyn_nml enable", &
+            call derived_requires_fail(trim(entry%name), "[ocean.cavity_dyn] enable", &
                                        "the ice-shelf draft geometry")
          end if
       case (DERIVED_REQ_CAVITY_MELT)
          if (.not. state%cavity_flux%enable) then
-            call derived_requires_fail(trim(entry%name), "&ocean_cavity_melt_nml enable", &
+            call derived_requires_fail(trim(entry%name), "[ocean.cavity_melt] enable", &
                                        "the basal-melt interface slot")
          end if
       case default
@@ -488,11 +488,11 @@ contains
       character(len=*), intent(in) :: name
          !! Catalog name the user asked for.
       character(len=*), intent(in) :: knob
-         !! The namelist key that has to be on.
+         !! The input key that has to be on.
       character(len=*), intent(in) :: what
          !! One phrase naming what that knob builds.
       character(len=:), allocatable :: msg
-      msg = "&ocean_diag_nml diags requested '"//name//"', which reads "//what// &
+      msg = "[ocean.diag] diags requested '"//name//"', which reads "//what// &
             " and therefore requires "//knob//"=.true.  Refused rather than "// &
             "registered: the fill would be a plane of missing values, which is "// &
             "indistinguishable from a physical answer once it reaches a figure."
@@ -503,14 +503,14 @@ contains
 
    subroutine apply_diag_selection(state, spec, dt_out, default_coord)
       !! Configure the ocean diagnostic set from the unified
-      !! `&ocean_diag_nml diags` selection string.  Single production entry
+      !! `[ocean.diag] diags` selection string.  Single production entry
       !! point: parses `spec` once, registers the canonical defaults
       !! (consulting the spec for per-diagnostic `:off` skips and
       !! `:cadence` / `:op` / `:coord` overrides), then registers any spec
       !! entries that name a derived-catalog diagnostic (with their overrides).
       !!
       !! `default_coord` (a `DIAG_VGRID_*`, default LAYER) is the global
-      !! output vgrid (`&ocean_diag_nml vgrid`) applied to layered diagnostics
+      !! output vgrid (`[ocean.diag] vgrid`) applied to layered diagnostics
       !! that don't carry a per-diag `:coord`.
       !!
       !! An empty / blank `spec` + LAYER default reproduces the canonical set
@@ -547,7 +547,7 @@ contains
          if (is_canonical_diag_name(trim(specs(i)%name))) then
             if (.not. state%diag%is_registered(trim(specs(i)%name))) then
                call global_logger%warning( &
-                  "&ocean_diag_nml diags requested '"//trim(specs(i)%name)// &
+                  "[ocean.diag] diags requested '"//trim(specs(i)%name)// &
                   "', which is a canonical diagnostic but is NOT registered — it will "// &
                   "be absent from the output. "//gate_clause(trim(specs(i)%name)))
             end if
@@ -1083,7 +1083,7 @@ contains
       !! Applied zonal wind stress on the u face (N/m^2) — MOM6/CMOR
       !! `tauuo`. Direct read of `surface_stress%tau_x`, the stress the
       !! momentum solve actually applies (not re-derived from a wind
-      !! profile), so it reflects whatever `&ocean_vdiff_nml
+      !! profile), so it reflects whatever `[ocean.vdiff]
       !! implicit_stress` / cover masking did to it upstream.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
@@ -1221,7 +1221,7 @@ contains
       !! Sea-ice drift speed |u_ice| at T-centres (m/s) — C-face pairs
       !! averaged to centre, 2-D twin of the ocean `fill_ke` stencil.
       !! Ice off / not init ⇒ zeros (never registered by default; opt-in
-      !! via `&ocean_diag_nml diags`).
+      !! via `[ocean.diag] diags`).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -1430,7 +1430,7 @@ contains
    pure subroutine thermal_driving_impl(t_far, s_far, p_top, active, eos, buf)
       !! `T_far − eos_freezing_point(eos, S_far, p_top)`.  The liquidus
       !! comes off the SAME `eos_t` handle the solve used
-      !! (`&ocean_eos_nml tfreeze_set`), never a local copy of the
+      !! (`[ocean.eos] tfreeze_set`), never a local copy of the
       !! coefficients — the two sets differ by ~0.03 degC, which is
       !! enough to flip the sign of this field.
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
@@ -1609,7 +1609,7 @@ contains
 
    subroutine fill_z_draft(state_handle, buf)
       !! Ice-shelf draft (m, POSITIVE DOWN from the geoid) — geometry,
-      !! so it needs only `&ocean_cavity_dyn_nml` and is masked by
+      !! so it needs only `[ocean.cavity_dyn]` and is masked by
       !! `cover_frac` rather than by the melt slot's `active`.  Beyond
       !! the calving front there is no draft, which is missing data, not
       !! a draft of zero.

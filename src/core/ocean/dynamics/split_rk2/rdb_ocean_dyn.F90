@@ -187,18 +187,18 @@ module rdb_ocean_dyn
    integer, public, save :: bcdiag_step_limit = 2
       !! Probe only the first `bcdiag_step_limit` outer steps (keeps trace bounded).
 
-   ! Outer split-explicit time-scheme selector (`&ocean_bt_nml
+   ! Outer split-explicit time-scheme selector (`[ocean.bt]
    ! split_scheme`, SPEC §4 S3/S4).
    integer, parameter, public :: SPLIT_SCHEME_SSP_RK2 = 0
-      !! Two identical stages + SSP average (`&ocean_bt_nml split_scheme
+      !! Two identical stages + SSP average (`[ocean.bt] split_scheme
       !! = "ssp_rk2"`).  **EXPERIMENTAL** — a label on the ANSWER, not a
       !! deprecation: the path is fully supported, fully tested, and the
       !! stability suite runs an `ssp_rk2` twin of every case whose
-      !! namelist does not pin a scheme.  It has the widest envelope
+      !! input does not pin a scheme.  It has the widest envelope
       !! (every vcoord including `eulerian_z`, wet/dry,
       !! `dt_tracer_advect_ratio > 1`) and is the only scheme wired
       !! through the windowed tracer-advection path, which is why six
-      !! shipped namelists pin it.
+      !! shipped inputs pin it.
       !!
       !! **What it costs you, measured.**  The two-stage average amplifies
       !! an internal gravity wave by `√(1 + (ω·dt)⁴/4)` per step, so it
@@ -229,7 +229,7 @@ module rdb_ocean_dyn
       !! MOM6 predictor-corrector: off-centred predictor at `pc_be·dt`,
       !! slow tendencies on the `u_av`/`h_av` step time-means, ONE
       !! prognostic update in the corrector, forward-backward
-      !! gravity-wave pairing.  **The DEFAULT** (`&ocean_bt_nml
+      !! gravity-wave pairing.  **The DEFAULT** (`[ocean.bt]
       !! split_scheme = "pred_corr"`, since 2026-09-14).
       !!
       !! Neutrally stable to `ω·dt = 2`, so it does not have the
@@ -245,7 +245,7 @@ module rdb_ocean_dyn
       !! then briefly as `"split_rk2"` — a name that collided with
       !! `dynamics/split_rk2/`, the directory holding the outer-loop
       !! machinery of BOTH schemes, so it named the family as well as
-      !! one member.  A namelist still carrying EITHER dead spelling
+      !! one member.  An input still carrying EITHER dead spelling
       !! fails loud naming `pred_corr` (`nml_enum`'s `retired` list),
       !! never silently falls back to a default.
 
@@ -255,7 +255,7 @@ module rdb_ocean_dyn
          !! `allocated(...)` — tracks GPU device attachment too.
       integer :: split_scheme = SPLIT_SCHEME_PRED_CORR
          !! Outer time-scheme selector (see the module constants).  Kept in
-         !! step with the `&ocean_bt_nml split_scheme` default in
+         !! step with the `[ocean.bt] split_scheme` default in
          !! `rdb_config.F90` — `ocean_setup` assigns this field from the
          !! config on BOTH branches (`rdb_ocean_setup.F90`, "SPEC S3"), so no
          !! production run reads this value, but a bare `ocean_dyn_t` built by
@@ -352,7 +352,7 @@ module rdb_ocean_dyn
          !! Diagnostic: the tracer-window clock `t_dyn_rel_adv` (s) at the
          !! last deferred-thermo call.  0 = the window had just been drained.
       logical :: diabatic_first = .true.
-         !! `&ocean_vmix_nml diabatic_first`.  `.false.` moves the thermo
+         !! `[ocean.vmix] diabatic_first`.  `.false.` moves the thermo
          !! kernels and the ALE remap to the END of the thermo interval
          !! (see `is_thermo_step`); no effect at `dt_therm_ratio <= 1`.
       integer :: dt_tracer_advect_ratio = 1
@@ -367,15 +367,15 @@ module rdb_ocean_dyn
       logical :: debug_bt_budget = .false.
          !! When `.true.`, calls the BT-budget probe once per RK2 stage
          !! after the slow tendencies.  Heavy (D->H transfers + prints).
-         !! Default `.false.`; driven by `ocean_debug_bt_budget` namelist.
+         !! Default `.false.`; driven by `ocean_debug_bt_budget` input.
       type(ke_probe_t) :: ke_probe
-         !! Per-segment layer-KE attribution meter (`&ocean_debug_nml
+         !! Per-segment layer-KE attribution meter (`[ocean.debug]
          !! ke_attr`).  Default off ⇒ bit-identical; when on,
          !! serialises the async velocity-apply chain (device waits +
          !! one reduction per segment) — debug only.
       type(chksum_probe_t) :: chksum_probe
          !! MOM6-style per-phase field checksums + HOTFACE argmax rows
-         !! (`&ocean_debug_nml chksum` + step window).  Default off ⇒
+         !! (`[ocean.debug] chksum` + step window).  Default off ⇒
          !! bit-identical; when on, waits the device + reduces at each
          !! phase seam — the first-diverging-operator attribution probe.
       logical :: accel_visc_rem = .false.
@@ -387,7 +387,7 @@ module rdb_ocean_dyn
          !! full-strength dt·F kick (the 2026-07-28 forensics: explicit
          !! force × dt on outcropped mm-layers is the dt=800 blow-up
          !! injector; the fold/vdiff mopped ±30 m/s per stage until
-         !! escape).  `&ocean_vdiff_nml accel_visc_rem` — RETIRED (D1
+         !! escape).  `[ocean.vdiff] accel_visc_rem` — RETIRED (D1
          !! follow-up): no MOM6 state-update equivalent, fail-loud at
          !! configure.  Default off ⇒ bit-identical.  Split path only (v1).
       real(wp), allocatable :: avr_u0(:, :, :)
@@ -404,7 +404,7 @@ module rdb_ocean_dyn
          !! each outer-step start (before any exchange or kernel).  Any kernel
          !! consuming an unexchanged ghost produces a loud NaN at that step.
          !! Default `.false.` = bit-identical (untaken branch per step).
-         !! Driven by `&ocean_mpi_nml poison_ghosts` via `rdb_ocean_setup`.
+         !! Driven by `[ocean.mpi] poison_ghosts` via `rdb_ocean_setup`.
          !! Requires the `bc` optional argument (edge topology); no-op when
          !! `bc` is absent.
 
@@ -415,7 +415,7 @@ module rdb_ocean_dyn
          !! KPP non-local transport, and surface tracer flux.  Tracers
          !! still advect horizontally but with `alpha_T = beta_S = 0` can't
          !! influence dynamics ⇒ adiabatic.  Wire via
-         !! `&ocean_setup_nml ocean_enable_thermodynamics`.
+         !! `[ocean.setup] ocean_enable_thermodynamics`.
 
       ! ---- Phase-2/3 Lagrangian grounding-stability knobs ----
       real(wp) :: angstrom_h = 0.0_wp
@@ -448,12 +448,12 @@ module rdb_ocean_dyn
       ! ---- Ideal-age tracer (PR-7) ----
       real(wp) :: ideal_age_young_val = 0.0_wp
          !! Surface-band age value (s), set by `configure_ocean_tracers`
-         !! from `&ocean_tracers_nml ideal_age_young_val`.  0 (default) =
+         !! from `[ocean.tracers] ideal_age_young_val`.  0 (default) =
          !! today's hard-coded zero reset ⇒ bit-identical.
       real(wp) :: ideal_age_sfc_growth_rate = 0.0_wp
          !! Exponential growth rate of the surface value (1/s), set by
          !! `configure_ocean_tracers` from
-         !! `&ocean_tracers_nml ideal_age_sfc_growth_rate`.  0 (default)
+         !! `[ocean.tracers] ideal_age_sfc_growth_rate`.  0 (default)
          !! ⇒ young_val constant ⇒ no `exp()` ⇒ bit-identical.
    contains
       procedure, non_overridable :: init => ocean_dyn_init
@@ -474,7 +474,7 @@ contains
    subroutine ocean_porous_refresh(grid, metrics, ms)
       !! Recompute the porous-barrier layer-averaged open-area fractions
       !! from the current layer thicknesses.  No-op (and untouched
-      !! placeholder arrays) when `&ocean_porous_nml enable` is off.
+      !! placeholder arrays) when `[ocean.porous] enable` is off.
       !!
       !! Cadence: ONCE PER OUTER STEP, before the RK2 stages — the
       !! fractions are then held fixed across both stages.  That is
@@ -853,7 +853,7 @@ contains
          !! Coriolis-scheme string (e.g. "beta_plane").
       real(wp), intent(in), optional :: omega
          !! Planetary rotation rate (1/s) for `coriolis_scheme = "planetary"`
-         !! (`&ocean_grid_nml omega`).  Absent => 0, which is only right for
+         !! (`[ocean.grid] omega`).  Absent => 0, which is only right for
          !! the beta plane: the wide clone's planetary f used to be built
          !! with omega = 0, i.e. a non-rotating barotropic fast loop.
 
@@ -1012,13 +1012,13 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
       type(ocean_top_drag_t), intent(inout), optional :: td
-         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! Ice-shelf TOP-drag slot (`[ocean.tdrag]`).  OPTIONAL so the
          !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
          !! test suite need no churn; the production driver always passes
          !! it.  Absent, or present and disabled, => no kernel launch and
          !! a bit-identical step.
       type(ocean_cavity_flux_t), intent(inout), optional :: cav
-         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! Ice-shelf basal-melt slot (`[ocean.cavity_melt]`).
          !! OPTIONAL for the same reason `td` is: the direct
          !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
          !! need no churn, and the production driver always passes it.
@@ -1195,13 +1195,13 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
       type(ocean_top_drag_t), intent(inout), optional :: td
-         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! Ice-shelf TOP-drag slot (`[ocean.tdrag]`).  OPTIONAL so the
          !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
          !! test suite need no churn; the production driver always passes
          !! it.  Absent, or present and disabled, => no kernel launch and
          !! a bit-identical step.
       type(ocean_cavity_flux_t), intent(inout), optional :: cav
-         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! Ice-shelf basal-melt slot (`[ocean.cavity_melt]`).
          !! OPTIONAL for the same reason `td` is: the direct
          !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
          !! need no churn, and the production driver always passes it.
@@ -1273,7 +1273,7 @@ contains
       call ocean_horizontal_viscosity_compute_ke_diss(hv, ms)
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, dt)
       call ocean_channel_drag_compute_tendencies(grid, metrics, bd, ms)
-      ! Ice-shelf top drag (`&ocean_tdrag_nml`).  Sits with the other slow
+      ! Ice-shelf top drag (`[ocean.tdrag]`).  Sits with the other slow
       ! velocity-tendency computes; the kernel returns immediately when the
       ! slot is disabled, so an ordinary run pays one host branch.
       if (present(td)) call ocean_top_drag_compute_tendencies(td, ms, dt)
@@ -1346,19 +1346,19 @@ contains
       call ocean_pressure_force_apply(pgf, ms, dt, no_wait=.true.)
       call ocean_horizontal_viscosity_apply_tendencies(hv, ms, dt, no_wait=.true.)
       ! Double-count guard: when the bottom drag / wind stress are folded
-      ! into the implicit vdiff tridiagonal (`&ocean_vdiff_nml implicit_*`),
+      ! into the implicit vdiff tridiagonal (`[ocean.vdiff] implicit_*`),
       ! their explicit pre-solve applies are SKIPPED here so the forcing is
       ! not applied twice.  Channel (side-wall) drag is a distinct lateral
       ! term and always applies.  Defaults (both off) ⇒ both applies run ⇒
       ! bit-identical to the prior path.  The MOM6 BBL glue (`bbl_glue`)
       ! is the same kind of fold: its piston IS the bed drag, so the
-      ! explicit (or `&ocean_bdrag_nml implicit` split-apply) one is skipped.
+      ! explicit (or `[ocean.bdrag] implicit` split-apply) one is skipped.
       if (.not. (vd%implicit_drag .or. vd%bbl_glue)) then
          call ocean_bottom_drag_apply_tendencies(bd, ms, dt, no_wait=.true.)
       end if
       call ocean_channel_drag_apply_tendencies(bd, ms, dt, no_wait=.true.)
       ! Top drag: same double-count guard as the bed.  `implicit_fold`
-      ! (`&ocean_vdiff_nml implicit_top_drag`) folds the rate into the
+      ! (`[ocean.vdiff] implicit_top_drag`) folds the rate into the
       ! vdiff `k = nz` diagonal instead, so the explicit apply is skipped
       ! there.
       if (present(td)) then
@@ -1372,7 +1372,7 @@ contains
 
       ! Surface tracer fluxes, geothermal bottom flux, ideal-age, vmix.
       call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
-      ! Ice-shelf real freshwater MASS (&ocean_cavity_melt_nml
+      ! Ice-shelf real freshwater MASS ([ocean.cavity_melt]
       ! freshwater='mass').  Immediately after the surface-flux apply,
       ! because it REPLACES that apply's virtual cavity salt increment
       ! with the real advective one and adds the meltwater volume + its
@@ -1419,7 +1419,7 @@ contains
       ! runtime branch the compiler cannot see.  Handing over a `(2,1)`
       ! placeholder therefore aborts the GPU build with "variable in data
       ! clause is partially present", which is exactly what it did before
-      ! this gate.  The fold requires `&ocean_tdrag_nml enable`
+      ! this gate.  The fold requires `[ocean.tdrag] enable`
       ! (validate_config), so when it is on the arrays are full size.
       fold_top = .false.
       if (present(td)) fold_top = td%implicit_fold
@@ -1542,7 +1542,7 @@ contains
          ! PR-6 fail-loud: VMIX_INTERIOR_LARGE94 / VMIX_INTERIOR_CVMIX are
          ! reserved-but-unwired (no kernel).  Selecting one would leave
          ! kv/kt with NO interior mixing.  The `interior_closure`
-         ! namelist parser never returns them, so this
+         ! input parser never returns them, so this
          ! is defence-in-depth for the next code/config consumer.
          call logger%error("vmix_apply_in_stage: the selected interior closure "// &
                            "has no kernel (only VMIX_INTERIOR_PP81/NONE are implemented; "// &
@@ -2780,7 +2780,7 @@ contains
       !! rewetting starts from rest.  Knob off / absent ⇒ the ORIGINAL
       !! loops run untouched (byte-identical).
       !!
-      !! When `&vcoord_nml zfixed_closed_faces` is on, the PER-LAYER
+      !! When `[vcoord] zfixed_closed_faces` is on, the PER-LAYER
       !! z-level mask `metrics%open_u/open_v` composes multiplicatively
       !! too — this is the "no normal velocity" half of the z-level wall
       !! (the "no mass or tracer flux" half is continuity's, and
@@ -3026,13 +3026,13 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
       type(ocean_top_drag_t), intent(inout), optional :: td
-         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! Ice-shelf TOP-drag slot (`[ocean.tdrag]`).  OPTIONAL so the
          !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
          !! test suite need no churn; the production driver always passes
          !! it.  Absent, or present and disabled, => no kernel launch and
          !! a bit-identical step.
       type(ocean_cavity_flux_t), intent(inout), optional :: cav
-         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! Ice-shelf basal-melt slot (`[ocean.cavity_melt]`).
          !! OPTIONAL for the same reason `td` is: the direct
          !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
          !! need no churn, and the production driver always passes it.
@@ -3231,7 +3231,7 @@ contains
 
       ! E3: the SAME assembled `sf%p_surf` also becomes the top-of-column
       ! pressure the EOS's IN-SITU builders measure down from (`ms%p_top`,
-      ! Pa) when `&ocean_psurf_nml in_eos` is set — the ice-shelf-cavity
+      ! Pa) when `[ocean.psurf] in_eos` is set — the ice-shelf-cavity
       ! seam, where 1e6-2e7 Pa of overburden makes the historical
       ! "in-situ pressure starts at 0 at the free surface" a systematic
       ! ~4-5 kg/m^3 density error under a nonlinear EOS.  It does NOT
@@ -3240,7 +3240,7 @@ contains
       ! per outer step, before the PGF of the step and held static across
       ! the stages.
       !
-      ! P5.0: the SAME refresh also covers `&ocean_pgf_nml p_top_in_bc`,
+      ! P5.0: the SAME refresh also covers `[ocean.pgf] p_top_in_bc`,
       ! the second consumer of `ms%p_top` — it puts the load in the
       ! FV_MOM6 pressure-stack surface BC (`pa(nz+1)`), independently of
       ! whether it also reaches the EOS arguments.  The gate is the
@@ -3995,7 +3995,7 @@ contains
       ! exact when S4 restructures the outer loop.  Nothing reads it until S3.
       call copy_field_3d(ms%h_layer, ms%h_av_layer, &
                          size(ms%h_layer, 1), size(ms%h_layer, 2), size(ms%h_layer, 3))
-      ! SPEC S2b (`&ocean_bt_nml renorm_visc_rem`): forward `visc_rem_u/v`
+      ! SPEC S2b (`[ocean.bt] renorm_visc_rem`): forward `visc_rem_u/v`
       ! so the transport-matching inversion runs in the γ-weighted MOM6
       ! form (`u_cor = u + du·γ_k`, Jacobian `dy·h_marg·γ_k`) — a
       ! heavily-frictioned layer receives a smaller share of `du`.  Off ⇒
@@ -4379,7 +4379,7 @@ contains
    end function lateral_mix_uses_resoln
 
    subroutine check_h_positive_or_die(grid, ms, label, stage, outer_step, check_layers)
-      !! `&ocean_isopycnal_nml check_h_positive` guard.  Abort on the FIRST
+      !! `[ocean.isopycnal] check_h_positive` guard.  Abort on the FIRST
       !! negative layer thickness, naming the pipeline stage that produced it,
       !! the offending `(i,j,k)`, and that column's full thickness profile.
       !!
@@ -4512,7 +4512,7 @@ contains
    end subroutine check_h_positive_or_die
 
    subroutine check_remap_preconditions_or_die(grid, vcoord, nz, outer_step)
-      !! `&vcoord_nml remap_check_preconditions` guard (audit findings V5, V6).
+      !! `[vcoord] remap_check_preconditions` guard (audit findings V5, V6).
       !!
       !! The per-column overlap sweep every remap method shares has two
       !! standing preconditions that nothing has ever asserted:
@@ -4684,13 +4684,13 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
       type(ocean_top_drag_t), intent(inout), optional :: td
-         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! Ice-shelf TOP-drag slot (`[ocean.tdrag]`).  OPTIONAL so the
          !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
          !! test suite need no churn; the production driver always passes
          !! it.  Absent, or present and disabled, => no kernel launch and
          !! a bit-identical step.
       type(ocean_cavity_flux_t), intent(inout), optional :: cav
-         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! Ice-shelf basal-melt slot (`[ocean.cavity_melt]`).
          !! OPTIONAL for the same reason `td` is: the direct
          !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
          !! need no churn, and the production driver always passes it.
@@ -4765,9 +4765,9 @@ contains
       real(wp), intent(in), optional :: eta_forcing(grid%nx_total, grid%ny_total)
       real(wp), intent(in), optional :: eta_pf_seam(grid%nx_total, grid%ny_total)
          !! The part of the `eta_forcing` seam that ALSO reaches the slow PGF
-         !! (`eta_ib` when `&ocean_pgf_nml p_top_in_bc` puts `p_surf` in the
+         !! (`eta_ib` when `[ocean.pgf] p_top_in_bc` puts `p_surf` in the
          !! FV_MOM6 top BC).  Absent ⇒ the slow PGF carries no seam load.
-         !! Read only under `&ocean_bt_nml bc_pgf_forcing`.
+         !! Read only under `[ocean.bt] bc_pgf_forcing`.
          !! Equilibrium-tide elevation (C1), held static across the inner
          !! substep loop.  Forwarded to `barotropic_substep_nonlinear`'s
          !! PGF; absent ⇒ bit-identical.
@@ -4983,7 +4983,7 @@ contains
       ! prognostic (MOM6 `CorAdCalc(u_av, v_av, h_av, ...)`).
       ! Default ⇒ prognostic, bit-identical.
       !
-      ! Mass-consistent CorAdCalc (`&ocean_coriolis_nml use_state_fluxes`):
+      ! Mass-consistent CorAdCalc (`[ocean.coriolis] use_state_fluxes`):
       ! in the pred_corr CORRECTOR, `ms%mass_flux_*_layer` still hold the
       ! PREDICTOR chain's renormalised transports — the uh/vh from the same
       ! solve that produced this `u_av` evaluation state.  Consuming them
@@ -5066,7 +5066,7 @@ contains
       call profiler_start("ocean_bdrag")
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, dt)
       call ocean_channel_drag_compute_tendencies(grid, metrics, bd, ms)
-      ! Ice-shelf top drag (`&ocean_tdrag_nml`) — see `run_stage`.
+      ! Ice-shelf top drag (`[ocean.tdrag]`) — see `run_stage`.
       if (present(td)) call ocean_top_drag_compute_tendencies(td, ms, dt)
       ! Phase 4b: publish the ice-shelf base stress that BOTH boundary-
       ! layer schemes take `u_*` from.  Under a shelf the wind has been
@@ -5130,7 +5130,7 @@ contains
       call profiler_start("ocean_F_slow_assembly")
       ! BT-budget probe: per-region per-term BT power decomposition.
       ! Pull device buffers down to host first (the probe is host-side
-      ! Fortran loops + writes to stdout).  Gated on the namelist knob
+      ! Fortran loops + writes to stdout).  Gated on the input knob
       ! so production runs pay nothing.
       if (dyn%debug_bt_budget) then
          !$acc update self(ms%h_layer)
@@ -5170,7 +5170,7 @@ contains
       ! tendency left out of this sum is both invisible to the fast loop
       ! and mis-corrected on the layers.
       if (present(td)) call add_top_drag_into_F_slow(dyn%bt_work, td, ms)
-      ! MOM6 wt_u parity (`&ocean_bt_nml forcing_visc_rem`): weight the
+      ! MOM6 wt_u parity (`[ocean.bt] forcing_visc_rem`): weight the
       ! forcing depth-mean by h·visc_rem so layers the implicit friction
       ! will immediately damp (grounded stacks under the vdiff BBL glue)
       ! do not force the fast loop (PGF_BUG.md §9).  The PGF-projection
@@ -5456,7 +5456,7 @@ contains
       call profiler_start("ocean_velocity_apply")
       ! `dt_vel` = dt (historical / corrector) or BE·dt (pred_corr
       ! predictor, SPEC §2 P8).
-      ! chksum seams (&ocean_debug_nml chksum, inert when off): each sample
+      ! chksum seams ([ocean.debug] chksum, inert when off): each sample
       ! waits the device, so the async queue-1 chain is serialised ONLY inside
       ! the chksum window — the per-tendency attribution that named the
       ! 30 m/s injector.  FIFO order is unaffected (same queue).
@@ -5481,7 +5481,7 @@ contains
       ! barotropic substep itself — the actual barotropic-coupling flip
       ! — is PR-56's territory (changes the barotropic mode, gated on
       ! the Bleck/Hallberg instability test).  For strict split-path use
-      ! today, keep the explicit / &ocean_bdrag_nml implicit split-apply.
+      ! today, keep the explicit / [ocean.bdrag] implicit split-apply.
       ! Defaults (folds off) ⇒ both applies run ⇒ bit-identical.  The MOM6
       ! BBL glue's piston is the bed drag too (see `run_stage`).
       if (.not. (vd%implicit_drag .or. vd%bbl_glue)) then
@@ -5598,7 +5598,7 @@ contains
          end if
       end if
 
-      ! Sponge.  Map-driven path (&ocean_sponge_nml enable, PR-23)
+      ! Sponge.  Map-driven path ([ocean.sponge] enable, PR-23)
       ! supersedes the legacy per-edge band; exactly one of the two runs.
       ! Both run AFTER bt-correction so they see the recombined per-layer
       ! velocity. `sponge_maps_on` is a local logical because Fortran does
@@ -5824,7 +5824,7 @@ contains
       ! accel_visc_rem stage-entry snapshots (allocated at setup when the
       ! knob is on; 0 on the default-off path where they stay unallocated).
       nbytes = nbytes + arr_bytes(this%avr_u0) + arr_bytes(this%avr_v0)
-      ! Wide-halo BT march-in shadow state (`&ocean_bt_nml bt_halo > 0`).
+      ! Wide-halo BT march-in shadow state (`[ocean.bt] bt_halo > 0`).
       ! Allocated + device-mapped by `ocean_dyn_enable_bt_wide`, which the
       ! driver runs AFTER `ocean_state_enter_data`; the driver therefore
       ! latches `mem_set_counted_budget` after that call so this term is in

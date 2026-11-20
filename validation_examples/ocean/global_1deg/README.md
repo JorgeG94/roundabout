@@ -1,6 +1,6 @@
 # Global 1° tripolar ocean, unforced — roundabout's first global run
 
-`global_1deg_unforced.nml` runs the MOM6 **OM_1deg** geometry (360 × 320
+`global_1deg_unforced.toml` runs the MOM6 **OM_1deg** geometry (360 × 320
 tracer points, bipolar Arctic cap, periodic in x, north tripolar fold) from
 a **WOA13 January** ocean at rest, with **no forcing** — no wind, no heat or
 freshwater flux, no sea ice — for one simulated year.
@@ -14,8 +14,8 @@ It is **not** a climate: with nothing driving it, the flow is the
 geostrophic adjustment of the WOA density field plus what the grid and the
 closures make of it.
 
-**Wind-forced variant:** `global_1deg_wind.nml` adds one year of JRA55-do
-wind stress through `&ocean_dataovr_nml` and changes nothing else — §6.
+**Wind-forced variant:** `global_1deg_wind.toml` adds one year of JRA55-do
+wind stress through `[ocean.dataovr]` and changes nothing else — §6.
 
 | | |
 |---|---|
@@ -59,7 +59,7 @@ new machine or toolchain.
 Both paths make the movie: the executable path renders it afterwards from
 the diagnostic file (`global_movie.py`), the Python path in-process as the
 run goes. It prints where everything went: the run directory holds
-`global_1deg_unforced.nml` (with `t_end` set from `--days`), the `INPUT`
+`global_1deg_unforced.toml` (with `t_end` set from `--days`), the `INPUT`
 symlink to the data, `run.log` (the console), `output/` (the diagnostic
 file; with `--python` also `daily.txt`, the frames and the movie),
 `movie/` (the executable path's frames and movie) and `check.txt`.
@@ -130,7 +130,7 @@ grows:
 In order: fetch the inputs (idempotent, SHA-256 checked) → prepare the
 model-grid inputs (skipped while `bathy_om1deg.nc` and `ic_woa13_jan.nc`
 are newer than the files they are made from) → set up the run directory
-(`INPUT` symlink, namelist copy with `t_end` from `--days`) → run → movie →
+(`INPUT` symlink, input copy with `t_end` from `--days`) → run → movie →
 `check_against_reference.py`. Each step can be run by hand:
 
 ### Inputs (not in the repository)
@@ -152,24 +152,24 @@ nothing to install. Takes about 30 s.
 
 ### The reference run — the `rdb` executable
 
-The namelist reads its three input files from `./INPUT/`:
+The input reads its three input files from `./INPUT/`:
 
 ```bash
 mkdir run && cd run
 ln -s "$RDB_DATA_DIR/OM_1deg" INPUT
-cp /path/to/roundabout/validation_examples/ocean/global_1deg/global_1deg_unforced.nml .
-CUDA_VISIBLE_DEVICES=0 /path/to/build/rdb global_1deg_unforced.nml > run.log
+cp /path/to/roundabout/validation_examples/ocean/global_1deg/global_1deg_unforced.toml .
+CUDA_VISIBLE_DEVICES=0 /path/to/build/rdb global_1deg_unforced.toml > run.log
 ```
 
 (or put absolute paths in `supergrid_file`, `bathymetry_file` and
-`&ocean_zinit_nml file`). The console prints, every simulated day,
+`[ocean.zinit] file`). The console prints, every simulated day,
 `[stats] Day … En … MaxCFL …` and the mass / salt / heat budget lines
 (`Error` = the relative closure residual, `out` = the tracked boundary
 flux, which is round-off in this closed domain).
 
 **On several ranks** (MPI build, `-DRDB_ENABLE_MPI=ON`; several GPUs also need
-`-DRDB_CUDA_AWARE_MPI=ON`): the same namelist runs unchanged — with
-`&mpi_nml` unset the engine splits the tripolar grid north-south (`px = 1`,
+`-DRDB_CUDA_AWARE_MPI=ON`): the same input runs unchanged — with
+`[mpi]` unset the engine splits the tripolar grid north-south (`px = 1`,
 `py = ranks`; the fold is single-rank in x) and every rank reads only its
 band of the three input files.  Pin one GPU per rank BEFORE `MPI_Init`:
 
@@ -180,7 +180,7 @@ export CUDA_VISIBLE_DEVICES=$OMPI_COMM_WORLD_LOCAL_RANK
 exec "$@"
 SH
 chmod +x pin.sh
-mpirun -np 4 ./pin.sh /path/to/build/rdb global_1deg_unforced.nml > run.log
+mpirun -np 4 ./pin.sh /path/to/build/rdb global_1deg_unforced.toml > run.log
 ```
 
 The state and the console are bit-identical to the 1-rank run (the console
@@ -191,7 +191,7 @@ per simulated day on 1 / 2 / 4 V100s (`docs/CAPABILITIES_AND_LIMITATIONS.md`,
 ### The same run through the Python interface
 
 `run_global_1deg.py` builds the same configuration knob by knob with the
-typed `rdb.Config` API (and checks it against the namelist before it
+typed `rdb.Config` API (and checks it against the input before it
 starts), drives it with `rdb.Model(config).step(...)`, reads the
 diagnostic manager's in-memory buffers every day
 (`model.diagnostic("SSH")`, `"u"`, `"v"` — no NetCDF round trip) and
@@ -267,8 +267,8 @@ longitude/latitude and are approximate.)
   2. The PR-4 barotropic default flip: `feead917a` (`hvel_mom6`, `bbl_glue`
      and `visc_rem_chain` default ON) and `5c7abf2bb` (`frhat_scheme =
      "hybrid"`). Day-3 MaxCFL 0.072 → 0.033. Confirmed: beta with those four
-     knobs set back (`visc_rem_chain=.false.`, `frhat_scheme="arithmetic"`,
-     `hvel_mom6=.false.`, `bbl_glue=.false.`) reproduces the pre-flip numbers
+     knobs set back (`visc_rem_chain=false`, `frhat_scheme="arithmetic"`,
+     `hvel_mom6=false`, `bbl_glue=false`) reproduces the pre-flip numbers
      (day-3 MaxCFL 0.0721 vs 0.0723, day-1 En 5.669e-04 vs 5.670e-04). A
      deliberate MOM6-parity change.
 
@@ -342,20 +342,20 @@ longitude/latitude and are approximate.)
   the same jet reaches the 6 m/s clamp by day 19.
 * **`z_fixed` + bed-only bottom drag gives no bottom drag.** The bed-only
   mode (`hbbl = 0`) drags layer `k = 1`, which is an inert filler in every
-  column shallower than the deepest level; configure warns. This namelist
+  column shallower than the deepest level; configure warns. This input
   uses `hbbl = 10` (MOM6's value), which reaches the live bottom layer.
 * **No channel list, no `CHANNEL_DRAG` file, no GM/MEKE, KPP instead of
   EPBL, no neutral diffusion, no sea ice.** None of them is needed for a
   stable year; all of them matter for a realistic one.
 
-## 6. Wind-forced: `global_1deg_wind.nml`
+## 6. Wind-forced: `global_1deg_wind.toml`
 
 The same configuration with **one** change: a year of JRA55-do wind stress,
-read from a file through `&ocean_dataovr_nml` and cycled. Grid, bathymetry,
+read from a file through `[ocean.dataovr]` and cycled. Grid, bathymetry,
 vertical grid, WOA13 initial state, physics, time step and output are the
 unforced case's (the diagnostics add the depth-integrated transport
 `transport_x`/`transport_y`, which is output only). The whole run is driven
-from the namelist by the `rdb` executable; no Python is involved.
+from the input by the `rdb` executable; no Python is involved.
 
 **What is forced and what is not.** Wind stress only. There is **no heat
 flux, no freshwater flux and no sea ice**: temperature and salinity change
@@ -448,17 +448,18 @@ float32, **337 MB**. It holds `taux(xf, y, time)` and `tauy(x, yf, time)`,
 and `time` is "days since 1958-01-01", 0.5 … 364.5. The layout is exactly
 what the `tau_x`/`tau_y` tags read: Fortran order, and one face more than
 there are cells in the staggered direction (`validation_examples/ocean/data_forcing/README.md`).
-In the namelist:
+In the input:
 
-```
-&ocean_dataovr_nml
-   enable       = .true.
-   time_mode    = "cyclic"
-   cycle_period = 31536000.0   ! 365 days
-   t_offset     = 0.0          ! model t = 0 is 1958-01-01 00:00
-   tau_x_file   = "INPUT/wind_jra55do_1958_24h.nc",  tau_x_var = "taux"
-   tau_y_file   = "INPUT/wind_jra55do_1958_24h.nc",  tau_y_var = "tauy"
-/
+```toml
+[ocean.dataovr]
+   enable = true
+   time_mode = "cyclic"
+   cycle_period = 31536000.0  # 365 days
+   t_offset = 0.0  # model t = 0 is 1958-01-01 00:00
+   tau_x_file = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_x_var = "taux"
+   tau_y_file = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_y_var = "tauy"
 ```
 
 The reader interpolates linearly between the daily records and wraps across
@@ -485,8 +486,8 @@ bands) is the familiar one:
 
 ```bash
 mkdir run && cd run && ln -s "$RDB_DATA_DIR/OM_1deg" INPUT
-cp /path/to/roundabout/validation_examples/ocean/global_1deg/global_1deg_wind.nml .
-CUDA_VISIBLE_DEVICES=1 /path/to/build/rdb global_1deg_wind.nml > run.log
+cp /path/to/roundabout/validation_examples/ocean/global_1deg/global_1deg_wind.toml .
+CUDA_VISIBLE_DEVICES=1 /path/to/build/rdb global_1deg_wind.toml > run.log
 ```
 
 Measured on one V100, 2026-09-30: nvfortran 26.5,
@@ -557,7 +558,7 @@ row per day in `wind_gfix_daily.txt` there).
   most 2.5e5 J, §4): some flux in this closed domain, larger when the flow
   is stronger, is booked as boundary flow. **Measured, not the tripolar
   fold**: a single-rank 2-day
-  re-run of both namelists (`gfortran`/nvfortran cc70 agree; `state`/`En`
+  re-run of both inputs (`gfortran`/nvfortran cc70 agree; `state`/`En`
   0.000% against `reference_daily.csv`) gives day-2 `out` of mass 1.45 kg /
   salt -62.6 / heat -3.84 (unforced) vs mass 0.067 kg / salt 602 / heat
   -11.1 (wind-forced) — both already at round-off-telescoping SCALE
@@ -578,7 +579,7 @@ row per day in `wind_gfix_daily.txt` there).
   jets in 9.5–50 m cells. The median over the year of the daily maximum is
   1.40 m/s.
 
-  The namelist output has no 3-D velocity, so the 3-D maximum is not
+  The input output has no 3-D velocity, so the 3-D maximum is not
   reported. MaxCFL bounds it.
 
 ### 6.3 Physics sanity
@@ -615,10 +616,10 @@ yardstick below.
   PGF, so the barotropic mode never felt JEBAR. MOM6 forces the barotropic
   mode with that depth mean minus only its free-surface part
   (`BT_force`/`eta_PF`); roundabout now does the same
-  (`&ocean_bt_nml bc_pgf_forcing`, default on). That fix alone gave
+  (`[ocean.bt] bc_pgf_forcing`, default on). That fix alone gave
   73–83 Sv. The FV_MOM6 PGF then evaluated its constant-by-layer density at
   the surface reference pressure rather than in situ; with the in-situ
-  density (`&ocean_pgf_nml insitu_density`, default on) the transport
+  density (`[ocean.pgf] insitu_density`, default on) the transport
   reaches the ~150 Sv here.
 * **The subtropical gyres match MOM6.** The SSH of the subtropical box
   minus the subpolar box (N. Atlantic 70–40° W × 25–35° N against
@@ -664,7 +665,7 @@ yardstick below.
 
 ### 6.4 The movie
 
-The movie is rendered from the diagnostic file of the namelist run. It needs
+The movie is rendered from the diagnostic file of the input run. It needs
 `nccopy` on PATH for the NetCDF-4 → NetCDF-3 flattening.
 
 ```bash
@@ -694,13 +695,13 @@ density, and the staircase has thermal-wind jets. Horizontal bilinear
 interpolation in the IC preparation would remove them. That changes the
 unforced reference, so it is left for its own change.
 
-## 7. Sea ice: `global_1deg_ice.nml`
+## 7. Sea ice: `global_1deg_ice.toml`
 
 **Thermodynamic sea ice on the global tripolar grid** — the v0.1.0
-release showcase for the SIS2 port on a real global ocean. `global_1deg_wind.nml`
-plus `&ocean_ice_nml enable=.true.`, Winton (2000) two-layer column
+release showcase for the SIS2 port on a real global ocean. `global_1deg_wind.toml`
+plus `[ocean.ice] enable=true`, Winton (2000) two-layer column
 thermodynamics, multi-category ITD (`ncat=5`), and category ice/snow
-transport (`transport=.true.`). **EVP dynamics on the fold and realistic
+transport (`transport=true`). **EVP dynamics on the fold and realistic
 (bulk-formula / JRA55-do) atmospheric forcing for ice are post-v0.1.0** —
 see "Configure-time refusal" and "No invented forcing" below; the
 dynamic-ice showcases are the regional `validation_examples/ocean/sea_ice/`
@@ -711,7 +712,7 @@ Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-10-07,
 branch `validate/global-1deg-ice-v010` off `beta` at `4fe9e6464` — the #178
 bottom-drag fix (apply bottom drag on the live bed row when `z_fixed`
 drawdown vanishes the setup bed layer) — cold start, against the committed
-namelist (verified identical to the one used here, ignoring comments):
+input (verified identical to the one used here, ignoring comments):
 365 days, 17 520 steps, **2654 s wall (7.27 s/simulated day)**, 10.57 GB of
 device memory (throughput 0.760 Mcells/s). Exit 0; `grep -i 'nan\|trunc'
 run.log` finds nothing — no NaN and no CFL truncation anywhere in the run.
@@ -722,11 +723,11 @@ fold-row conservation review); see §7.3/§7.5/§7.6 for what changed.
 
 The release checklist for this run asked for thermodynamics + ITD + EVP
 dynamics + the ice-ocean stress blend. `./rdb --validate-only` on a
-`dynamics=.true.` copy of this namelist refuses it outright:
+`dynamics=true` copy of this input refuses it outright:
 
 ```
-&ocean_ice_nml dynamics=.true. requires every &ocean_bc_nml edge to be 'wall' or 'periodic' (v1: no OBC/tidal/sponge/clamped/Chapman edges for ice dynamics)
-&ocean_ice_nml dynamics=.true. is incompatible with north='tripolar_fold' (v1: plain periodic/wall ghost policy only)
+[ocean.ice] dynamics=true requires every [ocean.bc] edge to be 'wall' or 'periodic' (v1: no OBC/tidal/sponge/clamped/Chapman edges for ice dynamics)
+[ocean.ice] dynamics=true is incompatible with north='tripolar_fold' (v1: plain periodic/wall ghost policy only)
 Configuration validation failed — see errors above
 VALIDATE-ONLY: REFUSED by validate_config: global_1deg_ice_dyntest.nml
 ```
@@ -734,25 +735,25 @@ VALIDATE-ONLY: REFUSED by validate_config: global_1deg_ice_dyntest.nml
 This refusal is **unconditional on `north='tripolar_fold'`** — it fires on
 one rank exactly as it would on four, which is stricter than "EVP-on-the-fold
 needs more than one rank." EVP's ghost-wrap contract is plain periodic/wall
-only; it has no fold-aware velocity exchange. So this namelist ships with
-`dynamics=.false.`: ice velocity falls back to sampling the ocean surface
-layer (still advected by `transport=.true.`, just with no independent
+only; it has no fold-aware velocity exchange. So this input ships with
+`dynamics=false`: ice velocity falls back to sampling the ocean surface
+layer (still advected by `transport=true`, just with no independent
 rheology), and the EVP ice-ocean stress blend does not apply — momentum
 reaches the ocean as the ice-blind wind-stress snapshot (documented
 divergence D7). EVP-on-the-fold is filed as a post-v0.1.0 issue.
 
 ### 7.2 No invented forcing: the IC is already supercooled at both poles
 
-The sea-ice atmospheric forcing (`&ocean_ice_nml air_temp`/`restore_lambda`/
+The sea-ice atmospheric forcing (`[ocean.ice] air_temp`/`restore_lambda`/
 `sw_down`) is a v1 stub: a single scalar restoring value, uniform over the
 whole globe and constant in time — it governs the **surface energy balance
 of ice that already exists** (conductive growth/melt against a slab
 atmosphere), not a direct flux onto open water. `air_temp=-20`,
 `restore_lambda=20`, `sw_down=0` are the same values already shipped and
-validated in `validation_examples/ocean/sea_ice/polar_freezeup_thermo.nml`
-and `sea_ice_pack/sea_ice_pack.nml` — nothing new was invented for this run.
+validated in `validation_examples/ocean/sea_ice/polar_freezeup_thermo.toml`
+and `sea_ice_pack/sea_ice_pack.toml` — nothing new was invented for this run.
 
-No `&ocean_thermo_nml q_heat` was added either. Checking the WOA13 January
+No `[ocean.thermo] q_heat` was added either. Checking the WOA13 January
 surface initial condition directly: of 115 200 surface cells, **11 161**
 (mostly Arctic/sub-Arctic, a smaller number near Antarctica) are already at
 or below their local linear-liquidus freezing point `T_f = -0.054·S`. The
@@ -973,7 +974,7 @@ run's own measurements now also happen to agree with.
 - **No realistic atmospheric forcing for ice.** `air_temp`/`restore_lambda`/
   `sw_down` are a v1 scalar/uniform/time-invariant stub (§7.2, §7.4) — no
   bulk formulae, no 2-D fields, no file input, no seasonal or diurnal
-  cycle. Coupling this to the JRA55-do fields this namelist already reads
+  cycle. Coupling this to the JRA55-do fields this input already reads
   for wind is filed as a post-v0.1.0 issue.
 - **No EVP dynamics on this grid** (§7.1) — ice drifts only by sampling the
   ocean surface current; no independent rheology, no ice-ocean stress
@@ -999,19 +1000,19 @@ run's own measurements now also happen to agree with.
   background-viscosity file not read, one-cell trenches/sills) apply
   unchanged here.
 
-## 8. Real fresh water: `global_1deg_ice_fwmass.nml`
+## 8. Real fresh water: `global_1deg_ice_fwmass.toml`
 
-`jra_ryf_1deg.nml` (JRA55-do bulk forcing, zstar, SIS2-derived ice) with the fresh-water
-**mass** path on: `&ocean_forcing_nml freshwater="mass"` (precipitation, evaporation and
+`jra_ryf_1deg.toml` (JRA55-do bulk forcing, zstar, SIS2-derived ice) with the fresh-water
+**mass** path on: `[ocean.forcing] freshwater="mass"` (precipitation, evaporation and
 runoff change the column volume; evaporation that would empty a layer is passed down the
-column), the CICE6/Icepack-port ice (`&ocean_ice_nml scheme="cice"`, `nilyr=4`,
-`&ocean_ice_thermo_nml update_ocn_f`), the ice and snow mass as a surface load
-(`&ocean_psurf_nml ice_load` + `ice_load_balance_ic`; `freshwater="mass"` with sea ice
+column), the CICE6/Icepack-port ice (`[ocean.ice] scheme="cice"`, `nilyr=4`,
+`[ocean.ice_thermo] update_ocn_f`), the ice and snow mass as a surface load
+(`[ocean.psurf] ice_load` + `ice_load_balance_ic`; `freshwater="mass"` with sea ice
 refuses to start without it) and liquid + frozen (calving) runoff from model-grid files
-(`&ocean_dataovr_nml lrunoff_* / frunoff_*`, `time_mode="cyclic"`, 365 days).
+(`[ocean.dataovr] lrunoff_* / frunoff_*`, `time_mode="cyclic"`, 365 days).
 `atm_load` stays off: the parent does not apply the atmospheric sea-level pressure to the
-free surface, and this namelist does not change that. The parent has `dt_therm_ratio = 1`,
-so this one does too (the OM3 interval order, `diabatic_first = .false.`, needs a ratio
+free surface, and this input does not change that. The parent has `dt_therm_ratio = 1`,
+so this one does too (the OM3 interval order, `diabatic_first = false`, needs a ratio
 above 1). Nothing else
 differs from the parent.
 
@@ -1046,18 +1047,18 @@ land cells that carried mass and the farthest move. It takes about one minute fo
 degree source on the 360 x 320 mosaic (the point map is built once, not per record).
 See `docs/howto/prepare_runoff_file.md`.
 
-## 9. ACCESS-OM3 vertical-mixing settings: `global_1deg_ice_om3.nml`
+## 9. ACCESS-OM3 vertical-mixing settings: `global_1deg_ice_om3.toml`
 
-`global_1deg_ice_fwmass.nml` (Sec. 8, same inputs) with OM3's boundary-layer and interior
-mixing in place of KPP + PP81: the energetics-based boundary layer (`&ocean_epbl_nml`,
+`global_1deg_ice_fwmass.toml` (Sec. 8, same inputs) with OM3's boundary-layer and interior
+mixing in place of KPP + PP81: the energetics-based boundary layer (`[ocean.epbl]`,
 Reichl & Hallberg 2018) with OM3's values of the OM4 mstar scheme, `nstar = 0.06`,
 `tke_decay = 0.01`, the additive Langmuir enhancement and `combine = "max_shear"`; river
 mixing over 40 m (`rivermix_depth`); Jackson, Hallberg & Legg (2008) shear mixing
-(`&ocean_kappa_shear_nml`); a 1.5e-5 m2/s background diffusivity with unit Prandtl number;
-and the OM3 interval order (`diabatic_first = .false.`) at `dt_therm_ratio = 4`
+(`[ocean.kappa_shear]`); a 1.5e-5 m2/s background diffusivity with unit Prandtl number;
+and the OM3 interval order (`diabatic_first = false`) at `dt_therm_ratio = 4`
 (7200 s, OM3's `DT_THERM`).
 
-What is not OM3's yet is listed in the namelist header: the shortwave bands and tidal
+What is not OM3's yet is listed in the input header: the shortwave bands and tidal
 mixing. At `dt_therm_ratio > 1` the ocean spends, over each thermodynamic interval, the MEAN of
 the atmosphere-driven fluxes of its dynamic steps (the "Surface flux at `dt_therm_ratio > 1`" row of
 `docs/CAPABILITIES_AND_LIMITATIONS.md`), not one step's sample; the cosine-zenith shortwave is

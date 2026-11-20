@@ -493,7 +493,7 @@ contains
             "[output]"//new_line("a")// &
             "output_to_file = false"//new_line("a")
       call read_config_from_toml_string(nml, cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "namelist must PARSE: "//what)
+      call check(error, ierr == OCEAN_STATUS_OK, "input must PARSE: "//what)
       if (allocated(error)) return
       ierr = -999
       call validate_config(cfg, ierr=ierr)

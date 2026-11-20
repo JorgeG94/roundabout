@@ -62,19 +62,19 @@ module rdb_ice_cice_hooks
    !!     bank; the scheme-neutral aggregates are refreshed for every consumer (diagnostics,
    !!     console totals, the open-water weight of the bulk forcing).
    !!
-   !! **Atmosphere and stress.**  With `&ocean_atm_forcing_nml enable` the `atm_prepare` hook builds
+   !! **Atmosphere and stress.**  With `[ocean.atm_forcing] enable` the `atm_prepare` hook builds
    !! the ice's inputs from the SAME `atm_state_t` arrays and time level the bulk forcing used at
    !! the top of this outer step (`tas, huss, uas, vas, psl, rlds, prra, prsn`, `rsds` for the ice
    !! radiation, the one wind rotation); otherwise from the uniform atmosphere of the run slot.  The
    !! ocean-side stress blend (`ice_ocean_stress_flux_c`) reads `ice%tau_a_x/y`: under the prescribed
    !! atmosphere the bulk forcing REFRESHES them every step with the unweighted wind stress of the
    !! step (and applies the blend itself at the top of the step, with the concentration and the ice
-   !! stress of the previous ice step); with the constant wind of `&physics_nml` they are the
+   !! stress of the previous ice step); with the constant wind of `[physics]` they are the
    !! configure-time snapshot.  Either way the hand-off blend of this stage uses the wind the ice
    !! just felt.  The `ice_cice_stress_blend` of the adapters (a different formulation: per-ice-area
    !! stress) is not used, the face blend of the C-grid dynamics conserves the momentum of the pair
    !! exactly.  Rain through the ice (`rain_through_impl`) is removed from the window mean of `fresh`
-   !! before the hand-over (unless `&ocean_forcing_nml freshwater = "virtual"`, where the open
+   !! before the hand-over (unless `[ocean.forcing] freshwater = "virtual"`, where the open
    !! fraction's rain dilutes too and the term stays): see the module docstring of `rdb_ice_cice_adapters`.
    use, intrinsic :: iso_fortran_env, only: int32
    use rdb_constants, only: wp
@@ -230,7 +230,7 @@ contains
    end subroutine ice_cice_step
 
    subroutine ice_cice_ledger_report(state, compute_rank)
-      !! The console line of the named-term ice ledger (`&ocean_ice_nml ledger`): the cumulative
+      !! The console line of the named-term ice ledger (`[ocean.ice] ledger`): the cumulative
       !! residual of each line (water, salt, heat) relative to its cumulative scale, with the stage
       !! that carries the largest one.  Called at the status cadence next to the ocean's console
       !! block; the sums are EFP reproducing sums combined over the ranks once per step, so the numbers do not
@@ -257,7 +257,7 @@ contains
    end subroutine ice_cice_post_enter
 
    subroutine ice_cice_ic_apply(state, par, hm, geolatT, ierr)
-      !! Cold-start seed from `&ocean_ice_ic_nml` (host, BEFORE `enter_data`): the analytic
+      !! Cold-start seed from `[ocean.ice_ic]` (host, BEFORE `enter_data`): the analytic
       !! concentration of the SIS2 seeder (`uniform`, or the `latitudes` polar caps) as ONE
       !! slab per cell (thickness `h_ice`, snow `h_snow`, surface temperature `t_ice`; the
       !! linear profile to the freezing point `-depressT*S_ref` of the EOS reference salinity)
@@ -442,7 +442,7 @@ contains
       ctx%work%zlvs = zs
       ! The atmosphere is the prescribed state the bulk forcing used THIS step (same arrays, same
       ! time level: `atm_state_update` ran at the top of the outer step) when
-      ! `&ocean_atm_forcing_nml enable`, else the uniform one of the run slot (setting both is refused
+      ! `[ocean.atm_forcing] enable`, else the uniform one of the run slot (setting both is refused
       ! at configure).  The two paths are the same builder with different arrays; `tair_offset` is 0
       ! because the state is in kelvin on both.
       if (S%atm%enable) then
@@ -630,7 +630,7 @@ contains
       ! ledger closes) but the ocean's own precipitation on the open fraction carries ENTHALPY ONLY
       ! (the bulk forcing writes no salt or mass term), so the virtual-salt dilution of the hand-over
       ! must not count it either.  Prescribed atmosphere only: with the uniform atmosphere the rain is
-      ! zero and nothing runs.  Under `&ocean_forcing_nml freshwater = "virtual"` the open fraction's
+      ! zero and nothing runs.  Under `[ocean.forcing] freshwater = "virtual"` the open fraction's
       ! rain DOES dilute (`salt_fw`), so the ice-covered share must too: the term stays in `fresh`.
       ! Under `"mass"` the open share is real volume (`lprec`) and the covered share arrives as
       ! `seaice_melt = fresh`: the term stays in `fresh` there as well, so together the two shares

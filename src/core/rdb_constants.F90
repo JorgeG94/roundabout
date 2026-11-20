@@ -43,7 +43,7 @@ module rdb_constants
    real(wp), parameter :: CP_WATER = 4000.0_wp
    real(wp), parameter :: SEAWATER_CP_DEFAULT = 3992.0_wp
       !! Seawater heat capacity (J/(kg K)): MOM6 `C_P` as set by ACCESS-OM3.
-      !! Default of `&ocean_eos_nml c_p` under both T/S conventions.  The
+      !! Default of `[ocean.eos] c_p` under both T/S conventions.  The
       !! exact TEOS-10 value cp0 = 3991.86795711963 is opt-in.
       !! Specific heat capacity of seawater (J/(kg·K)).  Converts surface
       !! heat flux Q_net [W/m²] to kinematic heat flux Q_net/(rho_0·cp) [m·K/s].
@@ -170,7 +170,7 @@ module rdb_constants
       !! ALE remap pulls `h_layer(k) → h_target(k)` where the targets
       !! come from absolute-depth interfaces `z_target = (0, h_nominal,
       !! 2·h_nominal, ..., h_ref)` with `h_nominal = h_ref/nz_ml` — or,
-      !! under `&vcoord_nml z_fixed_profile = "list" | "tanh"`, from a
+      !! under `[vcoord] z_fixed_profile = "list" | "tanh"`, from a
       !! stretched per-layer table (`ocean_vcoord_t%z_fixed_zi`).
       !! In deep cells the interfaces stay locked at those depths; in
       !! shallow cells the bed-side layers vanish to a minimum
@@ -237,7 +237,7 @@ module rdb_constants
    ! ---- Barotropic face-layer-weight ("frhat") scheme constants ----
 
    integer, parameter :: FRHAT_ARITHMETIC = 0
-      !! `&ocean_bt_nml frhat_scheme = "arithmetic"` (DEFAULT pre-port
+      !! `[ocean.bt] frhat_scheme = "arithmetic"` (DEFAULT pre-port
       !! behaviour).  Every barotropic depth mean
       !! (`rdb_barotropic_coupling::derive_bt_from_layers`,
       !! `face_depth_mean_u/v`, `face_depth_mean_rem_u/v`,
@@ -247,7 +247,7 @@ module rdb_constants
       !! `h_face(k) = 0.5*(h_L(k) + h_R(k))`.  Bit-identical to the
       !! pre-frhat-port tree.
    integer, parameter :: FRHAT_HYBRID = 1
-      !! `&ocean_bt_nml frhat_scheme = "hybrid"` — MOM6's
+      !! `[ocean.bt] frhat_scheme = "hybrid"` — MOM6's
       !! `HVEL_SCHEME = HYBRID` face-thickness closure (`btcalc`'s
       !! default scheme there).
       !! Above the shallower of the two abutting columns' bed depths the
@@ -266,7 +266,7 @@ module rdb_constants
 contains
 
    pure integer function parse_frhat_scheme(str, default_code) result(scheme)
-      !! Convert an `&ocean_bt_nml frhat_scheme` namelist string to a
+      !! Convert an `[ocean.bt] frhat_scheme` input string to a
       !! `FRHAT_*` constant.  Unrecognised ⇒ `default_code` if given,
       !! else `FRHAT_ARITHMETIC`.
       character(len=*), intent(in) :: str

@@ -1,4 +1,4 @@
-!! Windowed tracer advection (`&ocean_vmix_nml dt_tracer_advect_ratio > 1`)
+!! Windowed tracer advection (`[ocean.vmix] dt_tracer_advect_ratio > 1`)
 !! under the default `split_scheme = "pred_corr"`, driven through the
 !! PRODUCTION engine path (`engine_step` / `engine_step_finalize`).
 !!
@@ -100,11 +100,11 @@ contains
       logical, intent(in) :: uniform
       character(len=*), intent(in), optional :: vcoord
       logical, intent(in), optional :: dfirst
-         !! `&ocean_vmix_nml diabatic_first` (default: leave unset = `.true.`).
+         !! `[ocean.vmix] diabatic_first` (default: leave unset = `.true.`).
       integer, intent(in), optional :: therm
          !! `dt_therm_ratio` (default 4).
       character(len=*), intent(in), optional :: extra
-         !! Extra namelist text appended verbatim (e.g. `&ocean_bbl_mixing_nml ... /`).
+         !! Extra input text appended verbatim (e.g. `[ocean.bbl_mixing] ... /`).
       character(len=:), allocatable :: nml
       character(len=:), allocatable :: vc, df
       character(len=16) :: ts

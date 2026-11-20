@@ -1,4 +1,4 @@
-!! `&ocean_bt_nml substep_zeta_ke` — MOM6-parity planetary-only BT fast
+!! `[ocean.bt] substep_zeta_ke` — MOM6-parity planetary-only BT fast
 !! loop (live ζ_bt/∇KE dropped from the substeps, frozen copies retained
 !! in `F_bt_*_fast`, Cor_ref reduced to `f·v̄`).
 !!

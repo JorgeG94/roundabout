@@ -50,7 +50,7 @@ contains
       h_old = [50.0_wp, 0.02_wp, 30.0_wp, 20.0_wp]
       call min_thickness_target_column(NZ, h_old, FLOOR, h_new, grounded)
 
-      call check(error, grounded, "grounded column must report grounded=.true.")
+      call check(error, grounded, "grounded column must report grounded=true")
       if (allocated(error)) return
 
       sum_old = sum(h_old)
@@ -68,7 +68,7 @@ contains
       ! An already-thick column: strict no-op (grounded=.false., exact copy).
       h_flat = [25.0_wp, 25.0_wp, 25.0_wp, 25.0_wp]
       call min_thickness_target_column(NZ, h_flat, FLOOR, h_flat_new, grounded)
-      call check(error,.not. grounded, "thick column must report grounded=.false.")
+      call check(error,.not. grounded, "thick column must report grounded=false")
       if (allocated(error)) return
       do k = 1, NZ
          call check(error, h_flat_new(k) == h_flat(k), &

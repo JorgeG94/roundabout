@@ -607,8 +607,8 @@ contains
          call vc_pqm%enter_data()
 
          ! Run the production entry point via the config-level selector
-         ! (vcoord%remap_method), exactly the path a `&vcoord_nml
-         ! remap_method = "pqm"` namelist reaches.
+         ! (vcoord%remap_method), exactly the path a `[vcoord]
+         ! remap_method = "pqm"` input reaches.
          call ocean_apply_ale_remap_step(grid, vc_ppm, ms_ppm, bt_eta_ppm, bt_H_ref_ppm, &
                                          method=vc_ppm%remap_method)
          call ocean_apply_ale_remap_step(grid, vc_pqm, ms_pqm, bt_eta_pqm, bt_H_ref_pqm, &

@@ -87,7 +87,7 @@ module rdb_ice_therm1
    !! driver: `fswsfcn, fswintn, fswthrun` [W/m2], `Iswabsn` per ice layer and
    !! `Sswabsn` per snow layer [W/m2] (all ZERO when the radiation driver is not
    !! wired).  They are updated in place only by `sw_redist` (upstream does the
-   !! same).  `sw_redist` is a shim argument (the namelist knob does not exist
+   !! same).  `sw_redist` is a shim argument (the input knob does not exist
    !! yet); the iteration cap and thresholds are the BL99 constants.
    !!
    !! **Errors.**  Per-category word `ierr_n(i, j, n)` is WRITTEN (not OR-ed) each

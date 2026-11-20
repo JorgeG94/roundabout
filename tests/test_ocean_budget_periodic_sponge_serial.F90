@@ -44,7 +44,7 @@
 !! itself large enough, and platform/compiler-sensitive enough, to swamp
 !! the bug's own signature.  Measured directly while calibrating this file
 !! (gfortran default flags vs nvfortran `-gpu=cc70`, otherwise IDENTICAL
-!! namelist and step count, EFP-reduced `mass_out` via
+!! input and step count, EFP-reduced `mass_out` via
 !! `ocean_console_stats_report`'s `budget_out`):
 !!
 !! | build              | fixed        | broken       |

@@ -1,4 +1,4 @@
-!! Real fresh-water MASS at the ocean surface, `&ocean_forcing_nml freshwater = "mass"`
+!! Real fresh-water MASS at the ocean surface, `[ocean.forcing] freshwater = "mass"`
 !! (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`).  Analytical gates:
 !!
 !!   1. `rain_grows_column_exactly`: N steps of uniform rain: the top layer grows by N*P*dt/rho0,

@@ -1,4 +1,4 @@
-!! Runoff on the model grid (`&ocean_dataovr_nml lrunoff / frunoff`, slice B of the real fresh-water
+!! Runoff on the model grid (`[ocean.dataovr] lrunoff / frunoff`, slice B of the real fresh-water
 !! mass work).  Analytical gates:
 !!
 !!   1. `runoff_point_source_exact`: a liquid-runoff point source read from a file grows exactly
@@ -15,7 +15,7 @@
 !!   5. `runoff_config_gates`: accepted under "mass" and "virtual", refused under "none", a blank
 !!      variable is refused, and the runoff tags are not among the ones the atmosphere forcing
 !!      conflicts with.
-!!   6. `runoff_engine_closed_basin`: the engine path (namelist, reader, apply, assembler, mass
+!!   6. `runoff_engine_closed_basin`: the engine path (input, reader, apply, assembler, mass
 !!      step) raises a closed basin's mass by exactly the runoff, and the console residual closes.
 module test_ocean_runoff
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
@@ -490,7 +490,7 @@ contains
 
    function basin_nml(freshwater, extra, tail) result(nml)
       !! A closed 12 x 8 x 4 basin, `ssp_rk2`, sigma, components on, with `freshwater` as given;
-      !! `extra` is appended to `&ocean_forcing_nml`'s group as further groups.
+      !! `extra` is appended to `[ocean.forcing]`'s group as further groups.
       character(len=*), intent(in) :: freshwater, extra, tail
       character(len=:), allocatable :: nml
 
@@ -617,7 +617,7 @@ contains
       if (allocated(error)) return
 
       ! Not an atmosphere-forcing prerequisite: the runoff tags are exempt from the
-      ! `&ocean_atm_forcing_nml` / `&ocean_dataovr_nml` conflict, tau/heat/evap/lprec are not.
+      ! `[ocean.atm_forcing]` / `[ocean.dataovr]` conflict, tau/heat/evap/lprec are not.
       cfg%start_date = "1958-01-01"
       cfg%ocean%forcing%enable_components = .true.
       cfg%ocean%grid%grid_config = "spherical"
@@ -667,10 +667,10 @@ contains
                                                   'time_mode = "static"'//NL// &
                                                   'lrunoff_file = "'//FN//'"'//NL// &
                                                   'lrunoff_var = "field"'//NL, ""), cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "the namelist parses")
+      call check(error, ierr == OCEAN_STATUS_OK, "the input parses")
       if (allocated(error)) return
       call validate_config(cfg, ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "the namelist validates")
+      call check(error, ierr == OCEAN_STATUS_OK, "the input validates")
       if (allocated(error)) return
       call engine_setup(engine, cfg, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "the engine sets up with the runoff reader")
