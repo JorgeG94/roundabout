@@ -13,7 +13,6 @@
 module bench_ice_kernels_mod
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use, intrinsic :: iso_fortran_env, only: int32, int64
-   use pic_timer, only: timer_type
    use rdb_constants, only: wp
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX, ICE_NSLYR_MAX, ICE_NTRCR_MAX
    use rdb_ice_params, only: ice_constants_t, ice_params_t, ice_params_default, ICE_CONSTANTS_ICEPACK, &
@@ -326,6 +325,7 @@ end module bench_ice_kernels_mod
 program bench_ice_kernels
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use, intrinsic :: iso_fortran_env, only: int32, int64, output_unit, error_unit
+   use pic_timer, only: timer_type
    use rdb_constants, only: wp
    use rdb_ice_dims, only: ICE_NTRCR_MAX
    use rdb_ice_errors, only: ice_err_summary_t, ice_err_reduce, ice_err_fatal_set
