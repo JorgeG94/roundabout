@@ -1,0 +1,156 @@
+toml-f: keep nvfortran's uninitialised array descriptors out of the parser
+
+Applied to the fetched toml-f (JorgeG94/toml-f e0bc8c6) by cmake/Findtoml-f.cmake
+through my_fetch_package's patch argument; `patch -p1` from the toml-f root.
+
+nvfortran (26.5, every optimisation level) hands its runtime a descriptor it
+never initialised when a scalar derived-type allocatable that is NOT a plain
+procedure-level variable is the source of `move_alloc` or of an intrinsic
+assignment: an allocatable declared in a BLOCK, an allocatable component of a
+local, a derived-type function result.  The runtime (`pgf90_move_alloc`,
+`pgf90_poly_asn`) reads the descriptor's tag from that stack slot, and when
+the slot still holds 35 -- the array-descriptor tag, the most common stale
+value there is -- it copies an "array descriptor" of garbage rank over the
+destination: heap corruption or a segfault inside `toml_load`, on a valid
+file, depending only on what the caller left on the stack.  gfortran is
+correct, and the Fortran is legal (F2018 9.7.1.3: allocatable components of a
+newly created object are unallocated), so this is a workaround, not a fix of
+a toml-f defect.
+
+Three statements did it on the load path; each is replaced by a form that
+passes no such descriptor and does the same thing on every compiler:
+
+  structure.f90  new_list_structure / new_map_structure
+      BLOCK-local `allocate(x); call new_x(x); call move_alloc(x, self)`
+      -> `allocate(T :: self)` and construct in place under SELECT TYPE.
+  de/parser.f90  new_parser
+      `parser%root = toml_table()` (function result assigned to an
+      allocatable component) -> the root table is the caller's.
+  de/parser.f90  parse
+      `call move_alloc(parser%root, table)` -> `table` is allocated and
+      constructed first and the parser points at it; on a syntax error it is
+      deallocated again, so the caller still gets no table.
+
+Evidence (nvfortran 26.5, -O0 / -O1 / -O2 / -O3 -fast): valgrind over toml-f's
+own unit suite goes from 503 errors in 101 contexts to 0; a harness that fills
+the stack with 35 before each call crashes the unpatched library at -O0, -O1
+and -O2 and never the patched one.  gfortran: same results, same valgrind
+output, before and after.
+
+The public constructor functions `toml_table()` / `toml_array()` are left as
+they are (and stay unsafe under nvfortran as the source of an assignment);
+roundabout does not call them.
+
+diff -ruN a/src/tomlf/de/parser.f90 b/src/tomlf/de/parser.f90
+--- a/src/tomlf/de/parser.f90
++++ b/src/tomlf/de/parser.f90
+@@ -22,7 +22,7 @@
+    use tomlf_error, only : toml_error, toml_stat
+    use tomlf_terminal, only : toml_terminal
+    use tomlf_type, only : toml_table, toml_array, toml_keyval, toml_value, toml_key, &
+-      & add_table, add_array, add_keyval, cast_to_table, cast_to_array, len
++      & add_table, add_array, add_keyval, cast_to_table, cast_to_array, len, new_table
+    implicit none
+    private
+ 
+@@ -46,7 +46,7 @@
+       !> Current token
+       type(toml_token) :: token
+       !> Table containing the document root
+-      type(toml_table), allocatable :: root
++      type(toml_table), pointer :: root => null()
+       !> Pointer to the currently processed table
+       type(toml_table), pointer :: current => null()
+       !> Diagnostic produced while parsing
+@@ -60,14 +60,16 @@
+ contains
+ 
+ !> Create a new instance of the TOML parser
+-subroutine new_parser(parser, config)
++subroutine new_parser(parser, root, config)
+    !> Instance of the parser
+    type(toml_parser), intent(out), target :: parser
++   !> Table to hold the document root
++   type(toml_table), intent(inout), target :: root
+    !> Configuration of the parser
+    type(toml_parser_config), intent(in), optional :: config
+ 
+    parser%token = toml_token(token_kind%newline, 0, 0)
+-   parser%root = toml_table()
++   parser%root => root
+    parser%current => parser%root
+    parser%config = toml_parser_config()
+    if (present(config)) parser%config = config
+@@ -91,7 +93,7 @@
+    !> Instance of the lexer
+    class(toml_lexer), intent(inout) :: lexer
+    !> TOML data structure
+-   type(toml_table), allocatable, intent(out) :: table
++   type(toml_table), allocatable, intent(out), target :: table
+    !> Configuration for the parser
+    type(toml_parser_config), intent(in), optional :: config
+    !> Context tracking the origin of the data structure to allow rich reports
+@@ -101,15 +103,18 @@
+ 
+    type(toml_parser) :: parser
+ 
+-   call new_parser(parser, config)
++   allocate(table)
++   call new_table(table)
++   call new_parser(parser, table, config)
+    call parse_root(parser, lexer)
+ 
+    if (present(error) .and. allocated(parser%diagnostic)) then
+       call make_error(error, parser%diagnostic, lexer, parser%config%color)
+    end if
+-   if (allocated(parser%diagnostic)) return
+-
+-   call move_alloc(parser%root, table)
++   if (allocated(parser%diagnostic)) then
++      deallocate(table)
++      return
++   end if
+ 
+    if (present(context)) then
+       context = parser%context
+diff -ruN a/src/tomlf/structure.f90 b/src/tomlf/structure.f90
+--- a/src/tomlf/structure.f90
++++ b/src/tomlf/structure.f90
+@@ -44,13 +44,11 @@
+    !> Instance of the structure
+    class(toml_list_structure), allocatable, intent(out) :: self
+ 
+-   block
+-      type(toml_array_list), allocatable :: list
+-
+-      allocate(list)
+-      call new_array_list(list)
+-      call move_alloc(list, self)
+-   end block
++   allocate(toml_array_list :: self)
++   select type(self)
++   type is(toml_array_list)
++      call new_array_list(self)
++   end select
+ 
+ end subroutine new_list_structure
+ 
+@@ -61,13 +59,11 @@
+    !> Instance of the structure
+    class(toml_map_structure), allocatable, intent(out) :: self
+ 
+-   block
+-      type(toml_ordered_map), allocatable :: map
+-
+-      allocate(map)
+-      call new_ordered_map(map)
+-      call move_alloc(map, self)
+-   end block
++   allocate(toml_ordered_map :: self)
++   select type(self)
++   type is(toml_ordered_map)
++      call new_ordered_map(self)
++   end select
+ 
+ end subroutine new_map_structure
+ 

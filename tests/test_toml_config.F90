@@ -15,6 +15,7 @@ module test_toml_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_PARSE
    use rdb_toml_read, only: group_to_table, table_to_group, toml_schema_parse_string, &
                             toml_schema_parse_file
+   use tomlf, only: toml_table, toml_array, toml_error, toml_loads, get_value, len
    implicit none
    private
 
@@ -36,6 +37,8 @@ contains
                   new_unittest("doc_dumps_read_back_defaults", test_roundtrip_defaults), &
                   new_unittest("doc_dumps_read_back_tricky_values", test_roundtrip_tricky), &
                   new_unittest("doc_dumps_read_back_shipped_inputs", test_roundtrip_shipped), &
+                  new_unittest("key_position_sweep", test_key_position_sweep), &
+                  new_unittest("parse_on_dirty_stack", test_dirty_stack), &
                   new_unittest("empty_and_missing_input", test_empty_missing), &
                   new_unittest("refuse_unknown_table", test_unknown_table), &
                   new_unittest("refuse_unknown_key_and_case", test_unknown_key_case), &
@@ -466,14 +469,6 @@ contains
                  label//": write_doc_all carries the [ocean.x] and [x] table headers")
       if (allocated(error)) return
 
-#if !defined(__NVCOMPILER)
-      ! nvfortran (26.5) SEGFAULTS inside toml-f's parser (`parse_inline_array`)
-      ! whenever the 17th / 26th / 39th ... key of one table is an array -- the
-      ! ordered map's list growth.  Reproducer, pure toml-f with no roundabout code:
-      ! 15 scalar keys, then two array keys (tmp_local_artifacts/
-      ! nvfortran_tomlf_17th_key_array.toml).  `write_doc_all` lists every key
-      ! of a table, so its full document trips it on nvfortran; the compact
-      ! `write_doc_short` read-back below still runs there.
       call read_config_from_toml_string(doc_all, cfg2, schema2, ierr)
       call check(error, ierr, OCEAN_STATUS_OK, label//": write_doc_all output is accepted as TOML")
       if (allocated(error)) return
@@ -481,7 +476,6 @@ contains
       call slurp("test_toml_rt.exact", ex2)
       call check(error, ex1 == ex2, label//": write_doc_all reads back to the identical configuration")
       if (allocated(error)) return
-#endif
 
       call read_config_from_toml_string(doc_short, cfg2, schema2, ierr)
       call check(error, ierr, OCEAN_STATUS_OK, label//": write_doc_short output is accepted as TOML")
@@ -572,6 +566,213 @@ contains
          if (allocated(error)) return
       end do
    end subroutine test_roundtrip_shipped
+
+   ! ---- toml-f itself: every key position accepts an array --------------
+
+   subroutine sweep_doc(nkeys, pos, value, header, doc)
+      !! A document of `nkeys` keys `k1..k<nkeys>` in one table (the root, or
+      !! `[t]` when `header`): integers, except `k<pos>`, which is `value`
+      !! (`pos = 0`: EVERY key is `value`).
+      integer, intent(in) :: nkeys, pos
+      character(len=*), intent(in) :: value
+      logical, intent(in) :: header
+      character(len=:), allocatable, intent(out) :: doc
+      character(len=16) :: num
+      integer :: i
+
+      doc = ""
+      if (header) doc = "[t]"//NL
+      do i = 1, nkeys
+         write (num, '(i0)') i
+         if (i == pos .or. pos == 0) then
+            doc = doc//"k"//trim(num)//" = "//value//NL
+         else
+            doc = doc//"k"//trim(num)//" = "//trim(num)//NL
+         end if
+      end do
+   end subroutine sweep_doc
+
+   subroutine sweep_check(error, nkeys, pos, inline_table, header)
+      !! Parse one [[sweep_doc]] with toml-f and read the swept key(s) back:
+      !! an array `[7, 8, 9]`, or an inline table `{ a = 7, b = [8, 9] }`.
+      type(error_type), allocatable, intent(out) :: error
+      integer, intent(in) :: nkeys, pos
+      logical, intent(in) :: inline_table, header
+      type(toml_table), allocatable, target :: doc_table
+      type(toml_error), allocatable :: perr
+      type(toml_table), pointer :: tbl, sub
+      type(toml_array), pointer :: arr
+      character(len=:), allocatable :: doc
+      character(len=64) :: label
+      character(len=16) :: num
+      integer :: p, p1, p2, v, stat
+
+      write (label, '("nkeys=",i0," pos=",i0," inline_table=",l1," header=",l1)') nkeys, pos, inline_table, header
+      if (inline_table) then
+         call sweep_doc(nkeys, pos, "{ a = 7, b = [8, 9] }", header, doc)
+      else
+         call sweep_doc(nkeys, pos, "[7, 8, 9]", header, doc)
+      end if
+      call toml_loads(doc_table, doc, error=perr)
+      call check(error,.not. allocated(perr) .and. allocated(doc_table), trim(label)//": parses")
+      if (allocated(error)) return
+      tbl => doc_table
+      if (header) then
+         call get_value(doc_table, "t", tbl, requested=.false., stat=stat)
+         call check(error, associated(tbl), trim(label)//": [t] is a table")
+         if (allocated(error)) return
+      end if
+
+      p1 = pos
+      p2 = pos
+      if (pos == 0) then
+         p1 = 1
+         p2 = nkeys
+      end if
+      do p = p1, p2
+         write (num, '(i0)') p
+         nullify (arr, sub)
+         if (inline_table) then
+            call get_value(tbl, "k"//trim(num), sub, requested=.false., stat=stat)
+            call check(error, associated(sub), trim(label)//": k"//trim(num)//" is an inline table")
+            if (allocated(error)) return
+            call get_value(sub, "a", v, stat=stat)
+            call check(error, stat == 0 .and. v == 7, trim(label)//": k"//trim(num)//".a = 7")
+            if (allocated(error)) return
+            call get_value(sub, "b", arr, requested=.false., stat=stat)
+         else
+            call get_value(tbl, "k"//trim(num), arr, requested=.false., stat=stat)
+         end if
+         call check(error, associated(arr), trim(label)//": k"//trim(num)//" holds an array")
+         if (allocated(error)) return
+         call get_value(arr, len(arr), v, stat=stat)
+         call check(error, stat == 0 .and. v == 9 .and. len(arr) == merge(2, 3, inline_table), &
+                    trim(label)//": k"//trim(num)//" array contents")
+         if (allocated(error)) return
+      end do
+      ! the neighbours are still the integers they were written as
+      if (pos > 1) then
+         write (num, '(i0)') pos - 1
+         call get_value(tbl, "k"//trim(num), v, stat=stat)
+         call check(error, stat == 0 .and. v == pos - 1, trim(label)//": the key before is intact")
+      end if
+   end subroutine sweep_check
+
+   subroutine test_key_position_sweep(error)
+      !! An array (and an inline table) is accepted at EVERY key position of a
+      !! table of 1..80 keys, at the root and under a `[table]` header, and with
+      !! every key an array out to 140 keys.
+      !!
+      !! This is the gate on how toml-f is COMPILED, not on our reader: at -O2
+      !! and above nvfortran (26.5) miscompiles toml-f's `add_array_to_table`
+      !! (the key-length argument of the lookup that follows the insert is not
+      !! loaded), so the array that lands on a growth step of the table's
+      !! ordered list -- key 17, 26, 39, 59, 89, 134 -- is "not found", the
+      !! parser is handed a null pointer and `toml_load` SEGFAULTS on a valid
+      !! file (e.g. `[ocean.thermo]` with every key written out).
+      !! `cmake/Findtoml-f.cmake` builds toml-f at -O1 under nvfortran for
+      !! that reason; this sweep fails (crashes) if that is ever undone.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: nkeys, pos
+
+      do nkeys = 1, 80
+         do pos = 1, nkeys
+            call sweep_check(error, nkeys, pos, inline_table=.false., header=.false.)
+            if (allocated(error)) return
+            call sweep_check(error, nkeys, pos, inline_table=.false., header=.true.)
+            if (allocated(error)) return
+         end do
+         ! every position holds an inline table (itself carrying an array)
+         call sweep_check(error, nkeys, nkeys, inline_table=.true., header=.true.)
+         if (allocated(error)) return
+         call sweep_check(error, nkeys, 0, inline_table=.true., header=.false.)
+         if (allocated(error)) return
+      end do
+      ! every key an array, past the growth steps at 89 and 134
+      call sweep_check(error, 140, 0, inline_table=.false., header=.false.)
+      if (allocated(error)) return
+      call sweep_check(error, 140, 0, inline_table=.false., header=.true.)
+   end subroutine test_key_position_sweep
+
+   recursive subroutine dirty_stack(depth, pattern)
+      !! Leave `pattern` in every slot of the stack the next call will use
+      !! (`depth` frames of 2 kB).  `volatile` keeps the fill from being
+      !! optimised away.
+      integer, intent(in) :: depth
+      integer(int64), intent(in) :: pattern
+      integer(int64), volatile :: junk(256)
+
+      junk = pattern
+      if (depth > 0) call dirty_stack(depth - 1, pattern)
+      if (junk(1) /= pattern) error stop "dirty_stack: the fill was lost"
+   end subroutine dirty_stack
+
+   subroutine test_dirty_stack(error)
+      !! Parsing does not depend on what the caller left on the stack.
+      !!
+      !! nvfortran (26.5, every optimisation level) passes its runtime an
+      !! UNINITIALISED descriptor for some `move_alloc` / assignment sources
+      !! (a BLOCK-local allocatable, an allocatable component of a local, a
+      !! derived-type function result), and the runtime copies an "array
+      !! descriptor" of garbage rank whenever the stale slot holds 35, the
+      !! array-descriptor tag: heap corruption or a segfault in `toml_load`
+      !! on a valid file.  Unmodified toml-f has three such statements on the
+      !! load path; `cmake/patches/toml-f-nvfortran-descriptors.patch` rewrites
+      !! them.  Filling the stack with the tag (and with other non-zero
+      !! patterns) before each call makes the hazard deterministic: this test
+      !! crashes on nvfortran if the patch is dropped.
+      type(error_type), allocatable, intent(out) :: error
+      integer(int64), parameter :: PATTERNS(5) = [35_int64, int(z'0000002300000023', int64), &
+                                                  int(z'2323232323232323', int64), -1_int64, 1_int64]
+      character(len=*), parameter :: DOC = &
+                                     "a = 1"//NL//'s = "str"'//NL//"x.y = true"//NL//"arr = [1, 2, 3]"//NL// &
+                                     "nest = [[1, 2], [3]]"//NL//"it = { p = 1, q = [1, 2] }"//NL// &
+                                     "[t]"//NL//"b = [4, 5]"//NL//"[[aot]]"//NL//"n = 1"//NL//"[[aot]]"//NL//"n = 2"//NL
+      type(toml_table), allocatable, target :: doc_table
+      type(toml_error), allocatable :: perr
+      type(toml_table), pointer :: tbl
+      type(toml_array), pointer :: arr
+      type(config_t), target :: cfg
+      type(nml_schema_t) :: schema
+      character(len=24) :: label
+      integer :: ip, v, stat, ierr
+
+      do ip = 1, size(PATTERNS)
+         write (label, '("stack pattern ",i0)') ip
+         call dirty_stack(32, PATTERNS(ip))
+         call toml_loads(doc_table, DOC, error=perr)
+         call check(error,.not. allocated(perr) .and. allocated(doc_table), trim(label)//": a valid document parses")
+         if (allocated(error)) return
+
+         call dirty_stack(32, PATTERNS(ip))
+         nullify (tbl, arr)
+         call get_value(doc_table, "t", tbl, requested=.false., stat=stat)
+         call check(error, associated(tbl), trim(label)//": [t] is a table")
+         if (allocated(error)) return
+         call get_value(tbl, "b", arr, requested=.false., stat=stat)
+         call check(error, associated(arr), trim(label)//": t.b is an array")
+         if (allocated(error)) return
+         call get_value(arr, 2, v, stat=stat)
+         call check(error, stat == 0 .and. v == 5 .and. len(arr) == 2, trim(label)//": t.b = [4, 5]")
+         if (allocated(error)) return
+
+         ! the error path builds its diagnostic on the same stack
+         call dirty_stack(32, PATTERNS(ip))
+         call toml_loads(doc_table, "a = = 1"//NL, error=perr)
+         call check(error, allocated(perr) .and. .not. allocated(doc_table), &
+                    trim(label)//": a syntax error is reported, with no table")
+         if (allocated(error)) return
+
+         ! and the whole front end, schema included
+         call dirty_stack(32, PATTERNS(ip))
+         call read_config_from_toml_string("[grid]"//NL//"nx = 20"//NL//"[ocean.hvisc]"//NL//"nu_h = 5.0"//NL, &
+                                           cfg, schema, ierr)
+         call check(error, ierr, OCEAN_STATUS_OK, trim(label)//": the configuration front end")
+         if (allocated(error)) return
+         call check(error, cfg%nx, 20, trim(label)//": grid.nx read back")
+         if (allocated(error)) return
+      end do
+   end subroutine test_dirty_stack
 
    ! ---- refusals -------------------------------------------------------
 

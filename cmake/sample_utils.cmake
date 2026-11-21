@@ -4,6 +4,12 @@ macro("my_fetch_package" package url)
   if(NOT _git_ref)
     set(_git_ref "HEAD")
   endif()
+  # Optional fourth and fifth arguments: a patch file (`patch -p1`) applied to
+  # the fetched source right after it is cloned -- for a fix that has not landed
+  # upstream -- and a string the patch adds under src/, which tells an
+  # already-patched checkout from one that isn't on a reconfigure.
+  set(_patch_file "${ARGV3}")
+  set(_patch_marker "${ARGV4}")
 
   string(TOLOWER "${package}" _pkg_lc)
   string(TOUPPER "${package}" _pkg_uc)
@@ -15,10 +21,39 @@ macro("my_fetch_package" package url)
     set(FETCHCONTENT_QUIET FALSE)
   endif()
 
-  FetchContent_Declare(
-    "${_pkg_lc}"
-    GIT_REPOSITORY "${url}"
-    GIT_TAG "${_git_ref}")
+  if(_patch_file)
+    if(NOT _patch_marker)
+      message(
+        FATAL_ERROR
+          "my_fetch_package(${package} ... ${_patch_file}): needs a 5th "
+          "argument, a string the patch adds under src/, to tell an "
+          "already-patched checkout from one that isn't")
+    endif()
+    if(NOT EXISTS "${_patch_file}")
+      message(
+        FATAL_ERROR "my_fetch_package(${package}): no patch ${_patch_file}")
+    endif()
+    find_program(_patch_exe patch REQUIRED)
+    find_program(_sh_exe sh REQUIRED)
+    # Idempotent: a reconfigure can re-run the patch step on a source tree the
+    # first configure already patched, and `patch` refuses a hunk it finds
+    # applied. Grepping for a string the patch adds is the check: present,
+    # nothing to do; absent, apply for real and let a failure stop the
+    # configure.
+    FetchContent_Declare(
+      "${_pkg_lc}"
+      GIT_REPOSITORY "${url}"
+      GIT_TAG "${_git_ref}"
+      PATCH_COMMAND
+        "${_sh_exe}" -c
+        "grep -qrF '${_patch_marker}' src/ || '${_patch_exe}' -p1 -i '${_patch_file}'"
+    )
+  else()
+    FetchContent_Declare(
+      "${_pkg_lc}"
+      GIT_REPOSITORY "${url}"
+      GIT_TAG "${_git_ref}")
+  endif()
   FetchContent_MakeAvailable("${_pkg_lc}")
 
   # Only create the imported interface if the target doesn't already exist This
@@ -35,6 +70,8 @@ macro("my_fetch_package" package url)
   unset(_pkg_lc)
   unset(_pkg_uc)
   unset(_git_ref)
+  unset(_patch_file)
+  unset(_patch_marker)
 
   # sanity check
   if(NOT TARGET "${package}::${package}")
