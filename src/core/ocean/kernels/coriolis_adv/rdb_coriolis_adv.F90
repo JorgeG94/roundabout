@@ -44,7 +44,7 @@ module rdb_coriolis_adv
    ! PV-scheme variant tags.  Both `SADOURNY` and `SADOURNY_HK` ship;
    ! `AL81` is reserved.  The default below points at the safe
    ! enstrophy-conserving branch — flip to `SADOURNY_HK` for eddy-
-   ! resolving runs via `[ocean.setup] ocean_coriolis_form`.
+   ! resolving runs via `[ocean.coriolis] form`.
    integer, parameter, public :: PV_VARIANT_SADOURNY = 1
       !! Sadourny enstrophy-conserving — the default.
    integer, parameter, public :: PV_VARIANT_AL81 = 2
@@ -136,8 +136,8 @@ module rdb_coriolis_adv
       integer :: pv_variant = PV_VARIANT_SADOURNY
          !! Active PV/Coriolis scheme variant.  Defaults to Sadourny;
          !! set to `PV_VARIANT_SADOURNY_HK` to engage the Arakawa-Hsu
-         !! correction.  Driven from `[ocean.setup]
-         !! ocean_coriolis_form` via `parse_pv_variant`.
+         !! correction.  Driven from `[ocean.coriolis]
+         !! form` via `parse_pv_variant`.
       logical :: use_hk_correction = .false.
          !! Convenience flag mirroring `pv_variant == SADOURNY_HK`.
          !! Diagnostic only — the dispatch in `ocean_dyn` reads

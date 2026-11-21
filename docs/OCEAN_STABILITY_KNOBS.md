@@ -78,8 +78,7 @@ bit-identical.
 
 The FV-PGF interface integral is a layer-midpoint average; at a steep
 unequal-depth face it injects a spurious horizontal density gradient (the
-classic σ/z* shelf-break PGE). `[ocean.pgf] form="fv_mom6", mass_weight=
-.true.` ports MOM6's `hWght` mass-weighting (blend toward the thinner column),
+classic σ/z* shelf-break PGE). `[ocean.pgf]` `form = "fv_mom6"`, `mass_weight = true` ports MOM6's `hWght` mass-weighting (blend toward the thinner column),
 cutting the shelf-break PGF error ~50×. `hWght=0` on aligned columns ⇒
 bit-identical.
 
@@ -100,7 +99,7 @@ coast-masked, the velocity-form biharmonic part is not.
 
 MOM6 applies lateral side-wall Rayleigh drag in partially-blocked cells to
 *every* layer intersecting sloping bathymetry; we had only bed-layer drag.
-`[ocean.bdrag] channel_drag=true, cdrag_side=2.5e-3` adds it (implicit,
+`[ocean.bdrag]` `channel_drag = true`, `cdrag_side = 2.5e-3` adds it (implicit,
 thin-layer stable). All-wet/flat ⇒ no-op.
 
 ## #6 — Marginal-CFL continuity at a steep wet-wet face (`vol_cfl`)

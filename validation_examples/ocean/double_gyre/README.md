@@ -34,7 +34,7 @@ with SSH, T, S, u, v, KE per model day via the diag manager.
 ## `double_gyre_linear_nk10.toml`
 
 The same basin grown to **NK=10** using the linear density-range IC
-(`[ocean.ic] rho_lightest = 1035.0, rho_range = 2.0`) — the MOM6
+(`[ocean.ic]` `rho_lightest = 1035.0`, `rho_range = 2.0`) — the MOM6
 `COORD_CONFIG="linear"` + `DENSITY_RANGE` analogue.  Instead of a
 hand-listed `layer_rho_init`, the layer densities self-populate
 linearly, so you scale the column by editing `nz_layers` alone.  Because

@@ -23,6 +23,8 @@ module rdb_toml_read
    !! bit -- `tests/test_toml_config.F90` proves it over a sweep of bit patterns
    !! -- so stringifying loses nothing.
    use, intrinsic :: iso_fortran_env, only: int64, real64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use rdb_constants, only: wp
    use rdb_nml_schema, only: nml_schema_t, nml_group_t, nml_real_key_t, &
                              nml_int_key_t, nml_logical_key_t, nml_string_key_t, &
                              nml_enum_key_t, nml_real_array_key_t, nml_key_t, add_err, &
@@ -546,10 +548,74 @@ contains
          end if
       end if
       if (.not. is_int) then
-         if (scan(raw, "iInN") > 0) raw = lowercase(raw)
+         if (scan(raw, "iInN") > 0) then
+            raw = lowercase(raw)
+         else
+            ! A finite-looking decimal literal must stay finite in the working
+            ! real kind: overflow is REFUSED here, whatever the compiler's own
+            ! `read` does with it (gfortran gives +Infinity, nvfortran an error).
+            ! Underflow to zero is accepted (and spelled `0.0` so every compiler
+            ! reads the same value).
+            call check_float_range(raw, why)
+            if (allocated(why)) return
+         end if
       end if
       text = raw
    end subroutine raw_number
+
+   subroutine check_float_range(raw, why)
+      !! Refuse a finite decimal float literal whose magnitude overflows the
+      !! working real kind; rewrite one that underflows to zero as `0.0`.
+      character(len=:), allocatable, intent(inout) :: raw
+      character(len=:), allocatable, intent(inout) :: why
+
+      real(wp) :: x
+      integer :: ios, ie, i, ex, ipt, lead
+      character(len=:), allocatable :: mant
+      character(len=64) :: imsg
+      logical :: seen_nonzero
+
+      read (raw, *, iostat=ios, iomsg=imsg) x
+      if (ios == 0) then
+         if (ieee_is_finite(x)) return
+      end if
+      ! Not representable (or not read): decide overflow vs underflow from the
+      ! decimal magnitude  d.ddd * 10**(magnitude-1)  of the literal itself.
+      ie = scan(raw, "eE")
+      ex = 0
+      if (ie > 0) then
+         mant = raw(:ie - 1)
+         read (raw(ie + 1:), *, iostat=ios, iomsg=imsg) ex
+         if (ios /= 0) ex = merge(100000, -100000, index(raw(ie + 1:), "-") == 0)
+         ex = max(-100000, min(100000, ex))
+      else
+         mant = raw
+      end if
+      ipt = index(mant, ".")
+      if (ipt == 0) ipt = len(mant) + 1
+      seen_nonzero = .false.
+      lead = 0     ! magnitude of the leading significant digit relative to the point
+      do i = 1, len(mant)
+         if (mant(i:i) < "0" .or. mant(i:i) > "9") cycle
+         if (mant(i:i) /= "0") then
+            seen_nonzero = .true.
+            if (i < ipt) then
+               lead = ipt - i
+            else
+               lead = ipt - i + 1
+            end if
+            exit
+         end if
+      end do
+      if (.not. seen_nonzero) return
+      if (ex + lead > 0) then
+         why = "is a float literal that overflows the working real kind"
+      else if (raw(1:1) == "-") then
+         raw = "-0.0"
+      else
+         raw = "0.0"
+      end if
+   end subroutine check_float_range
 
    pure function lowercase(s) result(o)
       character(len=*), intent(in) :: s

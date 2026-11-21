@@ -407,10 +407,31 @@ contains
       if (allocated(error)) return
       call check(error,.not. file_contains(sf, "ri_crit"), "short omits defaults")
       if (allocated(error)) return
+      ! The dumps are TOML: table headers, bare TOML values, `#` comments.
+      call check(error, file_contains(af, "[ocean.kappa_shear]") .and. file_contains(af, "[ocean.epbl]"), &
+                 "all carries every [ocean.x] table header")
+      if (allocated(error)) return
+      call check(error, file_contains(af, "ri_crit = 0.25  # [nondim]"), "all: real as a short TOML float")
+      if (allocated(error)) return
+      call check(error, file_contains(af, "n_iter = 77  # "), "all: integer")
+      if (allocated(error)) return
+      call check(error, file_contains(af, "use_lt = false  # "), "all: logical true/false")
+      if (allocated(error)) return
+      call check(error, file_contains(af, 'form = "sadourny"  # '), "all: quoted string")
+      if (allocated(error)) return
+      call check(error, file_contains(af, "layers = [1000.0, 1000.0, 0.0, 0.0]  # "), "all: array")
+      if (allocated(error)) return
+      call check(error, file_contains(sf, "[ocean.kappa_shear]") .and. file_contains(sf, "n_iter = 77"), &
+                 "short carries the table header of a group with a non-default key")
+      if (allocated(error)) return
+      call check(error,.not. file_contains(sf, "[ocean.epbl]"), "short omits an all-default group")
+      if (allocated(error)) return
       ! The markdown reference carries its table header and every knob.
       call check(error, file_contains(mf, "| Knob |"), "markdown table header")
       if (allocated(error)) return
       call check(error, file_contains(mf, "mstar_variant"), "markdown lists every group")
+      if (allocated(error)) return
+      call check(error, file_contains(mf, "| `ri_crit` | `0.25` |"), "markdown shows the same value text")
 
       call rm_file(af)
       call rm_file(sf)

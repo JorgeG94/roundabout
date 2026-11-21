@@ -2129,7 +2129,7 @@ module rdb_config
       ! Each default equals the current `ocean_vmix_t` field default
       ! (rdb_ocean_vmix.F90) so an nml that never mentions these keys is
       ! bit-identical.  `kpp_*` names (not bare `ri_crit`/`cs_nonlocal`/
-      ! `c_vt2`) avoid a collision with `[ocean.kshear] ri_crit` (a
+      ! `c_vt2`) avoid a collision with `[ocean.kappa_shear] ri_crit` (a
       ! DIFFERENT physical quantity, the JHL08 critical Ri).  These route
       ! to the OCEAN vmix slot — do not confuse with the similarly-named
       ! `[nonhydrostatic] kpp_*` keys, which are the live COASTAL path.
@@ -4878,7 +4878,6 @@ module rdb_config
          !! topo, ic, diag).  PR-B1 migrates knobs from this struct's
          !! flat fields into the nested form one group at a time —
          !! callers go from `cfg%ocean_X` → `cfg%ocean%group%X`.
-         !! PR-B2 will split the giant `[ocean.setup]` to match.
    end type config_t
 
    interface

@@ -792,14 +792,11 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   Gaussian seamount at two steepnesses; a single-face stiffness ladder at
   `rx0 = |dH|/(H_a+H_b)` = 0.1/0.2/0.4/0.6/0.8; a flat and a sloping ice lid),
   in **two legs**: INVISCID (the hard probe) and VISCOUS (MOM6's shipped
-  seamount closure translated: `[ocean.hvisc] nu_h = 160, stress_tensor =
-  .true.` — the same `KH/Δx²` as MOM6's `KH = 1000` at 5 km — and `[ocean.bdrag]
-  form = "linear", r = 1e-5, hbbl = 10`, i.e. MOM6's `CDRAG·DRAG_BG_VEL =
+  seamount closure translated: `[ocean.hvisc]` `nu_h = 160`, `stress_tensor = true` — the same `KH/Δx²` as MOM6's `KH = 1000` at 5 km — and `[ocean.bdrag]` `form = "linear"`, `r = 1e-5`, `hbbl = 10`, i.e. MOM6's `CDRAG·DRAG_BG_VEL =
   1e-4 m/s` stress). It gates the spurious energy's level and fitted growth
   rate, the budgets at round-off, the tracer bounds, positivity and the
   remap precondition guard. Both legs run **the configuration v0.1.0
-  recommends over sloping topography**: `[ocean.pgf] form = "fv_mom6",
-  reconstruct_for_pressure = true`; `[vcoord] remap_boundary_extrap,
+  recommends over sloping topography**: `[ocean.pgf]` `form = "fv_mom6"`, `reconstruct_for_pressure = true`; `[vcoord] remap_boundary_extrap,
   remap_nonuniform_weights, remap_check_preconditions = true`; and
   `zfixed_closed_faces = true` for `z_fixed`. Re-measured 2026-09-23 with
   the MOM6-parity defaults (`[ocean.bt] bebt = 0.1`, `[ocean.continuity]

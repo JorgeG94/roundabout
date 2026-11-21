@@ -560,7 +560,7 @@ the configuration v0.1.0 recommends for any run over sloping topography**:
 
 | knob | why |
 |---|---|
-| `[ocean.pgf] form = "fv_mom6", reconstruct_for_pressure = true` | the exact finite-volume PGF: the sigma rest-state seed falls from 2.6e-8 to 9.6e-16 m s⁻² and the slope plateaus fall 12–17 decades to machine zero |
+| `[ocean.pgf]` `form = "fv_mom6"`, `reconstruct_for_pressure = true` | the exact finite-volume PGF: the sigma rest-state seed falls from 2.6e-8 to 9.6e-16 m s⁻² and the slope plateaus fall 12–17 decades to machine zero |
 | `[vcoord] remap_boundary_extrap = true` | linear-exact boundary cells in the remap (the first-order boundary cell was the rest-state amplifier: growth 0.355 → 0.047 /day) |
 | `[vcoord] remap_nonuniform_weights = true` | PLM/PPM linear-exact on a stretched column (1.5e-01 → 3e-14) |
 | `[vcoord] remap_check_preconditions = true` | fail loud the first step the remap is handed a negative layer or a mismatched column total, instead of silently creating or deleting tracer |

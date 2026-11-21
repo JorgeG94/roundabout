@@ -675,6 +675,12 @@ foreach(row ${RDB_TESTS})
   endif()
   set_tests_properties(rdb_${test_name} PROPERTIES LABELS
                                                    "${TEST_REGIME_LABELS}")
+  if(test_name STREQUAL "test_toml_config")
+    # shipped inputs the doc-dump round-trip test reads
+    set_tests_properties(
+      rdb_${test_name} PROPERTIES ENVIRONMENT
+                                  "RDB_SOURCE_DIR=${PROJECT_SOURCE_DIR}")
+  endif()
   if(test_name STREQUAL "test_cice_closure")
     # the dynamics-only case freezes the thermodynamics, a harness-only switch
     set_tests_properties(

@@ -855,9 +855,11 @@ and every `validate_config` rule without stepping the model.
 
 **Errors** name the file and line (`case.toml:12: key 'bebt' in [ocean.bt] ...`)
 and are reported together, not one per run. A TOML syntax error is reported as
-such and stops further checking of that file. A `.toml` file that does not exist
-is not an error for the library entry points (the defaults stand); the `rdb`
-driver refuses it.
+such and stops further checking of that file. A missing or unreadable input file is an
+error everywhere (the `rdb` driver, `read_config`, `bench_ocean`, `rdb_cfg_dump`):
+the refusal names the path and the file is never replaced by defaults. An empty
+file name is refused too. An empty TOML *document* is valid and means "all
+defaults" (`read_config_from_toml_string("")`, the Python `Config()` path).
 
 The model's input used to be Fortran namelists; that reader has been removed.
 

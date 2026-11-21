@@ -415,7 +415,7 @@ module rdb_ocean_dyn
          !! KPP non-local transport, and surface tracer flux.  Tracers
          !! still advect horizontally but with `alpha_T = beta_S = 0` can't
          !! influence dynamics ⇒ adiabatic.  Wire via
-         !! `[ocean.setup] ocean_enable_thermodynamics`.
+         !! `[ocean.thermo] enable_thermodynamics`.
 
       ! ---- Phase-2/3 Lagrangian grounding-stability knobs ----
       real(wp) :: angstrom_h = 0.0_wp

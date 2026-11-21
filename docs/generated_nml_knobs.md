@@ -14,8 +14,8 @@ Structured-grid geometry.
 |------|---------|-------|-------------|
 | `nx` | `200` |  | Number of physical cells in x |
 | `ny` | `1` |  | Number of physical cells in y |
-| `dx` | `0.1000000000E+01` | m | Cell size in x |
-| `dy` | `0.1000000000E+01` | m | Cell size in y |
+| `dx` | `1.0` | m | Cell size in x |
+| `dy` | `1.0` | m | Cell size in y |
 | `nghost` | `3` |  | Ghost cells on each side |
 
 ### [time]
@@ -24,10 +24,10 @@ Time-integration controls.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `t_end` | `0.1000000000E+01` |  | Simulation end time (in time_unit) |
-| `cfl` | `0.4500000000E+00` |  | CFL number for adaptive timestep |
-| `dt_max` | `0.1000000000E+11` | s | Maximum allowable timestep |
-| `dt_fixed` | `0.0000000000E+00` | s | Fixed timestep (0 = adaptive CFL) |
+| `t_end` | `1.0` |  | Simulation end time (in time_unit) |
+| `cfl` | `0.45` |  | CFL number for adaptive timestep |
+| `dt_max` | `1.0e+10` | s | Maximum allowable timestep |
+| `dt_fixed` | `0.0` | s | Fixed timestep (0 = adaptive CFL) |
 | `cfl_interval` | `1` |  | Recompute CFL timestep every N steps |
 | `time_unit` | `"s"` |  | Unit for the long-time fields: s/min/hr/day/year |
 | `start_date` | `""` |  | Proleptic-Gregorian date t=0 corresponds to ('' = plain relative clock, bit-identical) |
@@ -49,7 +49,7 @@ Logger verbosity + status cadence.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `log_level` | `"info"` |  | Log verbosity |
-| `status_interval` | `0.0000000000E+00` |  | Status-print cadence (in time_unit; 0 = every 100 steps) |
+| `status_interval` | `0.0` |  | Status-print cadence (in time_unit; 0 = every 100 steps) |
 
 ### [vcoord]
 
@@ -60,16 +60,16 @@ Vertical-coordinate + ALE-remap controls.
 | `vcoord_type` | `"sigma"` |  | Vertical coordinate type |
 | `thickness_config` | `"sigma"` |  | Initial layer-thickness profile (ocean path) |
 | `remap_method` | `"ppm"` |  | Vertical remapping method |
-| `zstar_h_surf_target` | `0.0000000000E+00` | m | z*-full: target surface-layer thickness (0 = auto) |
+| `zstar_h_surf_target` | `0.0` | m | z*-full: target surface-layer thickness (0 = auto) |
 | `zstar_stretching` | `"log"` |  | z*-full: surface-concentration stretching |
-| `zstar_h_min` | `0.1000000000E-03` | m | z*-full: vanishing-layer floor |
+| `zstar_h_min` | `1.0e-4` | m | z*-full: vanishing-layer floor |
 | `zstar_n_surf` | `0` |  | z*-full: number of fine near-surface layers (0 = auto) |
-| `rho_ref_pressure` | `0.2000000000E+08` | Pa | rho-coord: reference pressure for potential density |
-| `rho_target_light` | `0.1020000000E+04` | kg/m^3 | rho-coord: lightest (surface) target density |
-| `rho_target_dense` | `0.1030000000E+04` | kg/m^3 | rho-coord: densest (bed) target density |
+| `rho_ref_pressure` | `2.0e+7` | Pa | rho-coord: reference pressure for potential density |
+| `rho_target_light` | `1020.0` | kg/m^3 | rho-coord: lightest (surface) target density |
+| `rho_target_dense` | `1030.0` | kg/m^3 | rho-coord: densest (bed) target density |
 | `rho_target_profile` | `"uniform"` |  | rho/hycom target densities: uniform (rho_target_light..rho_target_dense linspace) or list (rho_target_list) |
-| `rho_target_list` | `[-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01]` | kg/m^3 | rho_target_profile='list': interface densities, lightest first (exactly nz_layers+1 entries) |
-| `regrid_time_scale` | `0.0000000000E+00` | s | ALE regrid grid time-filter timescale (0 = jump to target) |
+| `rho_target_list` | `[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]` | kg/m^3 | rho_target_profile='list': interface densities, lightest first (exactly nz_layers+1 entries) |
+| `regrid_time_scale` | `0.0` | s | ALE regrid grid time-filter timescale (0 = jump to target) |
 | `remap_vel_conserve_ke` | `false` |  | ALE velocity remap: KE-conserving baroclinic-anomaly rescale |
 | `remap_boundary_extrap` | `false` |  | ALE remap: linear-exact one-sided reconstruction in the k=1/k=nz boundary cells (MOM6 BOUNDARY_EXTRAPOLATION) |
 | `remap_nonuniform_weights` | `false` |  | ALE remap: non-uniform-grid PLM slope + PPM edge weights (Colella-Woodward 1984 eqs 1.6-1.8) instead of the equal-thickness specialisations |
@@ -77,10 +77,10 @@ Vertical-coordinate + ALE-remap controls.
 | `remap_check_preconditions` | `false` |  | ALE remap: fail loud when a column violates the overlap sweep's preconditions (non-negative thicknesses, matching column totals) |
 | `zfixed_closed_faces` | `false` |  | z_fixed / zstar / zstar_full partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip) |
 | `z_fixed_profile` | `"uniform"` |  | z_fixed / zstar levels / hycom z* floor nominal layer-thickness profile: uniform (max_depth/nz), list (z_fixed_dz) or tanh stretching |
-| `z_fixed_dz` | `[-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01]` | m | z_fixed_profile='list': nominal layer thicknesses, surface first (exactly nz_layers entries). tools/vgrid_to_dz.py converts a MOM6 ocean_vgrid.nc (or a plain interface-depth list) into a ready-to-paste block of this knob -- e.g. ACCESS-OM3's 75-level z* grid, used with vcoord_type='zstar' |
-| `z_fixed_dz_top` | `0.2000000000E+01` | m | z_fixed_profile='tanh': surface-layer nominal thickness |
-| `z_fixed_tanh_center` | `0.5000000000E+00` |  | z_fixed_profile='tanh': transition centre, fraction of the layer-index span (0 = surface, 1 = bed) |
-| `z_fixed_tanh_width` | `0.2500000000E+00` |  | z_fixed_profile='tanh': transition width, fraction of the layer-index span |
+| `z_fixed_dz` | `[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]` | m | z_fixed_profile='list': nominal layer thicknesses, surface first (exactly nz_layers entries). tools/vgrid_to_dz.py converts a MOM6 ocean_vgrid.nc (or a plain interface-depth list) into a ready-to-paste block of this knob -- e.g. ACCESS-OM3's 75-level z* grid, used with vcoord_type='zstar' |
+| `z_fixed_dz_top` | `2.0` | m | z_fixed_profile='tanh': surface-layer nominal thickness |
+| `z_fixed_tanh_center` | `0.5` |  | z_fixed_profile='tanh': transition centre, fraction of the layer-index span (0 = surface, 1 = bed) |
+| `z_fixed_tanh_width` | `0.25` |  | z_fixed_profile='tanh': transition width, fraction of the layer-index span |
 
 ### [physics]
 
@@ -88,10 +88,10 @@ Barotropic physics: bottom drag, wind stress, Coriolis.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `manning_n` | `0.0000000000E+00` |  | Manning roughness coefficient |
-| `wind_stress_x` | `0.0000000000E+00` | Pa | Surface wind stress in x |
-| `wind_stress_y` | `0.0000000000E+00` | Pa | Surface wind stress in y |
-| `coriolis_f` | `0.0000000000E+00` | 1/s | Coriolis parameter f |
+| `manning_n` | `0.0` |  | Manning roughness coefficient |
+| `wind_stress_x` | `0.0` | Pa | Surface wind stress in x |
+| `wind_stress_y` | `0.0` | Pa | Surface wind stress in y |
+| `coriolis_f` | `0.0` | 1/s | Coriolis parameter f |
 
 ### [output]
 
@@ -101,7 +101,7 @@ File output, I/O server, forcing/restart/gauge files.
 |------|---------|-------|-------------|
 | `output_to_file` | `false` |  | Enable file output (NetCDF snapshots) |
 | `output_dir` | `"./output"` |  | Directory for output files |
-| `restart_interval` | `0.0000000000E+00` | s | Time between restart writes (0 = none) |
+| `restart_interval` | `0.0` | s | Time between restart writes (0 = none) |
 | `compress_output` | `false` |  | Deflate-compress NetCDF output |
 | `compress_level` | `1` |  | Deflate level (1=fast, 9=max) |
 | `use_io_server` | `false` |  | Dedicate one MPI rank per node as I/O server |
@@ -119,13 +119,13 @@ Boundary conditions, tidal forcing, inflow/discharge/sponge/nesting.
 | `bc_south` | `"wall"` |  | South boundary type |
 | `bc_north` | `"wall"` |  | North boundary type |
 | `n_tidal_constituents` | `0` |  | Active tidal constituents (0 = legacy single) |
-| `tidal_amp` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | m | Constituent amplitudes |
-| `tidal_phase` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad | Constituent phases |
-| `tidal_omega` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad/s | Constituent angular frequencies |
-| `inflow_salinity` | `-0.1000000000E+01` | PSU | Inflow salinity (<0 = zero-gradient) |
-| `inflow_temperature` | `-0.9990000000E+03` | degC | Inflow temperature (<0 = zero-gradient) |
+| `tidal_amp` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | m | Constituent amplitudes |
+| `tidal_phase` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad | Constituent phases |
+| `tidal_omega` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad/s | Constituent angular frequencies |
+| `inflow_salinity` | `-1.0` | PSU | Inflow salinity (<0 = zero-gradient) |
+| `inflow_temperature` | `-999.0` | degC | Inflow temperature (<0 = zero-gradient) |
 | `sponge_width` | `0` |  | Sponge layer width in cells |
-| `sponge_strength` | `0.0000000000E+00` | 1/s | Sponge relaxation rate |
+| `sponge_strength` | `0.0` | 1/s | Sponge relaxation rate |
 
 ### [tracer]
 
@@ -133,22 +133,22 @@ Salinity + temperature IC/EOS/bounds, sediment transport.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `initial_salinity` | `0.3500000000E+02` | PSU | Initial salinity (uniform IC) |
-| `S_ref` | `0.0000000000E+00` | PSU | EOS reference salinity |
-| `beta_S` | `0.7800000000E+00` | kg/m^3/PSU | Haline contraction coefficient |
-| `S_min` | `0.0000000000E+00` | PSU | Lower physical bound for salinity |
-| `S_max` | `0.4000000000E+02` | PSU | Upper physical bound for salinity |
-| `kappa_S_bg` | `0.1000000000E-04` | m^2/s | Background vertical salinity diffusivity |
-| `S_init_surface` | `0.0000000000E+00` | PSU | Initial surface salinity at k=nz (linear-in-layer stratified IC; needs S_init_bottom non-zero too) |
-| `S_init_bottom` | `0.0000000000E+00` | PSU | Initial bed salinity at k=1 (linear-in-layer stratified IC; needs S_init_surface non-zero too) |
-| `initial_temperature` | `0.1500000000E+02` | degC | Initial temperature (uniform IC) |
-| `T_ref` | `0.1500000000E+02` | degC | EOS reference temperature |
-| `alpha_T` | `0.1700000000E+00` | kg/m^3/degC | Thermal expansion coefficient |
-| `T_min` | `-0.2000000000E+01` | degC | Lower physical bound for temperature |
-| `T_max` | `0.4000000000E+02` | degC | Upper physical bound for temperature |
-| `kappa_T_bg` | `0.1000000000E-04` | m^2/s | Background vertical temperature diffusivity |
-| `T_init_surface` | `0.0000000000E+00` | degC | Initial surface temperature (stratified IC) |
-| `T_init_bottom` | `0.0000000000E+00` | degC | Initial bed temperature (stratified IC) |
+| `initial_salinity` | `35.0` | PSU | Initial salinity (uniform IC) |
+| `S_ref` | `0.0` | PSU | EOS reference salinity |
+| `beta_S` | `0.78` | kg/m^3/PSU | Haline contraction coefficient |
+| `S_min` | `0.0` | PSU | Lower physical bound for salinity |
+| `S_max` | `40.0` | PSU | Upper physical bound for salinity |
+| `kappa_S_bg` | `1.0e-5` | m^2/s | Background vertical salinity diffusivity |
+| `S_init_surface` | `0.0` | PSU | Initial surface salinity at k=nz (linear-in-layer stratified IC; needs S_init_bottom non-zero too) |
+| `S_init_bottom` | `0.0` | PSU | Initial bed salinity at k=1 (linear-in-layer stratified IC; needs S_init_surface non-zero too) |
+| `initial_temperature` | `15.0` | degC | Initial temperature (uniform IC) |
+| `T_ref` | `15.0` | degC | EOS reference temperature |
+| `alpha_T` | `0.17` | kg/m^3/degC | Thermal expansion coefficient |
+| `T_min` | `-2.0` | degC | Lower physical bound for temperature |
+| `T_max` | `40.0` | degC | Upper physical bound for temperature |
+| `kappa_T_bg` | `1.0e-5` | m^2/s | Background vertical temperature diffusivity |
+| `T_init_surface` | `0.0` | degC | Initial surface temperature (stratified IC) |
+| `T_init_bottom` | `0.0` | degC | Initial bed temperature (stratified IC) |
 
 ### [initial_condition]
 
@@ -156,7 +156,7 @@ Coastal initial-condition selector + parameters.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `h0` | `0.1000000000E+01` | m | Background depth (gaussian_hump IC) |
+| `h0` | `1.0` | m | Background depth (gaussian_hump IC) |
 
 ### [nonhydrostatic]
 
@@ -166,11 +166,11 @@ Non-hydrostatic / multilayer: CG-Poisson, PP81/KPP/k-eps vmix, Smagorinsky, BPG,
 |------|---------|-------|-------------|
 | `nz_layers` | `2` |  | Number of sigma layers |
 | `use_multilayer` | `false` |  | Enable coupled hydrostatic vertical layers |
-| `rho_0` | `0.1000000000E+04` | kg/m^3 | Reference density for EOS |
-| `kpp_ri_crit` | `0.3000000000E+00` |  | Critical bulk Richardson number for KPP BL-depth |
-| `kpp_cs_nonlocal` | `0.6300000000E+01` |  | KPP non-local (counter-gradient) transport coefficient |
-| `kpp_c_vt2` | `0.1800000000E+01` |  | KPP V_t^2 unresolved-turbulence coefficient (0 = off) |
-| `hdiff_kappa` | `0.0000000000E+00` | m^2/s | Horizontal tracer diffusion coefficient (COASTAL path only; ocean's along-coordinate equivalent is [ocean.hdiff] kappa_h) |
+| `rho_0` | `1000.0` | kg/m^3 | Reference density for EOS |
+| `kpp_ri_crit` | `0.3` |  | Critical bulk Richardson number for KPP BL-depth |
+| `kpp_cs_nonlocal` | `6.3` |  | KPP non-local (counter-gradient) transport coefficient |
+| `kpp_c_vt2` | `1.8` |  | KPP V_t^2 unresolved-turbulence coefficient (0 = off) |
+| `hdiff_kappa` | `0.0` | m^2/s | Horizontal tracer diffusion coefficient (COASTAL path only; ocean's along-coordinate equivalent is [ocean.hdiff] kappa_h) |
 
 ### [ocean.kappa_shear]
 
@@ -179,27 +179,27 @@ JHL08 shear-driven interior turbulence (kappa-shear).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (requires use_closure + thermodynamics) |
-| `ri_crit` | `0.2500000000E+00` | nondim | Critical Richardson number |
-| `shearmix_rate` | `0.8900000000E-01` |  | Shear source-rate coefficient |
-| `fri_curvature` | `-0.9700000000E+00` |  | Ri-function curvature in the shear source |
-| `c_n` | `0.2400000000E+00` |  | TKE decay-rate coefficient vs stratification N |
-| `c_s` | `0.1400000000E+00` |  | TKE decay-rate coefficient vs shear S |
-| `lambda` | `0.8200000000E+00` |  | Buoyancy mixing-length-scale coefficient |
-| `lz_rescale` | `0.1000000000E+01` |  | Boundary-distance length-scale rescale factor |
-| `kappa_0` | `0.1000000000E-06` | m^2/s | Background diffusivity (pre-step kappa) |
-| `kappa_seed` | `0.1000000000E+01` | m^2/s | Iteration seed diffusivity |
-| `kappa_trunc` | `0.1000000000E-08` | m^2/s | Diffusivity truncated to 0 below this |
-| `tke_bg` | `0.0000000000E+00` | m^2/s^2 | Background TKE (Q denominator floor) |
-| `tol_err` | `0.1000000000E+00` |  | Picard convergence tolerance |
+| `ri_crit` | `0.25` | nondim | Critical Richardson number |
+| `shearmix_rate` | `0.089` |  | Shear source-rate coefficient |
+| `fri_curvature` | `-0.97` |  | Ri-function curvature in the shear source |
+| `c_n` | `0.24` |  | TKE decay-rate coefficient vs stratification N |
+| `c_s` | `0.14` |  | TKE decay-rate coefficient vs shear S |
+| `lambda` | `0.82` |  | Buoyancy mixing-length-scale coefficient |
+| `lz_rescale` | `1.0` |  | Boundary-distance length-scale rescale factor |
+| `kappa_0` | `1.0e-7` | m^2/s | Background diffusivity (pre-step kappa) |
+| `kappa_seed` | `1.0` | m^2/s | Iteration seed diffusivity |
+| `kappa_trunc` | `1.0e-9` | m^2/s | Diffusivity truncated to 0 below this |
+| `tke_bg` | `0.0` | m^2/s^2 | Background TKE (Q denominator floor) |
+| `tol_err` | `0.1` |  | Picard convergence tolerance |
 | `max_inner_it` | `50` |  | Inner Picard iteration cap |
 | `max_substep_it` | `13` |  | Outer adaptive-substep iteration cap |
-| `src_max_chg` | `0.1000000000E+02` |  | Adaptive-dt source-change tolerance band |
-| `prandtl_turb` | `0.1000000000E+01` |  | Kv = prandtl_turb * Kd into the momentum solve |
-| `vel_underflow` | `0.0000000000E+00` | m/s | Velocity snap-to-zero magnitude |
+| `src_max_chg` | `10.0` |  | Adaptive-dt source-change tolerance band |
+| `prandtl_turb` | `1.0` |  | Kv = prandtl_turb * Kd into the momentum solve |
+| `vel_underflow` | `0.0` | m/s | Velocity snap-to-zero magnitude |
 | `massless_merge` | `false` |  | Merge vanished (<H_VANISHED) layers onto the massive sub-grid before the column solve (default off; identity columns bypass) |
 | `at_vertex` | `false` |  | Solve the JHL08 columns at C-grid corners (vorticity points) from the native face velocities, averaging corner Kd back to tracer points (MOM6 VERTEX_SHEAR; v1 = Kd only) |
 | `vertex_geometric_mean` | `false` |  | Geometric (vs arithmetic) mean in the corner->centre Kd average (MOM6 VERTEX_SHEAR_GEOMETRIC_MEAN) |
-| `vertex_geomean_kdmin` | `0.0000000000E+00` | m^2/s | Floor applied to each corner Kd before the geometric mean (inert unless vertex_geometric_mean; OM5 configs use 1e-9) |
+| `vertex_geomean_kdmin` | `0.0` | m^2/s | Floor applied to each corner Kd before the geometric mean (inert unless vertex_geometric_mean; OM5 configs use 1e-9) |
 
 ### [ocean.slopes]
 
@@ -208,8 +208,8 @@ Isopycnal (neutral) slope diagnostics (Griffies 1998).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (diagnostic; default off ⇒ no-op) |
-| `kd_smooth` | `0.1000000000E-05` | m^2/s | Vert-fill smoothing diffusivity (× dt fills massless layers) |
-| `min_dz_for_n2` | `0.1000000000E+01` | m | Minimum layer thickness floored in the N²/drdz denominator |
+| `kd_smooth` | `1.0e-6` | m^2/s | Vert-fill smoothing diffusivity (× dt fills massless layers) |
+| `min_dz_for_n2` | `1.0` | m | Minimum layer thickness floored in the N²/drdz denominator |
 
 ### [ocean.gm]
 
@@ -218,14 +218,14 @@ Gent-McWilliams thickness diffusion (eddy bolus transport).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (requires [ocean.slopes] enable; default off ⇒ no-op) |
-| `khth` | `0.0000000000E+00` | m^2/s | Thickness diffusivity KhTh (constant-fill; production 1e2-1e3) |
-| `khth_max_cfl` | `0.1000000000E+00` | nondim | Fraction of the diffusive CFL the face KH may use |
-| `khth_slope_max` | `0.1000000000E-01` | nondim | Slope magnitude above which the safe-streamfunction blend takes over |
+| `khth` | `0.0` | m^2/s | Thickness diffusivity KhTh (constant-fill; production 1e2-1e3) |
+| `khth_max_cfl` | `0.1` | nondim | Fraction of the diffusive CFL the face KH may use |
+| `khth_slope_max` | `0.01` | nondim | Slope magnitude above which the safe-streamfunction blend takes over |
 | `use_ebt_struct` | `false` |  | EBT vertical structure of KhTh (KHTH_USE_EBT_STRUCT; needs wavespeed use_ebt; default off) |
 | `use_fgnv` | `false` |  | Solve the FGNV (2010) vertical BVP for the GM streamfunction (KHTH_USE_FGNV_STREAMFUNCTION; needs wavespeed) |
-| `fgnv_filter_scale` | `0.1000000000E+01` | nondim | FGNV smoothing-term scale: c^2 = scale*c^2, psi_unlim amplified by (1+scale) (FGNV_FILTER_SCALE, > 0) |
-| `fgnv_c_min` | `0.0000000000E+00` | m/s | FGNV_C_MIN, accepted for parity but not applied (>= 0) |
-| `fgnv_strat_floor` | `0.1000000000E-14` | nondim | FGNV N^2 floor as a fraction of Omega: N^2 >= (floor*Omega)^2 (FGNV_STRAT_FLOOR, > 0) |
+| `fgnv_filter_scale` | `1.0` | nondim | FGNV smoothing-term scale: c^2 = scale*c^2, psi_unlim amplified by (1+scale) (FGNV_FILTER_SCALE, > 0) |
+| `fgnv_c_min` | `0.0` | m/s | FGNV_C_MIN, accepted for parity but not applied (>= 0) |
+| `fgnv_strat_floor` | `1.0e-15` | nondim | FGNV N^2 floor as a fraction of Omega: N^2 >= (floor*Omega)^2 (FGNV_STRAT_FLOOR, > 0) |
 | `gm_src_form` | `"local"` |  | MEKE's GM energy source: 'local' = rho0/4 KH S^2 N^2 h (default); 'work' = PE release by the final bolus transports (MEKE_GM_SRC_ALT=False) |
 
 ### [ocean.redi]
@@ -236,9 +236,9 @@ Redi continuous neutral (along-isopycnal) tracer diffusion.
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (default off ⇒ no-op; augments hdiff_tracer) |
 | `continuous` | `true` |  | Continuous variant (discontinuous deferred R4; .false. rejected) |
-| `khtr` | `0.0000000000E+00` | m^2/s | Redi neutral diffusivity KhTr (production 1e2-1e3) |
+| `khtr` | `0.0` | m^2/s | Redi neutral diffusivity KhTr (production 1e2-1e3) |
 | `check_diffusive_cfl` | `false` |  | Subcycle Redi so the explicit-diffusion CFL stays <= 1 per pass (default off) |
-| `max_diffusive_cfl` | `-0.1000000000E+01` | nondim | Redi: cap face coefficients at this cell CFL (<=0 off; OM3 2.0) |
+| `max_diffusive_cfl` | `-1.0` | nondim | Redi: cap face coefficients at this cell CFL (<=0 off; OM3 2.0) |
 
 ### [ocean.varmix]
 
@@ -253,17 +253,17 @@ Spatially-varying GM/Redi lateral-diffusivity coefficients.
 | `gill_equatorial_ld` | `true` |  | Gill (1982) equatorial-Ld convention (factor 2 in beta_dx2) |
 | `interpolate_res_fn` | `false` |  | Interpolate centre Res_fn to faces (else interpolate cg1, MOM6 default) |
 | `kh_res_fn_power` | `2` |  | Resolution-function power p (integer >= 1; 2 is the production form) |
-| `kh_res_scale_coef` | `0.1000000000E+01` | nondim | Resolution-function alpha ((alpha·cg1)^p denominator coef) |
-| `khth` | `0.0000000000E+00` | m^2/s | Background thickness diffusivity KhTh |
-| `khtr` | `0.0000000000E+00` | m^2/s | Background tracer diffusivity KhTr (future Redi) |
-| `khth_slope_cff` | `0.0000000000E+00` | nondim | Visbeck coefficient for the KhTh chain |
-| `khtr_slope_cff` | `0.0000000000E+00` | nondim | Visbeck coefficient for the KhTr chain |
-| `khth_min` | `0.0000000000E+00` | m^2/s | Lower clamp on KhTh |
-| `khth_max` | `0.0000000000E+00` | m^2/s | Upper clamp on KhTh (<= 0 ⇒ no cap) |
-| `khtr_min` | `0.0000000000E+00` | m^2/s | Lower clamp on KhTr |
-| `khtr_max` | `0.0000000000E+00` | m^2/s | Upper clamp on KhTr (<= 0 ⇒ no cap) |
-| `visbeck_l_scale` | `0.0000000000E+00` | m | Visbeck length scale L (m); if < 0, |L|²·areaCu |
-| `visbeck_max_slope` | `0.0000000000E+00` | nondim | S² limiter scale (<= 0 ⇒ no limit) |
+| `kh_res_scale_coef` | `1.0` | nondim | Resolution-function alpha ((alpha·cg1)^p denominator coef) |
+| `khth` | `0.0` | m^2/s | Background thickness diffusivity KhTh |
+| `khtr` | `0.0` | m^2/s | Background tracer diffusivity KhTr (future Redi) |
+| `khth_slope_cff` | `0.0` | nondim | Visbeck coefficient for the KhTh chain |
+| `khtr_slope_cff` | `0.0` | nondim | Visbeck coefficient for the KhTr chain |
+| `khth_min` | `0.0` | m^2/s | Lower clamp on KhTh |
+| `khth_max` | `0.0` | m^2/s | Upper clamp on KhTh (<= 0 ⇒ no cap) |
+| `khtr_min` | `0.0` | m^2/s | Lower clamp on KhTr |
+| `khtr_max` | `0.0` | m^2/s | Upper clamp on KhTr (<= 0 ⇒ no cap) |
+| `visbeck_l_scale` | `0.0` | m | Visbeck length scale L (m); if < 0, |L|²·areaCu |
+| `visbeck_max_slope` | `0.0` | nondim | S² limiter scale (<= 0 ⇒ no limit) |
 
 ### [ocean.meke]
 
@@ -272,32 +272,32 @@ Prognostic mesoscale eddy kinetic energy (GM<->eddy loop).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (requires [ocean.gm] enable; default off ⇒ no-op) |
-| `gmcoeff` | `-0.1000000000E+01` | nondim | PE->MEKE conversion efficiency (< 0 ⇒ off) |
-| `frcoeff` | `-0.1000000000E+01` | nondim | Frictional mean->eddy conversion (< 0 ⇒ off; >=0 sources hvisc KE dissipation) |
-| `bgsrc` | `0.0000000000E+00` | m^2/s^3 | Background energy source |
-| `damping` | `0.0000000000E+00` | 1/s | Linear MEKE dissipation rate |
-| `kh` | `-0.1000000000E+01` | m^2/s | Background lateral diffusion of MEKE (< 0 ⇒ off) |
-| `k4` | `-0.1000000000E+01` | m^4/s | Background biharmonic diffusion of MEKE (< 0 ⇒ off) |
-| `khcoeff` | `0.1000000000E+01` | nondim | MEKE->Kh scaling (<= 0 ⇒ closure off) |
-| `cd_scale` | `0.0000000000E+00` | nondim | Bottom/column eddy-velocity ratio |
-| `cb` | `0.2500000000E+02` | nondim | Coefficient in gamma_bot (bottomFac2) |
-| `ct` | `0.5000000000E+02` | nondim | Coefficient in gamma_bt (barotrFac2) |
-| `min_gamma2` | `0.1000000000E-03` | nondim | Floor on gamma_b^2/gamma_t^2 |
-| `uscale` | `0.0000000000E+00` | m/s | Background eddy velocity scale for bottom drag |
-| `dtscale` | `0.1000000000E+01` | nondim | Time-stepping acceleration factor |
-| `khth_fac` | `0.0000000000E+00` | nondim | Geom-mean kh -> VarMix KhTh factor (0 ⇒ inert) |
-| `khtr_fac` | `0.0000000000E+00` | nondim | Geom-mean kh -> VarMix KhTr factor (0 ⇒ inert) |
+| `gmcoeff` | `-1.0` | nondim | PE->MEKE conversion efficiency (< 0 ⇒ off) |
+| `frcoeff` | `-1.0` | nondim | Frictional mean->eddy conversion (< 0 ⇒ off; >=0 sources hvisc KE dissipation) |
+| `bgsrc` | `0.0` | m^2/s^3 | Background energy source |
+| `damping` | `0.0` | 1/s | Linear MEKE dissipation rate |
+| `kh` | `-1.0` | m^2/s | Background lateral diffusion of MEKE (< 0 ⇒ off) |
+| `k4` | `-1.0` | m^4/s | Background biharmonic diffusion of MEKE (< 0 ⇒ off) |
+| `khcoeff` | `1.0` | nondim | MEKE->Kh scaling (<= 0 ⇒ closure off) |
+| `cd_scale` | `0.0` | nondim | Bottom/column eddy-velocity ratio |
+| `cb` | `25.0` | nondim | Coefficient in gamma_bot (bottomFac2) |
+| `ct` | `50.0` | nondim | Coefficient in gamma_bt (barotrFac2) |
+| `min_gamma2` | `1.0e-4` | nondim | Floor on gamma_b^2/gamma_t^2 |
+| `uscale` | `0.0` | m/s | Background eddy velocity scale for bottom drag |
+| `dtscale` | `1.0` | nondim | Time-stepping acceleration factor |
+| `khth_fac` | `0.0` | nondim | Geom-mean kh -> VarMix KhTh factor (0 ⇒ inert) |
+| `khtr_fac` | `0.0` | nondim | Geom-mean kh -> VarMix KhTr factor (0 ⇒ inert) |
 | `backscatter` | `false` |  | Enable MEKE -> momentum harmonic backscatter (negative viscosity); default off ⇒ bit-identical |
-| `backscatter_visc_coeff_ku` | `0.0000000000E+00` | nondim | MEKE_VISCOSITY_COEFF_KU: harmonic backscatter efficiency Ku=coeff*sqrt(2*gt2*E)*Lmix (0 ⇒ inert) |
-| `khmeke_fac` | `0.0000000000E+00` | nondim | meke%kh -> MEKE self-diffusivity factor |
-| `advection_factor` | `0.0000000000E+00` | nondim | Barotropic-transport advection scaling (0 ⇒ off) |
-| `cdrag` | `0.2500000000E-02` | nondim | Bottom drag coefficient for MEKE |
+| `backscatter_visc_coeff_ku` | `0.0` | nondim | MEKE_VISCOSITY_COEFF_KU: harmonic backscatter efficiency Ku=coeff*sqrt(2*gt2*E)*Lmix (0 ⇒ inert) |
+| `khmeke_fac` | `0.0` | nondim | meke%kh -> MEKE self-diffusivity factor |
+| `advection_factor` | `0.0` | nondim | Barotropic-transport advection scaling (0 ⇒ off) |
+| `cdrag` | `0.0025` | nondim | Bottom drag coefficient for MEKE |
 | `use_bbl_drag` | `false` |  | Add resolved |u_bed|^2 to the MEKE bottom-drag rate (default off ⇒ bit-identical) |
-| `alpha_deform` | `0.0000000000E+00` | nondim | Weight on deformation length scale |
-| `alpha_rhines` | `0.0000000000E+00` | nondim | Weight on Rhines length scale (v1 default 0 ⇒ inert) |
-| `alpha_eady` | `0.0000000000E+00` | nondim | Weight on Eady length scale (needs VarMix SN) |
-| `alpha_frict` | `0.0000000000E+00` | nondim | Weight on frictional-arrest length scale |
-| `alpha_grid` | `0.0000000000E+00` | nondim | Weight on grid length scale |
+| `alpha_deform` | `0.0` | nondim | Weight on deformation length scale |
+| `alpha_rhines` | `0.0` | nondim | Weight on Rhines length scale (v1 default 0 ⇒ inert) |
+| `alpha_eady` | `0.0` | nondim | Weight on Eady length scale (needs VarMix SN) |
+| `alpha_frict` | `0.0` | nondim | Weight on frictional-arrest length scale |
+| `alpha_grid` | `0.0` | nondim | Weight on grid length scale |
 
 ### [ocean.tidal_mixing]
 
@@ -306,20 +306,20 @@ St-Laurent/Simmons internal-tide interior diapycnal mixing.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (requires use_closure + thermodynamics) |
-| `gamma` | `0.3333000000E+00` | nondim | Local-dissipation fraction q (GAMMA_ITIDES) |
-| `mu` | `0.2000000000E+00` | nondim | Mixing efficiency Gamma_mix (MU_ITIDES) |
-| `zeta` | `0.5000000000E+03` | m | Bottom decay scale (INT_TIDE_DECAY_SCALE) |
-| `kd_max` | `0.1000000000E-01` | m^2/s | Per-layer physical Kd cap (<0 => no cap) |
-| `prandtl_tidal` | `0.1000000000E+01` |  | Kv = prandtl_tidal * Kd |
-| `min_zbot` | `0.0000000000E+00` | m | Mask off where column depth H < min_zbot |
-| `e_uniform` | `0.0000000000E+00` | W m-2 | Uniform bottom internal-tide energy input E |
+| `gamma` | `0.3333` | nondim | Local-dissipation fraction q (GAMMA_ITIDES) |
+| `mu` | `0.2` | nondim | Mixing efficiency Gamma_mix (MU_ITIDES) |
+| `zeta` | `500.0` | m | Bottom decay scale (INT_TIDE_DECAY_SCALE) |
+| `kd_max` | `0.01` | m^2/s | Per-layer physical Kd cap (<0 => no cap) |
+| `prandtl_tidal` | `1.0` |  | Kv = prandtl_tidal * Kd |
+| `min_zbot` | `0.0` | m | Mask off where column depth H < min_zbot |
+| `e_uniform` | `0.0` | W m-2 | Uniform bottom internal-tide energy input E |
 | `e_compute` | `false` |  | State-dependent E = min(TKE_coef*N_bot, e_max) (v1.1) |
-| `kappa_itides` | `0.6283200000E-03` | m^-1 | Topographic wavenumber (v1.1 E recompute) |
-| `kappa_h2` | `0.1000000000E+01` |  | KAPPA_H2_FACTOR (v1.1 E recompute) |
-| `utide` | `0.0000000000E+00` | m/s | RMS barotropic tidal velocity (v1.1 E recompute) |
-| `h2_rough` | `0.0000000000E+00` | m^2 | Sub-grid topographic roughness variance <h^2> |
-| `frac_rough` | `0.1000000000E+00` |  | Roughness clamp <h^2> <= (frac_rough*H)^2 |
-| `e_max` | `0.1000000000E+04` | W m-2 | TKE_itide_max cap on E |
+| `kappa_itides` | `6.2832e-4` | m^-1 | Topographic wavenumber (v1.1 E recompute) |
+| `kappa_h2` | `1.0` |  | KAPPA_H2_FACTOR (v1.1 E recompute) |
+| `utide` | `0.0` | m/s | RMS barotropic tidal velocity (v1.1 E recompute) |
+| `h2_rough` | `0.0` | m^2 | Sub-grid topographic roughness variance <h^2> |
+| `frac_rough` | `0.1` |  | Roughness clamp <h^2> <= (frac_rough*H)^2 |
+| `e_max` | `1000.0` | W m-2 | TKE_itide_max cap on E |
 | `tideamp_source` | `"uniform"` |  | Tidal speed source: uniform (utide) | file (static 2-D field; needs e_compute) |
 | `tideamp_file` | `""` |  | NetCDF file with the tidal-amplitude field |
 | `tideamp_var` | `"tideamp"` |  | Variable name in tideamp_file (m/s) |
@@ -331,11 +331,11 @@ St-Laurent/Simmons internal-tide interior diapycnal mixing.
 | `bed_share` | `"discard"` |  | Bed-layer power share: discard | lump into the first interior layer (OM3: lump) |
 | `n2_layer_form` | `"legacy"` |  | Layer N^2: legacy (interface value) | mean_interfaces (mean of the two bounding jumps; always under polzin) (OM3: mean_interfaces) |
 | `profile` | `"stlaurent"` |  | Vertical structure: stlaurent (exponential) | polzin (WKB-stretched algebraic; needs e_compute) (OM3: polzin) |
-| `nu_polzin` | `0.6970000000E-01` |  | Polzin decay-scale constant NU_POLZIN |
-| `nbotref_polzin` | `0.9610000000E-03` | s^-1 | Polzin reference bottom N (NBOTREF_POLZIN) |
-| `polzin_decay_scale_factor` | `0.1000000000E+01` |  | Multiplier on the Polzin decay scale |
-| `polzin_scale_max_factor` | `0.1000000000E+01` |  | Polzin stretched scale capped at this multiple of the depth |
-| `polzin_min_decay_scale` | `0.0000000000E+00` | m | Floor on the unstretched Polzin decay scale |
+| `nu_polzin` | `0.0697` |  | Polzin decay-scale constant NU_POLZIN |
+| `nbotref_polzin` | `9.61e-4` | s^-1 | Polzin reference bottom N (NBOTREF_POLZIN) |
+| `polzin_decay_scale_factor` | `1.0` |  | Multiplier on the Polzin decay scale |
+| `polzin_scale_max_factor` | `1.0` |  | Polzin stretched scale capped at this multiple of the depth |
+| `polzin_min_decay_scale` | `0.0` | m | Floor on the unstretched Polzin decay scale |
 
 ### [ocean.bbl_mixing]
 
@@ -344,11 +344,11 @@ Law-of-the-wall bottom-boundary-layer diapycnal mixing (tracer diffusivity).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (needs the per-face viscous BBL + thermodynamics) |
-| `effic` | `0.2000000000E+00` | nondim | Fraction of the BBL mean-KE loss spent on mixing (BBL_EFFIC; OM3: 0.01) |
-| `max_decay` | `0.2000000000E+03` | m | Upper bound on the upward power decay length (BBL_MIXING_MAX_DECAY) |
+| `effic` | `0.2` | nondim | Fraction of the BBL mean-KE loss spent on mixing (BBL_EFFIC; OM3: 0.01) |
+| `max_decay` | `200.0` | m | Upper bound on the upward power decay length (BBL_MIXING_MAX_DECAY) |
 | `use_omega` | `true` |  | Floor N^2 at Omega^2 in the energy bound (LOTW_BBL_USE_OMEGA) |
-| `von_karman` | `0.4100000000E+00` |  | Von Karman constant (VON_KARMAN_BBL) |
-| `kd_max` | `0.1000000000E+00` | m^2/s | Cap on the BBL diffusivity and unstratified fill value (KD_MAX) |
+| `von_karman` | `0.41` |  | Von Karman constant (VON_KARMAN_BBL) |
+| `kd_max` | `0.1` | m^2/s | Cap on the BBL diffusivity and unstratified fill value (KD_MAX) |
 
 ### [ocean.conv]
 
@@ -357,9 +357,9 @@ Brunt-Vaisala-triggered convective adjustment (interior closure contributor).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (requires use_closure + thermodynamics) |
-| `kd_conv` | `0.1000000000E+01` | m^2/s | Convective tracer diffusivity (KD_CONV) |
-| `prandtl_conv` | `0.1000000000E+01` |  | Kv_conv = prandtl_conv * kd_conv |
-| `n2_thresh` | `0.0000000000E+00` | s^-2 | Trigger threshold on N^2 (BV_SQR_CONV) |
+| `kd_conv` | `1.0` | m^2/s | Convective tracer diffusivity (KD_CONV) |
+| `prandtl_conv` | `1.0` |  | Kv_conv = prandtl_conv * kd_conv |
+| `n2_thresh` | `0.0` | s^-2 | Trigger threshold on N^2 (BV_SQR_CONV) |
 
 ### [ocean.porous]
 
@@ -370,7 +370,7 @@ Porous barriers: subgrid sill/strait blocking of the C-grid face widths.
 | `enable` | `false` |  | Master switch (ocean multilayer path only; fails loud with bt_halo > 0 or wetdry enable) |
 | `source` | `"resolved"` |  | Along-face bathymetry-statistics source ('resolved' is a wet-gated proxy; 'file' is deferred) |
 | `eta_interp` | `"max"` |  | Interface height at the velocity point (PORBAR_ETA_INTERP); 'max' is the LEAST blocking, 'min' the most |
-| `masking_depth` | `0.0000000000E+00` | m | Faces shallower than this stay fully open (PORBAR_MASKING_DEPTH, positive below the surface) |
+| `masking_depth` | `0.0` | m | Faces shallower than this stay fully open (PORBAR_MASKING_DEPTH, positive below the surface) |
 
 ### [ocean.ddiff]
 
@@ -379,14 +379,14 @@ Double diffusion: salt fingering + diffusive convection (folded into the heat/sa
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (requires thermodynamics) |
-| `strat_param_max` | `0.2550000000E+01` |  | R_rho salt-fingering cutoff (STRAT_PARAM_MAX) |
-| `kappa_ddiff_s` | `0.1000000000E-03` | m^2/s | Leading salt-fingering diffusivity K_f (KAPPA_DDIFF_S) |
-| `ddiff_exp1` | `0.1000000000E+01` |  | Inner fingering exponent (DDIFF_EXP1) |
-| `ddiff_exp2` | `0.3000000000E+01` |  | Outer fingering exponent (DDIFF_EXP2) |
-| `param1` | `0.9090000000E+00` |  | MC76 convection exterior coeff (KAPPA_DDIFF_PARAM1) |
-| `param2` | `0.4600000000E+01` |  | MC76 convection middle coeff (KAPPA_DDIFF_PARAM2) |
-| `param3` | `-0.5400000000E+00` |  | MC76 convection interior coeff (KAPPA_DDIFF_PARAM3) |
-| `mol_diff` | `0.1500000000E-05` | m^2/s | Molecular diffusivity scaling convection (MOL_DIFF) |
+| `strat_param_max` | `2.55` |  | R_rho salt-fingering cutoff (STRAT_PARAM_MAX) |
+| `kappa_ddiff_s` | `1.0e-4` | m^2/s | Leading salt-fingering diffusivity K_f (KAPPA_DDIFF_S) |
+| `ddiff_exp1` | `1.0` |  | Inner fingering exponent (DDIFF_EXP1) |
+| `ddiff_exp2` | `3.0` |  | Outer fingering exponent (DDIFF_EXP2) |
+| `param1` | `0.909` |  | MC76 convection exterior coeff (KAPPA_DDIFF_PARAM1) |
+| `param2` | `4.6` |  | MC76 convection middle coeff (KAPPA_DDIFF_PARAM2) |
+| `param3` | `-0.54` |  | MC76 convection interior coeff (KAPPA_DDIFF_PARAM3) |
+| `mol_diff` | `1.5e-6` | m^2/s | Molecular diffusivity scaling convection (MOL_DIFF) |
 | `use_k90` | `false` |  | Convection form: MC76 (default) vs Kelley-90 |
 
 ### [ocean.tides]
@@ -397,7 +397,7 @@ Equilibrium (astronomical) body-force tide (C1) + scalar SAL (C2).
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (requires a non-cartesian grid) |
 | `use_sal` | `false` |  | Apply scalar self-attraction & loading (C2) |
-| `beta_sal` | `0.0000000000E+00` |  | Scalar SAL factor beta (~0.085-0.12) |
+| `beta_sal` | `0.0` |  | Scalar SAL factor beta (~0.085-0.12) |
 | `add_nodal` | `false` |  | Apply the 18.6-yr nodal f/u corrections |
 | `constituents` | `"M2 S2 N2 K2 K1 O1 P1 Q1"` |  | Active constituent list (e.g. 'M2 S2 K1 O1') |
 | `ref_date` | `"1900-01-01"` |  | Astronomical reference date YYYY-MM-DD |
@@ -414,7 +414,7 @@ Atmospheric surface-pressure loading / inverse barometer (PR-17).
 | `ice_load` | `false` |  | Sea-ice + snow mass loading: p_surf = p_surf_const + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=true) |
 | `atm_load` | `false` |  | Add the bulk forcing's sea-level pressure (p_surf_atm = psl) to p_surf: the atmosphere's inverse barometer, seam ghosts exchanged every step (requires enable=true and [ocean.bulk_flux] enable). Off: p_surf stays the p_surf_const seed |
 | `ice_load_balance_ic` | `true` |  | Cold start with ice_load: lower the initial sea surface under the ice by (rho_i*vice+rho_s*vsno)/rho_0 so the start is in balance with the load (never on a warm restart) |
-| `p_surf_const` | `0.0000000000E+00` |  | Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert) |
+| `p_surf_const` | `0.0` |  | Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert) |
 
 ### [ocean.cavity_dyn]
 
@@ -425,18 +425,18 @@ Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref =
 | `enable` | `false` |  | Master switch (single-rank, split solver, fv_mom6 PGF, sigma/z_fixed only) |
 | `draft_config` | `"none"` |  | Draft source: analytic shape, or 'file' (static 2-D NetCDF on the model grid, single rank) |
 | `draft_source` | `"draft"` |  | Whether the formula gives the ice-base DEPTH or an ice THICKNESS ('in_situ' isostasy is deferred) |
-| `draft_depth` | `0.0000000000E+00` | m | Draft amplitude (ice thickness under draft_source='thickness') |
-| `draft_slope` | `0.0000000000E+00` |  | d(draft)/dx for draft_config='linear' (dimensionless; converted to grid units) |
-| `draft_x0` | `-0.1000000000E+31` | m | Western edge of the shelf box, and the anchor of the 'linear' profile (+/-1e30 => no limit) |
-| `draft_x1` | `0.1000000000E+31` | m | Eastern edge of the shelf box = the calving front (+/-1e30 => no limit) |
-| `draft_y0` | `-0.1000000000E+31` | m | Southern edge of the shelf box (+/-1e30 => no limit) |
-| `draft_y1` | `0.1000000000E+31` | m | Northern edge of the shelf box (+/-1e30 => no limit) |
+| `draft_depth` | `0.0` | m | Draft amplitude (ice thickness under draft_source='thickness') |
+| `draft_slope` | `0.0` |  | d(draft)/dx for draft_config='linear' (dimensionless; converted to grid units) |
+| `draft_x0` | `-1.0e+30` | m | Western edge of the shelf box, and the anchor of the 'linear' profile (+/-1e30 => no limit) |
+| `draft_x1` | `1.0e+30` | m | Eastern edge of the shelf box = the calving front (+/-1e30 => no limit) |
+| `draft_y0` | `-1.0e+30` | m | Southern edge of the shelf box (+/-1e30 => no limit) |
+| `draft_y1` | `1.0e+30` | m | Northern edge of the shelf box (+/-1e30 => no limit) |
 | `draft_file` | `""` |  | draft_config='file': NetCDF path (variable must be (x,y,t) Fortran order, on the model grid; record 1 read) |
 | `draft_var` | `"iceDraft"` |  | draft_config='file': 2-D variable name (ISOMIP+ ships 'iceDraft') |
 | `draft_sign` | `"depth"` |  | draft_config='file': sign convention of the file values (ISOMIP+ iceDraft is an ELEVATION) |
-| `h_min_cavity` | `0.1000000000E+02` | m | Grounding cutoff: b - z_draft below this is LAND (never a thin film under grounded ice) |
-| `grounded_max_frac` | `0.5000000000E+00` |  | Fail loud if more than this fraction of the interior columns ground |
-| `rho_ice` | `0.9180000000E+03` | kg/m^3 | Ice density, consulted only by draft_source='thickness' |
+| `h_min_cavity` | `10.0` | m | Grounding cutoff: b - z_draft below this is LAND (never a thin film under grounded ice) |
+| `grounded_max_frac` | `0.5` |  | Fail loud if more than this fraction of the interior columns ground |
+| `rho_ice` | `918.0` | kg/m^3 | Ice density, consulted only by draft_source='thickness' |
 | `trim_ic_for_p_surf` | `false` |  | Trim the initial column top so the displaced water's weight equals the ice load (MOM6 TRIM_IC_FOR_P_SURF; linear EOS + zinit source='linear' only) |
 
 ### [ocean.cavity_melt]
@@ -447,15 +447,15 @@ Ice-shelf basal-melt thermodynamics: the three-equation interface, its exchange 
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (requires [ocean.cavity_dyn], tfreeze_set='isomip' and the surface-flux component set) |
 | `exchange_law` | `"const_gamma"` |  | Turbulent exchange law; laws other than const_gamma/hj99/yung25 are RESERVED and refused at configure |
-| `gamma_t` | `0.2200000000E-01` |  | Dimensionless heat-transfer coefficient Gamma_T (ISOMIP+ starting guess; tune per coordinate) |
-| `gamma_s` | `-0.1000000000E+01` |  | Dimensionless salt-transfer coefficient Gamma_S (negative = unset = gamma_t/35) |
-| `cdrag_top` | `0.2500000000E-02` |  | Top drag coefficient for the MELT friction velocity (no momentum drag yet - that is Phase 4) |
-| `u_tide` | `0.1000000000E-01` | m/s | RMS tidal velocity in the melt u* only, never the drag |
-| `ustar_min` | `0.1000000000E-03` | m/s | Friction-velocity floor (Yung et al. 2025 eq. 14) |
+| `gamma_t` | `0.022` |  | Dimensionless heat-transfer coefficient Gamma_T (ISOMIP+ starting guess; tune per coordinate) |
+| `gamma_s` | `-1.0` |  | Dimensionless salt-transfer coefficient Gamma_S (negative = unset = gamma_t/35) |
+| `cdrag_top` | `0.0025` |  | Top drag coefficient for the MELT friction velocity (no momentum drag yet - that is Phase 4) |
+| `u_tide` | `0.01` | m/s | RMS tidal velocity in the melt u* only, never the drag |
+| `ustar_min` | `1.0e-4` | m/s | Friction-velocity floor (Yung et al. 2025 eq. 14) |
 | `ice_conduction` | `"insulating"` |  | Ice-side conduction; 'diffusive' is RESERVED and refused (it changes the melt/freeze branch logic) |
-| `t_ice` | `-0.2500000000E+02` | degC | Ice interior temperature; read by ice_conduction='adv_diff' only |
-| `s_ice` | `0.0000000000E+00` | g/kg | Ice salinity; must stay strictly below the far-field salinity |
-| `far_field_depth` | `0.1000000000E+02` | m | Thickness below the ice base the far-field T/S/u are averaged over (METRES, not layers) |
+| `t_ice` | `-25.0` | degC | Ice interior temperature; read by ice_conduction='adv_diff' only |
+| `s_ice` | `0.0` | g/kg | Ice salinity; must stay strictly below the far-field salinity |
+| `far_field_depth` | `10.0` | m | Thickness below the ice base the far-field T/S/u are averaged over (METRES, not layers) |
 | `freshwater` | `"virtual"` |  | Meltwater delivery: 'virtual' (default, fixed column mass) or 'mass' (real Boussinesq volume on the top layer) |
 | `volume_compensation` | `"none"` |  | Sea-level compensation for freshwater='mass': 'none' (default) or 'uniform_open_ocean' (remove the melt volume again over uncovered wet cells) |
 
@@ -467,49 +467,49 @@ RH18 energetics-based planetary boundary layer.
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (replaces the KPP overlay; requires use_closure) |
 | `mstar_scheme` | `"om4"` |  | Surface TKE mstar scheme |
-| `mstar` | `0.1200000000E+01` |  | Constant-scheme mstar |
-| `mstar_cap` | `-0.1000000000E+01` |  | Cap for OM4/RH18 mstar; off when < 0 |
-| `mstar_coef1` | `0.3000000000E+00` |  | OM4 stabilizing coefficient |
-| `c_ek` | `0.8500000000E-01` |  | OM4 Ekman coefficient |
-| `mstar_conv_adj` | `0.0000000000E+00` |  | Convective mstar reduction in [0,1] |
-| `rh18_cn1` | `0.2750000000E+00` |  | RH18 mstar fit coefficient cn1 |
-| `rh18_cn2` | `0.8000000000E+01` |  | RH18 mstar fit coefficient cn2 |
-| `rh18_cn3` | `-0.5000000000E+01` |  | RH18 mstar fit coefficient cn3 |
-| `rh18_cs1` | `0.2000000000E+00` |  | RH18 mstar fit coefficient cs1 |
-| `rh18_cs2` | `0.4000000000E+00` |  | RH18 mstar fit coefficient cs2 |
-| `nstar` | `0.2000000000E+00` |  | Convective PE -> TKE efficiency |
-| `rivermix_depth` | `0.0000000000E+00` |  | River-mixing depth (m); 0 = off |
-| `tke_decay` | `0.2500000000E+01` |  | Ekman-depth / TKE-decay-scale ratio |
-| `wstar_ustar_coef` | `0.1000000000E+01` |  | Convective weight in the velocity scale |
+| `mstar` | `1.2` |  | Constant-scheme mstar |
+| `mstar_cap` | `-1.0` |  | Cap for OM4/RH18 mstar; off when < 0 |
+| `mstar_coef1` | `0.3` |  | OM4 stabilizing coefficient |
+| `c_ek` | `0.085` |  | OM4 Ekman coefficient |
+| `mstar_conv_adj` | `0.0` |  | Convective mstar reduction in [0,1] |
+| `rh18_cn1` | `0.275` |  | RH18 mstar fit coefficient cn1 |
+| `rh18_cn2` | `8.0` |  | RH18 mstar fit coefficient cn2 |
+| `rh18_cn3` | `-5.0` |  | RH18 mstar fit coefficient cn3 |
+| `rh18_cs1` | `0.2` |  | RH18 mstar fit coefficient cs1 |
+| `rh18_cs2` | `0.4` |  | RH18 mstar fit coefficient cs2 |
+| `nstar` | `0.2` |  | Convective PE -> TKE efficiency |
+| `rivermix_depth` | `0.0` |  | River-mixing depth (m); 0 = off |
+| `tke_decay` | `2.5` |  | Ekman-depth / TKE-decay-scale ratio |
+| `wstar_ustar_coef` | `1.0` |  | Convective weight in the velocity scale |
 | `vel_scale_scheme` | `"cube_root"` |  | Velocity-scale scheme |
-| `vstar_scale_fac` | `0.1000000000E+01` |  | Overall vstar multiplier |
-| `vstar_surf_fac` | `0.1200000000E+01` |  | RH18 mechanical surface vstar factor |
-| `von_karman` | `0.4100000000E+00` |  | von Karman kappa in Kd = vstar*kappa*mixlen |
-| `ekman_scale_coef` | `0.1000000000E+01` |  | Rotational mixing-length rolloff |
-| `min_mix_len` | `0.0000000000E+00` | m | Mixing-length floor |
-| `mixlen_exponent` | `0.2000000000E+01` |  | Shape-function exponent |
-| `translay_scale` | `0.1000000000E+00` |  | Transition-layer shape floor (in [0,1) when iterating) |
+| `vstar_scale_fac` | `1.0` |  | Overall vstar multiplier |
+| `vstar_surf_fac` | `1.2` |  | RH18 mechanical surface vstar factor |
+| `von_karman` | `0.41` |  | von Karman kappa in Kd = vstar*kappa*mixlen |
+| `ekman_scale_coef` | `1.0` |  | Rotational mixing-length rolloff |
+| `min_mix_len` | `0.0` | m | Mixing-length floor |
+| `mixlen_exponent` | `2.0` |  | Shape-function exponent |
+| `translay_scale` | `0.1` |  | Transition-layer shape floor (in [0,1) when iterating) |
 | `mld_iteration` | `true` |  | Self-consistent MLD root-find |
-| `mld_tol` | `0.1000000000E+01` | m | MLD convergence tolerance |
+| `mld_tol` | `1.0` | m | MLD convergence tolerance |
 | `mld_max_its` | `20` |  | Max MLD iterations |
 | `mld_bisection` | `false` |  | Bisection instead of false position |
 | `mld_use_prev_guess` | `false` |  | Seed from the previous step's MLD |
-| `omega` | `0.7292100000E-04` | 1/s | Earth rotation rate |
-| `omega_frac` | `0.0000000000E+00` |  | Blend |f| with 2*Omega |
-| `prandtl` | `0.1000000000E+01` |  | Kv = prandtl*Kd into the momentum solve |
+| `omega` | `7.2921e-5` | 1/s | Earth rotation rate |
+| `omega_frac` | `0.0` |  | Blend |f| with 2*Omega |
+| `prandtl` | `1.0` |  | Kv = prandtl*Kd into the momentum solve |
 | `combine` | `"add"` |  | Combine vs interior closure kv/kt: add | max | max_shear (bg + max(epbl, kappa-shear)) |
 | `tke_diags` | `false` |  | Compute per-column TKE budget diagnostics |
 | `use_lt` | `false` |  | Langmuir-turbulence enhancement (LF17 wind-only) |
 | `lt_scheme` | `"rescale"` |  | Langmuir enhancement scheme |
-| `lt_enhance_coef` | `0.4470000000E+00` |  | Langmuir enhancement coefficient |
-| `lt_enhance_exp` | `-0.1330000000E+01` |  | Langmuir-number exponent |
-| `lt_max_enhance` | `0.5000000000E+01` |  | Cap on the multiplicative enhancement |
-| `la_frac_hbl` | `0.4000000000E-01` |  | Stokes SL-average depth fraction |
-| `lt_lac1` | `-0.8700000000E+00` |  | Stability-modified La coefficient 1 |
-| `lt_lac2` | `0.0000000000E+00` |  | Stability-modified La coefficient 2 |
-| `lt_lac3` | `0.0000000000E+00` |  | Stability-modified La coefficient 3 |
-| `lt_lac4` | `0.9500000000E+00` |  | Stability-modified La coefficient 4 |
-| `lt_lac5` | `0.9500000000E+00` |  | Stability-modified La coefficient 5 |
+| `lt_enhance_coef` | `0.447` |  | Langmuir enhancement coefficient |
+| `lt_enhance_exp` | `-1.33` |  | Langmuir-number exponent |
+| `lt_max_enhance` | `5.0` |  | Cap on the multiplicative enhancement |
+| `la_frac_hbl` | `0.04` |  | Stokes SL-average depth fraction |
+| `lt_lac1` | `-0.87` |  | Stability-modified La coefficient 1 |
+| `lt_lac2` | `0.0` |  | Stability-modified La coefficient 2 |
+| `lt_lac3` | `0.0` |  | Stability-modified La coefficient 3 |
+| `lt_lac4` | `0.95` |  | Stability-modified La coefficient 4 |
+| `lt_lac5` | `0.95` |  | Stability-modified La coefficient 5 |
 
 ### [ocean.wavespeed]
 
@@ -518,7 +518,7 @@ First-baroclinic wave speed + Rossby deformation radius (diagnostic).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (diagnostic; default off) |
-| `mono_n2` | `-0.1000000000E+01` |  | N2-monotonising depth; NOT IMPLEMENTED (refused together with use_ebt); < 0 = off |
+| `mono_n2` | `-1.0` |  | N2-monotonising depth; NOT IMPLEMENTED (refused together with use_ebt); < 0 = off |
 | `use_ebt` | `false` |  | Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (consumed by GM with [ocean.gm] use_ebt_struct) |
 | `n_wavespeed` | `1` |  | Recompute cadence (every N steps) |
 
@@ -529,17 +529,17 @@ Fox-Kemper mixed-layer-eddy restratification (B5).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (off => bit-identity) |
-| `ce` | `0.6250000000E-01` |  | FK08 coefficient Ce (0.06-0.08) |
-| `f_floor` | `0.1000000000E-04` | 1/s | |f| regularisation floor |
-| `mld_decay_time` | `0.0000000000E+00` | s | Running-mean MLD filter time-scale (0 = off, instantaneous MLD) |
-| `tail_dh` | `0.0000000000E+00` |  | mu cubic-tail extension (0 = exact mu) |
+| `ce` | `0.0625` |  | FK08 coefficient Ce (0.06-0.08) |
+| `f_floor` | `1.0e-5` | 1/s | |f| regularisation floor |
+| `mld_decay_time` | `0.0` | s | Running-mean MLD filter time-scale (0 = off, instantaneous MLD) |
+| `tail_dh` | `0.0` |  | mu cubic-tail extension (0 = exact mu) |
 | `use_mom_mixrate` | `false` |  | FK11 momentum-mixrate timescale (PRODUCTION-RECOMMENDED) vs bare Ce/|f| |
 | `resolution_taper` | `false` |  | B2 res_fn hook (hard error if on without B2) |
 | `use_bodner` | `false` |  | Bodner 2023 frontogenesis-arrest MLE (overrides ce/mixrate) |
-| `cr` | `0.0000000000E+00` |  | Bodner 2023 efficiency coefficient Cr (0 = off) |
-| `bodner_mstar` | `0.5000000000E+00` |  | Bodner mechanical (u*) weight in w'u' |
-| `bodner_nstar` | `0.6600000000E-01` |  | Bodner convective (w*) weight in w'u' |
-| `min_wstar2` | `0.1000000000E-23` | m^2/s^2 | Floor on w'u' (1/0 armour) |
+| `cr` | `0.0` |  | Bodner 2023 efficiency coefficient Cr (0 = off) |
+| `bodner_mstar` | `0.5` |  | Bodner mechanical (u*) weight in w'u' |
+| `bodner_nstar` | `0.066` |  | Bodner convective (w*) weight in w'u' |
+| `min_wstar2` | `1.0e-24` | m^2/s^2 | Floor on w'u' (1/0 armour) |
 
 ### [ocean.grid]
 
@@ -548,17 +548,17 @@ Horizontal-grid generator + geometry (ocean curvilinear stream).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `grid_config` | `"cartesian"` |  | Horizontal grid generator |
-| `lon_west` | `0.0000000000E+00` | degrees_east | West edge of the domain (spherical) |
-| `lat_south` | `0.0000000000E+00` | degrees_north | South edge of the domain (spherical) |
-| `rad_earth` | `0.6378000000E+07` | m | Earth radius for the spherical metric |
+| `lon_west` | `0.0` | degrees_east | West edge of the domain (spherical) |
+| `lat_south` | `0.0` | degrees_north | South edge of the domain (spherical) |
+| `rad_earth` | `6378000.0` | m | Earth radius for the spherical metric |
 | `supergrid_file` | `""` |  | Path to the MOM6 supergrid NetCDF (supergrid grid_config) |
 | `coriolis_scheme` | `"beta_plane"` |  | Coriolis source for the metrics f-fill |
-| `omega` | `0.7292100000E-04` | rad/s | Planetary rotation rate (planetary scheme) |
-| `phi_join` | `0.6500000000E+02` | degrees_north | Join latitude for the tripolar bipolar cap |
-| `lon_pole` | `0.1000000000E+03` | degrees_east | Longitude of the first tripolar cap pole (partner +180) |
+| `omega` | `7.2921e-5` | rad/s | Planetary rotation rate (planetary scheme) |
+| `phi_join` | `65.0` | degrees_north | Join latitude for the tripolar bipolar cap |
+| `lon_pole` | `100.0` | degrees_east | Longitude of the first tripolar cap pole (partner +180) |
 | `axis_units` | `"meters"` |  | Units of the Cartesian domain extent (MOM6 AXIS_UNITS) |
-| `len_lon` | `0.0000000000E+00` |  | Total x-extent of the Cartesian domain in axis_units (MOM6 LENLON; derives dx when > 0) |
-| `len_lat` | `0.0000000000E+00` |  | Total y-extent of the Cartesian domain in axis_units (MOM6 LENLAT; derives dy when > 0) |
+| `len_lon` | `0.0` |  | Total x-extent of the Cartesian domain in axis_units (MOM6 LENLON; derives dx when > 0) |
+| `len_lat` | `0.0` |  | Total y-extent of the Cartesian domain in axis_units (MOM6 LENLAT; derives dy when > 0) |
 
 ### [ocean.coriolis]
 
@@ -582,20 +582,20 @@ Thermodynamics master switch + scalar surface fluxes.
 | `kpp_sw_method` | `"mxl_sw"` |  | KPP shortwave-in-BL method: all_sw | mxl_sw | lv1_sw |
 | `epbl_sw_ctke` | `true` |  | Charge the EPBL TKE ledger for penetrating shortwave |
 | `enable_thermodynamics` | `true` |  | Run EOS + tracer advection + vertical mixing |
-| `q_heat` | `0.0000000000E+00` | W/m^2 | Net surface heat flux (positive down) |
-| `q_salt` | `0.0000000000E+00` | kg/m^2/s | Net surface salt flux (positive salinifies) |
-| `sw_pen_frac` | `0.0000000000E+00` |  | Penetrating fraction of q_heat (0 = off, all at surface) |
-| `sw_band_ratio` | `0.5800000000E+00` |  | Two-band shortwave band-1 weight R (Jerlov type I) |
-| `sw_zeta1` | `0.3500000000E+00` | m | Shortwave band-1 e-folding depth |
-| `sw_zeta2` | `0.2300000000E+02` | m | Shortwave band-2 e-folding depth |
+| `q_heat` | `0.0` | W/m^2 | Net surface heat flux (positive down) |
+| `q_salt` | `0.0` | kg/m^2/s | Net surface salt flux (positive salinifies) |
+| `sw_pen_frac` | `0.0` |  | Penetrating fraction of q_heat (0 = off, all at surface) |
+| `sw_band_ratio` | `0.58` |  | Two-band shortwave band-1 weight R (Jerlov type I) |
+| `sw_zeta1` | `0.35` | m | Shortwave band-1 e-folding depth |
+| `sw_zeta2` | `23.0` | m | Shortwave band-2 e-folding depth |
 | `sw_scheme` | `"default"` |  | Penetrating-SW scheme: default (two-band) | manizza05 (chlorophyll-dependent N-band, Manizza et al. 2005) |
 | `sw_nbands` | `3` |  | manizza05: number of bands (3..6); NIR split evenly over bands 3..n |
-| `sw_blue_frac` | `0.5000000000E+00` |  | manizza05: blue share of the visible (0.42 of total) shortwave |
+| `sw_blue_frac` | `0.5` |  | manizza05: blue share of the visible (0.42 of total) shortwave |
 | `sw_chl_file` | `""` |  | manizza05: NetCDF chlorophyll climatology (mg/m^3), monthly cyclic |
 | `sw_chl_var` | `"CHL"` |  | manizza05: variable name of the chlorophyll field |
-| `sw_opacity_coef` | `[0.2320000000E-01, 0.7400000000E-01, 0.2250000000E+00, 0.3700000000E-01, 0.2860000000E+01, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | 1/m | manizza05: (a_n, b_n) pairs, kappa_n = a_n + b_n*chl**p_n |
-| `sw_chl_power` | `[0.6740000000E+00, 0.6290000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` |  | manizza05: chlorophyll exponents p_n |
-| `sw_opacity_land` | `0.1000000000E+02` | 1/m | manizza05: opacity of land columns |
+| `sw_opacity_coef` | `[0.0232, 0.074, 0.225, 0.037, 2.86, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | 1/m | manizza05: (a_n, b_n) pairs, kappa_n = a_n + b_n*chl**p_n |
+| `sw_chl_power` | `[0.674, 0.629, 0.0, 0.0, 0.0, 0.0]` |  | manizza05: chlorophyll exponents p_n |
+| `sw_opacity_land` | `10.0` | 1/m | manizza05: opacity of land columns |
 
 ### [ocean.forcing]
 
@@ -605,7 +605,7 @@ Surface-flux component-set gate (PR-12): allocate the q_sw/evap/heat_content_*/.
 |------|---------|-------|-------------|
 | `enable_components` | `false` |  | Allocate the surface-flux component set and run the assembler (default off => byte-identical) |
 | `freshwater` | `"none"` |  | Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (real volume with the evaporation pass-down; open-ocean fluxes, needs enable_components) |
-| `fw_evap_cfl_limit` | `0.8000000000E+00` |  | freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1) (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column |
+| `fw_evap_cfl_limit` | `0.8` |  | freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1) (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column |
 
 ### [ocean.ice]
 
@@ -615,34 +615,34 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch for the sea-ice slot (default off => byte-identical) |
 | `ncat` | `5` |  | Number of ice thickness categories (cat 0 = open water) |
-| `hlim` | `[-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01]` | m | ITD category lower thickness edges; unset => SIS2 default table |
+| `hlim` | `[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]` | m | ITD category lower thickness edges; unset => SIS2 default table |
 | `nk_ice` | `2` |  | Vertical ice layers per category (2 = Winton two-layer) |
-| `air_temp` | `0.0000000000E+00` | degC | Prescribed slab-atmosphere air temperature for the v1 restoring filler |
-| `restore_lambda` | `0.0000000000E+00` | W/m^2/K | Surface-flux restoring coefficient dSF/dT (0 = passive column) |
-| `sw_down` | `0.0000000000E+00` | W/m^2 | Downwelling shortwave into the ice top for the v1 filler |
-| `snowfall` | `0.0000000000E+00` | kg/m^2/s | Uniform frozen-precipitation rate onto the ice top for the v1 filler |
+| `air_temp` | `0.0` | degC | Prescribed slab-atmosphere air temperature for the v1 restoring filler |
+| `restore_lambda` | `0.0` | W/m^2/K | Surface-flux restoring coefficient dSF/dT (0 = passive column) |
+| `sw_down` | `0.0` | W/m^2 | Downwelling shortwave into the ice top for the v1 filler |
+| `snowfall` | `0.0` | kg/m^2/s | Uniform frozen-precipitation rate onto the ice top for the v1 filler |
 | `snow_ice` | `false` |  | Enable Archimedes snow-ice flooding conversion (SIS2 SN2IC; default off => byte-identical) |
 | `frazil_column` | `false` |  | Full-column frazil sweep with rising carry instead of the surface-only clamp (OM3 FRAZIL; default off => byte-identical) |
 | `pressure_dependent_frazil` | `false` |  | Freezing point at layer-centre hydrostatic pressure (OM3 PRESSURE_DEPENDENT_FRAZIL; needs frazil_column) |
 | `reclaim_frazil` | `true` |  | Spend the standing frazil bank on a warm surface layer (OM3 RECLAIM_FRAZIL; default true, used only with frazil_column) |
 | `ledger` | `false` |  | scheme='cice': run the named-term ice conservation ledger every step and print its residual line at the console cadence (default off => bit-identical) |
-| `hfreeze` | `-0.1000000000E+01` | m | Depth cap of the melt-potential (frzmlt) integral, capped by the boundary-layer depth where KPP/EPBL provide one; -1 = off (OM3 HFREEZE = 10) |
+| `hfreeze` | `-1.0` | m | Depth cap of the melt-potential (frzmlt) integral, capped by the boundary-layer depth where KPP/EPBL provide one; -1 = off (OM3 HFREEZE = 10) |
 | `bound_salinity` | `false` |  | Floor top-layer salinity at min_salinity after the ice salt exchange (OM3 BOUND_SALINITY; non-conservative; default off) |
-| `min_salinity` | `0.0000000000E+00` | g/kg | Salinity floor for bound_salinity (OM3 MIN_SALINITY) |
+| `min_salinity` | `0.0` | g/kg | Salinity floor for bound_salinity (OM3 MIN_SALINITY) |
 | `transport` | `false` |  | Enable horizontal category ice/snow transport (default off => byte-identical) |
 | `adv_substeps` | `1` |  | Advective sub-iterations per transport call (SIS2 NSTEPS_ADV) |
-| `roll_factor` | `0.1000000000E+01` |  | Thin-ice rolling floor factor (SIS2 SEA_ICE_ROLL_FACTOR); 0 disables rolling |
+| `roll_factor` | `1.0` |  | Thin-ice rolling floor factor (SIS2 SEA_ICE_ROLL_FACTOR); 0 disables rolling |
 | `dynamics` | `false` |  | Enable C-grid EVP ice dynamics (default off => byte-identical) |
 | `a_face_stress` | `false` |  | Weight EVP wind stress + ice-ocean drag by face ice concentration (momentum-conserving; default off => byte-identical) |
-| `p0` | `0.2750000000E+05` | Pa | Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of [ocean.ice_ridge]) |
-| `c0` | `0.2000000000E+02` |  | Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of [ocean.ice_ridge]) |
-| `ec` | `0.2000000000E+01` |  | Yield-curve axis ratio (SIS2 ICE_YIELD_ELLIPTICITY); 0 = cavitating fluid |
-| `cdw` | `0.3240000000E-02` |  | Ice-ocean drag coefficient (SIS2 ICE_CDRAG_WATER) |
-| `rho_ocean` | `0.1030000000E+04` | kg/m^3 | Ice-drag reference density (SIS2 RHO_OCEAN) |
+| `p0` | `27500.0` | Pa | Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of [ocean.ice_ridge]) |
+| `c0` | `20.0` |  | Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of [ocean.ice_ridge]) |
+| `ec` | `2.0` |  | Yield-curve axis ratio (SIS2 ICE_YIELD_ELLIPTICITY); 0 = cavitating fluid |
+| `cdw` | `0.00324` |  | Ice-ocean drag coefficient (SIS2 ICE_CDRAG_WATER) |
+| `rho_ocean` | `1030.0` | kg/m^3 | Ice-drag reference density (SIS2 RHO_OCEAN) |
 | `evp_sub_steps` | `432` |  | EVP subcycles per slow step (SIS2 NSTEPS_DYN) |
-| `del_sh_min_scale` | `0.2000000000E+01` |  | Viscosity-floor scale (SIS2 ICE_DEL_SH_MIN_SCALE) |
-| `tdamp` | `-0.2000000000E+00` |  | Elastic damping timescale rule (SIS2 ICE_TDAMP_ELASTIC): >0 seconds, ==0 auto (0.2*dt_slow), <0 fraction of dt_slow |
-| `cfl_trunc` | `0.0000000000E+00` |  | Transport-CFL ceiling on the final ice velocity (SIS2 CFL_TRUNCATE, default 0.5 there); 0 disables |
+| `del_sh_min_scale` | `2.0` |  | Viscosity-floor scale (SIS2 ICE_DEL_SH_MIN_SCALE) |
+| `tdamp` | `-0.2` |  | Elastic damping timescale rule (SIS2 ICE_TDAMP_ELASTIC): >0 seconds, ==0 auto (0.2*dt_slow), <0 fraction of dt_slow |
+| `cfl_trunc` | `0.0` |  | Transport-CFL ceiling on the final ice velocity (SIS2 CFL_TRUNCATE, default 0.5 there); 0 disables |
 | `cfl_trunc_dyn_its` | `false` |  | Also clip the ice velocity every EVP subcycle (SIS2 CFL_TRUNC_DYN_ITS) |
 | `project_ci` | `false` |  | Project ice concentration forward within the EVP subcycle loop and recompute the ice strength (SIS2 PROJECT_ICE_CONCENTRATION) |
 | `scheme` | `"sis2"` |  | Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port, single rank; see docs/CAPABILITIES_AND_LIMITATIONS.md) |
@@ -650,7 +650,7 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `nslyr` | `1` |  | scheme='cice': snow layers per category (only 1 supported) |
 | `kcatbound` | `1` |  | scheme='cice': category-bound formula 0..3 (upstream 1; OM3 0) |
 | `constants_set` | `"icepack"` |  | scheme='cice': physical-constants table: 'icepack' (upstream) or 'cesm' (CESM-coupled override set) |
-| `dt_ice` | `-0.1000000000E+01` | s | scheme='cice': ice time step; <= 0 is the outer ocean step, a positive value must equal [time] dt_fixed (refused otherwise) |
+| `dt_ice` | `-1.0` | s | scheme='cice': ice time step; <= 0 is the outer ocean step, a positive value must equal [time] dt_fixed (refused otherwise) |
 
 ### [ocean.ice_thermo]
 
@@ -661,19 +661,19 @@ CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; up
 | `ktherm` | `1` |  | Thermodynamics: 1 = Bitz-Lipscomb 1999 (2 = mushy is refused) |
 | `conduct` | `"bubbly"` |  | Ice conductivity: bubbly (Pringle 2007) or MU71 |
 | `tfrz_option` | `"linear_salt"` |  | Ice-side sea freezing point (default linear_salt is OM3's value, NOT upstream's mushy; mushy is refused) |
-| `ice_ref_salinity` | `0.4000000000E+01` | ppt | Salt-flux reference salinity (OM3 5.0) |
+| `ice_ref_salinity` | `4.0` | ppt | Salt-flux reference salinity (OM3 5.0) |
 | `saltflux_option` | `"constant"` |  | Salt flux: constant (prognostic is refused) |
 | `congel_freeze` | `"two-step"` |  | Congelation freezing: two-step or one-step |
 | `cpl_frazil` | `"fresh_ice_correction"` |  | Frazil coupling (only fresh_ice_correction is supported) |
 | `update_ocn_f` | `false` |  | Frazil fresh water/salt fluxes to the ocean (OM3 .true.) |
-| `hfrazilmin` | `0.5000000000E-01` | m | Minimum new-frazil thickness |
-| `hi_min` | `0.1000000000E-01` | m | Minimum ice thickness for thermodynamics |
-| `ustar_min` | `0.5000000000E-02` | m/s | Friction-velocity floor (OM3 5e-4) |
+| `hfrazilmin` | `0.05` | m | Minimum new-frazil thickness |
+| `hi_min` | `0.01` | m | Minimum ice thickness for thermodynamics |
+| `ustar_min` | `0.005` | m/s | Friction-velocity floor (OM3 5e-4) |
 | `fbot_xfer_type` | `"constant"` |  | Basal heat-transfer coefficient: constant (Cdn_ocn is refused) |
-| `floediam` | `0.3000000000E+03` | m | Floe diameter for lateral melt (Steele 1992); must be > 0 |
-| `floeshape` | `0.6600000000E+00` |  | Floe shape factor for lateral melt (Steele 1992); must be > 0 |
-| `ksno` | `0.3000000000E+00` | W/m/K | Snow thermal conductivity |
-| `emissivity` | `0.9850000000E+00` |  | Surface emissivity (OM3 0.95) |
+| `floediam` | `300.0` | m | Floe diameter for lateral melt (Steele 1992); must be > 0 |
+| `floeshape` | `0.66` |  | Floe shape factor for lateral melt (Steele 1992); must be > 0 |
+| `ksno` | `0.3` | W/m/K | Snow thermal conductivity |
+| `emissivity` | `0.985` |  | Surface emissivity (OM3 0.95) |
 | `kitd` | `1` |  | ITD conversion: 1 = linear remap (0 = delta function is refused) |
 | `calc_Tsfc` | `true` |  | Solve for the surface temperature (.false. is refused) |
 | `semi_implicit_Tsfc` | `false` |  | Semi-implicit surface temperature coupling (.true. is refused) |
@@ -686,16 +686,16 @@ CICE-port ice shortwave knobs of the CCSM3 scheme (Briegleb et al. 2004; scheme=
 |------|---------|-------|-------------|
 | `shortwave` | `"ccsm3"` |  | Shortwave scheme: ccsm3 (Briegleb et al. 2004); the delta-Eddington options are refused (not ported) |
 | `albedo_type` | `"ccsm3"` |  | Albedo parameterisation: ccsm3 (Briegleb et al. 2004); constant is refused (not ported) |
-| `albicev` | `0.7800000000E+00` |  | Visible albedo of cold thick bare ice, in [0, 1] (OM3 0.86) |
-| `albicei` | `0.3600000000E+00` |  | Near-infrared albedo of cold thick bare ice, in [0, 1] (OM3 0.44) |
-| `albsnowv` | `0.9800000000E+00` |  | Visible albedo of cold snow, in [0, 1] |
-| `albsnowi` | `0.7000000000E+00` |  | Near-infrared albedo of cold snow, in [0, 1] |
-| `ahmax` | `0.3000000000E+00` | m | Thickness above which the ice albedo is constant (OM3 0.1); must be > 0 |
-| `snowpatch` | `-0.1000000000E+01` | m | Snow-cover patchiness length; negative follows constants_set (0.02 icepack, 0.005 cesm) |
+| `albicev` | `0.78` |  | Visible albedo of cold thick bare ice, in [0, 1] (OM3 0.86) |
+| `albicei` | `0.36` |  | Near-infrared albedo of cold thick bare ice, in [0, 1] (OM3 0.44) |
+| `albsnowv` | `0.98` |  | Visible albedo of cold snow, in [0, 1] |
+| `albsnowi` | `0.7` |  | Near-infrared albedo of cold snow, in [0, 1] |
+| `ahmax` | `0.3` | m | Thickness above which the ice albedo is constant (OM3 0.1); must be > 0 |
+| `snowpatch` | `-1.0` | m | Snow-cover patchiness length; negative follows constants_set (0.02 icepack, 0.005 cesm) |
 | `sw_redist` | `false` |  | Move shortwave absorbed in a near-melting layer to the surface (OM3 .true.) |
-| `sw_frac` | `0.9000000000E+00` |  | Fraction of the internal shortwave sw_redist moves to the surface; must be in (0, 1] |
-| `sw_dtemp` | `0.2000000000E-01` | K | sw_redist temperature offset from melting; must be >= 0 |
-| `sw_vis_frac` | `0.5200000000E+00` |  | Visible fraction of the broadband downwelling shortwave in a forced run (near-IR is the complement); must be in [0, 1] |
+| `sw_frac` | `0.9` |  | Fraction of the internal shortwave sw_redist moves to the surface; must be in (0, 1] |
+| `sw_dtemp` | `0.02` | K | sw_redist temperature offset from melting; must be >= 0 |
+| `sw_vis_frac` | `0.52` |  | Visible fraction of the broadband downwelling shortwave in a forced run (near-IR is the complement); must be in [0, 1] |
 
 ### [ocean.ice_ridge]
 
@@ -706,10 +706,10 @@ CICE-port ridging and ice-strength knobs (scheme='cice'; upstream CICE defaults,
 | `kstrength` | `1` |  | Ice strength: 1 = Rothrock (1975), 0 = Hibler (1979); other values are refused |
 | `krdg_partic` | `1` |  | Ridge participation: 1 = Lipscomb et al. (2007), 0 = Thorndike et al. (1975); other values are refused |
 | `krdg_redist` | `1` |  | Ridge redistribution: 1 = exponential (Lipscomb et al. 2007), 0 = Hibler (1980); other values are refused |
-| `mu_rdg` | `0.3000000000E+01` | m^0.5 | E-folding scale of ridged ice for krdg_redist=1 (Lipscomb et al. 2007); must be > 0 |
-| `Cf` | `0.1700000000E+02` |  | Ratio of ridging work to potential-energy change (Flato and Hibler 1995); must be > 0 |
-| `Pstar` | `0.2750000000E+05` | N/m | Hibler (1979) strength constant, kstrength=0; must be > 0.  Read by [ocean.ice_dyn] dyn_scheme=cice_c (the sis2_c core reads p0 of [ocean.ice]) |
-| `Cstar` | `0.2000000000E+02` |  | Hibler (1979) concentration constant, kstrength=0; must be > 0.  Read by [ocean.ice_dyn] dyn_scheme=cice_c (the sis2_c core reads c0 of [ocean.ice]) |
+| `mu_rdg` | `3.0` | m^0.5 | E-folding scale of ridged ice for krdg_redist=1 (Lipscomb et al. 2007); must be > 0 |
+| `Cf` | `17.0` |  | Ratio of ridging work to potential-energy change (Flato and Hibler 1995); must be > 0 |
+| `Pstar` | `27500.0` | N/m | Hibler (1979) strength constant, kstrength=0; must be > 0.  Read by [ocean.ice_dyn] dyn_scheme=cice_c (the sis2_c core reads p0 of [ocean.ice]) |
+| `Cstar` | `20.0` |  | Hibler (1979) concentration constant, kstrength=0; must be > 0.  Read by [ocean.ice_dyn] dyn_scheme=cice_c (the sis2_c core reads c0 of [ocean.ice]) |
 
 ### [ocean.ice_atm]
 
@@ -719,17 +719,17 @@ CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defa
 |------|---------|-------|-------------|
 | `highfreq` | `false` |  | Relative-wind (ice-velocity) stress with a 0.5 m/s floor (OM3 .true.) |
 | `natmiter` | `5` |  | Monin-Obukhov iterations (Jordan et al. 1999); must be >= 0 |
-| `atmiter_conv` | `0.0000000000E+00` |  | Relative change in ustar that stops the iteration; must be >= 0 |
-| `iceruf` | `0.5000000000E-03` | m | Ice surface roughness for the neutral drag; must be > 0 and below zref = 10 m (checked at configure); the forcing reference heights must also exceed it (checked at run time by the forcing input PR, not at configure) |
+| `atmiter_conv` | `0.0` |  | Relative change in ustar that stops the iteration; must be >= 0 |
+| `iceruf` | `5.0e-4` | m | Ice surface roughness for the neutral drag; must be > 0 and below zref = 10 m (checked at configure); the forcing reference heights must also exceed it (checked at run time by the forcing input PR, not at configure) |
 | `atmbndy` | `"similarity"` |  | Boundary-layer form: similarity (constant and mixed are refused) |
 | `formdrag` | `false` |  | Form drag (.true. is refused) |
 | `calc_strair` | `true` |  | Compute the wind stress in the ice model (.false. is refused) |
-| `uni_tas` | `0.2631500000E+03` | K | Uniform-atmosphere air temperature, used when [ocean.atm_forcing] enable is off |
-| `uni_uas` | `0.0000000000E+00` | m/s | Uniform-atmosphere eastward wind (earth-relative) |
-| `uni_vas` | `0.0000000000E+00` | m/s | Uniform-atmosphere northward wind |
-| `uni_psl` | `0.1013250000E+06` | Pa | Uniform-atmosphere sea-level pressure; must be > 0 |
-| `uni_huss` | `0.1000000000E-02` | kg/kg | Uniform-atmosphere specific humidity |
-| `uni_rlds` | `0.2000000000E+03` | W/m2 | Uniform-atmosphere downward longwave |
+| `uni_tas` | `263.15` | K | Uniform-atmosphere air temperature, used when [ocean.atm_forcing] enable is off |
+| `uni_uas` | `0.0` | m/s | Uniform-atmosphere eastward wind (earth-relative) |
+| `uni_vas` | `0.0` | m/s | Uniform-atmosphere northward wind |
+| `uni_psl` | `101325.0` | Pa | Uniform-atmosphere sea-level pressure; must be > 0 |
+| `uni_huss` | `0.001` | kg/kg | Uniform-atmosphere specific humidity |
+| `uni_rlds` | `200.0` | W/m2 | Uniform-atmosphere downward longwave |
 
 ### [ocean.ice_dyn]
 
@@ -739,22 +739,22 @@ CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP
 |------|---------|-------|-------------|
 | `dyn_scheme` | `"sis2_c"` |  | Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs [ocean.ice] enable and dynamics, nghost >= 3; runs on any rank count, a tripolar north fold included (px > 1 too) |
 | `ndte` | `120` |  | Elastic subcycles per dynamics step; must be >= 1 |
-| `elasticDamp` | `0.3600000000E+00` |  | Damping parameter E of the classic EVP (Hunke 2001, arlx = 2 E ndte); must be > 0 |
+| `elasticDamp` | `0.36` |  | Damping parameter E of the classic EVP (Hunke 2001, arlx = 2 E ndte); must be > 0 |
 | `revised_evp` | `false` |  | Revised EVP (Bouillon et al. 2013): arlx and brlx apply |
-| `arlx` | `0.3000000000E+03` |  | Revised EVP stress relaxation parameter alpha; must be > 0 when revised_evp |
-| `brlx` | `0.3000000000E+03` |  | Revised EVP momentum relaxation parameter beta; must be > 0 when revised_evp |
-| `e_yieldcurve` | `0.2000000000E+01` |  | Aspect ratio of the elliptical yield curve; must be > 0 |
-| `e_plasticpot` | `0.2000000000E+01` |  | Aspect ratio of the elliptical plastic potential; must be > 0 |
-| `Ktens` | `0.0000000000E+00` |  | Tensile strength fraction, T = Ktens P (Konig Beatty and Holland 2010); must be in [0, 1) |
-| `deltaminEVP` | `0.1000000000E-10` | 1/s | Minimum Delta of the viscosities (Hunke 2001); must be > 0 |
+| `arlx` | `300.0` |  | Revised EVP stress relaxation parameter alpha; must be > 0 when revised_evp |
+| `brlx` | `300.0` |  | Revised EVP momentum relaxation parameter beta; must be > 0 when revised_evp |
+| `e_yieldcurve` | `2.0` |  | Aspect ratio of the elliptical yield curve; must be > 0 |
+| `e_plasticpot` | `2.0` |  | Aspect ratio of the elliptical plastic potential; must be > 0 |
+| `Ktens` | `0.0` |  | Tensile strength fraction, T = Ktens P (Konig Beatty and Holland 2010); must be in [0, 1) |
+| `deltaminEVP` | `1.0e-11` | 1/s | Minimum Delta of the viscosities (Hunke 2001); must be > 0 |
 | `capping_method` | `"max"` |  | Viscosity capping: max (Hibler 1979) or sum (Kreyscher et al. 2000); other values are refused |
-| `dyn_area_min` | `0.1000000000E-10` |  | Minimum concentration for the dynamics; must be >= 0 |
-| `dyn_mass_min` | `0.1000000000E-09` | kg/m^2 | Minimum mass for the dynamics; must be >= 0 |
-| `rheo_area_min` | `0.1000000000E-02` |  | Concentration below which the internal stress is dropped (free_drift_approx); must be >= 0 |
+| `dyn_area_min` | `1.0e-11` |  | Minimum concentration for the dynamics; must be >= 0 |
+| `dyn_mass_min` | `1.0e-10` | kg/m^2 | Minimum mass for the dynamics; must be >= 0 |
+| `rheo_area_min` | `0.001` |  | Concentration below which the internal stress is dropped (free_drift_approx); must be >= 0 |
 | `free_drift_approx` | `true` |  | Drop the internal stress below rheo_area_min |
 | `visc_method` | `"avg_zeta"` |  | Corner shear viscosity: avg_zeta (mean of the T viscosities) or avg_strength (rebuilt from the mean strength); other values are refused |
-| `cdn_ocn` | `0.5360000000E-02` |  | Ice-ocean drag coefficient (upstream dragio); must be >= 0 |
-| `vel_cap` | `0.1000000000E+02` | m/s | Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0 |
+| `cdn_ocn` | `0.00536` |  | Ice-ocean drag coefficient (upstream dragio); must be >= 0 |
+| `vel_cap` | `10.0` | m/s | Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0 |
 | `advection` | `"remap"` |  | Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default), upwind = first-order upwind |
 | `transport_check` | `false` |  | Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity) |
 | `transport_buffer_mib` | `1024` |  | advection='remap': memory budget [MiB] of the flux and reconstruction buffers of one category batch (bigger = fewer launches); at least one category index per batch whatever the budget; must be >= 1 |
@@ -767,13 +767,13 @@ Sea-ice analytic initial-condition path (PR 24).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `conc_config` | `"zero"` |  | Sea-ice initial concentration configuration |
-| `conc` | `0.0000000000E+00` |  | Uniform-mode concentration ('uniform' only) |
-| `h_ice` | `0.0000000000E+00` | m | Ice thickness where seeded (SIS2 ICE_INIT_MASS as a thickness) |
-| `h_snow` | `0.0000000000E+00` | m | Snow thickness where seeded (SIS2 SNOW_INIT_MASS as a thickness) |
-| `t_ice` | `-0.4000000000E+01` | degC | Ice/snow temperature fed through the exact enthalpy inversion (SIS2 ICE_TEMPERATURE_IC) |
-| `s_ice` | `0.4000000000E+01` | PSU | Ice bulk salinity (SIS2 ICE_SALINITY_IC) |
-| `arctic_edge` | `0.9100000000E+02` | degrees_north | 'latitudes' Arctic ice edge (SIS2 ARCTIC_ICE_EDGE_IC) |
-| `antarctic_edge` | `-0.9100000000E+02` | degrees_north | 'latitudes' Antarctic ice edge (SIS2 ANTARCTIC_ICE_EDGE_IC) |
+| `conc` | `0.0` |  | Uniform-mode concentration ('uniform' only) |
+| `h_ice` | `0.0` | m | Ice thickness where seeded (SIS2 ICE_INIT_MASS as a thickness) |
+| `h_snow` | `0.0` | m | Snow thickness where seeded (SIS2 SNOW_INIT_MASS as a thickness) |
+| `t_ice` | `-4.0` | degC | Ice/snow temperature fed through the exact enthalpy inversion (SIS2 ICE_TEMPERATURE_IC) |
+| `s_ice` | `4.0` | PSU | Ice bulk salinity (SIS2 ICE_SALINITY_IC) |
+| `arctic_edge` | `91.0` | degrees_north | 'latitudes' Arctic ice edge (SIS2 ARCTIC_ICE_EDGE_IC) |
+| `antarctic_edge` | `-91.0` | degrees_north | 'latitudes' Antarctic ice edge (SIS2 ANTARCTIC_ICE_EDGE_IC) |
 
 ### [ocean.restore]
 
@@ -783,15 +783,15 @@ Surface buoyancy restoring (MOM6 RESTOREBUOY): piston-velocity relaxation of top
 |------|---------|-------|-------------|
 | `enable_restore_temp` | `false` |  | Master switch for SST restoring |
 | `enable_restore_salt` | `false` |  | Master switch for SSS restoring |
-| `piston_t` | `0.0000000000E+00` | m/day | SST piston velocity (MOM6 FLUXCONST_T) |
-| `piston_s` | `0.0000000000E+00` | m/day | SSS piston velocity (MOM6 FLUXCONST_S) |
-| `restore_sst` | `0.0000000000E+00` | degC | Scalar target SST, in the model T convention (theta or CT) |
-| `restore_sss` | `0.0000000000E+00` | PSU | Scalar target SSS, in the model S convention (SP or SA) |
+| `piston_t` | `0.0` | m/day | SST piston velocity (MOM6 FLUXCONST_T) |
+| `piston_s` | `0.0` | m/day | SSS piston velocity (MOM6 FLUXCONST_S) |
+| `restore_sst` | `0.0` | degC | Scalar target SST, in the model T convention (theta or CT) |
+| `restore_sss` | `0.0` | PSU | Scalar target SSS, in the model S convention (SP or SA) |
 | `sss_file` | `""` |  | File-based SSS restoring (OM3 SALT_RESTORE_FILE): NetCDF field(x,y,time) on the model grid; blank = scalar target |
 | `sss_var` | `"salt"` |  | Variable name in sss_file (OM3 SALT_RESTORE_VARIABLE) |
 | `sss_time_cyclic` | `true` |  | sss_file is a climatology wrapped with sss_cycle_period |
-| `sss_cycle_period` | `0.3153600000E+08` | s | Climatology period for sss_time_cyclic |
-| `max_delta_sss` | `0.9990000000E+03` | g/kg | Cap on |S_target - S| (OM3 MAX_DELTA_SRESTORE); 999 = no clamp |
+| `sss_cycle_period` | `3.1536e+7` | s | Climatology period for sss_time_cyclic |
+| `max_delta_sss` | `999.0` | g/kg | Cap on |S_target - S| (OM3 MAX_DELTA_SRESTORE); 999 = no clamp |
 | `sss_adjust_net_zero` | `false` |  | Remove the global net restoring salt flux (OM3 ADJUST_NET_SRESTORE_TO_ZERO); needs sss_file |
 | `sss_adjust_by_scaling` | `false` |  | Net removal by scaling the larger of the +/- area integrals (OM3 ADJUST_NET_SRESTORE_BY_SCALING); .false. = subtract the mean |
 | `sss_as_sflux` | `false` |  | OM3 SRESTORE_AS_SFLUX; the only form here, so required .true. with sss_file |
@@ -804,7 +804,7 @@ Geothermal bottom heat flux (bed-side analogue of the surface heat flux).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Apply a constant geothermal bottom heat flux to the bed layer |
-| `q_geo` | `0.0000000000E+00` | W/m^2 | Constant bottom heat flux (positive into the ocean from below) |
+| `q_geo` | `0.0` | W/m^2 | Constant bottom heat flux (positive into the ocean from below) |
 
 ### [ocean.sponge]
 
@@ -816,10 +816,10 @@ Map-driven sponge: per-cell Idamp + 3-D reference state (PR-23).
 | `damp_source` | `"band"` |  | How idamp_h/u/v are filled |
 | `target_source` | `"ic"` |  | Reference-state source |
 | `ramp` | `"cosine"` |  | Band ramp shape from the sponge wall inward ('linear' is ISOMIP+ Eq. 20) |
-| `lin_t_ref` | `0.0000000000E+00` | degC | target_source='linear_z': T at the z = 0 datum |
-| `lin_dt_dz` | `0.0000000000E+00` | degC/m | target_source='linear_z': dT/dz, z positive UP (stable => > 0) |
-| `lin_s_ref` | `0.3500000000E+02` | PSU | target_source='linear_z': S at the z = 0 datum |
-| `lin_ds_dz` | `0.0000000000E+00` | PSU/m | target_source='linear_z': dS/dz, z positive UP (stable => < 0) |
+| `lin_t_ref` | `0.0` | degC | target_source='linear_z': T at the z = 0 datum |
+| `lin_dt_dz` | `0.0` | degC/m | target_source='linear_z': dT/dz, z positive UP (stable => > 0) |
+| `lin_s_ref` | `35.0` | PSU | target_source='linear_z': S at the z = 0 datum |
+| `lin_ds_dz` | `0.0` | PSU/m | target_source='linear_z': dS/dz, z positive UP (stable => < 0) |
 | `relax_uv` | `true` |  | Relax u/v toward u_ref/v_ref |
 | `relax_tracers` | `true` |  | Relax every registered tracer toward its 3-D reference field |
 | `relax_h` | `false` |  | Interior-interface thickness damping (NOT IMPLEMENTED in v1 — deferred to PR-23b, requires vcoord_type='lagrangian') |
@@ -827,10 +827,10 @@ Map-driven sponge: per-cell Idamp + 3-D reference state (PR-23).
 | `east_width` | `-1` |  | as west_width |
 | `south_width` | `-1` |  | as west_width |
 | `north_width` | `-1` |  | as west_width |
-| `west_strength` | `-0.1000000000E+01` | 1/s | Per-edge peak relaxation-rate override (<0 => inherit [ocean.bc] sponge_strength) |
-| `east_strength` | `-0.1000000000E+01` | 1/s | as west_strength |
-| `south_strength` | `-0.1000000000E+01` | 1/s | as west_strength |
-| `north_strength` | `-0.1000000000E+01` | 1/s | as west_strength |
+| `west_strength` | `-1.0` | 1/s | Per-edge peak relaxation-rate override (<0 => inherit [ocean.bc] sponge_strength) |
+| `east_strength` | `-1.0` | 1/s | as west_strength |
+| `south_strength` | `-1.0` | 1/s | as west_strength |
+| `north_strength` | `-1.0` | 1/s | as west_strength |
 
 ### [ocean.tracers]
 
@@ -839,8 +839,8 @@ Prognostic-tracer registry switches.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable_ideal_age` | `false` |  | Register a passive ideal-age tracer |
-| `ideal_age_young_val` | `0.0000000000E+00` | s | Surface-band ideal-age Dirichlet value (0 = today's hard-coded reset) |
-| `ideal_age_sfc_growth_rate` | `0.0000000000E+00` | 1/s | Exponential growth rate of the ideal-age surface value (0 = constant) |
+| `ideal_age_young_val` | `0.0` | s | Surface-band ideal-age Dirichlet value (0 = today's hard-coded reset) |
+| `ideal_age_sfc_growth_rate` | `0.0` | 1/s | Exponential growth rate of the ideal-age surface value (0 = constant) |
 | `enable_pseudo_salt` | `false` |  | Register the pseudo-salt verification tracer (diagnostic; seeded to S, given salinity's boundary fluxes) |
 
 ### [ocean.bt]
@@ -851,10 +851,10 @@ Split-explicit barotropic substep controls.
 |------|---------|-------|-------------|
 | `n_inner` | `0` |  | Barotropic substeps per outer step (0 = unsplit) |
 | `auto_n_inner` | `false` |  | Derive n_inner from the gravity-wave CFL at setup |
-| `cfl_bt_safety` | `0.6500000000E+00` |  | Safety fraction on the BT CFL when auto_n_inner |
-| `dtbt` | `-0.1000000000E+31` |  | OM3-style BT step (MOM6 DTBT): <0 = fraction of max stable, 0 = -0.98, >0 = seconds; replaces auto_n_inner |
-| `dtbt_reset_period` | `-0.1000000000E+01` |  | Seconds between dtbt recomputes: 0 = every step, >0 = period, <0 = init only |
-| `bebt` | `0.1000000000E+00` |  | Forward-velocity-projection weight (MOM6 BEBT; default 0.1 = MOM6) |
+| `cfl_bt_safety` | `0.65` |  | Safety fraction on the BT CFL when auto_n_inner |
+| `dtbt` | `-1.0e+30` |  | OM3-style BT step (MOM6 DTBT): <0 = fraction of max stable, 0 = -0.98, >0 = seconds; replaces auto_n_inner |
+| `dtbt_reset_period` | `-1.0` |  | Seconds between dtbt recomputes: 0 = every step, >0 = period, <0 = init only |
+| `bebt` | `0.1` |  | Forward-velocity-projection weight (MOM6 BEBT; default 0.1 = MOM6) |
 | `use_cont_type` | `false` |  | Use the BT_cont flux-bounded closure (MOM6 USE_BT_CONT_TYPE) |
 | `cont_corr_bounds` | `false` |  | Use BT_cont flux limits for the eta-correction bound |
 | `upstream_h_face` | `false` |  | Use per-face upstream-PPM column-sum thickness in the BT chain |
@@ -865,7 +865,7 @@ Split-explicit barotropic substep controls.
 | `strong_drag` | `false` |  | MOM6 BT_STRONG_DRAG: rational-approximation bt_rem form n_inner*av_rem/(1+(n_inner-1)*av_rem) instead of the plain power; requires bt_rem_from_visc_rem (or visc_rem_chain) |
 | `rescale_strong_drag` | `false` |  | MOM6 RESCALE_STRONG_DRAG: rescale the BT-correction increment by min(bt_rem**n_inner/av_rem, 1.0); requires strong_drag |
 | `split_scheme` | `"pred_corr"` |  | Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 predictor-corrector, slow tendencies on the u_av/h_av step time-means, forward-backward gravity-wave pairing; lifts the internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage SSP average, widest envelope — the only scheme wired through eulerian_z and wet/dry — but it spuriously grows internal gravity waves out of a stratified REST state, En 2.992E-05 vs 1.739E-09 at day 25 on resting_stratified_channel.toml; a (omega*dt)^4 noise floor, so forced viscous runs sit decades above it and quiescent or long spin-up runs do not) |
-| `pc_be` | `0.6000000000E+00` |  | pred_corr predictor fraction BE (MOM6 BE, 0.6 reference) |
+| `pc_be` | `0.6` |  | pred_corr predictor fraction BE (MOM6 BE, 0.6 reference) |
 | `renorm_visc_rem` | `false` |  | gamma-weighted continuity transport-matching inversion (MOM6 u_cor = u + du*visc_rem); self-sufficient (the producer runs whenever this is on). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain. |
 | `forcing_visc_rem` | `false` |  | MOM6 wt_u parity: h*visc_rem-weight the BT forcing depth-mean so friction-damped (glued) layers do not force the fast loop; self-sufficient (the producer runs whenever this is on). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain. |
 | `frhat_scheme` | `"hybrid"` |  | Per-layer barotropic face-thickness closure for every depth mean that reads a face thickness (derive_bt_from_layers, face_depth_mean_u/v, face_depth_mean_rem_u/v's wt_u, apply_bt_correction's open/visc_rem folds, and av_rem via face_depth_mean_u/v): arithmetic (DEFAULT, bit-identical -- the plain two-abutting-cell mean) or hybrid (MOM6 btcalc HVEL_SCHEME=HYBRID -- arithmetic mean above the shallower column's bed, harmonic mean below it, suppressing a thin partial-bed layer's weight next to a thick abutting one) |
@@ -875,11 +875,11 @@ Split-explicit barotropic substep controls.
 | `substep_zeta_ke` | `true` |  | Integrate live zeta_bt + KE-gradient in the BT fast loop (.false. = MOM6 parity: planetary Coriolis only, zeta/KE frozen in the slow forcing) |
 | `wave_drag` | `false` |  | Barotropic linear wave drag master switch (MOM6 BT_LINEAR_WAVE_DRAG) |
 | `wave_drag_form` | `"uniform"` |  | Wave-drag r_H filler |
-| `wave_drag_scale` | `0.1000000000E+01` |  | Global tuning multiplier on r_H (MOM6 BT_WAVE_DRAG_SCALE) |
-| `wave_drag_r_uniform` | `0.0000000000E+00` | m/s | Piston velocity r_H for wave_drag_form='uniform' |
-| `wave_drag_kappa` | `0.6283200000E-03` | 1/m | Topographic wavenumber for wave_drag_form='roughness_proxy' |
-| `wave_drag_n_bot` | `0.1000000000E-02` | 1/s | Reference bottom N for wave_drag_form='roughness_proxy' |
-| `wave_drag_h2_max` | `0.2500000000E+05` | m^2 | Ceiling on <h^2> proxy for wave_drag_form='roughness_proxy' |
+| `wave_drag_scale` | `1.0` |  | Global tuning multiplier on r_H (MOM6 BT_WAVE_DRAG_SCALE) |
+| `wave_drag_r_uniform` | `0.0` | m/s | Piston velocity r_H for wave_drag_form='uniform' |
+| `wave_drag_kappa` | `6.2832e-4` | 1/m | Topographic wavenumber for wave_drag_form='roughness_proxy' |
+| `wave_drag_n_bot` | `0.001` | 1/s | Reference bottom N for wave_drag_form='roughness_proxy' |
+| `wave_drag_h2_max` | `25000.0` | m^2 | Ceiling on <h^2> proxy for wave_drag_form='roughness_proxy' |
 | `wave_drag_file` | `""` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_FILE); unused today |
 | `wave_drag_var` | `"rH"` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_VAR); unused today |
 | `bt_halo` | `-1` |  | Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off, bit-identical) |
@@ -916,9 +916,9 @@ Dynamic wetting/drying for the split-explicit barotropic substep.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Dynamic wet/dry: upwind BT face thickness + positive-definite outflow limiter + bed-blocking momentum gate |
-| `dry_depth` | `0.5000000000E-01` | m | Total-depth dry threshold |
-| `rewet_depth` | `0.1000000000E+00` | m | Hysteresis re-wet threshold (must exceed dry_depth) |
-| `land_margin` | `0.5000000000E+01` | m | Static-land headroom above rest MSL (intertidal cutoff) |
+| `dry_depth` | `0.05` | m | Total-depth dry threshold |
+| `rewet_depth` | `0.1` | m | Hysteresis re-wet threshold (must exceed dry_depth) |
+| `land_margin` | `5.0` | m | Static-land headroom above rest MSL (intertidal cutoff) |
 
 ### [ocean.pgf]
 
@@ -927,11 +927,11 @@ Pressure-gradient-force kernel selector + knobs.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `form` | `"mont"` |  | PGF kernel variant |
-| `gprime_gfs` | `0.9810000000E+01` | m/s^2 | Free-surface gravity for the gprime PGF |
-| `gprime_gint` | `0.9800000000E-02` | m/s^2 | Internal-interface reduced gravity (gprime PGF) |
-| `gfs_scale` | `0.1000000000E+01` |  | Free-surface gravity scaling (FV_MOM6, MOM6 GFS_scale) |
-| `maxvel` | `0.0000000000E+00` | m/s | Velocity-truncation clamp (0 = disabled) |
-| `cfl_trunc` | `0.0000000000E+00` |  | Advective-CFL velocity truncation threshold (0 = disabled) |
+| `gprime_gfs` | `9.81` | m/s^2 | Free-surface gravity for the gprime PGF |
+| `gprime_gint` | `0.0098` | m/s^2 | Internal-interface reduced gravity (gprime PGF) |
+| `gfs_scale` | `1.0` |  | Free-surface gravity scaling (FV_MOM6, MOM6 GFS_scale) |
+| `maxvel` | `0.0` | m/s | Velocity-truncation clamp (0 = disabled) |
+| `cfl_trunc` | `0.0` |  | Advective-CFL velocity truncation threshold (0 = disabled) |
 | `mass_weight` | `false` |  | FV_MOM6 shelf-break hWght mass-weighting at unequal-depth faces |
 | `reconstruct_for_pressure` | `false` |  | FV_MOM6 in-layer PLM/PPM T/S reconstruction for the density integral |
 | `recon_scheme` | `1` |  | In-layer reconstruction scheme: 1=PLM, 2=PPM |
@@ -948,9 +948,9 @@ Equation-of-state variant selector, liquidus set + reference pressure.
 | `tfreeze_set` | `"seaice"` |  | Named liquidus coefficient set for eos_freezing_point (T_f = l1*S + l2 + l3*p): 'seaice' = SIS2/MOM6 (-0.054, 0, -7.53e-8), 'isomip' = ISOMIP+ (-0.0573, 0.0832, -7.53e-8) |
 | `ts_convention` | `"pot_prac"` |  | Meaning of the T/S tracers: 'pot_prac' = potential temperature + practical salinity (default); 'cons_abs' = TEOS-10 Conservative Temperature + Absolute Salinity (roquet_rho/roquet_spv only) |
 | `tfreeze_form` | `"linear"` |  | Liquidus form: 'linear' (tfreeze_set coefficients, default) or 'teos_poly' (TEOS-10 CT_freezing_poly(SA,p); needs ts_convention='cons_abs') |
-| `tfreeze_sat_frac` | `0.0000000000E+00` |  | Air-saturation fraction of the TEOS-10 polynomial liquidus (0 = no dissolved air; ACCESS-OM3 parity) |
-| `c_p` | `0.3992000000E+04` | J kg-1 K-1 | Seawater heat capacity for ocean heat-flux <-> temperature conversion (MOM6 C_P); 3992 (OM3) by default under both ts_conventions, TEOS-10 cp0 = 3991.86795711963 |
-| `p_ref` | `0.0000000000E+00` | Pa | Reference pressure for the potential density ms%rho_layer (horizontally uniform by design; 0 => surface density) |
+| `tfreeze_sat_frac` | `0.0` |  | Air-saturation fraction of the TEOS-10 polynomial liquidus (0 = no dissolved air; ACCESS-OM3 parity) |
+| `c_p` | `3992.0` | J kg-1 K-1 | Seawater heat capacity for ocean heat-flux <-> temperature conversion (MOM6 C_P); 3992 (OM3) by default under both ts_conventions, TEOS-10 cp0 = 3991.86795711963 |
+| `p_ref` | `0.0` | Pa | Reference pressure for the potential density ms%rho_layer (horizontally uniform by design; 0 => surface density) |
 
 ### [ocean.bdrag]
 
@@ -959,14 +959,14 @@ Bottom-drag selector + coefficients.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `form` | `"quadratic"` |  | Bottom-drag variant |
-| `cd` | `0.0000000000E+00` |  | Quadratic drag coefficient (0 disables) |
-| `r` | `0.0000000000E+00` | 1/s | Linear Rayleigh coefficient (0 disables) |
-| `hbbl` | `0.0000000000E+00` | m | BBL thickness for distributed drag (0 = bed-only) |
-| `bg_vel` | `0.0000000000E+00` | m/s | Background velocity floor for distributed drag |
-| `bbl_thick_min` | `0.0000000000E+00` | m | Minimum effective BBL thickness |
-| `bed_factor` | `0.1000000000E+01` |  | Multiplier on the bed-layer drag tendency only |
+| `cd` | `0.0` |  | Quadratic drag coefficient (0 disables) |
+| `r` | `0.0` | 1/s | Linear Rayleigh coefficient (0 disables) |
+| `hbbl` | `0.0` | m | BBL thickness for distributed drag (0 = bed-only) |
+| `bg_vel` | `0.0` | m/s | Background velocity floor for distributed drag |
+| `bbl_thick_min` | `0.0` | m | Minimum effective BBL thickness |
+| `bed_factor` | `1.0` |  | Multiplier on the bed-layer drag tendency only |
 | `channel_drag` | `false` |  | Enable per-layer lateral side-wall (channel) Rayleigh drag |
-| `cdrag_side` | `0.0000000000E+00` |  | Side-wall drag coefficient (0 disables channel drag) |
+| `cdrag_side` | `0.0` |  | Side-wall drag coefficient (0 disables channel drag) |
 | `implicit` | `false` |  | Backward-Euler implicit drag (stable for thin bottom layers) |
 
 ### [ocean.tdrag]
@@ -977,11 +977,11 @@ Ice-shelf top-drag selector + coefficients (mirror of [ocean.bdrag]).
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Enable the ice-shelf top drag (requires [ocean.cavity_dyn] enable) |
 | `form` | `"quadratic"` |  | Top-drag variant |
-| `cd` | `0.0000000000E+00` |  | Quadratic top-drag coefficient (0 disables); must equal [ocean.cavity_melt] cdrag_top when melt is on |
-| `r` | `0.0000000000E+00` | 1/s | Linear Rayleigh top-drag coefficient (0 disables) |
-| `htbl` | `0.0000000000E+00` | m | Top-boundary-layer thickness for distributed drag (0 = layer-nz only) |
-| `bg_vel` | `0.0000000000E+00` | m/s | Background velocity floor in the quadratic top-drag speed |
-| `tbl_thick_min` | `0.0000000000E+00` | m | Minimum effective TBL thickness (0 = fall back to h_min) |
+| `cd` | `0.0` |  | Quadratic top-drag coefficient (0 disables); must equal [ocean.cavity_melt] cdrag_top when melt is on |
+| `r` | `0.0` | 1/s | Linear Rayleigh top-drag coefficient (0 disables) |
+| `htbl` | `0.0` | m | Top-boundary-layer thickness for distributed drag (0 = layer-nz only) |
+| `bg_vel` | `0.0` | m/s | Background velocity floor in the quadratic top-drag speed |
+| `tbl_thick_min` | `0.0` | m | Minimum effective TBL thickness (0 = fall back to h_min) |
 | `implicit` | `false` |  | Backward-Euler top drag inside the drag kernel (stable for thin top layers) |
 
 ### [ocean.hdiff]
@@ -990,7 +990,7 @@ Along-coordinate (not neutral) constant-coefficient tracer diffusion.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `kappa_h` | `0.0000000000E+00` | m^2/s | Horizontal tracer diffusivity, along the model coordinate (0 disables; ocean path only — coastal's equivalent knob is top-level hdiff_kappa) |
+| `kappa_h` | `0.0` | m^2/s | Horizontal tracer diffusivity, along the model coordinate (0 disables; ocean path only — coastal's equivalent knob is top-level hdiff_kappa) |
 
 ### [ocean.hvisc]
 
@@ -999,35 +999,35 @@ Lateral-viscosity closure + coefficients.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `lateral_closure` | `"none"` |  | Lateral-mixing closure tag |
-| `c_smag` | `0.1500000000E+00` |  | Smagorinsky coefficient |
-| `c_leith` | `0.1000000000E+01` |  | Leith coefficient |
-| `kh_vel_scale` | `0.0000000000E+00` | m/s | Velocity scale for the resolution viscosity floor |
-| `ah_bg` | `-0.1000000000E+01` | m^2/s | Background harmonic viscosity (<0 = derive) |
-| `ah_max` | `0.1000000000E+05` | m^2/s | Cap on per-face harmonic viscosity |
+| `c_smag` | `0.15` |  | Smagorinsky coefficient |
+| `c_leith` | `1.0` |  | Leith coefficient |
+| `kh_vel_scale` | `0.0` | m/s | Velocity scale for the resolution viscosity floor |
+| `ah_bg` | `-1.0` | m^2/s | Background harmonic viscosity (<0 = derive) |
+| `ah_max` | `10000.0` | m^2/s | Cap on per-face harmonic viscosity |
 | `smag_ah` | `false` |  | Flow-aware biharmonic viscosity (MOM6 SMAGORINSKY_AH) |
-| `smag_bi_const` | `0.6000000000E-01` |  | Biharmonic Smagorinsky constant (MOM6 SMAG_BI_CONST) |
-| `c_leith_bi` | `0.0000000000E+00` |  | Biharmonic Leith constant (MOM6 LEITH_BI_CONST) |
-| `nu_4_bg` | `0.0000000000E+00` | m^4/s | Background biharmonic viscosity floor |
-| `nu_4_max` | `0.1000000000E+13` | m^4/s | Cap on per-face biharmonic viscosity |
-| `nu_h` | `0.0000000000E+00` | m^2/s | Constant horizontal eddy viscosity |
-| `nu_4` | `0.0000000000E+00` | m^4/s | Constant biharmonic eddy viscosity |
+| `smag_bi_const` | `0.06` |  | Biharmonic Smagorinsky constant (MOM6 SMAG_BI_CONST) |
+| `c_leith_bi` | `0.0` |  | Biharmonic Leith constant (MOM6 LEITH_BI_CONST) |
+| `nu_4_bg` | `0.0` | m^4/s | Background biharmonic viscosity floor |
+| `nu_4_max` | `1.0e+12` | m^4/s | Cap on per-face biharmonic viscosity |
+| `nu_h` | `0.0` | m^2/s | Constant horizontal eddy viscosity |
+| `nu_4` | `0.0` | m^4/s | Constant biharmonic eddy viscosity |
 | `no_slip` | `false` |  | Coastal lateral BC: .false.=free-slip (×wet_q), .true.=no-slip (×(2-wet_q)) |
 | `stress_tensor` | `false` |  | MOM6 thickness-weighted stress-div operator + per-cell CFL + coast-mask |
-| `bound_coef` | `0.8000000000E+00` |  | Per-cell viscosity-CFL safety coefficient (MOM6 HORVISC_BOUND_COEF) |
+| `bound_coef` | `0.8` |  | Per-cell viscosity-CFL safety coefficient (MOM6 HORVISC_BOUND_COEF) |
 | `bound_kh` | `false` |  | Per-face harmonic viscosity CFL clamp on the velocity-Laplacian paths (MOM6 BOUND_KH) |
 | `resoln_scaled_visc` | `false` |  | Scale dynamic LAPLACIAN viscosity (Leith/Smag_KH A_h, not biharmonic) by VarMix Res_fn (MOM6 RESOLN_SCALED_KH) |
-| `kh_vel_scale_live` | `0.0000000000E+00` | m/s | Live velocity-scale viscosity Kh=U*dx*|u| (0=off; distinct from kh_vel_scale floor) |
-| `kh_sin_lat` | `0.0000000000E+00` | m^2/s | Latitude Laplacian viscosity floor kh_sin_lat*|sin(lat)|^kh_pwr_of_sine (0=off; MOM6 KH_SIN_LAT) |
-| `kh_pwr_of_sine` | `0.4000000000E+01` |  | Exponent of |sin(lat)| in the kh_sin_lat floor (MOM6 KH_PWR_OF_SINE) |
+| `kh_vel_scale_live` | `0.0` | m/s | Live velocity-scale viscosity Kh=U*dx*|u| (0=off; distinct from kh_vel_scale floor) |
+| `kh_sin_lat` | `0.0` | m^2/s | Latitude Laplacian viscosity floor kh_sin_lat*|sin(lat)|^kh_pwr_of_sine (0=off; MOM6 KH_SIN_LAT) |
+| `kh_pwr_of_sine` | `4.0` |  | Exponent of |sin(lat)| in the kh_sin_lat floor (MOM6 KH_PWR_OF_SINE) |
 | `bound_thin_layer` | `false` |  | stress_tensor: thin-layer ratio on Kh bound + harmonic corner thickness + T-masked h_u/h_v |
 | `biharm_stress` | `false` |  | stress_tensor: biharmonic inside the stress tensor with the joint Laplacian+biharmonic bound |
 | `kh_bg_at_points` | `false` |  | stress_tensor: Laplacian floor (vel-scale, sin-lat) built AT T and corner points |
-| `ah_vel_scale` | `0.0000000000E+00` | m/s | Biharmonic velocity-scale floor Ah>=U*Delta^3 under smag_ah (0=off; MOM6 AH_VEL_SCALE) |
+| `ah_vel_scale` | `0.0` | m/s | Biharmonic velocity-scale floor Ah>=U*Delta^3 under smag_ah (0=off; MOM6 AH_VEL_SCALE) |
 | `bound_coriolis_biharm` | `false` |  | Coriolis bound on the Smagorinsky biharmonic (needs smag_ah; MOM6 BOUND_CORIOLIS_BIHARM) |
-| `bound_coriolis_vel` | `0.6000000000E+01` | m/s | Velocity scale of the bound_coriolis_biharm term (MOM6 BOUND_CORIOLIS_VEL) |
-| `kh_aniso` | `0.0000000000E+00` | m^2/s | Anisotropic Laplacian viscosity magnitude (MOM6 KH_ANISO; stress_tensor path only) |
+| `bound_coriolis_vel` | `6.0` | m/s | Velocity scale of the bound_coriolis_biharm term (MOM6 BOUND_CORIOLIS_VEL) |
+| `kh_aniso` | `0.0` | m^2/s | Anisotropic Laplacian viscosity magnitude (MOM6 KH_ANISO; stress_tensor path only) |
 | `aniso_mode` | `0` |  | Anisotropy direction mode (0=grid-relative aniso_dir; MOM6 ANISOTROPIC_MODE) |
-| `aniso_dir` | `[0.1000000000E+01, 0.0000000000E+00]` |  | Anisotropy direction (n1,n2) in grid i,j components (MOM6 ANISO_GRID_DIR) |
+| `aniso_dir` | `[1.0, 0.0]` |  | Anisotropy direction (n1,n2) in grid i,j components (MOM6 ANISO_GRID_DIR) |
 
 ### [ocean.vmix]
 
@@ -1039,37 +1039,37 @@ Vertical-mixing module switches + knobs.
 | `interior_closure` | `"pp81"` |  | Interior closure under use_closure: pp81 (default) | none (background + other schemes only) |
 | `use_kpp` | `true` |  | KPP surface-boundary-layer overlay (needs use_closure) |
 | `direct_stress` | `false` |  | Spread wind stress over hmix_stress (MOM6 DIRECT_STRESS) |
-| `hmix_stress` | `0.2000000000E+02` | m | Surface-slab thickness for direct_stress |
-| `kv_ml_invz2` | `0.0000000000E+00` | m^2/s | Near-surface 1/(z hmix)^2 viscosity (MOM6 KV_ML_INVZ2) |
-| `hmix_fixed` | `0.2000000000E+02` | m | Mixed-layer thickness for the KV_ML_INVZ2 profile |
+| `hmix_stress` | `20.0` | m | Surface-slab thickness for direct_stress |
+| `kv_ml_invz2` | `0.0` | m^2/s | Near-surface 1/(z hmix)^2 viscosity (MOM6 KV_ML_INVZ2) |
+| `hmix_fixed` | `20.0` | m | Mixed-layer thickness for the KV_ML_INVZ2 profile |
 | `harmonic_visc` | `false` |  | Harmonic-mean face thickness in vdiff (MOM6 HARMONIC_VISC) |
 | `dt_therm_ratio` | `1` |  | Thermo step runs at ratio*dt_dyn (MOM6 DT_THERM) |
 | `diabatic_first` | `true` |  | Thermo step + ALE remap lead (T) or close (F, OM3) each dt_therm interval (MOM6 DIABATIC_FIRST) |
 | `dt_tracer_advect_ratio` | `1` |  | Horizontal tracer advect runs at ratio*dt_dyn (MOM6 DT_TRACER_ADVECT) |
 | `tracer_advection_scheme` | `"ppm"` |  | Horizontal tracer-advection scheme (ocean, every-step and windowed drain): ppm|ppm_h3 |
 | `tracer_recon` | `"ppm"` |  | Windowed tracer-advect drain face reconstruction (ocean): ppm|weno5|weno7|weno9 |
-| `kv_max` | `0.1797693135+309` | m^2/s | Assembly ceiling on kv; huge=off (MOM6 Kd_max momentum) |
-| `kd_max` | `0.1797693135+309` | m^2/s | Assembly ceiling on kt/ks; huge=off (MOM6 Kd_max) |
+| `kv_max` | `1.7976931348623157e+308` | m^2/s | Assembly ceiling on kv; huge=off (MOM6 Kd_max momentum) |
+| `kd_max` | `1.7976931348623157e+308` | m^2/s | Assembly ceiling on kt/ks; huge=off (MOM6 Kd_max) |
 | `kd_smooth_iterations` | `0` |  | 1-2-1 smoothing passes on kv/kt (MOM6 Kd_smooth) |
 | `vmix_guard` | `false` |  | Debug-gated negative/NaN diffusivity guard (assembly) |
 | `bkgnd_profile` | `false` |  | Bryan-Lewis depth-varying background diffusivity |
-| `bkgnd_kd_sfc` | `0.1000000000E-04` | m^2/s | Bryan-Lewis surface-asymptote background Kd |
-| `bkgnd_kd_deep` | `0.1300000000E-03` | m^2/s | Bryan-Lewis deep-asymptote background Kd |
-| `bkgnd_z0` | `0.2500000000E+04` | m | Bryan-Lewis transition-centre depth |
-| `bkgnd_delta` | `0.2220000000E+03` | m | Bryan-Lewis transition half-width |
-| `bkgnd_prandtl` | `-0.1000000000E+01` |  | Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; -1 (exact) off, 0 refused |
+| `bkgnd_kd_sfc` | `1.0e-5` | m^2/s | Bryan-Lewis surface-asymptote background Kd |
+| `bkgnd_kd_deep` | `1.3e-4` | m^2/s | Bryan-Lewis deep-asymptote background Kd |
+| `bkgnd_z0` | `2500.0` | m | Bryan-Lewis transition-centre depth |
+| `bkgnd_delta` | `222.0` | m | Bryan-Lewis transition half-width |
+| `bkgnd_prandtl` | `-1.0` |  | Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; -1 (exact) off, 0 refused |
 | `bkgnd_henyey` | `false` |  | Henyey IGW latitude factor on the scalar background (excludes bkgnd_profile; needs a non-cartesian grid) |
-| `bkgnd_kd_min` | `-0.1000000000E+01` | m^2/s | Minimum background Kd under the Henyey scaling (negative = 0.01*kt_bg) |
-| `bkgnd_henyey_n0_2omega` | `0.2000000000E+02` |  | Henyey N0/(2*Omega) reference stratification ratio |
-| `bkgnd_henyey_max_lat` | `0.9500000000E+02` | degN | Latitude poleward of which the Henyey factor floors |
-| `pp81_nu0` | `0.1000000000E-01` | m^2/s | PP81 Richardson-dependent viscosity scale |
-| `pp81_nu_bg` | `0.1000000000E-03` | m^2/s | PP81 background viscosity (also seeds vmix%kv_bg) |
-| `pp81_kappa_bg` | `0.1000000000E-04` | m^2/s | PP81 background diffusivity (also seeds vmix%kt_bg/ks_bg) |
-| `pp81_alpha` | `0.5000000000E+01` |  | PP81 Richardson-number scaling coefficient (paper value 5) |
-| `shear2_floor` | `0.1000000000E-09` | 1/s^2 | Floor on |du/dz|^2+|dv/dz|^2 in the PP81 Ri denominator |
-| `kpp_ri_crit` | `0.3000000000E+00` |  | Critical bulk Richardson number for KPP BL-depth |
-| `kpp_cs_nonlocal` | `0.6300000000E+01` |  | KPP non-local (counter-gradient) transport coefficient C_s |
-| `kpp_c_vt2` | `0.1800000000E+01` |  | KPP unresolved-turbulence V_t^2 coefficient (0 disables V_t^2) |
+| `bkgnd_kd_min` | `-1.0` | m^2/s | Minimum background Kd under the Henyey scaling (negative = 0.01*kt_bg) |
+| `bkgnd_henyey_n0_2omega` | `20.0` |  | Henyey N0/(2*Omega) reference stratification ratio |
+| `bkgnd_henyey_max_lat` | `95.0` | degN | Latitude poleward of which the Henyey factor floors |
+| `pp81_nu0` | `0.01` | m^2/s | PP81 Richardson-dependent viscosity scale |
+| `pp81_nu_bg` | `1.0e-4` | m^2/s | PP81 background viscosity (also seeds vmix%kv_bg) |
+| `pp81_kappa_bg` | `1.0e-5` | m^2/s | PP81 background diffusivity (also seeds vmix%kt_bg/ks_bg) |
+| `pp81_alpha` | `5.0` |  | PP81 Richardson-number scaling coefficient (paper value 5) |
+| `shear2_floor` | `1.0e-10` | 1/s^2 | Floor on |du/dz|^2+|dv/dz|^2 in the PP81 Ri denominator |
+| `kpp_ri_crit` | `0.3` |  | Critical bulk Richardson number for KPP BL-depth |
+| `kpp_cs_nonlocal` | `6.3` |  | KPP non-local (counter-gradient) transport coefficient C_s |
+| `kpp_c_vt2` | `1.8` |  | KPP unresolved-turbulence V_t^2 coefficient (0 disables V_t^2) |
 | `buoyancy_coeffs` | `"constant"` |  | Source of alpha/beta for KPP B_0 + double diffusion: constant (scalar [ocean.ic] pair) | eos (active EOS derivatives) |
 
 ### [ocean.vdiff]
@@ -1084,9 +1084,9 @@ Backward-Euler vertical-friction solver knobs.
 | `implicit_top_drag` | `false` |  | Fold the ice-shelf top drag into the vdiff surface (k=nz) diagonal, masking the wind RHS under cover |
 | `hvel_mom6` | `true` |  | MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does |
 | `hvel_harmonic` | `false` |  | MOM6 HARMONIC_VISC for the hvel_mom6 face thickness: .false. = MOM6 default (arithmetic + z_clear near-bed harmonic blend), .true. = harmonic + near-bed upwind-arithmetic blend |
-| `hbbl_visc` | `0.1000000000E+02` | m | Bottom-layer scale for the hvel_mom6 botfn blend without the BBL glue, and the glue's HBBL when ocean_bdrag hbbl = 0 (MOM6 HBBL) |
+| `hbbl_visc` | `10.0` | m | Bottom-layer scale for the hvel_mom6 botfn blend without the BBL glue, and the glue's HBBL when ocean_bdrag hbbl = 0 (MOM6 HBBL) |
 | `bbl_glue` | `true` |  | MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick from the ocean_bdrag law (quadratic or linear); kv_bbl botfn glue at near-bed interfaces + piston bed row replace the bed drag apply. Requires hvel_mom6 |
-| `bbl_piston` | `0.3000000000E-03` | m/s | Historical constant BBL piston u* (hand-built slots only; a configured glue takes its drag from ocean_bdrag) |
+| `bbl_piston` | `3.0e-4` | m/s | Historical constant BBL piston u* (hand-built slots only; a configured glue takes its drag from ocean_bdrag) |
 | `hvel_upwind` | `true` |  | Near-bed upwind blend in the hvel_mom6 thickness build (.false. = pure harmonic; the u-sign blend flip-flops on roundoff at rest and collapses the BBL glue, PGF_BUG.md par.9.8) |
 
 ### [ocean.continuity]
@@ -1095,7 +1095,7 @@ Continuity-PPM positivity controls.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `h_min` | `0.1000000000E-05` | m | PPM positivity-limiter thickness floor |
+| `h_min` | `1.0e-6` | m | PPM positivity-limiter thickness floor |
 | `ppm_limit_pos` | `false` |  | Positivity-preserving PPM face limiter (MOM6 PPM_limit_pos) |
 | `vol_cfl` | `false` |  | Swept-volume continuity-PPM face thickness (MOM6 vol_CFL) |
 | `positive_definite` | `false` |  | Positive-definite split continuity (h>=h_lim, zero mass created; reconstruction floor + per-donor outflux limiter) |
@@ -1107,7 +1107,7 @@ Lagrangian grounding-stability controls.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `angstrom_h` | `0.0000000000E+00` | m | Minimum-thickness floor on the Lagrangian continuity h-update (MOM6 Angstrom_H analogue) |
+| `angstrom_h` | `0.0` | m | Minimum-thickness floor on the Lagrangian continuity h-update (MOM6 Angstrom_H analogue) |
 | `reset_vanished_u` | `false` |  | Zero face velocity when layer vanished on both adjacent cells |
 | `cfl_ignore_vanished` | `false` |  | Exclude vanished layers from MaxCFL / panic / CFL truncation |
 | `pgf_skip_nonoverlap` | `true` |  | Zero the face PGF where a grounded layer's z-extents do not overlap across the face AND the layer is at the floor (<= 2*max(angstrom_h, H_VANISHED)) on one side (VCOORD_LAGRANGIAN only, mont / fv_lite / fv_wright / fv_mom6; default ON — kills the spurious at-rest grounded-layer pressure gradient) |
@@ -1121,17 +1121,17 @@ Basin geometry + surface forcing + Coriolis tilt.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `topo_config` | `"flat"` |  | Bathymetry profile selector |
-| `max_depth` | `0.2000000000E+04` | m | Basin maximum depth |
-| `edge_depth` | `0.1000000000E+03` | m | Spoon-bathymetry edge depth |
-| `slope_scale` | `0.4000000000E+06` | m | Spoon-bathymetry exponential decay scale |
-| `nl_continent_amp` | `0.1000000000E+01` | nondim | Neverworld2 continent amplitude (1=full continents, 0=aquaplanet+channel) |
-| `nl_roughness_amp` | `0.5000000000E-01` | nondim | Neverworld2 bathymetry roughness amplitude |
-| `nl_min_depth` | `0.5000000000E+03` | m | Neverworld2 minimum-depth floor (MOM6 MINIMUM_DEPTH analogue) |
+| `max_depth` | `2000.0` | m | Basin maximum depth |
+| `edge_depth` | `100.0` | m | Spoon-bathymetry edge depth |
+| `slope_scale` | `400000.0` | m | Spoon-bathymetry exponential decay scale |
+| `nl_continent_amp` | `1.0` | nondim | Neverworld2 continent amplitude (1=full continents, 0=aquaplanet+channel) |
+| `nl_roughness_amp` | `0.05` | nondim | Neverworld2 bathymetry roughness amplitude |
+| `nl_min_depth` | `500.0` | m | Neverworld2 minimum-depth floor (MOM6 MINIMUM_DEPTH analogue) |
 | `wind_config` | `"constant"` |  | Surface wind-stress dispatch |
-| `taux_magnitude` | `0.1000000000E+00` | Pa | Peak zonal wind stress for wind_config=2gyre/neverworld2 |
-| `coriolis_beta` | `0.0000000000E+00` | 1/(s m) | Meridional gradient of f (0 = f-plane) |
-| `coriolis_y_ref` | `0.0000000000E+00` | m | Reference y where f = coriolis_f under beta-plane |
-| `x_origin` | `0.0000000000E+00` | m | Absolute x of the domain west edge, for topo_config='isomip_plus' (ISOMIP+ ocean box starts at the MISMIP+ x = 320 km) |
+| `taux_magnitude` | `0.1` | Pa | Peak zonal wind stress for wind_config=2gyre/neverworld2 |
+| `coriolis_beta` | `0.0` | 1/(s m) | Meridional gradient of f (0 = f-plane) |
+| `coriolis_y_ref` | `0.0` | m | Reference y where f = coriolis_f under beta-plane |
+| `x_origin` | `0.0` | m | Absolute x of the domain west edge, for topo_config='isomip_plus' (ISOMIP+ ocean box starts at the MISMIP+ x = 320 km) |
 
 ### [ocean.ic]
 
@@ -1140,35 +1140,35 @@ Initial-condition overlay + EOS reference state.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `ic_config` | `""` |  | IC overlay tag |
-| `alpha_T` | `0.1700000000E-03` | kg/m^3/degC | Linear-EOS thermal-expansion coefficient (DIMENSIONAL: multiply a fractional 1/degC coefficient by rho_0) |
-| `beta_S` | `0.7600000000E-03` | kg/m^3/PSU | Linear-EOS haline contraction coefficient (DIMENSIONAL: multiply a fractional 1/PSU coefficient by rho_0) |
-| `T_ref` | `0.1000000000E+02` | degC | Linear-EOS reference temperature |
-| `S_ref` | `0.3500000000E+02` | PSU | Linear-EOS reference salinity |
-| `rho_0` | `0.1035000000E+04` | kg/m^3 | Reference density for the linear EOS / Boussinesq PGF |
-| `layer_rho_init` | `[-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01]` | kg/m^3 | Per-layer initial density (k=1 bed -> k=nz surface; -1 = EOS init) |
-| `rho_lightest` | `-0.1000000000E+01` | kg/m^3 | Linear density-range IC: surface (lightest) layer density; -1 = off |
-| `rho_range` | `0.2000000000E+01` | kg/m^3 | Linear density-range IC: top-to-bottom density contrast (MOM6 DENSITY_RANGE) |
-| `eady_dT_dy` | `-0.2000000000E-04` | degC/m | Eady IC meridional T gradient |
-| `eady_dT_dz` | `0.1000000000E-01` | degC/m | Eady IC vertical stratification |
-| `eady_T_ref` | `0.1000000000E+02` | degC | Eady IC reference temperature at z=0,y=y_mid |
-| `eady_pert_amp` | `0.1000000000E-02` | degC | Eady IC symmetry-breaking perturbation amplitude |
+| `alpha_T` | `1.7e-4` | kg/m^3/degC | Linear-EOS thermal-expansion coefficient (DIMENSIONAL: multiply a fractional 1/degC coefficient by rho_0) |
+| `beta_S` | `7.6e-4` | kg/m^3/PSU | Linear-EOS haline contraction coefficient (DIMENSIONAL: multiply a fractional 1/PSU coefficient by rho_0) |
+| `T_ref` | `10.0` | degC | Linear-EOS reference temperature |
+| `S_ref` | `35.0` | PSU | Linear-EOS reference salinity |
+| `rho_0` | `1035.0` | kg/m^3 | Reference density for the linear EOS / Boussinesq PGF |
+| `layer_rho_init` | `[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]` | kg/m^3 | Per-layer initial density (k=1 bed -> k=nz surface; -1 = EOS init) |
+| `rho_lightest` | `-1.0` | kg/m^3 | Linear density-range IC: surface (lightest) layer density; -1 = off |
+| `rho_range` | `2.0` | kg/m^3 | Linear density-range IC: top-to-bottom density contrast (MOM6 DENSITY_RANGE) |
+| `eady_dT_dy` | `-2.0e-5` | degC/m | Eady IC meridional T gradient |
+| `eady_dT_dz` | `0.01` | degC/m | Eady IC vertical stratification |
+| `eady_T_ref` | `10.0` | degC | Eady IC reference temperature at z=0,y=y_mid |
+| `eady_pert_amp` | `0.001` | degC | Eady IC symmetry-breaking perturbation amplitude |
 | `eady_pert_seed` | `12345` |  | RNG seed for the Eady IC perturbation |
-| `ga_eta_amp` | `0.1000000000E+01` | m | Geostrophic-adjustment IC: SSH-bump amplitude |
-| `ga_length_scale` | `0.5000000000E+05` | m | Geostrophic-adjustment IC: SSH-bump e-folding scale |
-| `ga_x_center` | `-0.1000000000E+01` | m | Geostrophic-adjustment IC: bump x-centre (<0 = auto) |
-| `ga_y_center` | `-0.1000000000E+01` | m | Geostrophic-adjustment IC: bump y-centre (<0 = auto) |
-| `jet_half_width` | `0.4000000000E+05` | m | Baroclinic-jet IC: tanh jet half-width L |
-| `interface_amp` | `0.2000000000E+03` | m | Baroclinic-jet IC: interface displacement amplitude |
-| `pert_amp_frac` | `0.2000000000E+00` |  | Baroclinic-jet IC: meander amplitude as a fraction of interface_amp |
+| `ga_eta_amp` | `1.0` | m | Geostrophic-adjustment IC: SSH-bump amplitude |
+| `ga_length_scale` | `50000.0` | m | Geostrophic-adjustment IC: SSH-bump e-folding scale |
+| `ga_x_center` | `-1.0` | m | Geostrophic-adjustment IC: bump x-centre (<0 = auto) |
+| `ga_y_center` | `-1.0` | m | Geostrophic-adjustment IC: bump y-centre (<0 = auto) |
+| `jet_half_width` | `40000.0` | m | Baroclinic-jet IC: tanh jet half-width L |
+| `interface_amp` | `200.0` | m | Baroclinic-jet IC: interface displacement amplitude |
+| `pert_amp_frac` | `0.2` |  | Baroclinic-jet IC: meander amplitude as a fraction of interface_amp |
 | `pert_nx` | `3` |  | Baroclinic-jet IC: zonal perturbation wavenumber (integer) |
-| `upper_layer_rest` | `0.5000000000E+03` | m | Baroclinic-jet IC: upper (surface) layer rest thickness H1 |
-| `vortex_x0` | `-0.1000000000E+01` | m | Balanced-vortex IC: centre x (<0 = domain centre) |
-| `vortex_y0` | `-0.1000000000E+01` | m | Balanced-vortex IC: centre y (<0 = domain centre) |
-| `vortex_radius` | `0.5000000000E+05` | m | Balanced-vortex IC: Gaussian e-folding radius R (>= 3 dx) |
-| `vortex_hv` | `0.8000000000E+03` | m | Balanced-vortex IC: vertical e-folding scale Hv from the surface |
-| `vortex_dT` | `0.1000000000E+01` | degC | Balanced-vortex IC: peak surface temperature anomaly (+ warm core) |
-| `vortex_T_surf` | `0.2000000000E+02` | degC | Balanced-vortex IC: background temperature at z=0 |
-| `vortex_dT_dz` | `0.2000000000E-02` | degC/m | Balanced-vortex IC: background dT/dz (z up; + = warmer toward surface) |
+| `upper_layer_rest` | `500.0` | m | Baroclinic-jet IC: upper (surface) layer rest thickness H1 |
+| `vortex_x0` | `-1.0` | m | Balanced-vortex IC: centre x (<0 = domain centre) |
+| `vortex_y0` | `-1.0` | m | Balanced-vortex IC: centre y (<0 = domain centre) |
+| `vortex_radius` | `50000.0` | m | Balanced-vortex IC: Gaussian e-folding radius R (>= 3 dx) |
+| `vortex_hv` | `800.0` | m | Balanced-vortex IC: vertical e-folding scale Hv from the surface |
+| `vortex_dT` | `1.0` | degC | Balanced-vortex IC: peak surface temperature anomaly (+ warm core) |
+| `vortex_T_surf` | `20.0` | degC | Balanced-vortex IC: background temperature at z=0 |
+| `vortex_dT_dz` | `0.002` | degC/m | Balanced-vortex IC: background dT/dz (z up; + = warmer toward surface) |
 | `vortex_balance` | `"geostrophic"` |  | Balanced-vortex IC: balance level |
 
 ### [ocean.zinit]
@@ -1184,12 +1184,12 @@ Z-level T/S initial-condition overlay (A2).
 | `t_var` | `""` |  | Temperature variable-name override (blank tries temp/T/temperature) |
 | `s_var` | `""` |  | Salinity variable-name override (blank tries salt/S/salinity) |
 | `z_var` | `""` |  | Source-axis variable-name override (blank tries z_src/z/depth/lev) |
-| `land_fill_t` | `0.1000000000E+02` | degC | Fallback temperature for dry columns |
-| `land_fill_s` | `0.3500000000E+02` | PSU | Fallback salinity for dry columns |
-| `lin_t_ref` | `0.0000000000E+00` | degC | source='linear': temperature at the z = 0 datum |
-| `lin_dt_dz` | `0.0000000000E+00` | degC/m | source='linear': dT/dz, z positive UP (stable > 0) |
-| `lin_s_ref` | `0.3500000000E+02` | PSU | source='linear': salinity at the z = 0 datum |
-| `lin_ds_dz` | `0.0000000000E+00` | PSU/m | source='linear': dS/dz, z positive UP (stable < 0) |
+| `land_fill_t` | `10.0` | degC | Fallback temperature for dry columns |
+| `land_fill_s` | `35.0` | PSU | Fallback salinity for dry columns |
+| `lin_t_ref` | `0.0` | degC | source='linear': temperature at the z = 0 datum |
+| `lin_dt_dz` | `0.0` | degC/m | source='linear': dT/dz, z positive UP (stable > 0) |
+| `lin_s_ref` | `35.0` | PSU | source='linear': salinity at the z = 0 datum |
+| `lin_ds_dz` | `0.0` | PSU/m | source='linear': dS/dz, z positive UP (stable < 0) |
 
 ### [ocean.data]
 
@@ -1208,41 +1208,41 @@ File-backed surface forcing (PR-15): wind stress, heat, freshwater.
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (default off; requires RDB_ENABLE_NETCDF=ON) |
 | `time_mode` | `"linear"` |  | Shared time-axis mode for every active tag |
-| `cycle_period` | `0.0000000000E+00` | s | Climatology period (required > 0 when time_mode=cyclic) |
-| `t_offset` | `0.0000000000E+00` | s | Added to the model time before the file-axis lookup |
+| `cycle_period` | `0.0` | s | Climatology period (required > 0 when time_mode=cyclic) |
+| `t_offset` | `0.0` | s | Added to the model time before the file-axis lookup |
 | `oor_clamp` | `false` |  | Clamp an out-of-range query to the end record instead of aborting |
 | `tau_x_file` | `""` |  | Path to the zonal wind stress NetCDF (blank ⇒ tag not file-driven) |
 | `tau_x_var` | `""` |  | Variable name inside tau_x_file (required when it is set) |
-| `tau_x_scale` | `0.1000000000E+01` | Pa | Multiplier applied to the zonal wind stress slab at read |
-| `tau_x_add` | `0.0000000000E+00` | Pa | Offset added to the zonal wind stress slab after scale |
+| `tau_x_scale` | `1.0` | Pa | Multiplier applied to the zonal wind stress slab at read |
+| `tau_x_add` | `0.0` | Pa | Offset added to the zonal wind stress slab after scale |
 | `tau_y_file` | `""` |  | Path to the meridional wind stress NetCDF (blank ⇒ tag not file-driven) |
 | `tau_y_var` | `""` |  | Variable name inside tau_y_file (required when it is set) |
-| `tau_y_scale` | `0.1000000000E+01` | Pa | Multiplier applied to the meridional wind stress slab at read |
-| `tau_y_add` | `0.0000000000E+00` | Pa | Offset added to the meridional wind stress slab after scale |
+| `tau_y_scale` | `1.0` | Pa | Multiplier applied to the meridional wind stress slab at read |
+| `tau_y_add` | `0.0` | Pa | Offset added to the meridional wind stress slab after scale |
 | `heat_file` | `""` |  | Path to the net surface heat flux (positive down) NetCDF (blank ⇒ tag not file-driven) |
 | `heat_var` | `""` |  | Variable name inside heat_file (required when it is set) |
-| `heat_scale` | `0.1000000000E+01` | W m-2 | Multiplier applied to the net surface heat flux (positive down) slab at read |
-| `heat_add` | `0.0000000000E+00` | W m-2 | Offset added to the net surface heat flux (positive down) slab after scale |
+| `heat_scale` | `1.0` | W m-2 | Multiplier applied to the net surface heat flux (positive down) slab at read |
+| `heat_add` | `0.0` | W m-2 | Offset added to the net surface heat flux (positive down) slab after scale |
 | `evap_file` | `""` |  | Path to the evaporative mass flux (<= 0) NetCDF (blank ⇒ tag not file-driven) |
 | `evap_var` | `""` |  | Variable name inside evap_file (required when it is set) |
-| `evap_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the evaporative mass flux (<= 0) slab at read |
-| `evap_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the evaporative mass flux (<= 0) slab after scale |
+| `evap_scale` | `1.0` | kg m-2 s-1 | Multiplier applied to the evaporative mass flux (<= 0) slab at read |
+| `evap_add` | `0.0` | kg m-2 s-1 | Offset added to the evaporative mass flux (<= 0) slab after scale |
 | `lprec_file` | `""` |  | Path to the liquid precipitation (>= 0) NetCDF (blank ⇒ tag not file-driven) |
 | `lprec_var` | `""` |  | Variable name inside lprec_file (required when it is set) |
-| `lprec_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the liquid precipitation (>= 0) slab at read |
-| `lprec_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the liquid precipitation (>= 0) slab after scale |
+| `lprec_scale` | `1.0` | kg m-2 s-1 | Multiplier applied to the liquid precipitation (>= 0) slab at read |
+| `lprec_add` | `0.0` | kg m-2 s-1 | Offset added to the liquid precipitation (>= 0) slab after scale |
 | `salt_file` | `""` |  | Path to the surface salt flux (positive salinifies) NetCDF (blank ⇒ tag not file-driven) |
 | `salt_var` | `""` |  | Variable name inside salt_file (required when it is set) |
-| `salt_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the surface salt flux (positive salinifies) slab at read |
-| `salt_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the surface salt flux (positive salinifies) slab after scale |
+| `salt_scale` | `1.0` | kg m-2 s-1 | Multiplier applied to the surface salt flux (positive salinifies) slab at read |
+| `salt_add` | `0.0` | kg m-2 s-1 | Offset added to the surface salt flux (positive salinifies) slab after scale |
 | `lrunoff_file` | `""` |  | Path to the liquid runoff mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven) |
 | `lrunoff_var` | `""` |  | Variable name inside lrunoff_file (required when it is set) |
-| `lrunoff_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the liquid runoff mass flux (>= 0, on wet cells only) slab at read |
-| `lrunoff_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the liquid runoff mass flux (>= 0, on wet cells only) slab after scale |
+| `lrunoff_scale` | `1.0` | kg m-2 s-1 | Multiplier applied to the liquid runoff mass flux (>= 0, on wet cells only) slab at read |
+| `lrunoff_add` | `0.0` | kg m-2 s-1 | Offset added to the liquid runoff mass flux (>= 0, on wet cells only) slab after scale |
 | `frunoff_file` | `""` |  | Path to the frozen runoff / calving mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven) |
 | `frunoff_var` | `""` |  | Variable name inside frunoff_file (required when it is set) |
-| `frunoff_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab at read |
-| `frunoff_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab after scale |
+| `frunoff_scale` | `1.0` | kg m-2 s-1 | Multiplier applied to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab at read |
+| `frunoff_add` | `0.0` | kg m-2 s-1 | Offset added to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab after scale |
 
 ### [ocean.atm_forcing]
 
@@ -1272,14 +1272,14 @@ JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface 
 | `var_prsn` | `"prsn"` |  | Variable name inside the prsn filelist |
 | `time_mode` | `"interannual"` |  | interannual (default) or repeat_year (RYF) |
 | `ryf_start_date` | `"1990-05-01"` |  | RYF window start date (time_mode=repeat_year only) |
-| `ryf_period_days` | `0.3650000000E+03` | days | RYF window length (time_mode=repeat_year only) |
+| `ryf_period_days` | `365.0` | days | RYF window length (time_mode=repeat_year only) |
 | `states_regrid` | `"bilinear"` |  | Horizontal regrid for tas/huss/uas/vas/psl (only 'bilinear' is implemented) |
 | `fluxes_regrid` | `"conservative"` |  | Horizontal regrid for rlds/rsds/prra/prsn |
 | `sw_interp` | `"coszen"` |  | coszen (default, held interval + diurnal cosine-zenith factor) or linear (plain time-blend) |
-| `sw_offset_s` | `0.5400000000E+04` | s | Time offset applied to the rsds query time before the bracket search (sw_interp=coszen) |
+| `sw_offset_s` | `5400.0` | s | Time offset applied to the rsds query time before the bracket search (sw_interp=coszen) |
 | `orb_year` | `1990` |  | Orbital-parameter year (reserved: v1 coszen uses fixed Spencer (1971) coefficients, so a non-default value is refused) |
 | `wind_relative` | `true` |  | Subtract the ocean surface current from the atmospheric wind before the bulk flux |
-| `ocean_albedo` | `0.6600000000E-01` |  | Ocean surface shortwave albedo (Large & Yeager 2009) |
+| `ocean_albedo` | `0.066` |  | Ocean surface shortwave albedo (Large & Yeager 2009) |
 | `verbose` | `false` |  | Log every bracket advance of the 9 underlying readers |
 
 ### [ocean.bulk_flux]
@@ -1290,9 +1290,9 @@ Monin-Obukhov bulk-flux kernel (Large & Yeager 2004/2009).
 |------|---------|-------|-------------|
 | `enable` | `false` |  | Master switch (required when [ocean.atm_forcing] enable is on) |
 | `n_iter` | `5` |  | Monin-Obukhov iteration count |
-| `z_wind` | `0.1000000000E+02` | m | Wind reference height |
-| `z_ta` | `0.2000000000E+01` | m | Air temperature / specific humidity reference height |
-| `emissivity` | `0.9700000000E+00` |  | Longwave emissivity of seawater |
+| `z_wind` | `10.0` | m | Wind reference height |
+| `z_ta` | `2.0` | m | Air temperature / specific humidity reference height |
+| `emissivity` | `0.97` |  | Longwave emissivity of seawater |
 
 ### [ocean.diag]
 
@@ -1302,15 +1302,15 @@ Ocean diag-manager output controls.
 |------|---------|-------|-------------|
 | `enabled` | `true` |  | Enable the per-step diag-manager hook |
 | `filename` | `"ocean_diag"` |  | Output file basename (per-rank suffix appended) |
-| `dt_out` | `0.3600000000E+04` |  | Diag-fire cadence (in time_unit) |
+| `dt_out` | `3600.0` |  | Diag-fire cadence (in time_unit) |
 | `vgrid` | `"layer"` |  | Default output vertical grid for layer-shaped diags |
-| `z_levels` | `[-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01]` | m | Output z-levels when vgrid=z_fixed (positive down) |
+| `z_levels` | `[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]` | m | Output z-levels when vgrid=z_fixed (positive down) |
 | `n_z_levels` | `0` |  | Number of z_levels entries used (0 = none) |
-| `sigma_levels` | `[-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01]` |  | Output sigma fractions (0..1) for sigma output; empty = auto-uniform |
+| `sigma_levels` | `[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]` |  | Output sigma fractions (0..1) for sigma output; empty = auto-uniform |
 | `n_sigma_levels` | `0` |  | Number of sigma_levels entries used (0 = auto) |
-| `zstar_levels` | `[-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01]` | m | Output z* reference depths for zstar output; empty = auto-uniform |
+| `zstar_levels` | `[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]` | m | Output z* reference depths for zstar output; empty = auto-uniform |
 | `n_zstar_levels` | `0` |  | Number of zstar_levels entries used (0 = auto) |
-| `rho_levels` | `[-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01]` | kg/m^3 | Output potential-density bin edges when vgrid=density; strictly increasing, light->dense |
+| `rho_levels` | `[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]` | kg/m^3 | Output potential-density bin edges when vgrid=density; strictly increasing, light->dense |
 | `n_rho_levels` | `0` |  | Number of rho_levels entries used (0 = none) |
 | `mask_vanished_layers` | `false` |  | Mask below-bottom/pinched remap cells to missing_value (default off) |
 | `reproducing_sums` | `true` |  | Order-invariant EFP console totals + budget terms: identical console on every rank count, exact drift residual (.false. = the pre-v0.1.0 FP sums) |
@@ -1328,52 +1328,52 @@ Open-boundary condition config: per-edge BC type, clamped/inflow Dirichlet value
 | `east` | `"wall"` |  | East edge boundary type |
 | `south` | `"wall"` |  | South edge boundary type |
 | `north` | `"wall"` |  | North edge boundary type ('tripolar_fold' is meaningful here only — Murray bipolar cap; requires grid_config='tripolar' + periodic west/east) |
-| `west_clamped_eta` | `0.0000000000E+00` | m | Clamped SSH, west edge |
-| `east_clamped_eta` | `0.0000000000E+00` | m | Clamped SSH, east edge |
-| `south_clamped_eta` | `0.0000000000E+00` | m | Clamped SSH, south edge |
-| `north_clamped_eta` | `0.0000000000E+00` | m | Clamped SSH, north edge |
-| `west_clamped_u` | `0.0000000000E+00` | m/s | Clamped normal velocity, west edge |
-| `east_clamped_u` | `0.0000000000E+00` | m/s | Clamped normal velocity, east edge |
-| `south_clamped_v` | `0.0000000000E+00` | m/s | Clamped normal velocity, south edge |
-| `north_clamped_v` | `0.0000000000E+00` | m/s | Clamped normal velocity, north edge |
-| `west_inflow_S` | `0.3500000000E+02` | PSU | Inflow salinity, west edge |
-| `west_inflow_T` | `0.1000000000E+02` | degC | Inflow temperature, west edge |
-| `east_inflow_S` | `0.3500000000E+02` | PSU | Inflow salinity, east edge |
-| `east_inflow_T` | `0.1000000000E+02` | degC | Inflow temperature, east edge |
-| `south_inflow_S` | `0.3500000000E+02` | PSU | Inflow salinity, south edge |
-| `south_inflow_T` | `0.1000000000E+02` | degC | Inflow temperature, south edge |
-| `north_inflow_S` | `0.3500000000E+02` | PSU | Inflow salinity, north edge |
-| `north_inflow_T` | `0.1000000000E+02` | degC | Inflow temperature, north edge |
+| `west_clamped_eta` | `0.0` | m | Clamped SSH, west edge |
+| `east_clamped_eta` | `0.0` | m | Clamped SSH, east edge |
+| `south_clamped_eta` | `0.0` | m | Clamped SSH, south edge |
+| `north_clamped_eta` | `0.0` | m | Clamped SSH, north edge |
+| `west_clamped_u` | `0.0` | m/s | Clamped normal velocity, west edge |
+| `east_clamped_u` | `0.0` | m/s | Clamped normal velocity, east edge |
+| `south_clamped_v` | `0.0` | m/s | Clamped normal velocity, south edge |
+| `north_clamped_v` | `0.0` | m/s | Clamped normal velocity, north edge |
+| `west_inflow_S` | `35.0` | PSU | Inflow salinity, west edge |
+| `west_inflow_T` | `10.0` | degC | Inflow temperature, west edge |
+| `east_inflow_S` | `35.0` | PSU | Inflow salinity, east edge |
+| `east_inflow_T` | `10.0` | degC | Inflow temperature, east edge |
+| `south_inflow_S` | `35.0` | PSU | Inflow salinity, south edge |
+| `south_inflow_T` | `10.0` | degC | Inflow temperature, south edge |
+| `north_inflow_S` | `35.0` | PSU | Inflow salinity, north edge |
+| `north_inflow_T` | `10.0` | degC | Inflow temperature, north edge |
 | `sponge_width` | `0` |  | Sponge band width in cells (0 disables) |
-| `sponge_strength` | `0.0000000000E+00` | 1/s | Peak sponge relaxation rate at the outer face of the band |
+| `sponge_strength` | `0.0` | 1/s | Peak sponge relaxation rate at the outer face of the band |
 | `sponge_relax_tracers` | `false` |  | Extend the sponge relaxation to h_layer + tracers |
-| `res_lscale_out` | `0.0000000000E+00` | m | Outflow reservoir length scale (0 = disabled) |
-| `res_lscale_in` | `0.0000000000E+00` | m | Inflow reservoir length scale (0 = instantaneous inflow) |
+| `res_lscale_out` | `0.0` | m | Outflow reservoir length scale (0 = disabled) |
+| `res_lscale_in` | `0.0` | m | Inflow reservoir length scale (0 = instantaneous inflow) |
 | `radiation_scheme` | `"anomaly"` |  | 'anomaly' = v1 BT-mean + zero-gradient anomaly (default); 'orlanski' = per-layer implicit-upwind radiation (Orlanski 1976) |
-| `orlanski_rx_max` | `0.1000000000E+02` | grid cells/step | Clamp on the Orlanski nondimensional phase speed |
-| `orlanski_gamma` | `0.1000000000E+01` |  | Running-mean weight (0=full running mean, 1=instant) |
-| `nudge_tau_in` | `0.0000000000E+00` | s | Inflow nudging timescale (0 = off) |
-| `nudge_tau_out` | `0.0000000000E+00` | s | Outflow nudging timescale (0 = off) |
+| `orlanski_rx_max` | `10.0` | grid cells/step | Clamp on the Orlanski nondimensional phase speed |
+| `orlanski_gamma` | `1.0` |  | Running-mean weight (0=full running mean, 1=instant) |
+| `nudge_tau_in` | `0.0` | s | Inflow nudging timescale (0 = off) |
+| `nudge_tau_out` | `0.0` | s | Outflow nudging timescale (0 = off) |
 | `flather_form` | `"legacy"` |  | 'legacy' = v1 Flather (u_ext=0, no interior vel, default); 'full' = half-characteristic form (Flather 1976) |
-| `west_ext_u` | `0.0000000000E+00` | m/s | Exterior barotropic u, west edge |
-| `east_ext_u` | `0.0000000000E+00` | m/s | Exterior barotropic u, east edge |
-| `south_ext_v` | `0.0000000000E+00` | m/s | Exterior barotropic v, south edge |
-| `north_ext_v` | `0.0000000000E+00` | m/s | Exterior barotropic v, north edge |
+| `west_ext_u` | `0.0` | m/s | Exterior barotropic u, west edge |
+| `east_ext_u` | `0.0` | m/s | Exterior barotropic u, east edge |
+| `south_ext_v` | `0.0` | m/s | Exterior barotropic v, south edge |
+| `north_ext_v` | `0.0` | m/s | Exterior barotropic v, north edge |
 | `west_n_tidal` | `0` |  | Active tidal constituents, west edge |
-| `west_tidal_amp` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | m | Constituent amplitudes, west edge |
-| `west_tidal_phase` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad | Constituent phases, west edge |
-| `west_tidal_omega` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad/s | Constituent angular frequencies, west edge |
+| `west_tidal_amp` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | m | Constituent amplitudes, west edge |
+| `west_tidal_phase` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad | Constituent phases, west edge |
+| `west_tidal_omega` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad/s | Constituent angular frequencies, west edge |
 | `east_n_tidal` | `0` |  | Active tidal constituents, east edge |
-| `east_tidal_amp` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | m | Constituent amplitudes, east edge |
-| `east_tidal_phase` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad | Constituent phases, east edge |
-| `east_tidal_omega` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad/s | Constituent angular frequencies, east edge |
+| `east_tidal_amp` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | m | Constituent amplitudes, east edge |
+| `east_tidal_phase` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad | Constituent phases, east edge |
+| `east_tidal_omega` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad/s | Constituent angular frequencies, east edge |
 | `south_n_tidal` | `0` |  | Active tidal constituents, south edge |
-| `south_tidal_amp` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | m | Constituent amplitudes, south edge |
-| `south_tidal_phase` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad | Constituent phases, south edge |
-| `south_tidal_omega` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad/s | Constituent angular frequencies, south edge |
+| `south_tidal_amp` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | m | Constituent amplitudes, south edge |
+| `south_tidal_phase` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad | Constituent phases, south edge |
+| `south_tidal_omega` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad/s | Constituent angular frequencies, south edge |
 | `north_n_tidal` | `0` |  | Active tidal constituents, north edge |
-| `north_tidal_amp` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | m | Constituent amplitudes, north edge |
-| `north_tidal_phase` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad | Constituent phases, north edge |
-| `north_tidal_omega` | `[0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00]` | rad/s | Constituent angular frequencies, north edge |
+| `north_tidal_amp` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | m | Constituent amplitudes, north edge |
+| `north_tidal_phase` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad | Constituent phases, north edge |
+| `north_tidal_omega` | `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` | rad/s | Constituent angular frequencies, north edge |
 | `obc_tidal_nodal` | `false` |  | Apply the 18.6-yr nodal factor + equilibrium/nodal phase to the open-boundary tidal elevation forcing (shares the [ocean.tides] astro generator); when true *_tidal_phase becomes a Greenwich phase lag |
 | `mask_wall_velocity` | `true` |  | Zero the T-cell wet-mask in the ghost cells beyond every solid WALL edge at setup, so wall-normal C-grid face velocities are masked rather than left as garbage (default ON; set .false. to reproduce a pre-fix legacy closed-basin baseline) |

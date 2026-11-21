@@ -17,6 +17,7 @@ module rdb_nml_schema
    !! its TABLE appears; an absent group is fine (defaults rule).
    use, intrinsic :: iso_fortran_env, only: int64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
    use rdb_constants, only: wp
    use pic_logger, only: global_logger
    use rdb_error_ring, only: error_ring_push
@@ -430,13 +431,121 @@ contains
    end function group_to_table
 
    pure function fmt_real(v) result(str)
-      !! Format a real in a stable exponential form (a valid TOML float).
+      !! Format a real as a VALID TOML float that reads back to the same bits:
+      !! the fewest significant digits (2..17) that round-trip, as a plain
+      !! decimal (`10000.0`, `0.25`) when the decimal exponent is in [-3, 6]
+      !! and as `d.ddde+x` otherwise; always with a `.` and a digit after it.
+      !! `inf`, `-inf` and `nan` are spelled the TOML way.
       real(rk), intent(in) :: v
       character(len=:), allocatable :: str
-      character(len=32) :: buf
-      write (buf, "(E18.10)") v
-      str = trim(adjustl(buf))
+      character(len=48) :: buf
+      character(len=24) :: fmt
+      character(len=64) :: imsg
+      character(len=40) :: dig
+      character(len=:), allocatable :: d
+      real(rk) :: back
+      integer :: p, ios, ie, e, nd, k
+
+      if (ieee_is_nan(v)) then
+         str = "nan"
+         return
+      end if
+      if (.not. ieee_is_finite(v)) then
+         if (v > 0) then
+            str = "inf"
+         else
+            str = "-inf"
+         end if
+         return
+      end if
+      buf = ""
+      do p = 1, 16
+         write (fmt, "(A,I0,A)") "(ES40.", p, "E3)"
+         write (buf, fmt) v
+         read (buf, *, iostat=ios, iomsg=imsg) back
+         if (ios == 0) then
+            if (back == v) exit
+         end if
+      end do
+      buf = adjustl(buf)
+      ie = index(buf, "E")
+      read (buf(ie + 1:), *) e
+      ! Digits of the mantissa with the point removed, trailing zeros dropped.
+      dig = ""
+      nd = 0
+      do k = 1, ie - 1
+         if (buf(k:k) >= "0" .and. buf(k:k) <= "9") then
+            nd = nd + 1
+            dig(nd:nd) = buf(k:k)
+         end if
+      end do
+      do while (nd > 1)
+         if (dig(nd:nd) /= "0") exit
+         nd = nd - 1
+      end do
+      d = dig(1:nd)
+      if (buf(1:1) == "-") then
+         str = "-"
+      else
+         str = ""
+      end if
+      if (d == "0") then
+         str = str//"0.0"
+      else if (e >= 0 .and. e <= 6) then
+         if (nd <= e + 1) then
+            str = str//d//repeat("0", e + 1 - nd)//".0"
+         else
+            str = str//d(1:e + 1)//"."//d(e + 2:)
+         end if
+      else if (e < 0 .and. e >= -3) then
+         str = str//"0."//repeat("0", -e - 1)//d
+      else
+         if (nd == 1) d = d//"0"
+         write (fmt, "(SP,I0)") e
+         str = str//d(1:1)//"."//d(2:)//"e"//trim(fmt)
+      end if
    end function fmt_real
+
+   pure function toml_basic_string(s) result(str)
+      !! `s` as a TOML basic string (double-quoted), escaped per the TOML
+      !! rules: backslash and double quote, the short control escapes, and a
+      !! `u`+4-hex-digit escape for any
+      !! other control character (and DEL).
+      character(len=*), intent(in) :: s
+      character(len=:), allocatable :: str
+      character(len=1), parameter :: BS = achar(92)
+      character(len=8) :: hex
+      integer :: i, c
+
+      str = '"'
+      do i = 1, len(s)
+         c = iachar(s(i:i))
+         select case (c)
+         case (34)
+            str = str//BS//'"'
+         case (92)
+            str = str//BS//BS
+         case (8)
+            str = str//BS//"b"
+         case (9)
+            str = str//BS//"t"
+         case (10)
+            str = str//BS//"n"
+         case (12)
+            str = str//BS//"f"
+         case (13)
+            str = str//BS//"r"
+         case default
+            if (c < 32 .or. c == 127) then
+               write (hex, "(Z4.4)") c
+               str = str//BS//"u"//trim(hex)
+            else
+               str = str//s(i:i)
+            end if
+         end select
+      end do
+      str = str//'"'
+   end function toml_basic_string
 
    pure function fmt_int(v) result(str)
       !! Format an integer.
@@ -528,8 +637,18 @@ contains
    function real_is_default(this) result(yes)
       class(nml_real_key_t), intent(in) :: this
       logical :: yes
-      yes = (this%tgt == this%default)
+      yes = same_real(this%tgt, this%default)
    end function real_is_default
+
+   elemental function same_real(a, b) result(yes)
+      !! `a == b`, with a zero of the other sign counted as different: the doc
+      !! dumps print `-0.0`, so `write_doc_short` must keep a key whose only
+      !! difference from its default is the sign of a zero.
+      real(rk), intent(in) :: a, b
+      logical :: yes
+      yes = a == b
+      if (yes .and. a == 0.0_rk) yes = (sign(1.0_rk, a) == sign(1.0_rk, b))
+   end function same_real
 
    ! ------------------------------------------------------------------
    ! Integer key methods.
@@ -657,13 +776,13 @@ contains
    function string_value_string(this) result(str)
       class(nml_string_key_t), intent(in) :: this
       character(len=:), allocatable :: str
-      str = '"'//trim(this%tgt)//'"'
+      str = toml_basic_string(trim(this%tgt))
    end function string_value_string
 
    function string_default_string(this) result(str)
       class(nml_string_key_t), intent(in) :: this
       character(len=:), allocatable :: str
-      str = '"'//trim(this%default)//'"'
+      str = toml_basic_string(trim(this%default))
    end function string_default_string
 
    function string_is_default(this) result(yes)
@@ -783,7 +902,7 @@ contains
       logical :: yes
       yes = .false.
       if (size(this%tgt) /= size(this%default)) return
-      yes = all(this%tgt == this%default)
+      yes = all(same_real(this%tgt, this%default))
    end function real_array_is_default
    ! ------------------------------------------------------------------
    ! Group management.
@@ -996,8 +1115,9 @@ contains
    end subroutine schema_write_doc_all
 
    subroutine schema_write_doc_short(this, path)
-      !! Write only non-default keys (MOM6 parameter_doc.short).  Groups
-      !! with no non-default keys are omitted entirely.
+      !! Write only non-default keys (MOM6 parameter_doc.short) as a TOML
+      !! document that reads back to the same configuration.  Groups with no
+      !! non-default keys are omitted entirely.
       class(nml_schema_t), intent(in) :: this
       character(len=*), intent(in) :: path
       integer :: u, ig, ik
@@ -1025,7 +1145,7 @@ contains
    subroutine schema_write_resolved(this, path)
       !! Write every key as `table.key = value` with reals at full precision
       !! (`ES30.17E3`: 18 significant digits, an exact binary64 round trip),
-      !! where the doc dumps round them to 11.  A function of the resolved
+      !! where the doc dumps print the shortest round-trip text.  A function of the resolved
       !! configuration only -- it is the equality oracle between input
       !! formats (`rdb_cfg_dump`).
       class(nml_schema_t), intent(in) :: this

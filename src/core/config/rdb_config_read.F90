@@ -61,7 +61,7 @@ contains
       type(nml_schema_t), intent(out) :: sch
          !! Built + parsed schema (aliases into `cfg`)
       integer, intent(out), optional :: ierr
-         !! Non-zero on a strict-parse failure when present; absent
+         !! Non-zero on a strict-parse failure or a missing input file when present; absent
          !! behaves as today (`error stop`).
 
       ! `cfg` arrives at its pristine field-initialiser defaults.  Build the
@@ -77,17 +77,25 @@ contains
          return
       end if
 
-      ! A missing TOML file is not an error -- the pristine `cfg` defaults
-      ! stand (production main.F90 fails loudly on a missing file earlier;
-      ! tests + the FFI rely on this defaults-on-absent behaviour).  Guard the
-      ! strict parse so it never error-stops on "cannot open file".
+      ! A missing / unopenable input file is an ERROR (never "keep defaults"):
+      ! refused through the parse-failure contract -- `ierr` =
+      ! `OCEAN_STATUS_ERR_CONFIG_PARSE` plus a message naming the path when
+      ! `ierr` is present, `error stop` otherwise.  A caller that wants the
+      ! defaults uses `read_config_from_toml_string("")` (an empty TOML document
+      ! is valid and means "all defaults") or default-constructs `config_t`.
       block
          logical :: file_exists
+         character(len=:), allocatable :: msg
          inquire (file=trim(filename), exist=file_exists)
          if (.not. file_exists) then
-            call logger%debug("Configuration file not found, keeping defaults: "//trim(filename))
-            if (present(ierr)) ierr = OCEAN_STATUS_OK
-            return
+            msg = trim(filename)//": cannot read the input file (it does not exist or is not readable)"
+            call error_ring_push(msg)
+            call logger%error(msg)
+            if (present(ierr)) then
+               ierr = OCEAN_STATUS_ERR_CONFIG_PARSE
+               return
+            end if
+            error stop "read_config: the input file does not exist"
          end if
       end block
 
@@ -257,11 +265,14 @@ contains
       !! paths.  `t_end`, `status_interval`, `ocean_diag%dt_out` are given
       !! in `time_unit` from `[time]`; multiply through to SI seconds.
       !! `dt_fixed`/`dt_max` stay in seconds; default `time_unit="s"`
+      !! (and it is reset to "s" once the conversion is done)
       !! gives a 1× factor (bit-identical to before).
       type(config_t), intent(inout) :: cfg
 
       real(wp) :: time_factor
+      logical :: unit_ok
 
+      unit_ok = .true.
       select case (trim(cfg%time_unit))
       case ("s", "sec", "second", "seconds")
          time_factor = 1.0_wp
@@ -278,10 +289,17 @@ contains
          call logger%error("Invalid time_unit = '"//trim(cfg%time_unit)// &
                            "': must be one of s/min/hr/day/year")
          time_factor = 1.0_wp  ! fallthrough so validation reports it
+         unit_ok = .false.
       end select
       cfg%t_end = cfg%t_end*time_factor
       cfg%status_interval = cfg%status_interval*time_factor
       cfg%ocean%diag%dt_out = cfg%ocean%diag%dt_out*time_factor
+      ! The three quantities are now in seconds, so the resolved configuration
+      ! says so: `time_unit` reads "s".  Otherwise a doc dump (`write_doc_all`,
+      ! `write_doc_short`) that states the converted seconds next to the original
+      ! unit would be scaled a second time when it is read back.  Nothing else
+      ! reads `time_unit`.
+      if (unit_ok) cfg%time_unit = "s"
    end subroutine apply_time_unit_cascade
 
    module subroutine apply_cartesian_degrees(cfg)

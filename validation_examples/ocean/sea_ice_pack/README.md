@@ -46,8 +46,7 @@ the expected EVP behaviour is the opposite of the ice-free-start dynamics
 case: **near-immobile, stress-limited drift from step 0**, not free drift
 decaying into it.
 
-Measured (re-run with `[ocean.diag] enabled = true, diags = "ice_u
-ice_v ice_speed"` to get the field, since the console summary line is
+Measured (re-run with `[ocean.diag]` `enabled = true`, `diags = "ice_u ice_v ice_speed"` to get the field, since the console summary line is
 broken — see "Bugs found" below):
 
 | t (day) | max `ice_speed` (m/s) | ice_thick range (m) |

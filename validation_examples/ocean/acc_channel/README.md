@@ -32,9 +32,9 @@ end-to-end "everything on" integration case for the C-grid dyn-core.
 | Walls north/south | (default) | channel confined |
 | EPBL surface boundary layer | `[ocean.epbl] enable=true` | MLD_EPBL 110-200 m, evolving |
 | kappa-shear interior mixing | `[ocean.kappa_shear] enable=true` | Kd_KSHEAR up to 1.7e-2 m^2/s |
-| Smagorinsky KH + AH | `[ocean.hvisc] lateral_closure="smagorinsky", smag_ah=true` | stable |
+| Smagorinsky KH + AH | `[ocean.hvisc]` `lateral_closure = "smagorinsky"`, `smag_ah = true` | stable |
 | z* vertical coord + ALE remap | `[vcoord] vcoord_type="zstar"` | mass conserved 1e-16 |
-| Distributed linear bottom drag | `[ocean.bdrag] form="linear", hbbl=10` | stable |
+| Distributed linear bottom drag | `[ocean.bdrag]` `form = "linear"`, `hbbl = 10` | stable |
 | Diag manager | `[ocean.diag]` | SSH/T/S/u/v/KE + MLD_EPBL + Kd_EPBL + Kd_KSHEAR |
 
 ## How to run

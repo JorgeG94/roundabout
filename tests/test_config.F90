@@ -13,7 +13,7 @@ module test_config
                          ATM_PREREQ_CARTESIAN, ATM_PREREQ_FILELIST, ATM_PREREQ_SW_SOURCE, &
                          ATM_PREREQ_DATAOVR, ATM_PREREQ_BULK_FLUX, ATM_PREREQ_N_ITER, &
                          ATM_PREREQ_ORB_YEAR
-   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
+   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE, OCEAN_STATUS_ERR_CONFIG_PARSE
    use rdb_test_clock, only: wall_seconds
    implicit none
    private
@@ -1356,16 +1356,23 @@ contains
    end subroutine test_atm_forcing_wired_accepted
 
    subroutine test_missing_file(error)
-      !! Missing file should not crash, defaults should be preserved
+      !! A missing input file is refused (never silently defaulted); the
+      !! empty-string TOML entry is the way to ask for pure defaults.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
+      integer :: ierr
 
-      call read_config("nonexistent_file_12345.toml", cfg)
+      call read_config("nonexistent_file_12345.toml", cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_PARSE, "a missing file must be refused")
+      if (allocated(error)) return
 
-      call check(error, cfg%nx == 200, "nx should keep default on missing file")
+      call read_config_from_toml_string("", cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "the empty document is accepted")
+      if (allocated(error)) return
+      call check(error, cfg%nx == 200, "nx keeps its default on the empty document")
       if (allocated(error)) return
       call check(error, abs(cfg%cfl - 0.45_wp) < 1.0e-15_wp, &
-                 "cfl should keep default on missing file")
+                 "cfl keeps its default on the empty document")
    end subroutine test_missing_file
 
    subroutine test_diag_density_requires_rho_levels(error)

@@ -49,6 +49,7 @@ program bench_ocean
    character(len=512) :: nml_path
    character(len=32) :: arg2
    integer :: nstep, n_inner, ng, max_steps, ios, ierr
+   logical :: ios_exists
    real(wp) :: t_current, dt, wall_sec, mcells_per_sec
    real(wp) :: next_status, status_interval
 
@@ -69,6 +70,13 @@ program bench_ocean
       end if
    end if
 
+   inquire (file=trim(nml_path), exist=ios_exists)
+   if (.not. ios_exists) then
+      write (error_unit, "(a)") "bench_ocean: input file '"//trim(nml_path)//"' not found. "// &
+         "Pass the TOML input path as the first argument (the default is relative "// &
+         "to the repository root): bench_ocean <input.toml> [max_steps]"
+      error stop 2
+   end if
    call read_config(trim(nml_path), cfg)
    call validate_config(cfg)   ! aborts on invalid config
 

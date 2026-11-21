@@ -21,6 +21,7 @@ module test_toml_config
    public :: collect_toml_config_tests
 
    character(len=*), parameter :: NL = achar(10)
+   character(len=*), parameter :: BSL = achar(92)
 
 contains
 
@@ -32,6 +33,9 @@ contains
                   new_unittest("file_entry_and_non_toml_refused", test_file_entry), &
                   new_unittest("oracle_sees_one_ulp", test_oracle_sensitivity), &
                   new_unittest("real_stringify_is_exact", test_real_exact), &
+                  new_unittest("doc_dumps_read_back_defaults", test_roundtrip_defaults), &
+                  new_unittest("doc_dumps_read_back_tricky_values", test_roundtrip_tricky), &
+                  new_unittest("doc_dumps_read_back_shipped_inputs", test_roundtrip_shipped), &
                   new_unittest("empty_and_missing_input", test_empty_missing), &
                   new_unittest("refuse_unknown_table", test_unknown_table), &
                   new_unittest("refuse_unknown_key_and_case", test_unknown_key_case), &
@@ -60,7 +64,7 @@ contains
       !! Whole file into one string (newline-joined), then delete it.
       character(len=*), intent(in) :: path
       character(len=:), allocatable, intent(out) :: text
-      character(len=2048) :: buf
+      character(len=16384) :: buf
       integer :: u, ios
 
       text = ""
@@ -329,9 +333,9 @@ contains
    end subroutine test_file_entry
 
    subroutine test_oracle_sensitivity(error)
-      !! The equality oracle is not vacuous: the doc dump rounds reals to 11
-      !! digits and so cannot tell two values one ulp apart, the full-precision
-      !! dump can.
+      !! The equality oracle is not vacuous: two values one ulp apart give
+      !! different dumps -- the doc dump prints reals round-trip exact, so it
+      !! separates them too, as does the fixed 18-digit `.exact` dump.
       type(error_type), allocatable, intent(out) :: error
       character(len=:), allocatable :: a1, e1, a2, e2
       integer :: i1, i2
@@ -342,7 +346,7 @@ contains
       if (allocated(error)) return
       call check(error, e1 /= e2, "full-precision dump separates one ulp")
       if (allocated(error)) return
-      call check(error, a1 == a2, "doc dump (11 digits) cannot")
+      call check(error, a1 /= a2, "the doc dump separates one ulp as well")
    end subroutine test_oracle_sensitivity
 
    subroutine test_real_exact(error)
@@ -424,11 +428,150 @@ contains
       call dumps_of("# only a comment"//NL, a2, e2, i2)
       call check(error, i2 == OCEAN_STATUS_OK .and. a2 == a1 .and. e2 == e1, "comment-only toml keeps defaults")
       if (allocated(error)) return
+      ! A missing FILE is an error (the empty STRING above is the way to ask
+      ! for defaults); the refusal names the path and leaves the defaults.
       call read_config("no_such_file_anywhere.toml", cfg, schema, i3)
-      call check(error, i3, OCEAN_STATUS_OK, "missing .toml keeps defaults")
+      call check(error, i3, OCEAN_STATUS_ERR_CONFIG_PARSE, "a missing .toml file is refused")
       if (allocated(error)) return
-      call check(error, cfg%nx == 200, "missing .toml leaves the default nx")
+      call check(error, cfg%nx == 200, "a refused missing file leaves the default nx")
+      if (allocated(error)) return
+      call read_config("", cfg, schema, i3)
+      call check(error, i3, OCEAN_STATUS_ERR_CONFIG_PARSE, "an empty file name is refused")
    end subroutine test_empty_missing
+
+   ! ---- doc dumps are TOML that reads back ------------------------------
+
+   subroutine roundtrip_check(error, label, schema1)
+      !! The `write_doc_all` and `write_doc_short` dumps of a resolved
+      !! configuration, read back through `read_config_from_toml_string`, give
+      !! a byte-identical full-precision (`.exact`) dump; the table headers are
+      !! present.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: label
+      type(nml_schema_t), intent(in) :: schema1
+         !! Resolved schema (aliases the caller's live `config_t`)
+      type(config_t), target :: cfg2
+      type(nml_schema_t) :: schema2
+      character(len=:), allocatable :: ex1, ex2, doc_all, doc_short
+      integer :: ierr
+
+      call schema1%write_resolved("test_toml_rt.exact")
+      call slurp("test_toml_rt.exact", ex1)
+      call schema1%write_doc_all("test_toml_rt.all")
+      call slurp("test_toml_rt.all", doc_all)
+      call schema1%write_doc_short("test_toml_rt.short")
+      call slurp("test_toml_rt.short", doc_short)
+
+      call check(error, index(doc_all, NL//"[ocean.hvisc]"//NL) > 0 .and. index(doc_all, "[grid]"//NL) > 0, &
+                 label//": write_doc_all carries the [ocean.x] and [x] table headers")
+      if (allocated(error)) return
+
+#if !defined(__NVCOMPILER)
+      ! nvfortran (26.5) SEGFAULTS inside toml-f's parser (`parse_inline_array`)
+      ! whenever the 17th / 26th / 39th ... key of one table is an array -- the
+      ! ordered map's list growth.  Reproducer, pure toml-f with no roundabout code:
+      ! 15 scalar keys, then two array keys (tmp_local_artifacts/
+      ! nvfortran_tomlf_17th_key_array.toml).  `write_doc_all` lists every key
+      ! of a table, so its full document trips it on nvfortran; the compact
+      ! `write_doc_short` read-back below still runs there.
+      call read_config_from_toml_string(doc_all, cfg2, schema2, ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, label//": write_doc_all output is accepted as TOML")
+      if (allocated(error)) return
+      call schema2%write_resolved("test_toml_rt.exact")
+      call slurp("test_toml_rt.exact", ex2)
+      call check(error, ex1 == ex2, label//": write_doc_all reads back to the identical configuration")
+      if (allocated(error)) return
+#endif
+
+      call read_config_from_toml_string(doc_short, cfg2, schema2, ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, label//": write_doc_short output is accepted as TOML")
+      if (allocated(error)) return
+      call schema2%write_resolved("test_toml_rt.exact")
+      call slurp("test_toml_rt.exact", ex2)
+      call check(error, ex1 == ex2, label//": write_doc_short reads back to the identical configuration")
+   end subroutine roundtrip_check
+
+   subroutine roundtrip_text(error, label, text)
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: label, text
+      type(config_t), target :: cfg1
+      type(nml_schema_t) :: schema1
+      integer :: ierr
+
+      call read_config_from_toml_string(text, cfg1, schema1, ierr)
+      call check(error, ierr, OCEAN_STATUS_OK, label//": input accepted")
+      if (allocated(error)) return
+      call roundtrip_check(error, label, schema1)
+   end subroutine roundtrip_text
+
+   subroutine test_roundtrip_defaults(error)
+      !! The default configuration: its dump holds `huge()` ceilings (`kv_max`,
+      !! `kd_max`) and every key type, and must read back to itself.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=:), allocatable :: doc_all
+      type(config_t), target :: cfg1
+      type(nml_schema_t) :: schema1
+      integer :: ierr
+
+      call read_config_from_toml_string("", cfg1, schema1, ierr)
+      call check(error, ierr, OCEAN_STATUS_OK)
+      if (allocated(error)) return
+      call schema1%write_doc_all("test_toml_rt.all")
+      call slurp("test_toml_rt.all", doc_all)
+      call check(error, index(doc_all, "kv_max = 1.7976931348623157e+308") > 0, &
+                 "the huge() default prints as a valid, exactly round-tripping TOML float")
+      if (allocated(error)) return
+      call check(error, index(doc_all, " = Infinity") == 0 .and. index(doc_all, " = NaN") == 0, &
+                 "no Fortran spelling of a non-finite value")
+      if (allocated(error)) return
+      call roundtrip_check(error, "defaults", schema1)
+   end subroutine test_roundtrip_defaults
+
+   subroutine test_roundtrip_tricky(error)
+      !! Values that stress the real/string writers: one-ulp neighbours, the
+      !! extremes of the range, denormals, signs, and a string with a quote and a
+      !! backslash.
+      type(error_type), allocatable, intent(out) :: error
+
+      call roundtrip_text(error, "tricky reals", &
+                          "[physics]"//NL//"coriolis_f = 1.0000000000000002"//NL// &
+                          "wind_stress_x = -4.9406564584124654e-324"//NL// &
+                          "wind_stress_y = 123456.789e-30"//NL// &
+                          "[ocean.vmix]"//NL//"kv_max = 1.7976931348623157e308"//NL// &
+                          "[ocean.hvisc]"//NL//"nu_h = 1e22"//NL//"nu_4 = 0.1"//NL// &
+                          "[ocean.ic]"//NL//"layer_rho_init = [1036.0, 1035.0000000000002, 1e-7]"//NL// &
+                          "[time]"//NL//"t_end = 0.3"//NL//'time_unit = "day"'//NL)
+      if (allocated(error)) return
+      call roundtrip_text(error, "negative zero", "[physics]"//NL//"wind_stress_x = -0.0"//NL)
+      if (allocated(error)) return
+      call roundtrip_text(error, "escaped string", &
+                          "[ocean.diag]"//NL//'filename = "a'//BSL//'"b'//BSL//BSL//'c"'//NL)
+   end subroutine test_roundtrip_tricky
+
+   subroutine test_roundtrip_shipped(error)
+      !! Shipped inputs (time_unit = "day", Cartesian extent sizing, ...) round
+      !! trip through both doc dumps.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), parameter :: FILES(3) = [character(len=64) :: &
+                                                 "ocean/double_gyre/double_gyre_mom6.toml", &
+                                                 "ocean/acc_channel/acc_channel_kitchensink.toml", &
+                                                 "ocean/isomip_plus/ocean0.toml"]
+      character(len=1024) :: root
+      type(config_t), target :: cfg1
+      type(nml_schema_t) :: schema1
+      integer :: i, ierr, n
+
+      call get_environment_variable("RDB_SOURCE_DIR", root, length=n)
+      call check(error, n > 0, "RDB_SOURCE_DIR is set by the ctest registration")
+      if (allocated(error)) return
+      do i = 1, size(FILES)
+         call read_config(trim(root)//"/validation_examples/"//trim(FILES(i)), cfg1, schema1, ierr)
+         call check(error, ierr, OCEAN_STATUS_OK, "shipped input "//trim(FILES(i))//" accepted")
+         if (allocated(error)) return
+         call roundtrip_check(error, trim(FILES(i)), schema1)
+         if (allocated(error)) return
+      end do
+   end subroutine test_roundtrip_shipped
 
    ! ---- refusals -------------------------------------------------------
 
@@ -718,23 +861,34 @@ contains
    end subroutine test_nonfinite
 
    subroutine test_float_overflow(error)
-      !! A literal beyond the real range gives the same answer on every
-      !! compiler: both runs of the reader agree (the same value, or both
-      !! refuse), and a refusal carries the key and line.
+      !! ONE verdict on every compiler: a finite-looking float literal that
+      !! overflows the working real kind is REFUSED with a file:line message
+      !! naming the key (the front end decides, not the compiler's `read`, which
+      !! gives +Infinity on gfortran and an error on nvfortran); a literal that
+      !! underflows to zero is ACCEPTED and means exactly 0.0.
       type(error_type), allocatable, intent(out) :: error
       character(len=:), allocatable :: a1, e1, a2, e2
       integer :: i1, i2
 
-      call dumps_of("[physics]"//NL//"coriolis_f = 1e400"//NL, a1, e1, i1)
-      call dumps_of("[physics]"//NL//"coriolis_f = 1e400"//NL, a2, e2, i2)
-      call check(error, i1 == i2, "deterministic accept/refuse verdict for 1e400")
+      call check_refused(error, "[physics]"//NL//"coriolis_f = 1e400"//NL, &
+                         [character(len=24) :: ":2:", "key 'coriolis_f'", "overflows"])
       if (allocated(error)) return
-      if (i1 == OCEAN_STATUS_OK) then
-         call check(error, e1 == e2, "deterministic value for 1e400")
-      else
-         call check_refused(error, "[physics]"//NL//"coriolis_f = 1e400"//NL, &
-                            [character(len=24) :: ":2:", "key 'coriolis_f'"])
-      end if
+      call check_refused(error, "[physics]"//NL//"coriolis_f = -1.5E+999"//NL, &
+                         [character(len=24) :: ":2:", "overflows"])
+      if (allocated(error)) return
+      call check_refused(error, "[physics]"//NL//"coriolis_f = 1e99999999999"//NL, &
+                         [character(len=24) :: ":2:", "overflows"])
+      if (allocated(error)) return
+
+      ! Underflow to zero is accepted, and is exactly 0.0 (either sign).
+      call dumps_of("[physics]"//NL//"coriolis_f = 1e-400"//NL, a1, e1, i1)
+      call check(error, i1, OCEAN_STATUS_OK, "1e-400 underflows to zero and is accepted")
+      if (allocated(error)) return
+      call dumps_of("[physics]"//NL//"coriolis_f = 0.0"//NL, a2, e2, i2)
+      call check(error, i2 == OCEAN_STATUS_OK .and. e1 == e2, "1e-400 resolves to exactly 0.0")
+      if (allocated(error)) return
+      call dumps_of("[physics]"//NL//"coriolis_f = 0.000001e-399"//NL, a1, e1, i1)
+      call check(error, i1 == OCEAN_STATUS_OK .and. e1 == e2, "0.000001e-399 resolves to 0.0")
    end subroutine test_float_overflow
 
    subroutine test_duplicate_group(error)

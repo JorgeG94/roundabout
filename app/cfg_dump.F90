@@ -3,8 +3,9 @@ program cfg_dump
    !! `rdb_cfg_dump <input> <out>`: read `<input>` (input, or TOML for a
    !! `.toml` name) through `read_config`, then write the resolved
    !! configuration -- every group and key, post-cascade -- to `<out>`
-   !! (`write_doc_all`) and, at full real precision, to `<out>.exact`
-   !! (`write_resolved`; the doc form rounds reals to 11 digits).
+   !! (`write_doc_all`) and, in a fixed 18-significant-digit form, to
+   !! `<out>.exact` (`write_resolved`; the doc form is itself valid TOML that reads
+   !! back to the same configuration).
    !!
    !! Both files are a function of the resolved configuration only: no path,
    !! timestamp or input-format text reaches them, so two `.toml` files that

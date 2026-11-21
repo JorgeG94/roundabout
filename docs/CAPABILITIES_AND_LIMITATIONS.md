@@ -708,10 +708,7 @@ r = 2.5e-5
 form = "sadourny"
 [ocean.pgf]
 form = "gprime"
-maxvel = 6.0  # 2-layer reduced gravity + clamp
-                                                        ! (optional cfl_trunc = 0.5 adds an
-                                                        !  advective-CFL velocity truncation
-                                                        !  ahead of the absolute maxvel cap)
+maxvel = 6.0  # 2-layer reduced gravity + clamp (optional cfl_trunc = 0.5 adds an advective-CFL velocity truncation)
 [ocean.bt]
 auto_n_inner = true
 [vcoord]
@@ -720,7 +717,7 @@ vcoord_type = "sigma"
 dt_fixed = 1200.0
 ```
 
-Ocean knobs live in per-concern tables named `[ocean.<group>]`, with the `ocean_` prefix dropped from each key. Run `tools/nml_split.py <file>` to migrate an old `[ocean.setup]` input.
+Ocean knobs live in per-concern tables named `[ocean.<group>]`, with the `ocean_` prefix dropped from each key.
 
 ### Open problems
 

@@ -1572,7 +1572,7 @@ call check(error,.not. ieee_is_finite(ice_melt_cap(-100.0_wp, nan, 1800.0_wp, 90
       call av%register_restart(r1)
       call av%register_restart(r2, required=.true.)
       call check(error, all(r1%entries(1:r1%n)%optional) .and. count(.not. r2%entries(1:r2%n)%optional) == 7 .and. &
-              r1%n == 9 .and. r2%n == 9, "required=true makes the seven window tags non-optional (the pending pair stays optional)")
+            r1%n == 9 .and. r2%n == 9, "required=.true. makes the seven window tags non-optional (the pending pair stays optional)")
       call make_halo(g, bc, .false.)
       call sf%init(g)
       call sf%set_components(g, .true.)
